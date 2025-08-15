@@ -1,0 +1,7 @@
+description: AI Aggregator - Marketplace for AI Solutions
+excluded_tools: []
+included_optional_tools: []
+language: javascript
+name: aiag
+path: D:\webp\aiag
+read_only: false

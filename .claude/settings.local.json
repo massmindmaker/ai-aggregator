@@ -26,7 +26,12 @@
       "Bash(del performance-test.js quick-diagnosis.js performance-test-results.json diagnosis-results.json)",
       "Bash(rm:*)",
       "Bash(git init:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(gh repo create:*)",
+      "Bash(git commit:*)",
+      "Bash(uv run:*)",
+      "Bash(python:*)",
+      "WebSearch"
     ],
     "deny": []
   }
