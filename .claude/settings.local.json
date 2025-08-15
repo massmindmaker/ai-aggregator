@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone:*)",
+      "Bash(ping:*)",
+      "WebFetch(domain:ai-aggregator.ru)",
+      "Bash(grep:*)",
+      "Bash(vercel:*)",
+      "Bash(npm run build:*)",
+      "WebFetch(domain:ai-aggregator-pxf3digcd-massmindmakers-projects.vercel.app)",
+      "Bash(curl:*)",
+      "Bash(for i in {1..5})",
+      "Bash(do echo \"Request $i:\")",
+      "Bash(done)",
+      "Bash(for i in {1..3})",
+      "Bash(do echo \"Metrics Request $i:\")",
+      "Bash(dir)",
+      "Bash(npm install)",
+      "Bash(do)",
+      "WebFetch(domain:ai-aggregator-wxys6nwxh-massmindmakers-projects.vercel.app)",
+      "WebFetch(domain:ai-aggregator-gamma.vercel.app)",
+      "WebFetch(domain:aiaghub.vercel.app)",
+      "Bash(git add:*)",
+      "Bash(do echo \"Test $i:\")",
+      "Bash(node:*)",
+      "Bash(del performance-test.js quick-diagnosis.js performance-test-results.json diagnosis-results.json)",
+      "Bash(rm:*)",
+      "Bash(git init:*)",
+      "Bash(git rm:*)"
+    ],
+    "deny": []
+  }
+}

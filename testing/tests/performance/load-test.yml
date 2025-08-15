@@ -1,0 +1,293 @@
+# Artillery Load Testing Configuration for AI Aggregator Migration
+# Testing Vercel Functions cold start performance and overall system load
+
+config:
+  target: "{{ $processEnvironment.TARGET_URL || 'http://localhost:5000' }}"
+  phases:
+    # Warm-up phase
+    - duration: 60
+      arrivalRate: 1
+      name: "Warm-up"
+    
+    # Gradual load increase
+    - duration: 120
+      arrivalRate: 5
+      rampTo: 20
+      name: "Ramp-up"
+    
+    # Sustained load
+    - duration: 300
+      arrivalRate: 20
+      name: "Sustained load"
+    
+    # Peak load testing
+    - duration: 60
+      arrivalRate: 50
+      name: "Peak load"
+    
+    # Stress testing
+    - duration: 30
+      arrivalRate: 100
+      name: "Stress test"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      User-Agent: "Artillery Load Test"
+
+  processor: "./load-test-processor.js"
+
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+    
+  ensure:
+    thresholds:
+      - http.response_time.p95: 2000    # 95% of requests should complete within 2s
+      - http.response_time.p99: 5000    # 99% of requests should complete within 5s
+      - http.request_rate: 20           # Should handle at least 20 req/s
+      - http.codes.200: 95              # 95% success rate
+      - http.codes.500: 1               # Less than 1% server errors
+
+scenarios:
+  # Authentication endpoints
+  - name: "User Authentication"
+    weight: 20
+    flow:
+      - post:
+          url: "/auth/register"
+          json:
+            email: "loadtest-{{ $randomString() }}@aiag.com"
+            password: "LoadTest123!"
+            username: "loadtest{{ $randomNumber(1000, 9999) }}"
+          capture:
+            - json: "$.user.id"
+              as: "userId"
+          expect:
+            - statusCode: [201, 400] # 400 for duplicate users is acceptable
+      
+      - post:
+          url: "/auth/login"
+          json:
+            email: "loadtest-{{ userId }}@aiag.com"
+            password: "LoadTest123!"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+            - hasHeader: "content-type"
+
+  # Product operations
+  - name: "Product CRUD Operations"
+    weight: 40
+    flow:
+      - function: "generateAuthToken"
+      
+      # Create product
+      - post:
+          url: "/product"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            name: "Load Test Product {{ $randomString() }}"
+            description: "Product created during load testing"
+            category: "{{ $randomItem(['ai', 'ml', 'data-processing', 'search']) }}"
+            pricing: "{{ $randomItem(['Free', 'Premium', 'Enterprise']) }}"
+          capture:
+            - json: "$._id"
+              as: "productId"
+          expect:
+            - statusCode: 201
+
+      # Read product
+      - get:
+          url: "/product/{{ productId }}"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+      # Update product
+      - put:
+          url: "/product/{{ productId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            description: "Updated during load test at {{ $timestamp() }}"
+          expect:
+            - statusCode: 200
+
+      # List products
+      - get:
+          url: "/product"
+          qs:
+            page: "{{ $randomNumber(1, 5) }}"
+            limit: "10"
+          expect:
+            - statusCode: 200
+
+      # Search products
+      - get:
+          url: "/product/search"
+          qs:
+            q: "{{ $randomItem(['AI', 'ML', 'API', 'Test']) }}"
+          expect:
+            - statusCode: 200
+
+      # Delete product (50% chance)
+      - ifTrue: "{{ $randomNumber(1, 100) <= 50 }}"
+        then:
+          - delete:
+              url: "/product/{{ productId }}"
+              headers:
+                Authorization: "Bearer {{ authToken }}"
+              expect:
+                - statusCode: 200
+
+  # File operations
+  - name: "File Upload and Management"
+    weight: 15
+    flow:
+      - function: "generateAuthToken"
+      
+      # Upload file
+      - post:
+          url: "/api/files/upload"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          formData:
+            file: "@./test-files/sample-{{ $randomNumber(1, 5) }}.jpg"
+          capture:
+            - json: "$.url"
+              as: "fileUrl"
+          expect:
+            - statusCode: [200, 201]
+
+      # Get file metadata
+      - get:
+          url: "/api/files/info"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          qs:
+            url: "{{ fileUrl }}"
+          expect:
+            - statusCode: 200
+
+      # List user files
+      - get:
+          url: "/api/files"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+
+  # API Hub operations
+  - name: "API Hub Proxy"
+    weight: 15
+    flow:
+      - function: "generateAuthToken"
+      
+      # Create API key
+      - post:
+          url: "/api/keys"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            name: "Load Test Key {{ $randomString() }}"
+            permissions: ["read", "write"]
+          capture:
+            - json: "$.key"
+              as: "apiKey"
+          expect:
+            - statusCode: 201
+
+      # Proxy request
+      - get:
+          url: "/api/hub/proxy"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          qs:
+            target: "https://jsonplaceholder.typicode.com/posts/1"
+            method: "GET"
+          expect:
+            - statusCode: 200
+
+      # Get analytics
+      - get:
+          url: "/api/hub/analytics"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          qs:
+            period: "24h"
+          expect:
+            - statusCode: 200
+
+  # Database-heavy operations
+  - name: "Database Stress Test"
+    weight: 10
+    flow:
+      - function: "generateAuthToken"
+      
+      # Complex aggregation query
+      - get:
+          url: "/api/analytics/dashboard"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          qs:
+            timeRange: "7d"
+            includeMetrics: "true"
+          expect:
+            - statusCode: 200
+
+      # Statistics endpoint
+      - get:
+          url: "/api/statistics/user"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+
+      # Search with filters
+      - get:
+          url: "/product"
+          qs:
+            category: "{{ $randomItem(['ai', 'ml', 'data-processing']) }}"
+            pricing: "{{ $randomItem(['Free', 'Premium']) }}"
+            sortBy: "createdAt"
+            order: "desc"
+            page: "{{ $randomNumber(1, 10) }}"
+          expect:
+            - statusCode: 200
+
+# Cold start testing for Vercel Functions
+after:
+  flow:
+    - log: "Load test completed. Running cold start tests..."
+    
+    # Wait for functions to go cold
+    - think: 300 # 5 minutes
+    
+    # Test cold start performance
+    - post:
+        url: "/auth/login"
+        json:
+          email: "coldstart@test.com"
+          password: "ColdStart123!"
+        beforeRequest: "recordColdStartTime"
+        afterResponse: "measureColdStartTime"
+        expect:
+          - statusCode: [200, 401] # 401 for non-existent user is fine
+    
+    - get:
+        url: "/product"
+        beforeRequest: "recordColdStartTime"
+        afterResponse: "measureColdStartTime"
+        expect:
+          - statusCode: 200
+
+    - get:
+        url: "/api/hub/analytics"
+        beforeRequest: "recordColdStartTime"
+        afterResponse: "measureColdStartTime"
+        expect:
+          - statusCode: [200, 401] # Might need auth

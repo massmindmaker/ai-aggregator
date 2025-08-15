@@ -1,0 +1,57 @@
+{
+  "name": "ai-aggregator-database-migration",
+  "version": "1.0.0",
+  "description": "Database migration utilities for AI Aggregator to MongoDB Atlas and Vercel Postgres",
+  "main": "index.js",
+  "scripts": {
+    "migrate": "node scripts/migration-runner.js run",
+    "migrate:dry": "node scripts/migration-runner.js run --dry-run",
+    "migrate:force": "node scripts/migration-runner.js run --force",
+    "migrate:verbose": "node scripts/migration-runner.js run --verbose",
+    "migrate:mongo": "node database/mongodb/migration-script.js migrate",
+    "migrate:postgres": "node database/postgres/migration-script.js migrate",
+    "migrate:verify": "node scripts/migration-runner.js verify",
+    "migrate:test": "node scripts/migration-runner.js test",
+    "migrate:backup": "node scripts/migration-runner.js backup",
+    "migrate:check": "node scripts/migration-runner.js check",
+    "db:health": "node -e 'require(\"./database/config/database-adapter\").getDatabaseAdapter().healthCheck().then(console.log)'",
+    "db:stats": "node -e 'require(\"./database/config/database-adapter\").getDatabaseAdapter().getConnectionStats().then(console.log)'",
+    "db:analytics": "node -e 'require(\"./database/config/database-adapter\").dbOperations.getCrossDbAnalytics().then(console.log)'",
+    "indexes:create": "node -e 'require(\"./database/mongodb/indexes\").createIndexes().then(() => console.log(\"Indexes created\"))'",
+    "indexes:analyze": "node -e 'require(\"./database/mongodb/indexes\").analyzeQuery(\"users\", {}).then(console.log)'",
+    "cleanup:postgres": "node -e 'require(\"./database/postgres/vercel-config\").dbUtils.query(\"SELECT cleanup_old_data()\").then(() => console.log(\"Cleanup completed\"))'",
+    "start:monitoring": "node -e 'require(\"./database/healthcheck/monitoring\").getGlobalMonitor().start()'",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mongodb",
+    "postgresql",
+    "migration",
+    "vercel",
+    "atlas",
+    "database",
+    "ai-aggregator"
+  ],
+  "author": "AI Aggregator Team",
+  "license": "ISC",
+  "dependencies": {
+    "mongoose": "^7.6.0",
+    "pg": "^8.11.0",
+    "dotenv": "^16.3.0",
+    "config": "^3.3.9"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-repo/ai-aggregator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-repo/ai-aggregator/issues"
+  },
+  "homepage": "https://github.com/your-repo/ai-aggregator#readme"
+}

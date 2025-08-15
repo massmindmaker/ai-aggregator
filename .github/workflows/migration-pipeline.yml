@@ -1,0 +1,467 @@
+name: Migration Pipeline - Yandex Cloud to Vercel
+
+on:
+  workflow_dispatch:
+    inputs:
+      migration_type:
+        description: 'Type of migration to perform'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+          - rollback
+      skip_tests:
+        description: 'Skip tests (use with caution)'
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Perform dry run only'
+        required: false
+        type: boolean
+        default: true
+
+env:
+  NODE_VERSION: '18'
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  MONGODB_URI: ${{ secrets.MONGODB_URI }}
+  POSTGRES_URI: ${{ secrets.POSTGRES_URI }}
+  YANDEX_CLOUD_KEY: ${{ secrets.YANDEX_CLOUD_KEY }}
+  BACKUP_LOCATION: './migration-backups'
+
+jobs:
+  # Pre-migration validation
+  pre-migration-validation:
+    name: Pre-Migration Validation
+    runs-on: ubuntu-latest
+    if: inputs.migration_type != 'rollback'
+    
+    outputs:
+      validation_passed: ${{ steps.validation.outputs.passed }}
+      backup_created: ${{ steps.backup.outputs.created }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Validate current system health
+        id: validation
+        run: |
+          cd testing
+          npm run test:health:yandex
+          echo "passed=true" >> $GITHUB_OUTPUT
+        continue-on-error: false
+
+      - name: Create system backup
+        id: backup
+        run: |
+          cd testing
+          mkdir -p ${{ env.BACKUP_LOCATION }}
+          node scripts/create-migration-backup.js
+          echo "created=true" >> $GITHUB_OUTPUT
+        env:
+          BACKUP_LOCATION: ${{ env.BACKUP_LOCATION }}
+
+      - name: Upload backup artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-migration-backup
+          path: ${{ env.BACKUP_LOCATION }}
+          retention-days: 30
+
+      - name: Validate Vercel setup
+        run: |
+          npx vercel --version
+          npx vercel whoami --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Run pre-migration tests
+        run: |
+          cd testing
+          npm run test:pre-migration
+        if: ${{ !inputs.skip_tests }}
+
+  # Database migration
+  database-migration:
+    name: Database Migration
+    runs-on: ubuntu-latest
+    needs: pre-migration-validation
+    if: inputs.migration_type != 'rollback' && needs.pre-migration-validation.outputs.validation_passed == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Run MongoDB migration
+        run: |
+          cd migration
+          node mongodb-migration.js
+        env:
+          SOURCE_MONGODB_URI: ${{ secrets.YANDEX_MONGODB_URI }}
+          TARGET_MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          DRY_RUN: ${{ inputs.dry_run }}
+
+      - name: Run PostgreSQL migration
+        run: |
+          cd migration
+          node postgres-migration.js
+        env:
+          SOURCE_POSTGRES_URI: ${{ secrets.YANDEX_POSTGRES_URI }}
+          TARGET_POSTGRES_URI: ${{ secrets.POSTGRES_URI }}
+          DRY_RUN: ${{ inputs.dry_run }}
+
+      - name: Validate database migration
+        run: |
+          cd testing
+          npm run test:database:migration
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          POSTGRES_URI: ${{ secrets.POSTGRES_URI }}
+
+      - name: Generate migration report
+        run: |
+          cd testing
+          npm run test:migration:database:report
+        if: always()
+
+  # File storage migration
+  file-storage-migration:
+    name: File Storage Migration
+    runs-on: ubuntu-latest
+    needs: pre-migration-validation
+    if: inputs.migration_type != 'rollback' && needs.pre-migration-validation.outputs.validation_passed == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Migrate files to Vercel Blob
+        run: |
+          cd migration
+          node file-migration.js
+        env:
+          YANDEX_CLOUD_ACCESS_KEY: ${{ secrets.YANDEX_CLOUD_ACCESS_KEY }}
+          YANDEX_CLOUD_SECRET_KEY: ${{ secrets.YANDEX_CLOUD_SECRET_KEY }}
+          VERCEL_BLOB_TOKEN: ${{ secrets.VERCEL_BLOB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+
+      - name: Update file references
+        run: |
+          cd migration
+          node update-file-references.js
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          DRY_RUN: ${{ inputs.dry_run }}
+
+      - name: Validate file migration
+        run: |
+          cd testing
+          npm run test:files:migration
+        env:
+          VERCEL_BLOB_TOKEN: ${{ secrets.VERCEL_BLOB_TOKEN }}
+
+  # Application deployment
+  application-deployment:
+    name: Application Deployment
+    runs-on: ubuntu-latest
+    needs: [database-migration, file-storage-migration]
+    if: inputs.migration_type != 'rollback'
+    
+    environment: ${{ inputs.migration_type }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: |
+          if [ "${{ inputs.migration_type }}" = "production" ]; then
+            vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+          fi
+
+      - name: Build Project Artifacts
+        run: |
+          if [ "${{ inputs.migration_type }}" = "production" ]; then
+            vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            vercel build --token=${{ secrets.VERCEL_TOKEN }}
+          fi
+
+      - name: Deploy to Vercel
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "DRY RUN: Would deploy to Vercel"
+            echo "VERCEL_DEPLOYMENT_URL=https://dry-run-deployment.vercel.app" >> $GITHUB_ENV
+          else
+            if [ "${{ inputs.migration_type }}" = "production" ]; then
+              DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+            else
+              DEPLOYMENT_URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+            fi
+            echo "VERCEL_DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_ENV
+          fi
+
+      - name: Wait for deployment
+        run: sleep 60
+        if: ${{ !inputs.dry_run }}
+
+      - name: Validate deployment
+        run: |
+          cd testing
+          npm run test:deployment:validation
+        env:
+          DEPLOYMENT_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
+        if: ${{ !inputs.dry_run }}
+
+  # Post-migration testing
+  post-migration-testing:
+    name: Post-Migration Testing
+    runs-on: ubuntu-latest
+    needs: application-deployment
+    if: inputs.migration_type != 'rollback' && !inputs.skip_tests
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Run integration tests
+        run: |
+          cd testing
+          npm run test:integration
+        env:
+          TEST_TARGET_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
+
+      - name: Run performance tests
+        run: |
+          cd testing
+          npm run test:performance:post-migration
+        env:
+          TEST_TARGET_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
+
+      - name: Run E2E tests
+        run: |
+          cd testing
+          npx cypress run --config baseUrl=${{ env.VERCEL_DEPLOYMENT_URL }}
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+
+      - name: Run migration verification tests
+        run: |
+          cd testing
+          npm run test:migration:verification
+        env:
+          TEST_TARGET_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
+
+  # DNS and traffic migration
+  dns-traffic-migration:
+    name: DNS and Traffic Migration
+    runs-on: ubuntu-latest
+    needs: post-migration-testing
+    if: inputs.migration_type == 'production' && !inputs.dry_run
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update DNS records
+        run: |
+          # This would update DNS to point to Vercel
+          echo "Updating DNS records to point to Vercel..."
+          # Implementation depends on DNS provider
+        env:
+          DNS_API_KEY: ${{ secrets.DNS_API_KEY }}
+
+      - name: Wait for DNS propagation
+        run: sleep 300
+
+      - name: Validate DNS changes
+        run: |
+          nslookup aiag.dev
+          curl -I https://aiag.dev
+
+      - name: Run final validation tests
+        run: |
+          cd testing
+          npm run test:final:validation
+        env:
+          PRODUCTION_URL: https://aiag.dev
+
+  # Rollback procedure
+  rollback-procedure:
+    name: Rollback Procedure
+    runs-on: ubuntu-latest
+    if: inputs.migration_type == 'rollback' || failure()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Download backup artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pre-migration-backup
+          path: ${{ env.BACKUP_LOCATION }}
+
+      - name: Execute rollback
+        run: |
+          cd testing
+          node scripts/rollback-procedures.js full
+        env:
+          BACKUP_LOCATION: ${{ env.BACKUP_LOCATION }}
+          YANDEX_CLOUD_KEY: ${{ secrets.YANDEX_CLOUD_KEY }}
+          MONGODB_BACKUP_URI: ${{ secrets.MONGODB_BACKUP_URI }}
+
+      - name: Validate rollback
+        run: |
+          cd testing
+          npm run test:rollback:validation
+        env:
+          YANDEX_CLOUD_URL: ${{ secrets.YANDEX_CLOUD_URL }}
+
+      - name: Generate rollback report
+        run: |
+          cd testing
+          npm run test:rollback:report
+        if: always()
+
+  # Migration monitoring
+  migration-monitoring:
+    name: Migration Monitoring
+    runs-on: ubuntu-latest
+    needs: [dns-traffic-migration]
+    if: inputs.migration_type == 'production' && !inputs.dry_run
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup monitoring
+        run: |
+          cd testing
+          npm run monitoring:setup
+        env:
+          PRODUCTION_URL: https://aiag.dev
+          MONITORING_API_KEY: ${{ secrets.MONITORING_API_KEY }}
+
+      - name: Run 24h monitoring
+        run: |
+          cd testing
+          npm run monitoring:24h
+        env:
+          PRODUCTION_URL: https://aiag.dev
+
+      - name: Generate monitoring report
+        run: |
+          cd testing
+          npm run monitoring:report
+        if: always()
+
+  # Migration summary
+  migration-summary:
+    name: Migration Summary
+    runs-on: ubuntu-latest
+    needs: [pre-migration-validation, database-migration, file-storage-migration, application-deployment, post-migration-testing]
+    if: always()
+    
+    steps:
+      - name: Generate migration summary
+        run: |
+          echo "# Migration Summary" > migration-summary.md
+          echo "" >> migration-summary.md
+          echo "## Migration Details" >> migration-summary.md
+          echo "- Type: ${{ inputs.migration_type }}" >> migration-summary.md
+          echo "- Dry Run: ${{ inputs.dry_run }}" >> migration-summary.md
+          echo "- Skip Tests: ${{ inputs.skip_tests }}" >> migration-summary.md
+          echo "" >> migration-summary.md
+          echo "## Job Status" >> migration-summary.md
+          echo "- Pre-migration validation: ${{ needs.pre-migration-validation.result }}" >> migration-summary.md
+          echo "- Database migration: ${{ needs.database-migration.result }}" >> migration-summary.md
+          echo "- File storage migration: ${{ needs.file-storage-migration.result }}" >> migration-summary.md
+          echo "- Application deployment: ${{ needs.application-deployment.result }}" >> migration-summary.md
+          echo "- Post-migration testing: ${{ needs.post-migration-testing.result }}" >> migration-summary.md
+          echo "" >> migration-summary.md
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ]; then
+            echo "❌ Migration failed - check individual job logs" >> migration-summary.md
+          else
+            echo "✅ Migration completed successfully" >> migration-summary.md
+          fi
+
+      - name: Upload migration summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-summary
+          path: migration-summary.md
+
+      - name: Send notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            Migration ${{ inputs.migration_type }} completed!
+            Status: ${{ contains(needs.*.result, 'failure') && '❌ Failed' || '✅ Success' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: always()

@@ -1,0 +1,539 @@
+name: AI Aggregator Testing Pipeline
+
+on:
+  push:
+    branches: [ main, develop, staging ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  NODE_VERSION: '18'
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  MONGODB_TEST_URI: ${{ secrets.MONGODB_TEST_URI }}
+  POSTGRES_TEST_URI: ${{ secrets.POSTGRES_TEST_URI }}
+
+jobs:
+  # Pre-migration tests (run on current Yandex Cloud setup)
+  pre-migration-tests:
+    name: Pre-Migration Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && contains(github.ref, 'migration')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Setup test databases
+        run: |
+          # Start MongoDB for testing
+          docker run -d --name mongo-test -p 27017:27017 mongo:latest
+          # Start PostgreSQL for testing  
+          docker run -d --name postgres-test -e POSTGRES_PASSWORD=test -p 5432:5432 postgres:13
+
+      - name: Wait for databases
+        run: |
+          sleep 30
+          docker ps
+
+      - name: Run unit tests
+        run: |
+          cd testing
+          npm run test:unit
+        continue-on-error: false
+
+      - name: Run integration tests
+        run: |
+          cd testing
+          npm run test:integration
+        continue-on-error: false
+
+      - name: Generate test report
+        run: |
+          cd testing
+          npm run test:report
+        if: always()
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pre-migration-test-results
+          path: testing/reports/
+
+  # Unit Tests
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [16, 18, 20]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Run unit tests
+        run: |
+          cd testing
+          npm run test:unit -- --coverage
+        env:
+          CI: true
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        if: matrix.node-version == 18
+        with:
+          file: testing/coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+
+  # Integration Tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: aiag_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Setup test databases
+        run: |
+          cd testing
+          npm run db:setup
+
+      - name: Seed test data
+        run: |
+          cd testing
+          node scripts/test-data-seeder.js seed
+
+      - name: Run integration tests
+        run: |
+          cd testing
+          npm run test:integration
+        env:
+          MONGODB_TEST_URI: mongodb://localhost:27017/aiag_test
+          POSTGRES_TEST_URI: postgresql://postgres:test@localhost:5432/aiag_test
+
+      - name: Cleanup test data
+        run: |
+          cd testing
+          node scripts/test-data-seeder.js cleanup
+        if: always()
+
+  # Performance Tests
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Install Artillery
+        run: npm install -g artillery@latest
+
+      - name: Run serverless performance tests
+        run: |
+          cd testing
+          npm run test:performance:serverless
+        env:
+          TEST_TARGET_URL: ${{ secrets.VERCEL_PREVIEW_URL || 'http://localhost:3000' }}
+
+      - name: Run load tests
+        run: |
+          cd testing
+          npm run test:performance:load
+        env:
+          TEST_TARGET_URL: ${{ secrets.VERCEL_PREVIEW_URL || 'http://localhost:3000' }}
+
+      - name: Generate performance report
+        run: |
+          cd testing
+          npm run test:performance:report
+        if: always()
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-test-results
+          path: testing/reports/performance/
+
+  # Security Tests
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Run security tests
+        run: |
+          cd testing
+          npm run test:security
+        env:
+          CI: true
+
+      - name: Run dependency audit
+        run: |
+          cd aiag_back
+          npm audit --audit-level high
+          cd ../aiaghub
+          npm audit --audit-level high
+
+      - name: Run SAST scan
+        uses: github/super-linter@v4
+        env:
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_JAVASCRIPT_ES: true
+          VALIDATE_DOCKERFILE: true
+          VALIDATE_JSON: true
+
+  # Vercel Deployment Tests
+  vercel-deployment-tests:
+    name: Vercel Deployment Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel Preview
+        run: |
+          vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} > preview_url.txt
+          echo "VERCEL_PREVIEW_URL=$(cat preview_url.txt)" >> $GITHUB_ENV
+
+      - name: Wait for deployment
+        run: sleep 60
+
+      - name: Test deployment health
+        run: |
+          curl -f ${{ env.VERCEL_PREVIEW_URL }}/health || exit 1
+
+      - name: Run deployment verification tests
+        run: |
+          cd testing
+          npm run test:deployment
+        env:
+          TEST_TARGET_URL: ${{ env.VERCEL_PREVIEW_URL }}
+
+      - name: Comment PR with preview URL
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 Preview deployment ready: ${{ env.VERCEL_PREVIEW_URL }}`
+            })
+
+  # End-to-End Tests
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    needs: vercel-deployment-tests
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Install Cypress
+        run: |
+          cd testing
+          npx cypress install
+
+      - name: Run Cypress E2E tests
+        uses: cypress-io/github-action@v6
+        with:
+          working-directory: testing
+          start: npm run start:test-server
+          wait-on: 'http://localhost:3000'
+          config: baseUrl=${{ env.VERCEL_PREVIEW_URL || 'http://localhost:3000' }}
+          spec: cypress/e2e/**/*.cy.js
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Cypress screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: testing/cypress/screenshots
+
+      - name: Upload Cypress videos
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cypress-videos
+          path: testing/cypress/videos
+
+  # Migration Tests
+  migration-tests:
+    name: Migration Tests
+    runs-on: ubuntu-latest
+    needs: [integration-tests, performance-tests]
+    if: contains(github.ref, 'migration') || github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd testing
+          npm ci
+
+      - name: Run migration simulation tests
+        run: |
+          cd testing
+          npm run test:migration
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_STAGING_URI }}
+          POSTGRES_URI: ${{ secrets.POSTGRES_STAGING_URI }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Test rollback procedures
+        run: |
+          cd testing
+          node scripts/rollback-procedures.js database
+        env:
+          BACKUP_LOCATION: ./test-backups
+        if: always()
+
+      - name: Generate migration report
+        run: |
+          cd testing
+          npm run test:migration:report
+        if: always()
+
+      - name: Upload migration results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: migration-test-results
+          path: testing/reports/migration/
+
+  # Production Deployment Tests
+  production-deployment:
+    name: Production Deployment Tests
+    runs-on: ubuntu-latest
+    needs: [e2e-tests, migration-tests, security-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project Artifacts
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel Production
+        run: |
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Wait for deployment
+        run: sleep 120
+
+      - name: Run post-deployment health checks
+        run: |
+          cd testing
+          npm run test:health:production
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+
+      - name: Run smoke tests
+        run: |
+          cd testing
+          npm run test:smoke:production
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+
+      - name: Send deployment notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'AI Aggregator deployed to production successfully! 🚀'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: always()
+
+  # Test Results Summary
+  test-summary:
+    name: Test Results Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, performance-tests, security-tests]
+    if: always()
+    
+    steps:
+      - name: Download all test artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Generate test summary
+        run: |
+          echo "# Test Results Summary" > test-summary.md
+          echo "" >> test-summary.md
+          echo "## Test Status" >> test-summary.md
+          echo "- Unit Tests: ${{ needs.unit-tests.result }}" >> test-summary.md
+          echo "- Integration Tests: ${{ needs.integration-tests.result }}" >> test-summary.md
+          echo "- Performance Tests: ${{ needs.performance-tests.result }}" >> test-summary.md
+          echo "- Security Tests: ${{ needs.security-tests.result }}" >> test-summary.md
+          echo "" >> test-summary.md
+          echo "## Coverage Report" >> test-summary.md
+          echo "Coverage reports are available in the artifacts." >> test-summary.md
+
+      - name: Comment PR with test summary
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('test-summary.md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+
+  # Cleanup
+  cleanup:
+    name: Cleanup Test Resources
+    runs-on: ubuntu-latest
+    needs: [e2e-tests, migration-tests]
+    if: always()
+    
+    steps:
+      - name: Cleanup preview deployments
+        run: |
+          # This would clean up old preview deployments
+          echo "Cleaning up test resources..."
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

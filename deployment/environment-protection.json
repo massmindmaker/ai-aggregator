@@ -1,0 +1,227 @@
+{
+  "environment_protection": {
+    "production": {
+      "protection_bypass": {
+        "enabled": true,
+        "scope": "vercel",
+        "allowed_users": [
+          "admin@aiag.ai",
+          "dev@massmindmakers.com"
+        ]
+      },
+      "deployment_protection": {
+        "enabled": true,
+        "require_approval": true,
+        "approvers": [
+          "admin@aiag.ai"
+        ],
+        "auto_approve_authors": false
+      },
+      "branch_protection": {
+        "enabled": true,
+        "protected_branches": ["main", "production"],
+        "require_status_checks": true,
+        "require_up_to_date_branch": true,
+        "enforce_admins": true,
+        "required_status_checks": [
+          "ci/tests",
+          "ci/security-scan",
+          "ci/build"
+        ]
+      },
+      "secrets_management": {
+        "environment_variables": {
+          "NODE_ENV": "production",
+          "DATABASE_URL": {
+            "type": "secret",
+            "description": "Production database connection string"
+          },
+          "MONGODB_URI": {
+            "type": "secret",
+            "description": "MongoDB Atlas connection string"
+          },
+          "JWT_SECRET": {
+            "type": "secret",
+            "description": "JWT signing secret"
+          },
+          "VERCEL_BLOB_READ_WRITE_TOKEN": {
+            "type": "secret",
+            "description": "Vercel Blob storage token"
+          },
+          "SLACK_WEBHOOK_URL": {
+            "type": "secret",
+            "description": "Slack webhook for alerts"
+          },
+          "EMAIL_API_KEY": {
+            "type": "secret",
+            "description": "Email service API key"
+          }
+        }
+      }
+    },
+    "staging": {
+      "protection_bypass": {
+        "enabled": true,
+        "scope": "vercel",
+        "allowed_users": [
+          "admin@aiag.ai",
+          "dev@massmindmakers.com",
+          "test@massmindmakers.com"
+        ]
+      },
+      "deployment_protection": {
+        "enabled": false,
+        "require_approval": false
+      },
+      "branch_protection": {
+        "enabled": true,
+        "protected_branches": ["staging", "develop"],
+        "require_status_checks": true,
+        "require_up_to_date_branch": false,
+        "enforce_admins": false,
+        "required_status_checks": [
+          "ci/tests",
+          "ci/build"
+        ]
+      },
+      "secrets_management": {
+        "environment_variables": {
+          "NODE_ENV": "staging",
+          "DATABASE_URL": {
+            "type": "secret",
+            "description": "Staging database connection string"
+          },
+          "MONGODB_URI": {
+            "type": "secret",
+            "description": "MongoDB Atlas staging connection string"
+          },
+          "JWT_SECRET": {
+            "type": "secret",
+            "description": "JWT signing secret for staging"
+          },
+          "VERCEL_BLOB_READ_WRITE_TOKEN": {
+            "type": "secret",
+            "description": "Vercel Blob storage token for staging"
+          }
+        }
+      }
+    },
+    "preview": {
+      "protection_bypass": {
+        "enabled": false,
+        "scope": "none"
+      },
+      "deployment_protection": {
+        "enabled": false,
+        "require_approval": false
+      },
+      "secrets_management": {
+        "environment_variables": {
+          "NODE_ENV": "preview",
+          "DATABASE_URL": {
+            "type": "preview",
+            "description": "Preview database connection string"
+          },
+          "MONGODB_URI": {
+            "type": "preview",
+            "description": "MongoDB Atlas preview connection string"
+          }
+        }
+      }
+    }
+  },
+  "security_policies": {
+    "access_control": {
+      "ip_whitelist": {
+        "enabled": false,
+        "allowed_ips": [],
+        "description": "IP whitelist for production access"
+      },
+      "geographic_restrictions": {
+        "enabled": false,
+        "allowed_countries": [],
+        "blocked_countries": []
+      },
+      "authentication": {
+        "required_for_preview": false,
+        "required_for_staging": true,
+        "required_for_production": true,
+        "methods": ["password", "github_oauth"]
+      }
+    },
+    "content_security": {
+      "password_protection": {
+        "staging": {
+          "enabled": true,
+          "password": {
+            "type": "secret",
+            "key": "STAGING_PASSWORD"
+          }
+        },
+        "preview": {
+          "enabled": false
+        }
+      },
+      "basic_auth": {
+        "enabled": false,
+        "username": "admin",
+        "password": {
+          "type": "secret",
+          "key": "BASIC_AUTH_PASSWORD"
+        }
+      }
+    },
+    "monitoring": {
+      "failed_login_attempts": {
+        "enabled": true,
+        "max_attempts": 5,
+        "lockout_duration": "15m",
+        "alert_threshold": 3
+      },
+      "unusual_activity": {
+        "enabled": true,
+        "monitor_geographic_anomalies": true,
+        "monitor_time_anomalies": true,
+        "monitor_volume_anomalies": true
+      }
+    }
+  },
+  "compliance": {
+    "data_protection": {
+      "gdpr_compliance": {
+        "enabled": true,
+        "cookie_consent": true,
+        "data_retention_policy": "2_years",
+        "right_to_deletion": true
+      },
+      "ccpa_compliance": {
+        "enabled": true,
+        "opt_out_mechanism": true
+      }
+    },
+    "security_standards": {
+      "owasp_compliance": true,
+      "security_headers": true,
+      "ssl_enforcement": true,
+      "vulnerability_scanning": true
+    }
+  },
+  "audit_logging": {
+    "deployment_logs": {
+      "enabled": true,
+      "retention": "90_days",
+      "include_metadata": true
+    },
+    "access_logs": {
+      "enabled": true,
+      "retention": "30_days",
+      "log_failed_attempts": true,
+      "log_admin_actions": true
+    },
+    "security_events": {
+      "enabled": true,
+      "retention": "1_year",
+      "alert_on_critical": true
+    }
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "domains": {
+    "production": {
+      "ai-aggregator": {
+        "domain": "aiag.ai",
+        "vercel_project": "ai-aggregator",
+        "current_url": "https://ai-aggregator-pxf3digcd-massmindmakers-projects.vercel.app",
+        "ssl": {
+          "enabled": true,
+          "type": "automatic",
+          "provider": "vercel"
+        },
+        "dns_records": [
+          {
+            "type": "CNAME",
+            "name": "@",
+            "value": "cname.vercel-dns.com",
+            "ttl": 300
+          },
+          {
+            "type": "CNAME",
+            "name": "www",
+            "value": "cname.vercel-dns.com",
+            "ttl": 300
+          }
+        ],
+        "redirects": [
+          {
+            "source": "www.aiag.ai",
+            "destination": "aiag.ai",
+            "permanent": true
+          }
+        ]
+      },
+      "aiag-hub": {
+        "domain": "hub.aiag.ai",
+        "vercel_project": "aiag-hub",
+        "current_url": "https://aiag-hub.vercel.app",
+        "ssl": {
+          "enabled": true,
+          "type": "automatic",
+          "provider": "vercel"
+        },
+        "dns_records": [
+          {
+            "type": "CNAME",
+            "name": "hub",
+            "value": "cname.vercel-dns.com",
+            "ttl": 300
+          }
+        ]
+      }
+    },
+    "staging": {
+      "ai-aggregator": {
+        "domain": "staging.aiag.ai",
+        "vercel_project": "ai-aggregator-staging",
+        "ssl": {
+          "enabled": true,
+          "type": "automatic",
+          "provider": "vercel"
+        }
+      },
+      "aiag-hub": {
+        "domain": "staging-hub.aiag.ai",
+        "vercel_project": "aiag-hub-staging",
+        "ssl": {
+          "enabled": true,
+          "type": "automatic",
+          "provider": "vercel"
+        }
+      }
+    }
+  },
+  "setup_instructions": {
+    "steps": [
+      "1. Purchase and configure aiag.ai domain in your DNS provider",
+      "2. Add domain to Vercel project via dashboard or CLI",
+      "3. Configure DNS records as specified above",
+      "4. Verify SSL certificate provisioning",
+      "5. Test domain resolution and HTTPS",
+      "6. Update environment variables if needed"
+    ],
+    "vercel_cli_commands": [
+      "vercel domains add aiag.ai --project=ai-aggregator",
+      "vercel domains add hub.aiag.ai --project=aiag-hub",
+      "vercel domains verify aiag.ai",
+      "vercel domains verify hub.aiag.ai"
+    ],
+    "dns_verification": {
+      "tools": ["dig", "nslookup", "host"],
+      "commands": [
+        "dig +short aiag.ai",
+        "dig +short hub.aiag.ai",
+        "curl -I https://aiag.ai/health",
+        "curl -I https://hub.aiag.ai/health"
+      ]
+    }
+  },
+  "security": {
+    "ssl_configuration": {
+      "min_tls_version": "1.2",
+      "cipher_suites": "modern",
+      "hsts": {
+        "enabled": true,
+        "max_age": 31536000,
+        "include_subdomains": true,
+        "preload": true
+      }
+    },
+    "headers": {
+      "strict_transport_security": "max-age=31536000; includeSubDomains; preload",
+      "content_security_policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.vercel.com https://vitals.vercel-insights.com",
+      "x_frame_options": "DENY",
+      "x_content_type_options": "nosniff",
+      "referrer_policy": "strict-origin-when-cross-origin"
+    }
+  }
+}

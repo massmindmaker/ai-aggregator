@@ -1,0 +1,250 @@
+{
+  "monitoring": {
+    "vercel_analytics": {
+      "enabled": true,
+      "config": {
+        "ai-aggregator": {
+          "analytics_id": "vercel-analytics-ai-aggregator",
+          "web_vitals": true,
+          "audience": true,
+          "speed_insights": true,
+          "custom_events": [
+            "user_registration",
+            "api_key_generation",
+            "product_view",
+            "contest_submission",
+            "payment_success"
+          ]
+        },
+        "aiag-hub": {
+          "analytics_id": "vercel-analytics-aiag-hub",
+          "web_vitals": true,
+          "audience": true,
+          "speed_insights": true,
+          "custom_events": [
+            "api_request",
+            "hub_search",
+            "model_query",
+            "rate_limit_hit"
+          ]
+        }
+      }
+    },
+    "health_checks": {
+      "endpoints": {
+        "ai-aggregator": {
+          "production": "https://aiag.ai/api/health",
+          "staging": "https://staging.aiag.ai/api/health",
+          "current": "https://ai-aggregator-pxf3digcd-massmindmakers-projects.vercel.app/api/health"
+        },
+        "aiag-hub": {
+          "production": "https://hub.aiag.ai/health",
+          "staging": "https://staging-hub.aiag.ai/health",
+          "current": "https://aiag-hub.vercel.app/health"
+        }
+      },
+      "intervals": {
+        "production": "30s",
+        "staging": "60s",
+        "development": "300s"
+      },
+      "timeout": "10s",
+      "expected_status": [200, 206],
+      "retry_attempts": 3,
+      "retry_delay": "5s"
+    },
+    "uptime_monitoring": {
+      "providers": {
+        "pingdom": {
+          "enabled": false,
+          "config": {
+            "check_interval": 60,
+            "locations": ["us-east", "europe", "asia"],
+            "contact_ids": []
+          }
+        },
+        "uptimerobot": {
+          "enabled": true,
+          "config": {
+            "monitor_type": "http",
+            "interval": 300,
+            "timeout": 30,
+            "keyword_type": "exists",
+            "keyword_value": "healthy"
+          }
+        },
+        "vercel_monitoring": {
+          "enabled": true,
+          "synthetic_monitoring": true,
+          "real_user_monitoring": true
+        }
+      }
+    },
+    "performance_monitoring": {
+      "web_vitals": {
+        "core_web_vitals": ["LCP", "FID", "CLS"],
+        "additional_metrics": ["FCP", "TTFB", "TTI"],
+        "thresholds": {
+          "LCP": { "good": 2500, "needs_improvement": 4000 },
+          "FID": { "good": 100, "needs_improvement": 300 },
+          "CLS": { "good": 0.1, "needs_improvement": 0.25 },
+          "TTFB": { "good": 800, "needs_improvement": 1800 }
+        }
+      },
+      "api_performance": {
+        "response_time_targets": {
+          "p50": "200ms",
+          "p95": "500ms",
+          "p99": "1000ms"
+        },
+        "error_rate_threshold": "1%",
+        "throughput_monitoring": true
+      }
+    },
+    "alerting": {
+      "channels": {
+        "email": {
+          "enabled": true,
+          "addresses": ["admin@aiag.ai", "alerts@massmindmakers.com"]
+        },
+        "webhook": {
+          "enabled": true,
+          "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+          "format": "slack"
+        },
+        "sms": {
+          "enabled": false,
+          "numbers": []
+        }
+      },
+      "rules": {
+        "downtime": {
+          "condition": "health_check_failed",
+          "threshold": "3_consecutive_failures",
+          "severity": "critical",
+          "cooldown": "5m"
+        },
+        "high_error_rate": {
+          "condition": "error_rate > 5%",
+          "window": "5m",
+          "severity": "high",
+          "cooldown": "10m"
+        },
+        "slow_response": {
+          "condition": "p95_response_time > 2000ms",
+          "window": "10m",
+          "severity": "medium",
+          "cooldown": "15m"
+        },
+        "ssl_expiry": {
+          "condition": "ssl_cert_expires_in < 30_days",
+          "severity": "medium",
+          "cooldown": "24h"
+        }
+      }
+    },
+    "logging": {
+      "vercel_logs": {
+        "enabled": true,
+        "retention": "7d",
+        "level": "info"
+      },
+      "custom_logging": {
+        "enabled": true,
+        "destinations": [
+          {
+            "type": "webhook",
+            "url": "https://api.logtail.com/",
+            "format": "json"
+          }
+        ],
+        "events": [
+          "user_actions",
+          "api_requests",
+          "errors",
+          "performance_metrics",
+          "security_events"
+        ]
+      }
+    },
+    "dashboards": {
+      "vercel_dashboard": {
+        "enabled": true,
+        "functions_monitoring": true,
+        "edge_network_monitoring": true,
+        "bandwidth_monitoring": true
+      },
+      "custom_dashboard": {
+        "enabled": true,
+        "provider": "grafana",
+        "metrics": [
+          "request_count",
+          "response_time",
+          "error_rate",
+          "user_activity",
+          "database_performance",
+          "api_usage"
+        ]
+      }
+    }
+  },
+  "security_monitoring": {
+    "rate_limiting": {
+      "enabled": true,
+      "rules": [
+        {
+          "path": "/api/*",
+          "limit": "100/min",
+          "burst": "20"
+        },
+        {
+          "path": "/hub/*",
+          "limit": "1000/min",
+          "burst": "50"
+        }
+      ]
+    },
+    "ddos_protection": {
+      "enabled": true,
+      "vercel_protection": true,
+      "cloudflare_integration": false
+    },
+    "security_headers_monitoring": {
+      "enabled": true,
+      "check_interval": "1h",
+      "required_headers": [
+        "Strict-Transport-Security",
+        "X-Content-Type-Options",
+        "X-Frame-Options",
+        "X-XSS-Protection",
+        "Referrer-Policy"
+      ]
+    }
+  },
+  "backup_monitoring": {
+    "database_backups": {
+      "mongodb_atlas": {
+        "enabled": true,
+        "continuous_backup": true,
+        "point_in_time_recovery": true,
+        "retention": "30d"
+      },
+      "vercel_postgres": {
+        "enabled": true,
+        "automated_backups": true,
+        "retention": "7d"
+      }
+    },
+    "code_backups": {
+      "github": {
+        "enabled": true,
+        "automatic_pushes": true,
+        "branch_protection": true
+      },
+      "vercel_deployment_history": {
+        "enabled": true,
+        "retention": "unlimited"
+      }
+    }
+  }
+}
