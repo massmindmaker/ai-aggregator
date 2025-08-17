@@ -31,7 +31,13 @@
       "Bash(git commit:*)",
       "Bash(uv run:*)",
       "Bash(python:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(chmod:*)",
+      "Bash(npm:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(./github-mcp-server --help)",
+      "Bash(go:*)",
+      "Bash(claude mcp add:*)"
     ],
     "deny": []
   }
