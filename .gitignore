@@ -95,3 +95,7 @@ venv.bak/
 
 # Git submodule files
 *.git
+
+# Claude Code sensitive files
+.claude/settings.local.json
+github-setup-commands.txt
