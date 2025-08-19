@@ -1,60 +1,112 @@
-# AI Aggregator - Marketplace for AI Solutions
+# AI Aggregator Platform
 
-AI Aggregator is a comprehensive marketplace platform for artificial intelligence solutions, designed to create an ecosystem connecting AI developers and consumers of their solutions.
+🚀 **Comprehensive AI Tools Marketplace and API Hub**
 
-## 🚀 Deployed Application
+[![Live Demo](https://img.shields.io/badge/Demo-Live-brightgreen)](https://aiaghub.vercel.app)
+[![Frontend](https://img.shields.io/badge/Frontend-Live-blue)](https://ai-aggregator-gamma.vercel.app)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-20.x-green)](https://nodejs.org/)
+[![MongoDB](https://img.shields.io/badge/Database-MongoDB%20%7C%20PostgreSQL-orange)](https://www.mongodb.com/)
+[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black)](https://vercel.com)
 
-**Live Demo**: [https://ai-aggregator-gamma.vercel.app](https://ai-aggregator-gamma.vercel.app)
+## 🌟 Overview
 
-The application is a Russian-language AI marketplace platform ("Маркетплейс ИИ-решений") featuring:
-- API marketplace for AI solutions
-- Machine learning competitions
-- Development request system
-- Organization profiles and collaboration tools
+AI Aggregator is a comprehensive platform that serves as a central hub for discovering, managing, and integrating AI tools and services. It combines a modern React frontend with a robust Node.js backend, featuring both traditional and serverless architectures for optimal performance and scalability.
+
+## ✨ Key Features
+
+### 🎯 Core Platform
+- **AI Tools Marketplace** - Discover and manage AI tools and services
+- **API Hub** - Centralized API proxy and management system
+- **User Management** - Complete authentication and user profile system
+- **Organization Management** - Multi-organization support and management
+- **Contest System** - AI competitions and challenges platform
+- **Feed System** - Social features and content sharing
+
+### 🏗️ Architecture
+- **Dual Database Support** - MongoDB Atlas & Vercel PostgreSQL
+- **Serverless Functions** - Optimized for Vercel edge deployment
+- **API Proxy Hub** - Rate limiting, caching, and monitoring
+- **Microservices Ready** - Modular, scalable architecture
+- **Cloud Native** - Built for modern cloud deployment
+
+### 🔧 Technical Features
+- **Real-time Analytics** - Performance monitoring and metrics
+- **Advanced Caching** - Multi-layer caching strategy
+- **Rate Limiting** - API protection and fair usage
+- **Security First** - CORS, CSP, and comprehensive security headers
+- **SEO Optimized** - Server-side rendering and meta optimization
+
+## 🚀 Live Deployments
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **API Hub** | [aiaghub.vercel.app](https://aiaghub.vercel.app) | Main API gateway and services |
+| **Frontend** | [ai-aggregator-gamma.vercel.app](https://ai-aggregator-gamma.vercel.app) | React-based user interface |
+| **Health Check** | [aiaghub.vercel.app/health](https://aiaghub.vercel.app/health) | System status monitoring |
 
 ## 📁 Project Structure
 
 ```
 ai-aggregator/
-├── aiag_back/              # Main backend API and React frontend
-│   ├── api/                # Serverless API endpoints
-│   ├── controllers/        # Business logic controllers
-│   ├── models/            # Database schemas
-│   ├── routes/            # API routing
-│   ├── react-ui/          # React frontend application
-│   └── middleware/        # Authentication and security
-├── aiaghub/               # Central API hub service
-│   ├── api/               # Hub API endpoints
-│   ├── controllers/       # Hub controllers
-│   └── lib/               # Shared utilities
-├── serena/                # AI assistant integration
-├── database/              # Database configuration and migrations
-├── deployment/            # Deployment scripts and configs
-├── testing/               # Comprehensive test suite
-└── migration/             # Database migration scripts
+├── 📁 aiag_back/                  # Main Backend Service
+│   ├── 📁 api/                    # API endpoints
+│   ├── 📁 react-ui/               # React frontend application
+│   ├── 📁 controllers/            # Business logic controllers
+│   ├── 📁 models/                 # Database models and schemas
+│   ├── 📁 routes/                 # Express.js route definitions
+│   ├── 📁 middleware/             # Authentication, rate limiting, etc.
+│   └── 📄 vercel.json             # Vercel deployment configuration
+│
+├── 📁 aiaghub/                    # Serverless API Hub
+│   ├── 📁 api/                    # Serverless functions
+│   ├── 📁 controllers/            # API proxy logic
+│   ├── 📁 lib/                    # Shared utilities
+│   ├── 📁 middleware/             # Serverless middleware
+│   └── 📄 vercel.json             # Hub-specific Vercel config
+│
+├── 📁 database/                   # Database Management
+│   ├── 📁 mongodb/                # MongoDB Atlas configuration
+│   ├── 📁 postgres/               # Vercel PostgreSQL setup
+│   └── 📁 healthcheck/            # Database monitoring
+│
+├── 📁 testing/                    # Comprehensive Test Suite
+│   ├── 📁 tests/unit/             # Unit tests
+│   ├── 📁 tests/integration/      # Integration tests
+│   ├── 📁 tests/performance/      # Load and performance tests
+│   └── 📁 cypress/                # End-to-end tests
+│
+├── 📁 deployment/                 # Deployment Scripts
+├── 📁 .github/workflows/          # CI/CD Pipeline
+└── 📁 serena/                     # AI Assistant Integration
 ```
 
-## 🛠 Technology Stack
+## 🛠️ Technology Stack
 
 ### Frontend
-- **React** - Main UI framework
-- **SCSS** - Styling and responsive design
-- **Material-UI** - Component library
-- **React Router** - Client-side routing
+- **React 18** - Modern UI library with hooks
+- **Material-UI** - Component library and design system
+- **SCSS/CSS3** - Styling and responsive design
+- **Webpack** - Module bundling and optimization
 
 ### Backend
-- **Node.js** - Runtime environment
-- **Express.js** - Web framework
-- **MongoDB** - Primary database
-- **JWT** - Authentication system
-- **Vercel** - Serverless deployment platform
+- **Node.js 20+** - JavaScript runtime
+- **Express.js** - Web application framework
+- **MongoDB** - Primary document database
+- **PostgreSQL** - Relational data storage
+- **Vercel Functions** - Serverless deployment
 
-### DevOps & Infrastructure
+### Infrastructure
 - **Vercel** - Hosting and serverless functions
-- **Vercel Blob** - File storage
-- **YooKassa** - Payment processing
-- **Yandex Cloud** - Additional cloud services
-- **GitHub Actions** - CI/CD pipeline
+- **MongoDB Atlas** - Cloud database service
+- **Vercel Postgres** - Serverless PostgreSQL
+- **GitHub Actions** - CI/CD automation
+
+### APIs & Services
+- **RESTful APIs** - Standard HTTP API design
+- **JWT Authentication** - Secure token-based auth
+- **Rate Limiting** - API protection
+- **Caching Layer** - Performance optimization
 
 ## 🎯 Key Features
 

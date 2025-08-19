@@ -37,8 +37,18 @@
       "WebFetch(domain:github.com)",
       "Bash(./github-mcp-server --help)",
       "Bash(go:*)",
-      "Bash(claude mcp add:*)"
+      "Bash(claude mcp add:*)",
+      "Bash(env)",
+      "Bash(gh auth:*)",
+      "Bash(claude mcp:*)",
+      "Bash(git reset:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh repo view:*)",
+      "Bash(git fetch:*)"
     ],
-    "deny": []
+    "deny": [],
+    "additionalDirectories": [
+      "D:\\d\\webp\\aiag"
+    ]
   }
 }
