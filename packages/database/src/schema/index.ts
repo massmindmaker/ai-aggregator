@@ -41,3 +41,11 @@ export * from './fraudFlags';
 export * from './cookieConsents';
 export * from './humanReviews';
 export * from './incidents';
+
+// Phase 14 — Contest → Marketplace pipeline + KYC + prize awards
+export * from './kyc';
+export * from './prize-awards';
+// `models-marketplace` exports the gateway `models` table. Importers MUST use
+// a named import (e.g. `import { models } from '@aiag/database/schema/models-marketplace'`)
+// to avoid colliding with the legacy `aiModels` symbol from `./ai-models`.
+// We deliberately do NOT re-export it from this barrel.

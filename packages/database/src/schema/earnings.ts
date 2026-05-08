@@ -6,6 +6,8 @@ import {
   integer,
   numeric,
   date,
+  varchar,
+  jsonb,
   index,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
@@ -26,7 +28,8 @@ export const authorEarnings = pgTable(
     modelId: uuid('model_id')
       .notNull()
       .references(() => aiModels.id),
-    periodMonth: date('period_month').notNull(),
+    // Phase 14: NULL for per-request accrual rows (sourced from aiag_settle_charge hook)
+    periodMonth: date('period_month'),
     grossRevenueRub: numeric('gross_revenue_rub', { precision: 14, scale: 4 })
       .notNull()
       .default('0'),
@@ -43,6 +46,13 @@ export const authorEarnings = pgTable(
     authorTaxStatus: text('author_tax_status'),
     status: text('status').notNull().default('accruing'), // accruing | locked | paid
     computedAt: timestamp('computed_at', { mode: 'date' }).defaultNow().notNull(),
+
+    // Phase 14 — per-request accrual columns (spec §5 Step 5)
+    gatewayRequestId: varchar('gateway_request_id', { length: 64 }),
+    grossRub: numeric('gross_rub', { precision: 14, scale: 4 }),
+    tierPctDecimal: numeric('tier_pct_decimal', { precision: 4, scale: 3 }),
+    netRub: numeric('net_rub', { precision: 14, scale: 4 }),
+    availableAt: timestamp('available_at', { mode: 'date' }),
   },
   (table) => ({
     uniqPeriod: uniqueIndex('author_earnings_uniq_idx').on(
@@ -83,6 +93,10 @@ export const payouts = pgTable(
     requestedAt: timestamp('requested_at', { mode: 'date' }).defaultNow().notNull(),
     processedAt: timestamp('processed_at', { mode: 'date' }),
     paidAt: timestamp('paid_at', { mode: 'date' }),
+
+    // Phase 14 — KYC snapshot at payout time + tax act (spec §3.5)
+    kycSnapshot: jsonb('kyc_snapshot'),
+    taxActStorageKey: text('tax_act_storage_key'),
   },
   (table) => ({
     authorIdx: index('payouts_author_idx').on(table.authorId),

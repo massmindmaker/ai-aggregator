@@ -6,6 +6,7 @@ import {
   boolean,
   varchar,
   jsonb,
+  date,
   index,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
@@ -55,6 +56,15 @@ export const users = pgTable(
     isActive: boolean('is_active').default(true).notNull(),
     isBanned: boolean('is_banned').default(false).notNull(),
     banReason: text('ban_reason'),
+
+    // Phase 14 — KYC + tax + bank fields (spec §3.3)
+    kycStatus: text('kyc_status').notNull().default('none'), // none | pending | verified | rejected
+    kycType: text('kyc_type'), // self_employed | ip | individual
+    kycVerifiedAt: timestamp('kyc_verified_at', { mode: 'date' }),
+    taxCountry: text('tax_country').default('RU'),
+    taxId: text('tax_id'),
+    bankDetails: jsonb('bank_details'), // encrypted application-side (libsodium) — admin sees last-4 only
+    dob: date('dob'),
 
     // 152-FZ consent fields
     consentProcessing: boolean('consent_processing').notNull().default(false),

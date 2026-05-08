@@ -182,6 +182,12 @@ export const contestSubmissions = pgTable(
     isSelected: boolean('is_selected').default(false).notNull(), // Selected for final evaluation
     isFinal: boolean('is_final').default(false).notNull(), // Chosen as final submission
 
+    // Phase 14 — publish-to-marketplace linkage (spec §3.1)
+    publishedModelId: uuid('published_model_id'),
+    publishedAt: timestamp('published_at', { mode: 'date' }),
+    finalRank: integer('final_rank'),
+    authorConsentId: uuid('author_consent_id'),
+
     // Timestamps
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
     scoredAt: timestamp('scored_at', { mode: 'date' }),
