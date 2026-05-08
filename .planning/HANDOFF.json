@@ -1,0 +1,115 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-08T10:23:15.577Z",
+  "source": "auto-postool",
+  "partial": false,
+  "phase": null,
+  "phase_name": "post-launch hardening (v0.5.0-mvp-integration shipped to https://ai-aggregator.ru)",
+  "phase_dir": null,
+  "plan": "rolling bug-sweep + UI polish on master (no active GSD phase)",
+  "task": null,
+  "total_tasks": null,
+  "status": "auto-checkpoint",
+  "completed_tasks": [],
+  "remaining_tasks": [],
+  "blockers": [
+    {
+      "description": "**Real upstream API keys** — OpenAI / YandexGPT / GigaChat / Anthropic. Without them /v1/chat/completions returns mock-or-401. Highest-priority next milestone.",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "**Payment integration end-to-end test** — Tinkoff sandbox keys + a successful test charge against `/api/payments/*`.",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "**S3 bucket** — `aiag-storage` not created in Timeweb. Blocks Phase 5 image storage, Phase 6 uploads, Phase 7 submissions (REQ-INF-011).",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "**VPS RAM** — 2GB tight (web 92MB + gateway 26MB + PG + nginx). Recommend 4GB upgrade before traffic.",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "**DNS** — `www.` and `api.` A-records not added in Beget. Blocks subdomain certs.",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "**Eval-runner sandbox** (nsjail) — Phase 7 submission scoring still uses unsanitised exec. SECURITY-TODO before opening contests publicly.",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "**VPS root password** — SECURITY-TODO change/disable (key auth already active).",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "**deploy.sh pm2 process name** — script looks for `web`/`gateway`, actual pm2 names are `aiag-web`/`aiag-gateway`. Manual `ln -sfn` + `pm2 restart aiag-web` required after each deploy. Cleanup ticket.",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "NextAuth v5 UntrustedHost / \"Failed to parse URL /login?error=Configuration\" → `trustHost: true`.",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "Postgres \"server does not support SSL connections\" on register → ssl=false for localhost URLs in `createDb`.",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "Marketplace 500 / `TypeError: f is not a function` digest 2370859535 → moved `computeFacets` from `'use client'` FilterPanel into `lib/marketplace/facets.ts`.",
+      "type": "technical",
+      "workaround": ""
+    },
+    {
+      "description": "Hero animation missing → ported Brian's-Brain CA from `brain/Projects/AIAG/Wireframes/animations/hero-demo-v2.html` to `apps/web/src/components/HeroAnimation.tsx`.",
+      "type": "technical",
+      "workaround": ""
+    }
+  ],
+  "human_actions_pending": [],
+  "decisions": [
+    {
+      "decision": "**D#12** Drop Supabase → Timeweb managed PG + NextAuth + S3 (152-ФЗ + RAM economy)",
+      "rationale": "",
+      "phase": null
+    },
+    {
+      "decision": "**D#13** Drop Docker entirely → bare-metal apt + systemd",
+      "rationale": "",
+      "phase": null
+    },
+    {
+      "decision": "**D#14** Drop Dokploy → pm2 + nginx + GitHub Actions SSH rsync (Capistrano-style releases)",
+      "rationale": "",
+      "phase": null
+    }
+  ],
+  "uncommitted_files": [
+    {
+      "status": "M",
+      "path": ".planning/ROADMAP.md"
+    },
+    {
+      "status": "M",
+      "path": "docs/superpowers/specs/2026-05-08-phase14-contest-marketplace-workflow-design.md"
+    },
+    {
+      "status": "??",
+      "path": ".planning/HANDOFF.json"
+    },
+    {
+      "status": "??",
+      "path": ".planning/phases/14-contest-marketplace-admin/"
+    }
+  ],
+  "next_action": "Production live. Web + gateway online behind pm2 + nginx. Marketplace, /api/auth/*, all 10 surveyed routes return 200 OK with no console errors.",
+  "context_notes": "Status: Production live. Web + gateway online behind pm2 + nginx. Marketplace, /api/auth/*, all 10 surveyed routes return 200 OK with no console errors.\n\nRecent commits:\n11adf71 docs(specs): apply post-research deltas + bring phase14-17 specs to master (#2)\ncb82067 chore(security): bump hono ^4.3.2 → ^4.12.16 (#1)\n1464889 chore: GSD phase 10/11 directories + oauth test scripts + .gitignore deploy artifacts\nfefa610 feat(growth): Phase 13 — referrals + promo codes + cohort retention\n09195b9 feat(admin): add Phase 12 critical views — requests/routing/jobs/dashboard"
+}

@@ -229,13 +229,34 @@ Plans:
 
 ### Phase 13: Growth Foundation — referral system + promo codes + cohort retention dashboard
 
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 12
-**Plans:** 0 plans
+---
+
+### Phase 14: Contest → Marketplace Admin ○ DESIGN-READY
+
+**Goal:** Admin-only flow для публикации модели победителя конкурса в marketplace + revshare accrual + payout queue + KYC review + freeze controls. Author-side (consent, /me/kyc, payout request, dashboard earnings) — отложено в Phase 14b.
+
+**Depends on:** Phase 7 (Supply), Phase 11 (Admin Panel), Phase 12 (Admin Critical Views)
+**Requirements:** REQ-CONTEST-001..003, REQ-CONTEST-005, REQ-PAYOUT-001..004, REQ-KYC-001..003 (TBD — derive from spec §3.1-3.6; 004 dropped as placeholder, consents → 14b)
+**Success Criteria:**
+  1. Cron `closeContestsCron` финализирует scores и создаёт `prize_awards` записи
+  2. `/admin/contests/[slug]` имеет publish-modal — admin может опубликовать submission как model в `pending_author_consent`
+  3. Каждый settled gateway-call авто-инсертит `author_earnings` с правильным sticky tier_pct
+  4. `/admin/payouts` queue с manual approve + auto-approve cap (20k₽ дефолт) + tax_withheld расчёт
+  5. `/admin/kyc-queue` — admin approve/reject документы (3 пути: НПД / ИП / физлицо)
+  6. `/admin/models/[id]` имеет freeze/depublish controls для деградирующих моделей
+  7. Migration `0014_contest_marketplace.sql` идемпотентна, применяется на VPS Postgres
+**Plans:** 7 plans (3 waves)
+**Status:** ○ Design ready (spec at `docs/superpowers/specs/2026-05-08-phase14-contest-marketplace-workflow-design.md`)
+**Source:** `docs/superpowers/specs/2026-05-08-phase14-contest-marketplace-workflow-design.md`
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 13 to break down)
+- [ ] 14-01-schema-migration-PLAN.md — Migration 0014 + drizzle schema + tier_pct fn + accrue hook
+- [ ] 14-02-crons-PLAN.md — closeContestsCron + finalizeEarningsCron in worker
+- [ ] 14-03-admin-publish-modal-PLAN.md — /admin/contests publish modal + API
+- [ ] 14-04-admin-payouts-extended-PLAN.md — /admin/payouts queue extend + tax + approve/reject
+- [ ] 14-05-admin-kyc-queue-PLAN.md — NEW /admin/kyc-queue page + approve/reject
+- [ ] 14-06-admin-models-freeze-PLAN.md — /admin/models freeze/depublish + gateway 503
+- [ ] 14-07-deploy-and-verify-PLAN.md — SSH migrate + GH deploy + smoke
 
 ---
 

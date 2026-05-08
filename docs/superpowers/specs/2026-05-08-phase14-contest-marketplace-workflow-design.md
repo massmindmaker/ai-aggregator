@@ -456,7 +456,7 @@ flowchart TD
 7. KYC flow покрывает 3 пути (НПД / ИП / физлицо), admin может approve/reject.
 8. Payout request → admin queue → SBP transfer → email + TG notification, tax_withheld посчитан корректно.
 9. Edge case: incoming gateway call к `frozen` модели → 503, no accrual.
-10. Все consents (publish + revshare) сохранены в `consent_records` (audit trail).
+10. **[Phase 14b]** Все consents (publish + revshare) сохранены в `consent_records` (audit trail). _Запись consent делается на author-side flow `/me/contest-wins/[id]/publish` — относится к Phase 14b. Phase 14 (admin) только создаёт `models` row в `pending_author_consent` и триггерит email-инвайт автору._
 
 ---
 
