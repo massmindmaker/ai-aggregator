@@ -11,6 +11,7 @@ import { AiagError, errors } from './lib/errors';
 import { requireApiKey } from './middleware/auth-plan04';
 import { rateLimit } from './middleware/rate-limit-plan04';
 import { piiFilter } from './middleware/pii-filter';
+import { modelStatusMiddleware } from './middleware/model-status-check';
 import { requestIdMiddleware } from './middleware/request-id';
 import { chat } from './routes/v1/chat';
 import { completions } from './routes/v1/completions';
@@ -70,6 +71,7 @@ app.get('/', (c) =>
 app.use('/v1/*', requireApiKey);
 app.use('/v1/*', rateLimit);
 app.use('/v1/*', piiFilter);
+app.use('/v1/*', modelStatusMiddleware());
 
 app.route('/v1/chat', chat);
 app.route('/v1/completions', completions);
