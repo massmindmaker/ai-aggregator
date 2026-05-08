@@ -17,6 +17,8 @@ import { startUpstreamPollWorker } from './queues/upstream-poll.js';
 import { startContestEvalWorker } from './queues/contest-eval.js';
 import { startWebhookRetryWorker } from './queues/webhook-retry.js';
 import { startEmailSendWorker } from './queues/email-send.js';
+import { startCloseContestsCron } from './queues/close-contests-cron.js';
+import { startFinalizeEarningsCron } from './queues/finalize-earnings-cron.js';
 import { runEvaluation } from './eval-runner/runner.js';
 import { startInternalProbe } from './probes/internal-probe.js';
 
@@ -53,7 +55,38 @@ async function main(): Promise<void> {
   const webhookRetry = startWebhookRetryWorker(connection);
   const emailSend = startEmailSendWorker(connection);
 
-  const workers = [upstreamPoll, contestEval, webhookRetry, emailSend];
+  // ---------------------------------------------------------------------------
+  // Phase 14 crons — closeContestsCron (hourly) + finalizeEarningsCron (daily).
+  // Both lazy-import @aiag/database so the worker still boots when DATABASE_URL
+  // is absent (dev / smoke / CI), matching the internalProbe pingPg pattern.
+  // ---------------------------------------------------------------------------
+  const closeContests = startCloseContestsCron(connection, {
+    runOnce: async () => {
+      if (!process.env.DATABASE_URL) return { contestsProcessed: 0, awardsCreated: 0 };
+      const { createDb, sql } = await import('@aiag/database');
+      const db = createDb(process.env.DATABASE_URL);
+      const { runCloseContestsOnce } = await import('./queues/close-contests-cron.js');
+      return runCloseContestsOnce(
+        db as unknown as Parameters<typeof runCloseContestsOnce>[0],
+        sql as unknown as Parameters<typeof runCloseContestsOnce>[1]
+      );
+    },
+  });
+
+  const finalizeEarnings = startFinalizeEarningsCron(connection, {
+    runOnce: async () => {
+      if (!process.env.DATABASE_URL) return { rowsTransitioned: 0 };
+      const { createDb, sql } = await import('@aiag/database');
+      const db = createDb(process.env.DATABASE_URL);
+      const { runFinalizeEarningsOnce } = await import('./queues/finalize-earnings-cron.js');
+      return runFinalizeEarningsOnce(
+        db as unknown as Parameters<typeof runFinalizeEarningsOnce>[0],
+        sql as unknown as Parameters<typeof runFinalizeEarningsOnce>[1]
+      );
+    },
+  });
+
+  const workers = [upstreamPoll, contestEval, webhookRetry, emailSend, closeContests, finalizeEarnings];
 
   // ---------------------------------------------------------------------------
   // Probes
