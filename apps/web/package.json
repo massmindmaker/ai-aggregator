@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "bun run --cwd ../../packages/shared build && bun run --cwd ../../packages/database build",
+    "prebuild": "bun run --cwd ../../packages/shared build && bun run --cwd ../../packages/database build && bun run --cwd ../../packages/email build && bun run --cwd ../../packages/telegram-alerts build && bun run --cwd ../../packages/tinkoff build && bun run --cwd ../../packages/yookassa build",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -16,6 +16,7 @@
     "@aiag/shared": "*",
     "@aiag/telegram-alerts": "*",
     "@aiag/tinkoff": "*",
+    "@aiag/yookassa": "*",
     "@auth/drizzle-adapter": "^1.1.0",
     "@emotion/cache": "^11.11.0",
     "@emotion/react": "^11.11.0",
