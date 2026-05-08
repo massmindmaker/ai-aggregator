@@ -2,14 +2,22 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/Button';
+import { PublishSubmissionModal } from './PublishSubmissionModal';
 
 export function ContestSubmissionsActions({
   slug,
   submissionId,
+  rank,
+  finalRank,
+  participantEmail,
+  suggestedSlug,
 }: {
   slug: string;
   submissionId: string;
   rank: number;
+  finalRank: number | null;
+  participantEmail: string | null;
+  suggestedSlug: string;
 }) {
   const [busy, setBusy] = React.useState(false);
   const setWinner = async (place: number) => {
@@ -29,8 +37,11 @@ export function ContestSubmissionsActions({
     }
   };
 
+  const effectiveRank = finalRank ?? rank;
+  const canPublish = effectiveRank !== null && effectiveRank <= 3;
+
   return (
-    <div className="flex gap-1 justify-end">
+    <div className="flex gap-1 justify-end items-center">
       <Button size="sm" variant="outline" disabled={busy} onClick={() => setWinner(1)}>
         🥇
       </Button>
@@ -40,6 +51,15 @@ export function ContestSubmissionsActions({
       <Button size="sm" variant="outline" disabled={busy} onClick={() => setWinner(3)}>
         🥉
       </Button>
+      {canPublish ? (
+        <PublishSubmissionModal
+          slug={slug}
+          submissionId={submissionId}
+          finalRank={effectiveRank}
+          participantEmail={participantEmail}
+          suggestedSlug={suggestedSlug}
+        />
+      ) : null}
     </div>
   );
 }
