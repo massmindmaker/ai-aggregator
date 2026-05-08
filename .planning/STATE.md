@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: MVP
+status: executing
+stopped_at: production stable, all 10 surveyed routes return 200 OK with zero console errors. Hero CA animation live.
+last_updated: "2026-05-08T10:40:51.863Z"
+last_activity: 2026-05-08 -- Phase --phase execution started
+progress:
+  total_phases: 14
+  completed_phases: 0
+  total_plans: 7
+  completed_plans: 0
+  percent: 0
+---
+
 # Project State
 
 ## Project Reference
@@ -5,14 +21,14 @@
 See: `.planning/PROJECT.md` (updated 2026-04-26)
 
 **Core value:** Any AI model. One API. Payment in ₽.
-**Current focus:** Phase 8 (Launch) — recommended as next focus, blocks production
+**Current focus:** Phase --phase — 14
 
 ## Current Position
 
-Phase: post-launch hardening (v0.5.0-mvp-integration shipped to https://ai-aggregator.ru)
-Plan: rolling bug-sweep + UI polish on master (no active GSD phase)
-Status: Production live. Web + gateway online behind pm2 + nginx. Marketplace, /api/auth/*, all 10 surveyed routes return 200 OK with no console errors.
-Last activity: 2026-04-27 — hero CA animation restored, NextAuth UntrustedHost + db SSL + marketplace `f is not a function` fixed and deployed.
+Phase: --phase (14) — EXECUTING
+Plan: 1 of --name
+Status: Executing Phase --phase
+Last activity: 2026-05-08 -- Phase --phase execution started
 
 Progress: [██████░░░░] ~60% — Phases 1–3 + Phase 8 deployment shipped; Phases 4–7 merged into master via `v0.5.0-mvp-integration` and partially live (web + gateway). Still missing: real upstream API keys, payment integration test, S3 bucket, eval-runner sandbox.
 
@@ -25,6 +41,7 @@ Alternative: `/gsd:execute-phase 2` to finish bare-metal infrastructure (10% rem
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 2 (Phase 1, Phase 3)
 - Tags shipped: 3 (`v0.1.0-foundation`, `v0.1.1-foundation-complete`, `v0.2.0-design`)
 - Master commits since 2026-04-20: 11
@@ -42,6 +59,7 @@ Alternative: `/gsd:execute-phase 2` to finish bare-metal infrastructure (10% rem
 | 6. Marketplace | 1/1 | n/a | Complete + deployed (RSC `f is not a function` fixed 2026-04-27) |
 | 7. Supply | partial | n/a | Merged — submission UI exists, eval-runner sandbox still TODO |
 | 8. Launch | 1/1 | n/a | Complete — pm2 + nginx + GitHub Actions SSH rsync deploy, ai-aggregator.ru live |
+| 14. Contest→Marketplace Admin | 7/7 code, 6/7 deployed | n/a | ◆ Admin half on master, migration 0014 applied on VPS; web/gateway/worker deploy blocked on CI pipeline debt — see `.planning/phases/14-contest-marketplace-admin/14-07-SUMMARY.md` |
 
 ## Accumulated Context
 
@@ -50,6 +68,7 @@ Alternative: `/gsd:execute-phase 2` to finish bare-metal infrastructure (10% rem
 Full log in `.planning/PROJECT.md` Key Decisions and `.planning/intel/decisions.md` (verbatim D#1–D#14).
 
 Recent decisions affecting current work (all 2026-04-24):
+
 - **D#12** Drop Supabase → Timeweb managed PG + NextAuth + S3 (152-ФЗ + RAM economy)
 - **D#13** Drop Docker entirely → bare-metal apt + systemd
 - **D#14** Drop Dokploy → pm2 + nginx + GitHub Actions SSH rsync (Capistrano-style releases)
@@ -61,6 +80,7 @@ None captured via GSD yet (workflow just bootstrapped today).
 ### Blockers/Concerns
 
 External (waiting on user):
+
 - **Real upstream API keys** — OpenAI / YandexGPT / GigaChat / Anthropic. Without them /v1/chat/completions returns mock-or-401. Highest-priority next milestone.
 - **Payment integration end-to-end test** — Tinkoff sandbox keys + a successful test charge against `/api/payments/*`.
 - **S3 bucket** — `aiag-storage` not created in Timeweb. Blocks Phase 5 image storage, Phase 6 uploads, Phase 7 submissions (REQ-INF-011).
@@ -68,11 +88,13 @@ External (waiting on user):
 - **DNS** — `www.` and `api.` A-records not added in Beget. Blocks subdomain certs.
 
 Internal:
+
 - **Eval-runner sandbox** (nsjail) — Phase 7 submission scoring still uses unsanitised exec. SECURITY-TODO before opening contests publicly.
 - **VPS root password** — SECURITY-TODO change/disable (key auth already active).
 - **deploy.sh pm2 process name** — script looks for `web`/`gateway`, actual pm2 names are `aiag-web`/`aiag-gateway`. Manual `ln -sfn` + `pm2 restart aiag-web` required after each deploy. Cleanup ticket.
 
 Recently fixed (2026-04-27):
+
 - NextAuth v5 UntrustedHost / "Failed to parse URL /login?error=Configuration" → `trustHost: true`.
 - Postgres "server does not support SSL connections" on register → ssl=false for localhost URLs in `createDb`.
 - Marketplace 500 / `TypeError: f is not a function` digest 2370859535 → moved `computeFacets` from `'use client'` FilterPanel into `lib/marketplace/facets.ts`.
@@ -95,6 +117,7 @@ Stopped at: production stable, all 10 surveyed routes return 200 OK with zero co
 Resume file: `brain/Projects/AIAG/RESUME-HERE.md`
 
 **Next milestone candidates** (pick one to focus):
+
 1. Real OpenAI / YandexGPT keys → live `/v1/chat/completions` end-to-end
 2. Tinkoff sandbox payment test → close Phase 5 monetization loop
 3. S3 bucket provisioning → unblock image upload + submission flows
@@ -103,6 +126,7 @@ Resume file: `brain/Projects/AIAG/RESUME-HERE.md`
 **Last release:** `20260427T024519Z-1e346f7` deployed to ai-aggregator.ru — but commit hash is misleading; actual code shipped includes uncommitted master tip `ee0824d` (deploy was done with built artefacts before the commits were pushed; matches by content)
 
 **Worktrees in play (parallel work possible):**
+
 - `C:\Users\боб\projects\aggregator` — `exec/plan-03-design` (current shell, 4ad927f)
 - `C:\Users\боб\projects\aggregator-master-check` — `master` (314397d, used for this bootstrap commit)
 - `C:\Users\боб\projects\aggregator-plan-04` — `exec/plan-04-gateway`

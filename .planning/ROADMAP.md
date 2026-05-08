@@ -231,7 +231,7 @@ Plans:
 
 ---
 
-### Phase 14: Contest → Marketplace Admin ○ DESIGN-READY
+### Phase 14: Contest → Marketplace Admin ◆ ADMIN HALF CODE-COMPLETE — DEPLOY BLOCKED
 
 **Goal:** Admin-only flow для публикации модели победителя конкурса в marketplace + revshare accrual + payout queue + KYC review + freeze controls. Author-side (consent, /me/kyc, payout request, dashboard earnings) — отложено в Phase 14b.
 
@@ -246,17 +246,17 @@ Plans:
   6. `/admin/models/[id]` имеет freeze/depublish controls для деградирующих моделей
   7. Migration `0014_contest_marketplace.sql` идемпотентна, применяется на VPS Postgres
 **Plans:** 7 plans (3 waves)
-**Status:** ○ Design ready (spec at `docs/superpowers/specs/2026-05-08-phase14-contest-marketplace-workflow-design.md`)
+**Status:** ◆ Admin half code-complete on master (commits 2b537ae..f9d0f2c). Migration 0014 applied + idempotent on prod VPS. Deploy pipeline blocked on pre-existing CI debt — see `.planning/phases/14-contest-marketplace-admin/14-07-SUMMARY.md`. Author-side flows + deploy fix → Phase 14b.
 **Source:** `docs/superpowers/specs/2026-05-08-phase14-contest-marketplace-workflow-design.md`
 
 Plans:
-- [ ] 14-01-schema-migration-PLAN.md — Migration 0014 + drizzle schema + tier_pct fn + accrue hook
-- [ ] 14-02-crons-PLAN.md — closeContestsCron + finalizeEarningsCron in worker
-- [ ] 14-03-admin-publish-modal-PLAN.md — /admin/contests publish modal + API
-- [ ] 14-04-admin-payouts-extended-PLAN.md — /admin/payouts queue extend + tax + approve/reject
-- [ ] 14-05-admin-kyc-queue-PLAN.md — NEW /admin/kyc-queue page + approve/reject
-- [ ] 14-06-admin-models-freeze-PLAN.md — /admin/models freeze/depublish + gateway 503
-- [ ] 14-07-deploy-and-verify-PLAN.md — SSH migrate + GH deploy + smoke
+- [x] 14-01-schema-migration-PLAN.md — Migration 0014 + drizzle schema + tier_pct fn + accrue hook ✓ applied on VPS
+- [x] 14-02-crons-PLAN.md — closeContestsCron + finalizeEarningsCron in worker ✓ on master
+- [x] 14-03-admin-publish-modal-PLAN.md — /admin/contests publish modal + API ✓ on master
+- [x] 14-04-admin-payouts-extended-PLAN.md — /admin/payouts queue extend + tax + approve/reject ✓ on master
+- [x] 14-05-admin-kyc-queue-PLAN.md — NEW /admin/kyc-queue page + approve/reject ✓ on master
+- [x] 14-06-admin-models-freeze-PLAN.md — /admin/models freeze/depublish + gateway 503 ✓ on master
+- [~] 14-07-deploy-and-verify-PLAN.md — Migration applied ✓; GH deploy + smoke BLOCKED on CI pipeline (route eager-DB-init, see 14-07-SUMMARY)
 
 ---
 
