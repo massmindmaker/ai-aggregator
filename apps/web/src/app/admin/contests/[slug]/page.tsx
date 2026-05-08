@@ -24,7 +24,14 @@ type Contest = {
 
 async function fetchContest(slug: string): Promise<{
   contest: Contest | null;
-  submissions: Array<{ id: string; participant_email: string | null; score: string | null; status: string; rank: number | null }>;
+  submissions: Array<{
+    id: string;
+    participant_email: string | null;
+    score: string | null;
+    status: string;
+    rank: number | null;
+    final_rank: number | null;
+  }>;
 }> {
   try {
     const [c, s] = await Promise.all([
@@ -39,12 +46,13 @@ async function fetchContest(slug: string): Promise<{
                u.email AS participant_email,
                cs.score::text,
                cs.status::text,
-               cs.rank
+               cs.rank,
+               cs.final_rank
         FROM contest_submissions cs
         JOIN contests ct ON ct.id = cs.contest_id
         LEFT JOIN users u ON u.id = cs.user_id
         WHERE ct.slug = ${slug}
-        ORDER BY COALESCE(cs.score, 0) DESC
+        ORDER BY COALESCE(cs.final_rank, 999), COALESCE(cs.score, 0) DESC
         LIMIT 100
       `).catch(() => ({ rows: [] })),
     ]);
@@ -58,6 +66,7 @@ async function fetchContest(slug: string): Promise<{
         score: string | null;
         status: string;
         rank: number | null;
+        final_rank: number | null;
       }>,
     };
   } catch (e) {
@@ -130,19 +139,30 @@ export default async function AdminContestDetailPage({ params }: { params: Promi
               </tr>
             </thead>
             <tbody>
-              {submissions.map((s, i) => (
-                <tr key={s.id} className="border-t">
-                  <td className="px-3 py-2">{s.rank ?? i + 1}</td>
-                  <td className="px-3 py-2 text-xs">{s.participant_email ?? '—'}</td>
-                  <td className="px-3 py-2 text-right">{s.score ?? '—'}</td>
-                  <td className="px-3 py-2">
-                    <Badge variant="outline">{s.status}</Badge>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <ContestSubmissionsActions slug={contest.slug} submissionId={s.id} rank={s.rank ?? i + 1} />
-                  </td>
-                </tr>
-              ))}
+              {submissions.map((s, i) => {
+                const effectiveRank = s.final_rank ?? s.rank ?? i + 1;
+                const suggestedSlug = `contest-${contest.slug}-rank${effectiveRank}`;
+                return (
+                  <tr key={s.id} className="border-t">
+                    <td className="px-3 py-2">{effectiveRank}</td>
+                    <td className="px-3 py-2 text-xs">{s.participant_email ?? '—'}</td>
+                    <td className="px-3 py-2 text-right">{s.score ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      <Badge variant="outline">{s.status}</Badge>
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <ContestSubmissionsActions
+                        slug={contest.slug}
+                        submissionId={s.id}
+                        rank={effectiveRank}
+                        finalRank={s.final_rank}
+                        participantEmail={s.participant_email}
+                        suggestedSlug={suggestedSlug}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
               {submissions.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
