@@ -9,6 +9,8 @@
 --  - Partial UNIQUE (request_id, source) WHERE type='api_usage' ensures
 --    idempotency at the row level (see migration 0004_gateway_core.sql).
 --
+-- Phase 14: appended accrue_author_earnings hook (spec §5 Step 5).
+--
 -- Returns: (sub_portion, payg_portion, new_sub, new_payg, idempotent)
 -- Raises:
 --   P0001 INVALID_AMOUNT            if _total_rub <= 0
@@ -37,6 +39,10 @@ DECLARE
   _payg_portion  NUMERIC := 0;
   _existing_sub  NUMERIC;
   _existing_payg NUMERIC;
+  -- Phase 14: hook locals (declared at top level — Postgres disallows nested DECLARE)
+  _author_id     UUID;
+  _model_id      UUID;
+  _tier_pct      NUMERIC;
 BEGIN
   IF _total_rub <= 0 THEN
     RAISE EXCEPTION 'INVALID_AMOUNT' USING ERRCODE = 'P0001';
@@ -110,6 +116,39 @@ BEGIN
     INSERT INTO gateway_transactions (org_id, request_id, type, source, delta, metadata, created_at)
     VALUES (_org_id, _request_id, 'api_usage', 'payg', -_payg_portion, '{}'::jsonb, NOW());
   END IF;
+
+  -- -----------------------------------------------------------------------
+  -- Phase 14 §5 Step 5 — accrue_author_earnings hook.
+  -- Skipped on idempotent replays (early-return above). Filter `m.status='live'`
+  -- is the authoritative cutoff for whether a settled charge accrues to the
+  -- author. Failures isolated by inner BEGIN/EXCEPTION (settlement must succeed
+  -- even if accrual fails — accrual can be reconciled, settlement cannot).
+  -- -----------------------------------------------------------------------
+  BEGIN
+    SELECT m.author_user_id, m.id INTO _author_id, _model_id
+    FROM requests r
+    JOIN models m ON m.slug = r.model_slug
+    WHERE r.request_id = _request_id
+      AND m.author_user_id IS NOT NULL
+      AND m.status = 'live'
+    LIMIT 1;
+
+    IF _author_id IS NOT NULL THEN
+      _tier_pct := current_tier_pct(_author_id);
+      INSERT INTO author_earnings (
+        author_id, model_id, period_month,
+        gross_rub, tier_pct, tier_pct_decimal, net_rub, author_share_rub,
+        gateway_request_id, status, available_at
+      ) VALUES (
+        _author_id, _model_id, NULL,
+        _total_rub, (_tier_pct * 100)::int, _tier_pct, _total_rub * _tier_pct, _total_rub * _tier_pct,
+        _request_id, 'accruing', NOW() + INTERVAL '30 days'
+      )
+      ON CONFLICT (gateway_request_id) DO NOTHING;
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'accrue_author_earnings hook failed for request_id=%: %', _request_id, SQLERRM;
+  END;
 
   sub_portion  := _sub_portion;
   payg_portion := _payg_portion;
