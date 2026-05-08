@@ -181,7 +181,7 @@ ALTER TABLE author_earnings ALTER COLUMN period_month DROP NOT NULL;
 
 DO $$ BEGIN
   ALTER TABLE author_earnings ADD CONSTRAINT uq_author_earnings_gw_req UNIQUE (gateway_request_id);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; WHEN duplicate_table THEN NULL; END $$;
 
 CREATE INDEX IF NOT EXISTS idx_author_earnings_status_avail
   ON author_earnings(status, available_at) WHERE status='accruing';
