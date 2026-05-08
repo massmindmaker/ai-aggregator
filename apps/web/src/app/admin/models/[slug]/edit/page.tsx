@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/Table';
+import { ModelStatusActions } from './ModelStatusActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,9 @@ interface ModelRow {
   enabled: boolean;
   display_name: string | null;
   description: string | null;
+  status: string;
+  frozen_reason: string | null;
+  depublished_reason: string | null;
 }
 
 interface UpstreamRow {
@@ -40,7 +44,8 @@ interface UpstreamRow {
 
 async function getData(slug: string) {
   const modelRes = await db.execute(sql`
-    SELECT id, slug, type, enabled, display_name, description
+    SELECT id::text AS id, slug, type, enabled, display_name, description,
+           status, frozen_reason, depublished_reason
     FROM models WHERE slug = ${slug} LIMIT 1
   `);
   const mr = modelRes as unknown as { rows?: ModelRow[] } | ModelRow[];
@@ -149,6 +154,17 @@ export default async function EditModelPage({
         )}
       </div>
       <p className="text-sm text-muted-foreground font-mono mb-8">{model.slug}</p>
+
+      <section className="mb-10">
+        <h2 className="text-xl font-semibold mb-3">Статус модели</h2>
+        <ModelStatusActions
+          modelId={model.id}
+          modelSlug={model.slug}
+          status={model.status}
+          frozenReason={model.frozen_reason}
+          depublishedReason={model.depublished_reason}
+        />
+      </section>
 
       <section className="mb-10">
         <h2 className="text-xl font-semibold mb-3">Основные поля</h2>
