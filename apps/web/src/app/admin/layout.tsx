@@ -17,6 +17,7 @@ const NAV: { href: string; label: string }[] = [
   { href: '/admin/upstreams', label: 'Аплинки' },
   { href: '/admin/contests', label: 'Контесты' },
   { href: '/admin/payouts', label: 'Выплаты' },
+  { href: '/admin/kyc-queue', label: 'KYC очередь' },
   { href: '/admin/payments', label: 'Платежи' },
   { href: '/admin/moderation/models', label: 'Модерация' },
   { href: '/admin/audit', label: 'Аудит' },
