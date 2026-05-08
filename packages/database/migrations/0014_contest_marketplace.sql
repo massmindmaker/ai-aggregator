@@ -18,14 +18,14 @@
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
--- PRE-CHECK: consent_records prerequisite (Phase 1 baseline).
--- Surfaces a clear operator message instead of opaque FK error if missing.
+-- NOTE on consent_records: forward-looking dependency from Phase 1 spec.
+-- The table is not yet present in the deployed schema (Phase 1 shipped
+-- without it). Sections referencing consent_records (FK on
+-- contest_submissions.author_consent_id, doc_type CHECK extension) are
+-- conditional and become no-ops when the table is missing. They are
+-- safely re-applicable by re-running this migration after Phase 14b/15
+-- introduces consent_records.
 -- ---------------------------------------------------------------------------
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'consent_records') THEN
-    RAISE EXCEPTION 'Phase 14 migration requires consent_records table from Phase 1 — not found. Apply Phase 1 baseline before 0014.';
-  END IF;
-END $$;
 
 -- ---------------------------------------------------------------------------
 -- 1. contest_submissions extensions (spec §3.1)
@@ -33,8 +33,16 @@ END $$;
 ALTER TABLE contest_submissions
   ADD COLUMN IF NOT EXISTS published_model_id uuid REFERENCES models(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS published_at timestamptz,
-  ADD COLUMN IF NOT EXISTS final_rank int,
-  ADD COLUMN IF NOT EXISTS author_consent_id uuid REFERENCES consent_records(id) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS final_rank int;
+
+-- contest_submissions.author_consent_id — conditional on consent_records existence.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'consent_records') THEN
+    EXECUTE 'ALTER TABLE contest_submissions
+             ADD COLUMN IF NOT EXISTS author_consent_id uuid
+             REFERENCES consent_records(id) ON DELETE SET NULL';
+  END IF;
+END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_csubs_pubmodel
   ON contest_submissions(published_model_id) WHERE published_model_id IS NOT NULL;
@@ -201,11 +209,16 @@ $$ LANGUAGE plpgsql STABLE;
 -- ---------------------------------------------------------------------------
 -- 9. consent_records doc_type extension (spec §3.7)
 -- Add 'author_publish_consent' and 'author_revshare_consent' to existing CHECK.
--- Introspect actual constraint name from pg_catalog before dropping.
+-- Conditional: no-op if consent_records table does not exist yet.
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE _conname text;
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'consent_records') THEN
+    RAISE NOTICE 'consent_records table not present — skipping doc_type CHECK extension (will apply on re-run after Phase 14b/15 baseline).';
+    RETURN;
+  END IF;
+
   SELECT con.conname INTO _conname
   FROM pg_constraint con
   JOIN pg_class rel ON rel.oid = con.conrelid
@@ -218,10 +231,6 @@ BEGIN
     EXECUTE format('ALTER TABLE consent_records DROP CONSTRAINT %I', _conname);
   END IF;
 
-  -- Re-add with extended IN list. Keep prior values; new values appended.
-  -- Prior assumed values from Phase 1: 'tos','privacy','marketing','transborder'.
-  -- If Phase 1 used different prior values, this constraint will reject existing rows
-  -- and the migration will fail loudly — operator must reconcile.
   ALTER TABLE consent_records
     ADD CONSTRAINT consent_records_doc_type_chk
     CHECK (doc_type IN (
