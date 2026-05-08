@@ -28,6 +28,7 @@
       "dependencies": {
         "@aiag/database": "*",
         "@aiag/email": "*",
+        "@aiag/shared": "*",
         "@aiag/telegram-alerts": "*",
         "@aiag/tinkoff": "*",
         "@auth/drizzle-adapter": "^1.1.0",

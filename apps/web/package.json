@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "bun run --cwd ../../packages/shared build && bun run --cwd ../../packages/database build",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -12,6 +13,7 @@
   "dependencies": {
     "@aiag/database": "*",
     "@aiag/email": "*",
+    "@aiag/shared": "*",
     "@aiag/telegram-alerts": "*",
     "@aiag/tinkoff": "*",
     "@auth/drizzle-adapter": "^1.1.0",
