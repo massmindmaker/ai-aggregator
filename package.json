@@ -22,8 +22,7 @@
     "db:migrate": "turbo db:migrate",
     "db:push": "turbo db:push",
     "db:studio": "pnpm --filter @aiag/database db:studio",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "prepare": "playwright install"
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
     "@aiag/typescript-config": "*",
