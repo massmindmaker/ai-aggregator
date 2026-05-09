@@ -10,8 +10,18 @@ import { users } from '@aiag/database/schema';
 import { eq } from '@aiag/database';
 import bcrypt from 'bcryptjs';
 
+// Adapter must be attached lazily — at build-time DATABASE_URL is unset and
+// DrizzleAdapter(db) eagerly touches the lazy db Proxy, which throws
+// "Database not initialized" and fails Next page-data collection on every
+// route that imports @/auth (e.g. via requireAdmin in @/lib/admin/guard).
+// JWT session strategy doesn't need the adapter for build-time analysis.
+const adapter =
+  typeof process !== 'undefined' && process.env.DATABASE_URL
+    ? DrizzleAdapter(db)
+    : undefined;
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  adapter: DrizzleAdapter(db),
+  adapter,
   trustHost: true,
   session: {
     strategy: 'jwt',
