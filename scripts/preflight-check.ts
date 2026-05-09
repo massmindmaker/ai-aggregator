@@ -14,6 +14,8 @@
  *   - TELEGRAM_ALERT_BOT_TOKEN отсутствует → alerts не будут доставлены
  */
 
+import { readFileSync, existsSync } from 'node:fs';
+
 function fail(msg: string): never {
   console.error(`[PREFLIGHT-FAIL] ${msg}`);
   process.exit(1);
@@ -23,7 +25,34 @@ function warn(msg: string) {
   console.warn(`[PREFLIGHT-WARN] ${msg}`);
 }
 
+/**
+ * Deploy pipeline runs this script in a bare SSH bash session that has no
+ * application env vars — those live in /srv/aiag/shared/.env (loaded by
+ * pm2 ecosystem at process start). Hydrate process.env from common locations
+ * so preflight checks see the same vars the running services will see.
+ */
+function loadEnvFiles() {
+  const candidates = [
+    '/srv/aiag/shared/.env',
+    process.env.AIAG_ENV_FILE,
+  ].filter((p): p is string => Boolean(p && existsSync(p)));
+  for (const path of candidates) {
+    try {
+      const txt = readFileSync(path, 'utf8');
+      for (const line of txt.split('\n')) {
+        const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+        if (m && process.env[m[1]] === undefined) {
+          process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+        }
+      }
+    } catch {
+      // best-effort
+    }
+  }
+}
+
 function main() {
+  loadEnvFiles();
   const isProd = process.env.NODE_ENV === 'production';
 
   // --- Hard gates (production only) ---
