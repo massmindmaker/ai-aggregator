@@ -28,15 +28,16 @@ function main() {
 
   // --- Hard gates (production only) ---
   if (isProd) {
+    // РКН/DPO downgraded to warnings on owner request — owner accepts compliance
+    // debt and will populate these envs before opening real traffic to PDn flows.
     if (!process.env.RKN_OPERATOR_NUMBER) {
-      fail(
-        'Cannot launch without РКН registration. RKN_OPERATOR_NUMBER not set.\n' +
-          '  Per 152-ФЗ ч.1 ст.22: operator must be registered BEFORE processing PDn.\n' +
-          '  See: docs/legal/rkn-submission-record.md'
+      warn(
+        'RKN_OPERATOR_NUMBER not set — running without РКН registration. ' +
+          'Per 152-ФЗ ч.1 ст.22 must be set before processing real PDn.'
       );
     }
     if (!process.env.DPO_EMAIL && !process.env.NEXT_PUBLIC_DPO_EMAIL) {
-      fail('DPO_EMAIL not set. 152-ФЗ ст.22.1 requires published DPO contact.');
+      warn('DPO_EMAIL not set — 152-ФЗ ст.22.1 requires it before public traffic.');
     }
     if (!process.env.DATABASE_URL) {
       fail('DATABASE_URL not set.');
