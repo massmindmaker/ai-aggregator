@@ -236,10 +236,7 @@ export default function HomePage() {
   return (
     <MainLayout>
       {/* ═══ HERO ═══ */}
-      <section
-        className="relative isolate overflow-hidden"
-        style={{ minHeight: 760, padding: '80px 20px 120px' }}
-      >
+      <section className="aiag-hero relative isolate overflow-hidden">
         {/* Layer: cellular automaton canvas (full-bleed) */}
         <div className="aiag-hero-canvas">
           <HeroAnimation
@@ -255,7 +252,7 @@ export default function HomePage() {
         {/* Layer: vignette overlay */}
         <div className="aiag-hero-overlay" />
 
-        {/* Floating model cards (right side) */}
+        {/* Floating model cards (right side) — hidden on mobile via CSS */}
         <div
           className="aiag-floating-cards absolute inset-0 pointer-events-none"
           style={{ zIndex: 0 }}
@@ -287,12 +284,10 @@ export default function HomePage() {
         </div>
 
         <div
-          className="relative grid items-center"
+          className="aiag-hero-grid relative items-center"
           style={{
             maxWidth: 1280,
             margin: '0 auto',
-            gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)',
-            gap: 80,
             zIndex: 1,
           }}
         >

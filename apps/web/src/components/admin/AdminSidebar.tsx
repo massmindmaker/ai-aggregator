@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -22,6 +23,8 @@ import {
   Webhook,
   Settings,
   Cpu,
+  Menu,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -99,12 +102,49 @@ interface Props {
 
 export default function AdminSidebar({ email }: Props) {
   const pathname = usePathname() ?? '/admin';
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   return (
-    <aside
-      className="w-60 shrink-0 border-r flex flex-col"
-      style={{ borderColor: 'var(--line)', background: 'var(--bg-elev)' }}
-    >
+    <>
+      <button
+        type="button"
+        aria-label="Открыть admin-меню"
+        onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed top-3 left-3 z-40 p-2 rounded-md border bg-[var(--bg-elev)] hover:bg-white/[0.04]"
+        style={{ borderColor: 'var(--line)' }}
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/70"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={cn(
+          'shrink-0 border-r flex flex-col',
+          'lg:static lg:w-60 lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200 ease-out',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        )}
+        style={{ borderColor: 'var(--line)', background: 'var(--bg-elev)' }}
+      >
+      <button
+        type="button"
+        aria-label="Закрыть меню"
+        onClick={() => setMobileOpen(false)}
+        className="lg:hidden absolute top-3 right-3 p-1.5 rounded hover:bg-white/[0.04] z-10"
+      >
+        <X className="h-5 w-5" />
+      </button>
       <div
         className="px-4 py-4 border-b"
         style={{ borderColor: 'var(--line)' }}
@@ -155,6 +195,7 @@ export default function AdminSidebar({ email }: Props) {
       >
         {email}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

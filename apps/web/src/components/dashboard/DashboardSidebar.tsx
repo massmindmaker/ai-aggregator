@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
@@ -18,6 +19,8 @@ import {
   Lock,
   Users as UsersIcon,
   ShieldAlert,
+  Menu,
+  X,
 } from 'lucide-react';
 import { resolveMode, type Mode } from '@/lib/dashboard/mode';
 import { cn } from '@/lib/utils';
@@ -77,12 +80,54 @@ export default function DashboardSidebar({ isAdmin }: Props) {
   const pathname = usePathname() ?? '/dashboard';
   const searchParams = useSearchParams();
   const mode = resolveMode(searchParams.get('mode') ?? undefined, pathname);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close drawer on route change.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname, searchParams]);
 
   return (
-    <aside
-      className="w-60 shrink-0 border-r"
-      style={{ borderColor: 'var(--line)', background: 'var(--bg-elev)' }}
-    >
+    <>
+      {/* Mobile hamburger — fixed top-left, visible < lg */}
+      <button
+        type="button"
+        aria-label="Открыть меню кабинета"
+        onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed top-3 left-3 z-40 p-2 rounded-md border bg-[var(--bg-elev)] hover:bg-white/[0.04]"
+        style={{ borderColor: 'var(--line)' }}
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/70"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={cn(
+          'shrink-0 border-r flex flex-col',
+          // Desktop: classic sidebar inline
+          'lg:static lg:w-60 lg:translate-x-0',
+          // Mobile: slide-over drawer
+          'fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200 ease-out',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        )}
+        style={{ borderColor: 'var(--line)', background: 'var(--bg-elev)' }}
+      >
+        <button
+          type="button"
+          aria-label="Закрыть меню"
+          onClick={() => setMobileOpen(false)}
+          className="lg:hidden absolute top-3 right-3 p-1.5 rounded hover:bg-white/[0.04]"
+        >
+          <X className="h-5 w-5" />
+        </button>
       <div className="p-4 flex flex-col gap-1">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
           Режим
@@ -169,6 +214,7 @@ export default function DashboardSidebar({ isAdmin }: Props) {
           </Link>
         )}
       </nav>
-    </aside>
+      </aside>
+    </>
   );
 }

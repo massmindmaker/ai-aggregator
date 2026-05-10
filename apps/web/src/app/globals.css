@@ -366,9 +366,37 @@
   animation-play-state: paused;
 }
 
+/* Hero responsive layout */
+.aiag-hero {
+  min-height: 760px;
+  padding: 80px 20px 120px;
+}
+.aiag-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 80px;
+}
+
 @media (max-width: 1024px) {
   .aiag-floating-cards {
     display: none;
+  }
+  .aiag-hero {
+    min-height: auto;
+    padding: 56px 16px 72px;
+  }
+  .aiag-hero-grid {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+}
+
+@media (max-width: 640px) {
+  .aiag-hero {
+    padding: 40px 14px 56px;
+  }
+  .aiag-hero-grid {
+    gap: 28px;
   }
 }
 
