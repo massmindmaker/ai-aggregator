@@ -1111,55 +1111,6 @@ head -3 apps/web/src/app/pricing/page.tsx
 # First non-empty line should be: import { auth } from '@/auth'; (server, no 'use client')
 ```
 
-```tsx
-// apps/web/src/app/pricing/page.tsx
-import { auth } from '@/auth';
-import { db, sql } from '@/lib/db';
-import PricingClient from './PricingClient';
-
-export const dynamic = 'force-dynamic';
-
-interface PlanRow { plan_name: string | null }
-
-async function currentPlanId(userId: string | null | undefined): Promise<string | null> {
-  if (!userId) return null;
-  const r = await db.execute(sql`
-    SELECT plan_name FROM subscriptions
-    WHERE user_id = ${userId}::uuid AND status = 'active'
-    ORDER BY created_at DESC LIMIT 1
-  `).catch(() => ({ rows: [] }));
-  const rows = (((r as unknown as { rows?: unknown[] }).rows ?? r) as PlanRow[]);
-  return rows[0]?.plan_name ?? null;
-}
-
-export interface DerivedCta {
-  label: string;
-  href: string | null; // null → disabled
-}
-
-export default async function PricingPage() {
-  const session = await auth();
-  const plan = await currentPlanId(session?.user?.id);
-  return <PricingClient session={session} currentPlanId={plan} />;
-}
-```
-
-`PricingClient.tsx` is the existing client component renamed. Inside it, replace per-tier `ctaHref` lookup with:
-
-```ts
-function ctaForTier(tier: Tier, loggedIn: boolean, currentPlanId: string | null): DerivedCta {
-  if (tier.isContact) return { label: 'Связаться', href: '/business?topic=enterprise' };
-  if (!loggedIn) {
-    return { label: 'Зарегистрироваться', href: `/register?callbackUrl=${encodeURIComponent('/pricing')}` };
-  }
-  if (currentPlanId === tier.id) return { label: 'Текущий тариф', href: null };
-  const verb = tier.id === 'free' ? 'Перейти на Free' : `Сменить на ${tier.name}`;
-  return { label: verb, href: `/dashboard/billing?upgrade=${tier.id}` };
-}
-```
-
-In the JSX, replace the existing `<Link href={tier.ctaHref}>` button with derivation-aware rendering: if `cta.href === null`, render a disabled button with the label.
-
 - [ ] **Step 3: Type-check**
 
 ```bash
