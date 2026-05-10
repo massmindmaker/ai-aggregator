@@ -111,6 +111,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
+        // Lookup role once on sign-in so server components can show admin
+        // affordances (e.g. "Админка" link in header) without each request
+        // querying the DB. Refresh on session update if the trigger fires.
+        try {
+          const u = await db.query.users.findFirst({
+            where: eq(users.id, user.id as string),
+            columns: { role: true },
+          });
+          token.role = u?.role ?? 'user';
+        } catch {
+          token.role = 'user';
+        }
       }
 
       if (trigger === 'update' && session) {
@@ -123,6 +135,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.role = (token.role as string | undefined) ?? 'user';
       }
       return session;
     },
@@ -137,6 +150,14 @@ declare module 'next-auth' {
       name?: string | null;
       email?: string | null;
       image?: string | null;
+      role?: string;
     };
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id?: string;
+    role?: string;
   }
 }

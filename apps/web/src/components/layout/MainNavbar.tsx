@@ -1,8 +1,5 @@
 import Link from 'next/link';
 import { auth } from '@/auth';
-import { db } from '@/lib/db';
-import { users } from '@aiag/database/schema';
-import { eq } from '@aiag/database';
 import UserMenu from '@/components/UserMenu';
 import MainNavbarMobile from './MainNavbarMobile';
 
@@ -15,17 +12,14 @@ const mainMenu = [
 ];
 
 export default async function MainNavbar() {
+  // Important: do NOT import `db` or `@aiag/database/schema` here. MainNavbar
+  // is rendered inside MainLayout which is consumed by 'use client' pages
+  // (e.g. dashboard/billing, dashboard/keys, pricing/PricingClient). Any
+  // server-only DB import would leak pg/dns/fs into the client bundle and
+  // fail webpack with "Module not found: Can't resolve 'fs'".
+  // Role is read from the JWT (auth.ts puts it there on sign-in).
   const session = await auth();
-  let isAdmin = false;
-  if (session?.user?.id) {
-    const me = await db.query.users
-      .findFirst({
-        where: eq(users.id, session.user.id),
-        columns: { role: true },
-      })
-      .catch(() => null);
-    isAdmin = me?.role === 'admin';
-  }
+  const isAdmin = session?.user?.role === 'admin';
 
   const right = session?.user ? (
     <UserMenu
