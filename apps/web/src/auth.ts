@@ -155,9 +155,5 @@ declare module 'next-auth' {
   }
 }
 
-declare module 'next-auth/jwt' {
-  interface JWT {
-    id?: string;
-    role?: string;
-  }
-}
+// (JWT shape is augmented via the Session type — next-auth/jwt module
+// augmentation is not used here to avoid version-mismatch resolution issues.)
