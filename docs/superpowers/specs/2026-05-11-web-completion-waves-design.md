@@ -40,13 +40,9 @@
   - Defer: Yandex IAM token cache, GigaChat (post-MVP)
 - **Note on Kie.ai images in Wave 1:** upstream URL returned as-is (expiring Kie CDN link). Permanent storage to Object Storage added in Wave 2 Phase 6.
 
-### Subagent C: Phase 8 — Legal Pages + Monitoring
+### Subagent C: Phase 8 — Monitoring (Legal pages deferred)
 - **Branch:** `exec/plan-08-launch` (restart fresh — previous agent died)
-- **Legal pages** (using `LegalPageShell` component):
-  - `/privacy` — 152-ФЗ compliant, generated from template
-  - `/terms` — terms of service
-  - `/contests-rules` — contest participation rules
-  - `/author-agreement` — ML engineer revenue share agreement
+- **Legal pages:** deferred (no deadline yet, Gate G3 not resolved)
 - **Monitoring on VPS:**
   - Prometheus + Node Exporter via apt + systemd
   - Grafana dashboard: request rate, error rate, p95 latency, disk, RAM
@@ -62,8 +58,7 @@
 4. Insufficient balance → `402` with topup link, balance never goes negative
 5. Rate limit → `429 + Retry-After`
 6. `X-AIAG-Upstream` header on every response
-7. All four `/legal/*` pages live and linked from footer
-8. Grafana accessible, Telegram alert fires on synthetic test condition
+7. Grafana accessible, Telegram alert fires on synthetic test condition
 
 ---
 
@@ -119,6 +114,7 @@
 |------|--------|
 | Yandex IAM / GigaChat adapters | Need Russian entity + agreement |
 | nsjail eval sandbox | Complex kernel setup; `systemd-run` sufficient for launch |
+| Legal pages (`/privacy`, `/terms`, etc.) | Deliberately deferred — no deadline |
 | Author self-service consent UI | Phase 14b |
 | Loki log aggregation | Monitoring baseline sufficient |
 | Foreign entity / Stripe | Phase 9 trigger: MRR > 500k₽ |
