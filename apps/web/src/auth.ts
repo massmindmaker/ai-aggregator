@@ -28,11 +28,15 @@ import bcrypt from 'bcryptjs';
 // the actual cause of the user-facing "Configuration" error on /login.
 const adapter =
   typeof process !== 'undefined' && process.env.DATABASE_URL
-    ? DrizzleAdapter(db, {
-        usersTable: users,
-        accountsTable: accounts,
-        sessionsTable: sessions,
-        verificationTokensTable: verificationTokens,
+    ? // The adapter's strict generic shape expects "default" Auth.js columns;
+      // our `users` table carries extra app columns (role, kyc_*, consent_*…)
+      // that don't fit. The adapter still works at runtime — it only reads
+      // the columns it needs. Cast through unknown to bypass the structural check.
+      DrizzleAdapter(db, {
+        usersTable: users as unknown as never,
+        accountsTable: accounts as unknown as never,
+        sessionsTable: sessions as unknown as never,
+        verificationTokensTable: verificationTokens as unknown as never,
       })
     : undefined;
 
