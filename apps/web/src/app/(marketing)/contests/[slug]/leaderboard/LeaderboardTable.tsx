@@ -28,43 +28,7 @@ interface LeaderboardPayload {
   updatedAt: string;
 }
 
-// MVP: mocked response — real endpoint reads Redis cache (7s TTL) from
-// the leaderboard aggregate query (Plan 07 §8.2).
-const MOCK_BY_SLUG: Record<string, LeaderboardPayload> = {
-  'launch-banking-tx': mockData(false),
-  'ru-doc-summarization': mockData(false),
-  'ru-ner-medical': mockData(true),
-};
-
-function mockData(privateRevealed: boolean): LeaderboardPayload {
-  const names = [
-    ['Ирина К.', 'irina-k'],
-    ['Алексей М.', 'alexey-m'],
-    ['Вы', 'me'],
-    ['Дарья П.', 'darya-p'],
-    ['Maxim Sh.', 'maxim-sh'],
-    ['team_bayes', 'team-bayes'],
-    ['Pavel N.', 'pavel-n'],
-    ['sofiia', 'sofiia'],
-  ];
-  const rows: LeaderboardRow[] = names.map(([name, username], i) => ({
-    rank: i + 1,
-    authorName: name,
-    authorUsername: username,
-    bestPublic: Number((0.942 - i * 0.011).toFixed(4)),
-    bestPrivate: privateRevealed
-      ? Number((0.939 - i * 0.012).toFixed(4))
-      : null,
-    submissionsCount: 15 - i,
-    firstSubmittedAt: '2026-04-16T12:00:00Z',
-    isCurrentUser: username === 'me',
-  }));
-  return {
-    rows,
-    privateRevealed,
-    updatedAt: new Date().toISOString(),
-  };
-}
+// (MOCK data removed — real /api/contests/[slug]/leaderboard implemented.)
 
 export default function LeaderboardTable({ slug }: { slug: string }) {
   const [data, setData] = React.useState<LeaderboardPayload | null>(() => null);
