@@ -1,7 +1,10 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
-import { auth } from '@/auth';
+import { useSession } from 'next-auth/react';
+import { Menu, X } from 'lucide-react';
 import UserMenu from '@/components/UserMenu';
-import MainNavbarMobile from './MainNavbarMobile';
 
 const mainMenu = [
   { title: 'Маркетплейс', href: '/marketplace' },
@@ -11,45 +14,18 @@ const mainMenu = [
   { title: 'Для бизнеса', href: '/business' },
 ];
 
-export default async function MainNavbar() {
-  // Important: do NOT import `db` or `@aiag/database/schema` here. MainNavbar
-  // is rendered inside MainLayout which is consumed by 'use client' pages
-  // (e.g. dashboard/billing, dashboard/keys, pricing/PricingClient). Any
-  // server-only DB import would leak pg/dns/fs into the client bundle and
-  // fail webpack with "Module not found: Can't resolve 'fs'".
-  // Role is read from the JWT (auth.ts puts it there on sign-in).
-  const session = await auth();
+/**
+ * Pixel-match navbar per home.html mockup.
+ * Sticky, blurred dark, mono "ai-aggregator" wordmark with amber dash.
+ *
+ * Client component on purpose: pulls session via useSession (no DB), so that
+ * any 'use client' page (e.g. dashboard/billing, pricing/PricingClient) can
+ * import MainLayout without leaking pg into the client bundle.
+ */
+const MainNavbar = () => {
+  const { data: session } = useSession();
   const isAdmin = session?.user?.role === 'admin';
-
-  const right = session?.user ? (
-    <UserMenu
-      name={session.user.name ?? null}
-      email={session.user.email ?? ''}
-      image={session.user.image ?? null}
-      isAdmin={isAdmin}
-    />
-  ) : (
-    <>
-      <Link
-        href="/login"
-        className="inline-flex items-center px-4 py-2 text-[13px] font-semibold rounded-[2px] border transition-colors hover:bg-white/[0.04]"
-        style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
-      >
-        Войти
-      </Link>
-      <Link
-        href="/register"
-        className="inline-flex items-center px-4 py-2 text-[13px] font-semibold rounded-[2px] border transition-all hover:-translate-y-px"
-        style={{
-          background: 'var(--accent)',
-          color: '#000',
-          borderColor: 'var(--accent)',
-        }}
-      >
-        Регистрация
-      </Link>
-    </>
-  );
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
     <header
@@ -76,16 +52,153 @@ export default async function MainNavbar() {
           ))}
         </nav>
 
-        <div className="hidden lg:flex items-center gap-2.5">{right}</div>
+        <div className="hidden lg:flex items-center gap-2.5">
+          {session?.user ? (
+            <UserMenu
+              name={session.user.name ?? null}
+              email={session.user.email ?? ''}
+              image={session.user.image ?? null}
+              isAdmin={isAdmin}
+            />
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="inline-flex items-center px-4 py-2 text-[13px] font-semibold rounded-[2px] border transition-colors hover:bg-white/[0.04]"
+                style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
+              >
+                Войти
+              </Link>
+              <Link
+                href="/register"
+                className="inline-flex items-center px-4 py-2 text-[13px] font-semibold rounded-[2px] border transition-all hover:-translate-y-px"
+                style={{
+                  background: 'var(--accent)',
+                  color: '#000',
+                  borderColor: 'var(--accent)',
+                }}
+              >
+                Регистрация
+              </Link>
+            </>
+          )}
+        </div>
 
-        <MainNavbarMobile
-          menu={mainMenu}
-          loggedIn={Boolean(session?.user)}
-          name={session?.user?.name ?? null}
-          email={session?.user?.email ?? ''}
-          isAdmin={isAdmin}
-        />
+        <button
+          type="button"
+          aria-label="Открыть меню"
+          className="lg:hidden p-2 rounded-md hover:bg-white/[0.04] transition-colors"
+          onClick={() => setDrawerOpen(true)}
+        >
+          <Menu className="h-5 w-5" />
+        </button>
       </div>
+
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 z-50 lg:hidden"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="absolute inset-0 bg-black/70"
+            onClick={() => setDrawerOpen(false)}
+          />
+          <aside
+            className="absolute inset-y-0 end-0 w-72 border-s shadow-xl flex flex-col"
+            style={{ background: 'var(--bg-elev)', borderColor: 'var(--line)' }}
+          >
+            <div
+              className="flex items-center justify-between p-4 border-b"
+              style={{ borderColor: 'var(--line)' }}
+            >
+              <span className="font-mono font-bold text-sm">
+                ai<span style={{ color: 'var(--accent)' }}>-</span>aggregator
+              </span>
+              <button
+                type="button"
+                aria-label="Закрыть меню"
+                className="p-2 rounded-md hover:bg-white/[0.04] transition-colors"
+                onClick={() => setDrawerOpen(false)}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <ul className="flex flex-col p-2 flex-1">
+              {mainMenu.map((item) => (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    onClick={() => setDrawerOpen(false)}
+                    className="block px-4 py-3 text-sm hover:bg-white/[0.04] rounded"
+                  >
+                    {item.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div
+              className="p-4 border-t flex flex-col gap-2"
+              style={{ borderColor: 'var(--line)' }}
+            >
+              {session?.user ? (
+                <>
+                  <div className="px-1 pb-1 text-xs text-muted-foreground truncate">
+                    {session.user.name || session.user.email}
+                  </div>
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setDrawerOpen(false)}
+                    className="inline-flex justify-center items-center px-4 py-2.5 text-sm font-semibold rounded-[2px] border"
+                    style={{ borderColor: 'var(--line)' }}
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    href="/dashboard/profile"
+                    onClick={() => setDrawerOpen(false)}
+                    className="inline-flex justify-center items-center px-4 py-2.5 text-sm rounded-[2px] border"
+                    style={{ borderColor: 'var(--line)' }}
+                  >
+                    Профиль
+                  </Link>
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setDrawerOpen(false)}
+                      className="inline-flex justify-center items-center px-4 py-2.5 text-sm font-semibold rounded-[2px] border"
+                      style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                    >
+                      Админка
+                    </Link>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    onClick={() => setDrawerOpen(false)}
+                    className="inline-flex justify-center items-center px-4 py-2.5 text-sm font-semibold rounded-[2px] border"
+                    style={{ borderColor: 'var(--line)' }}
+                  >
+                    Войти
+                  </Link>
+                  <Link
+                    href="/register"
+                    onClick={() => setDrawerOpen(false)}
+                    className="inline-flex justify-center items-center px-4 py-2.5 text-sm font-semibold rounded-[2px]"
+                    style={{ background: 'var(--accent)', color: '#000' }}
+                  >
+                    Регистрация
+                  </Link>
+                </>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
     </header>
   );
-}
+};
+
+export default MainNavbar;
