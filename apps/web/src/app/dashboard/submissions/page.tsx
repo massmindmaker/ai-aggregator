@@ -1,3 +1,6 @@
+// FIXME(spec §9 row 10): MOCK_SUBMISSIONS is hardcoded. Convert to a server
+// component reading from `contest_submissions` JOIN `users` before public
+// launch. Tracked in docs/superpowers/specs/2026-05-10-dashboard-ia-redesign-design.md §10.
 import * as React from 'react';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';

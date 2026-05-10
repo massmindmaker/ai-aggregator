@@ -1,3 +1,6 @@
+// FIXME(spec §9 row 10): MOCK_EARNINGS is hardcoded. Convert to a server
+// component reading from `author_earnings` table before public launch. Tracked
+// in docs/superpowers/specs/2026-05-10-dashboard-ia-redesign-design.md §10.
 import * as React from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/Badge';

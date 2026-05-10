@@ -1,3 +1,6 @@
+// FIXME(spec §9 row 10): MOCK_PAYMENTS is hardcoded. Convert to a server
+// component reading from `payments` table before public launch. Tracked in
+// docs/superpowers/specs/2026-05-10-dashboard-ia-redesign-design.md §10.
 'use client';
 
 import { useEffect, useState } from 'react';
