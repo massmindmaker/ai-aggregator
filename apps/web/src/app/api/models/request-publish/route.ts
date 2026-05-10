@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db, sql } from '@/lib/db';
-import { models } from '@aiag/database/schema';
-import { eq, and } from '@aiag/database';
 
 /**
  * POST /api/models/request-publish
@@ -57,10 +55,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const existing = await db.query.models.findFirst({
-    where: eq(models.slug, slug),
-  });
-  if (existing) {
+  const existingRes = await db.execute(
+    sql`SELECT id FROM models WHERE slug = ${slug} LIMIT 1`
+  );
+  const existingRows = ((existingRes as unknown as { rows?: unknown[] }).rows ??
+    existingRes) as Array<{ id: string }>;
+  if (existingRows.length > 0) {
     return NextResponse.json(
       { error: { message: 'Slug уже занят, выберите другой' } },
       { status: 409 }
@@ -93,21 +93,21 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    const [inserted] = await db
-      .insert(models)
-      .values({
-        slug,
-        type: 'chat',
-        enabled: false,
-        displayName: String(body.name),
-        description: String(body.description),
-        metadata,
-        authorUserId: session.user.id,
-        hostingStrategy,
-        status: 'draft',
-        tags: [],
-      })
-      .returning({ id: models.id, slug: models.slug });
+    const insertRes = await db.execute(sql`
+      INSERT INTO models (
+        slug, type, enabled, display_name, description, metadata,
+        author_user_id, hosting_strategy, status, tags
+      ) VALUES (
+        ${slug}, 'chat', false, ${String(body.name)}, ${String(body.description)},
+        ${JSON.stringify(metadata)}::jsonb,
+        ${session.user.id}::uuid, ${hostingStrategy}, 'draft', ARRAY[]::text[]
+      )
+      RETURNING id::text AS id, slug
+    `);
+    const insertRows = ((insertRes as unknown as { rows?: unknown[] }).rows ??
+      insertRes) as Array<{ id: string; slug: string }>;
+    const inserted = insertRows[0];
+    if (!inserted) throw new Error('insert returned no row');
 
     // Best-effort audit; don't block on failure.
     try {
