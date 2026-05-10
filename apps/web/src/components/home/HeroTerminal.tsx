@@ -102,7 +102,7 @@ export default function HeroTerminal() {
 
   return (
     <div
-      className="rounded-md overflow-hidden relative"
+      className="aiag-hero-terminal rounded-md overflow-hidden relative"
       style={{
         background: '#0f0f11',
         maxWidth: '100%',

@@ -398,6 +398,28 @@
   .aiag-hero-grid {
     gap: 28px;
   }
+  .aiag-hero-terminal {
+    display: none;
+  }
+  .aiag-hero-stats {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .aiag-hero-badge {
+    font-size: 10px !important;
+  }
+  .aiag-pricing-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .aiag-pricing-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

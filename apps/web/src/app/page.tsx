@@ -293,7 +293,7 @@ export default function HomePage() {
         >
           <div className="min-w-0">
             <span
-              className="inline-flex items-center font-mono uppercase rounded-sm"
+              className="aiag-hero-badge inline-flex items-center font-mono uppercase rounded-sm"
               style={{
                 fontSize: 11,
                 color: 'var(--accent)',
@@ -321,7 +321,7 @@ export default function HomePage() {
             <h1
               className="font-bold"
               style={{
-                fontSize: 'clamp(44px, 6.4vw, 84px)',
+                fontSize: 'clamp(36px, 8vw, 84px)',
                 lineHeight: 0.98,
                 letterSpacing: '-0.035em',
                 margin: '0 0 28px',
@@ -388,7 +388,7 @@ export default function HomePage() {
             </div>
 
             <div
-              className="flex gap-6 flex-wrap font-mono"
+              className="aiag-hero-stats flex gap-6 flex-wrap font-mono"
               style={{
                 marginTop: 32,
                 fontSize: 12,
@@ -947,7 +947,7 @@ export default function HomePage() {
           </div>
 
           <div
-            className="grid gap-3"
+            className="aiag-pricing-grid grid gap-3"
             style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}
           >
             {pricingTiers.map((p) => (
