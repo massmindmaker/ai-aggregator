@@ -1,6 +1,5 @@
 import * as React from 'react';
 import Link from 'next/link';
-import MainLayout from '@/components/layout/MainLayout';
 import ContestCard, { ContestCardData } from './ContestCard';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 
