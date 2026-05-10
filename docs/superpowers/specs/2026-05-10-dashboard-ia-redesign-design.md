@@ -111,8 +111,8 @@ Migrations (delete or 301-redirect):
 
 | Old | New |
 |-----|-----|
-| `/me/submit-model` | 301 → `/dashboard/models/new` |
-| `/account/request-human-review` | 301 → `/dashboard/profile/human-review` (or keep public, owner-decision deferred — see "Open questions") |
+| `/me/submit-model` | 308 → `/dashboard/models/new` (via Next 15 `permanentRedirect()`) |
+| `/account/request-human-review` | 308 → `/dashboard/profile/human-review` (or keep public, owner-decision deferred — see "Open questions") |
 
 `/onboarding` does not exist and will not be created. The earlier NextAuth `pages.newUser: '/onboarding'` was removed — first-login redirects to `/dashboard` directly.
 
@@ -163,14 +163,14 @@ The dashboard layout is the most consequential piece. It owns:
 
 **Mode switcher behavior:**
 
-- Three chips at top: User / Author / Participant
-- A mode is "available" if the user has any data in it (`models.count > 0` for author; `contest_submissions.count > 0` for participant). Unavailable modes show as muted with a tooltip («Появится после первой подачи модели» / «...первого сабмишена»). Clicking an unavailable mode still navigates — it just lands on the mode's "empty state" CTA.
-- Active mode persists in URL: `/dashboard?mode=author`. The URL is the source of truth.
-- Default mode resolution (server, in `dashboard/layout.tsx`):
-  1. If `?mode=` query is present and valid → use it.
-  2. Else if `models.count > 0` → `author`
-  3. Else if `contest_submissions.count > 0` → `participant`
-  4. Else → `user`
+- Three chips at top: User / Author / Participant. All three are always interactive (no muting in v1 — see §10).
+- Mode is derived from `?mode=` query first, then from path family as a fallback (so `/dashboard/models` defaults to `author`, `/dashboard/submissions` to `participant`, everything else to `user`). Path-family mapping:
+  - `author`: `/dashboard/models`, `/dashboard/earnings`, `/dashboard/payouts`, `/dashboard/kyc`
+  - `participant`: `/dashboard/submissions`, `/dashboard/wins`
+  - `user`: everything else
+- Active mode persists in URL: `/dashboard?mode=author`. The URL query overrides path-family inference (so a user on `/dashboard/keys?mode=author` sees the author sidebar even though `/dashboard/keys` is a user-family page).
+- **Chip click navigation:** clicking a mode chip always navigates to `/dashboard?mode=X` (the overview of that mode), never to a sibling page in the new mode. Rationale: the user's current page may not exist in the target mode, and "go to overview" is the safest landing.
+- **Default mode (no `?mode=` query, on `/dashboard`):** plain `user`. No auto-detection in v1 (see §10 — explicitly dropped).
 
 **Sidebar items per mode:**
 
@@ -257,50 +257,70 @@ A server component reading from DB. Mode-aware shape:
 ```ts
 // pseudocode
 const session = await auth();
-const mode = resolveMode(searchParams.mode, ...counts);
+const mode = (searchParams.mode as Mode | undefined) ?? 'user';
 const data = await fetchOverview(session.user.id, mode);
 ```
 
-`fetchOverview` queries:
+`fetchOverview` queries (all use `LEFT JOIN` and coalesce nulls — see "Empty-state contract" below):
 
-- `subscriptions` JOIN plans → currentPlan, monthlyCreditsLimit, monthlyCreditsUsed
-- `gateway_requests` count where created_at >= start_of_month
-- `models` count where author_user_id = me
+- `subscriptions` LEFT JOIN plans → currentPlan (or `'free'` fallback), monthlyCreditsLimit (`null` ⇒ display «нет тарифа»), monthlyCreditsUsed
+- `gateway_requests` count where `created_at >= date_trunc('month', now())` and `user_id = me` → API-вызовы
+- `models` count where `author_user_id = me` AND `status='live'` → published count
+- `models` count of distinct `model_id` referenced in user's `gateway_requests` this month → "active models used by me" (user-mode tile #3)
 - Last 5 `gateway_requests` rows for the activity table
 
 Mode-specific tile swaps:
 
 | Tile | mode=user | mode=author | mode=participant |
 |------|-----------|-------------|------------------|
-| 1st | Кредиты | Заработок этого месяца | Активные конкурсы |
+| 1st | Кредиты (used / limit) | Заработок этого месяца | Активные конкурсы |
 | 2nd | API-вызовы | Вызовы моих моделей | Мои сабмишены |
-| 3rd | Активные модели (used by me) | Опубликовано | Победы (счётчик) |
+| 3rd | Активные модели (used by me) | Опубликовано (status='live') | Победы (count where prize_awards.user_id = me) |
 | 4th | Тариф | Тариф | Тариф |
 
-The "recent activity" panel below tiles always shows last 5 gateway_requests for the user (calls they made), regardless of mode.
+**Empty-state contract.** Every tile MUST render without error when its source returns zero rows or null:
+
+- No `subscriptions` row → "Тариф: Free" + 0 used / `−` limit
+- 0 `gateway_requests` this month → "0 за месяц" with no delta arrow
+- 0 `models` → tile renders "0 опубликовано" + helper link «Загрузить первую модель»
+- 0 `contest_submissions` → tile renders "Пока нет сабмишенов" + helper link «Найти конкурс»
+
+The "recent activity" panel below tiles always shows last 5 `gateway_requests` for the user, regardless of mode. Empty-state: «Здесь появятся ваши API-вызовы».
 
 ---
 
 ## 8. Auth gates
 
-Two boundaries, enforced at layout level (Next 14 RSC pattern):
+Two boundaries, enforced at layout level (Next 15 RSC pattern):
 
 ```ts
 // app/dashboard/layout.tsx
 const session = await auth();
 if (!session?.user) {
-  redirect(`/login?callbackUrl=${encodeURIComponent(headers().get('x-pathname') ?? '/dashboard')}`);
+  // We can't read the request pathname inside a layout RSC without injecting
+  // a custom header from middleware (Next does NOT expose `x-pathname` by
+  // default). Avoid that complexity: send the user to /login and rely on the
+  // login page reading `usePathname()` on the client to set the next-redirect
+  // OR accept always-/dashboard as the post-login target. Simpler default:
+  redirect('/login?callbackUrl=/dashboard');
 }
 ```
 
 ```ts
 // app/admin/layout.tsx (existing — keep)
 const session = await auth();
-const me = session && (await db.query.users.findFirst({ where: eq(users.email, session.user.email!) }));
+if (!session?.user?.id) redirect('/login?callbackUrl=/admin');
+const me = await db.query.users.findFirst({
+  where: eq(users.id, session.user.id), // ID, not email — see note
+});
 if (!me || me.role !== 'admin') redirect('/dashboard');
 ```
 
-A `middleware.ts` is **not** strictly required if every layout enforces its own gate — Next 14 + RSC handles redirects cleanly from layouts. Add middleware only if we ever need to short-circuit before route resolution (e.g. heavy auth checks for many leaf pages). Out of scope here.
+**Anonymous on `/admin/*`.** The first guard above redirects to `/login?callbackUrl=/admin`; on success we re-enter the layout, the role check fires, and a non-admin is bounced to `/dashboard`.
+
+**ID over email lookup.** NextAuth v5 with our jwt callback writes `token.id = user.id` and `session.user.id = token.id` (already done in `auth.ts`). Lookup via `users.id` is exact and provider-agnostic. Email lookup is fine as a fallback but not the primary key.
+
+**No middleware in v1.** Layout-level `auth()` covers both gates. We will add `middleware.ts` only if a future requirement (e.g. capturing the original pathname for `callbackUrl`, or rate-limiting) needs pre-routing logic. The accepted trade-off here: post-login always lands on `/dashboard` (or `/admin`), not the originally-requested deep link. Owner approved this v1 simplification.
 
 ---
 
@@ -314,8 +334,8 @@ A `middleware.ts` is **not** strictly required if every layout enforces its own 
 | 4 | `apps/web/src/components/dashboard/UserMenu.tsx` | **CREATE.** Avatar dropdown (used by both MainNavbar and DashboardHeader). |
 | 5 | `apps/web/src/app/dashboard/page.tsx` | Rewrite as server component, real queries, mode-aware tiles. Drop `'use client'`. |
 | 6 | `apps/web/src/app/pricing/page.tsx` | Wrap in server component for session + currentPlan; derive CTAs via `ctaForTier`. |
-| 7 | `apps/web/src/app/me/submit-model/page.tsx` | Replace body with `redirect('/dashboard/models/new')`. |
-| 8 | `apps/web/src/app/account/request-human-review/page.tsx` | Either redirect to `/dashboard/profile/human-review` (creating that page) OR keep as is — owner-decision deferred. |
+| 7 | `apps/web/src/app/me/submit-model/page.tsx` | Replace body with `permanentRedirect('/dashboard/models/new')` (Next 15 — emits 308, the closest to "permanent" semantics; bookmarks and any indexed crawler will follow). |
+| 8 | `apps/web/src/app/account/request-human-review/page.tsx` | Either `permanentRedirect('/dashboard/profile/human-review')` (creating that page) OR keep as is — see Open question §11.1. |
 | 9 | `apps/web/src/app/dashboard/{wins,kyc,profile,security}/page.tsx` | **CREATE** as honest empty-state stubs (real schema queries, even if results are zero). No MOCK arrays. |
 | 10 | `apps/web/src/app/dashboard/{billing,earnings,referrals,submissions,usage,keys}/page.tsx` | Audit each — many are `'use client'` with hardcoded data per the prior session's review. Convert to server components reading DB or mark explicitly with `// FIXME: still MOCK` if the table doesn't exist yet. |
 
@@ -329,6 +349,9 @@ A `middleware.ts` is **not** strictly required if every layout enforces its own 
 - KEK encryption of `models.metadata.auth_token` (debt acknowledged elsewhere).
 - Rebuilding `/dashboard/webhooks` rich UI.
 - Implementing payment modal at `/dashboard/billing?upgrade=...` (assume existing behaviour will satisfy the redirect; if not, separate spec).
+- **Mode auto-detection** based on the user's existing data (was an early candidate). Reasons it's dropped from v1: (a) extra count queries on every layout render; (b) surprise factor — a user who once submitted a contest entry would land in "Participant" mode and not see API-keys without finding the chip; (c) we can revisit once we have real users and data. Default mode in v1 is always `user`.
+- **Muted/disabled mode chips** based on data availability — same reasoning. All three chips are always clickable; the mode's overview shows an empty-state CTA when there's nothing to show.
+- **Deep-link callbackUrl preservation through `/login`** — for v1 we always redirect to `/dashboard` (or `/admin`) post-login, not back to the requested deep page. Adding middleware to capture pathname is the follow-up.
 
 ---
 
@@ -342,11 +365,22 @@ A `middleware.ts` is **not** strictly required if every layout enforces its own 
 
 ## 12. Verification (after implementation)
 
+Core:
+
 - Logged-in owner sees avatar + dropdown in header on every public page.
 - `/dashboard` shows real DB-backed numbers (credits, calls, models) — not 750/1200/1234/3.
 - Sidebar navigation visible on every `/dashboard/*` page; mode switcher reflects URL.
 - Anonymous user visiting `/dashboard` → `/login?callbackUrl=/dashboard`; on success, returns to `/dashboard`.
 - Logged-in user on `/pricing` clicking «Сменить на Pro» → `/dashboard/billing?upgrade=pro`, not `/register`.
-- `/me/submit-model` returns `301 → /dashboard/models/new`.
-- Switching modes preserves URL state and updates sidebar items without a full reload (client navigation).
+- `/me/submit-model` returns `308 → /dashboard/models/new`.
+- Switching modes via chip click navigates to `/dashboard?mode=X` and re-renders sidebar via soft-navigation (server layout re-runs, no hard reload).
 - Admin sees «Админка →» in dashboard sidebar; non-admin does not.
+
+Edge cases (added per spec review):
+
+- **Anonymous on `/admin/*`** → 307 to `/login?callbackUrl=/admin` (per §8). After login, role check redirects non-admin to `/dashboard`.
+- **`/pricing` for user with no `subscriptions` row** → all tier CTAs offer "upgrade" (none rendered as "Текущий"); page renders without error.
+- **Overview with all-zero data** (new user, 0 models, 0 submissions, no subscription) → all four tiles render their empty-state copy from §7; no thrown errors; recent-activity panel shows the empty-state line.
+- **MainNavbar mobile drawer** when logged-in → drawer shows the same avatar+items as desktop dropdown (Dashboard, Профиль, Админка if admin, Выйти), not anonymous «Войти/Регистрация».
+- **signOut from avatar dropdown** → calls NextAuth `signOut({ callbackUrl: '/' })` → session cleared → `/`. Header on `/` returns to anonymous variant.
+- **Mode chip click from `/dashboard/keys?mode=user`** → clicking "Author" → `/dashboard?mode=author` (overview), NOT `/dashboard/keys?mode=author`.
