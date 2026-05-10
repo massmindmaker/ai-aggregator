@@ -25,6 +25,7 @@ import {
   Cpu,
   Menu,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -100,13 +101,31 @@ interface Props {
   email: string;
 }
 
+const STORAGE_KEY = 'aiag-admin-sidebar-collapsed';
+
 export default function AdminSidebar({ email }: Props) {
   const pathname = usePathname() ?? '/admin';
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) setCollapsed(JSON.parse(saved));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  function toggleSection(heading: string) {
+    setCollapsed((prev) => {
+      const next = { ...prev, [heading]: !prev[heading] };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
 
   return (
     <>
@@ -157,35 +176,64 @@ export default function AdminSidebar({ email }: Props) {
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-3 flex flex-col gap-3">
-        {SECTIONS.map((section) => (
-          <div key={section.heading} className="flex flex-col gap-0.5">
-            <div className="px-3 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-              {section.heading}
-            </div>
-            {section.items.map((item) => {
-              const active =
-                pathname === item.href ||
-                (item.href !== '/admin' && pathname.startsWith(item.href + '/'));
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
+      <nav className="flex-1 overflow-y-auto px-2 py-3 flex flex-col gap-1">
+        {SECTIONS.map((section) => {
+          const isCollapsed = !!collapsed[section.heading];
+          const hasActive = section.items.some(
+            (item) =>
+              pathname === item.href ||
+              (item.href !== '/admin' && pathname.startsWith(item.href + '/'))
+          );
+          return (
+            <div key={section.heading} className="flex flex-col">
+              <button
+                type="button"
+                onClick={() => toggleSection(section.heading)}
+                className={cn(
+                  'flex items-center justify-between px-3 py-1.5 rounded',
+                  'text-[10px] uppercase tracking-wider font-semibold',
+                  'hover:bg-white/[0.04] transition-colors cursor-pointer select-none',
+                  hasActive && isCollapsed
+                    ? 'text-[var(--accent)]'
+                    : 'text-muted-foreground'
+                )}
+              >
+                <span>{section.heading}</span>
+                <ChevronDown
                   className={cn(
-                    'flex items-center gap-2 px-3 py-2 text-[13px] rounded transition-colors',
-                    active
-                      ? 'bg-[rgba(245,158,11,0.08)] text-foreground border-l-2 border-l-[var(--accent)]'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04] border-l-2 border-l-transparent'
+                    'h-3 w-3 transition-transform duration-150',
+                    isCollapsed ? '-rotate-90' : 'rotate-0'
                   )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        ))}
+                />
+              </button>
+              {!isCollapsed && (
+                <div className="flex flex-col gap-0.5 mt-0.5">
+                  {section.items.map((item) => {
+                    const active =
+                      pathname === item.href ||
+                      (item.href !== '/admin' && pathname.startsWith(item.href + '/'));
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          'flex items-center gap-2 px-3 py-2 text-[13px] rounded transition-colors',
+                          active
+                            ? 'bg-[rgba(245,158,11,0.08)] text-foreground border-l-2 border-l-[var(--accent)]'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04] border-l-2 border-l-transparent'
+                        )}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       <div
