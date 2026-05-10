@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { db, sql } from '@/lib/db';
-import MainLayout from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import {
@@ -61,7 +60,7 @@ export default async function DashboardModelsPage({
   const rows = ((r as unknown as { rows?: unknown[] }).rows ?? r) as Row[];
 
   return (
-    <MainLayout>
+    <>
       <div className="container mx-auto px-4 py-10 max-w-5xl">
         <div className="flex items-start justify-between mb-6">
           <div>
@@ -144,6 +143,6 @@ export default async function DashboardModelsPage({
           </div>
         )}
       </div>
-    </MainLayout>
+    </>
   );
 }

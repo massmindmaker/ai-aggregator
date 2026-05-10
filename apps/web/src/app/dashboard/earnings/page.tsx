@@ -2,7 +2,6 @@
 // component reading from `author_earnings` table before public launch. Tracked
 // in docs/superpowers/specs/2026-05-10-dashboard-ia-redesign-design.md §10.
 import * as React from 'react';
-import MainLayout from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -66,7 +65,7 @@ const totalPaid = MOCK_EARNINGS.filter((e) => e.status === 'paid').reduce(
 
 export default function EarningsPage() {
   return (
-    <MainLayout>
+    <>
       <div className="container mx-auto px-4 py-10 max-w-5xl">
         <h1 className="text-3xl font-bold tracking-tight mb-6">
           Мои доходы
@@ -169,7 +168,7 @@ export default function EarningsPage() {
           gross и сами выставляют чек. ИП/ООО — по счёту.
         </p>
       </div>
-    </MainLayout>
+    </>
   );
 }
 

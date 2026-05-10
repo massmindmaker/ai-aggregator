@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, Copy, KeyRound, AlertTriangle, Trash2, Pencil } from 'lucide-react';
-import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -166,7 +165,7 @@ export default function DashboardKeysPage() {
   }
 
   return (
-    <MainLayout>
+    <>
       <section className="container mx-auto max-w-6xl px-4 py-10">
         <header className="mb-6 flex items-center justify-between gap-4">
           <div>
@@ -415,6 +414,6 @@ export default function DashboardKeysPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </>
   );
 }

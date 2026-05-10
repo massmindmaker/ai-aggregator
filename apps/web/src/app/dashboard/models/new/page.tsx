@@ -1,5 +1,4 @@
 import * as React from 'react';
-import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import SubmitModelForm from './SubmitModelForm';
 
@@ -17,7 +16,7 @@ export const metadata = { title: 'Предложить модель — AI-Aggre
  */
 export default function SubmitModelPage() {
   return (
-    <MainLayout>
+    <>
       <div className="container mx-auto px-4 py-10 max-w-3xl">
         <h1 className="text-3xl font-bold tracking-tight mb-2">
           Предложить модель
@@ -37,6 +36,6 @@ export default function SubmitModelPage() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
+    </>
   );
 }

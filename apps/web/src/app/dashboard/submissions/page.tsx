@@ -3,7 +3,6 @@
 // launch. Tracked in docs/superpowers/specs/2026-05-10-dashboard-ia-redesign-design.md §10.
 import * as React from 'react';
 import Link from 'next/link';
-import MainLayout from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import {
@@ -104,7 +103,7 @@ export default function MySubmissionsPage() {
   const rows = MOCK_SUBMISSIONS;
 
   return (
-    <MainLayout>
+    <>
       <div className="container mx-auto px-4 py-10 max-w-5xl">
         <h1 className="text-3xl font-bold tracking-tight mb-6">
           Мои submissions
@@ -186,6 +185,6 @@ export default function MySubmissionsPage() {
           автоматически (топ-3 по public).
         </p>
       </div>
-    </MainLayout>
+    </>
   );
 }

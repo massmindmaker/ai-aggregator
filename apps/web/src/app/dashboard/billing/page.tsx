@@ -5,7 +5,6 @@
 
 import { useEffect, useState } from 'react';
 import { ArrowRight, CreditCard, Wallet, Crown, Plus, Zap } from 'lucide-react';
-import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
@@ -123,7 +122,7 @@ export default function BillingPage() {
   }
 
   return (
-    <MainLayout>
+    <>
       <section className="container mx-auto max-w-6xl px-4 py-10">
         <div className="mb-8 flex items-center justify-between">
           <div>
@@ -321,6 +320,6 @@ export default function BillingPage() {
           )}
         </div>
       </section>
-    </MainLayout>
+    </>
   );
 }

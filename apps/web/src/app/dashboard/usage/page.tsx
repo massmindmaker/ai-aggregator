@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { Activity, Coins, Timer } from 'lucide-react';
-import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/Card';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
@@ -89,7 +88,7 @@ export default async function DashboardUsagePage({ searchParams }: UsagePageProp
   const maxTop = Math.max(1, ...topModels.map((m) => Number(m.totalRub) || 0));
 
   return (
-    <MainLayout>
+    <>
       <section className="container mx-auto max-w-6xl px-4 py-10">
         <header className="mb-6">
           <h1 className="text-3xl font-bold tracking-tight">Аналитика и расходы</h1>
@@ -212,6 +211,6 @@ export default async function DashboardUsagePage({ searchParams }: UsagePageProp
           </CardContent>
         </Card>
       </section>
-    </MainLayout>
+    </>
   );
 }
