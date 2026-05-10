@@ -1,60 +1,63 @@
-import * as React from 'react';
 import Link from 'next/link';
+import { db, sql } from '@/lib/db';
 import ContestCard, { ContestCardData } from './ContestCard';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 
+export const dynamic = 'force-dynamic';
 export const metadata = {
   title: 'Конкурсы AI — AI-Aggregator',
   description:
     'Участвуйте в конкурсах по машинному обучению, соревнуйтесь за призы и публикуйте свои модели в маркетплейсе AIAG.',
 };
 
-// MVP: mock data — реальная выборка из Postgres в Task 22 (seed launch contest).
-// Plan 07 Task 3: listing должен фильтроваться по статусу.
-const MOCK_CONTESTS: ContestCardData[] = [
-  {
-    id: 'banking-tx',
-    slug: 'launch-banking-tx',
-    name: 'Классификация банковских транзакций',
-    shortDescription:
-      'Определите категорию транзакции по описанию платежа. F1-score на private split.',
-    banner: null,
-    sponsorName: 'Банк пример',
-    prizePoolRub: 500_000,
-    participantsCount: 142,
-    startsAt: new Date('2026-04-15T00:00:00Z'),
-    endsAt: new Date('2026-06-15T00:00:00Z'),
-    status: 'open',
-  },
-  {
-    id: 'doc-summary',
-    slug: 'ru-doc-summarization',
-    name: 'Резюмирование русских документов',
-    shortDescription:
-      'Сжатое описание юридических документов объёмом 5–15 страниц. Метрика — ROUGE-L.',
-    banner: null,
-    sponsorName: null,
-    prizePoolRub: 250_000,
-    participantsCount: 37,
-    startsAt: new Date('2026-05-01T00:00:00Z'),
-    endsAt: new Date('2026-07-01T00:00:00Z'),
-    status: 'upcoming',
-  },
-  {
-    id: 'ru-ner',
-    slug: 'ru-ner-medical',
-    name: 'NER для медицинских текстов',
-    shortDescription:
-      'Извлечение сущностей (симптомы, диагнозы, препараты) из анамнезов. Метрика — F1.',
-    banner: null,
-    sponsorName: 'HealthTech RU',
-    prizePoolRub: 1_000_000,
-    participantsCount: 284,
-    startsAt: new Date('2026-01-15T00:00:00Z'),
-    endsAt: new Date('2026-04-01T00:00:00Z'),
-    status: 'completed',
-  },
-];
+interface ContestRow {
+  id: string;
+  slug: string;
+  name: string;
+  short_description: string | null;
+  banner: string | null;
+  sponsor_name: string | null;
+  total_prize_pool: string | null;
+  total_participants: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  status: string;
+}
+
+async function fetchContests(): Promise<ContestCardData[]> {
+  try {
+    const r = await db.execute(sql`
+      SELECT c.id::text AS id, c.slug, c.name, c.short_description, c.banner,
+             o.name AS sponsor_name,
+             c.total_prize_pool::text AS total_prize_pool,
+             c.total_participants,
+             c.starts_at::text AS starts_at,
+             c.ends_at::text AS ends_at,
+             c.status::text AS status
+      FROM contests c
+      LEFT JOIN organizations o ON o.id = c.organization_id
+      WHERE c.is_public = true
+      ORDER BY c.starts_at DESC NULLS LAST
+      LIMIT 100
+    `);
+    const rows = (((r as unknown as { rows?: unknown[] }).rows ?? r) as ContestRow[]);
+    return rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      shortDescription: row.short_description ?? '',
+      banner: row.banner,
+      sponsorName: row.sponsor_name,
+      prizePoolRub: row.total_prize_pool ? Number(row.total_prize_pool) : 0,
+      participantsCount: row.total_participants ?? 0,
+      startsAt: row.starts_at ? new Date(row.starts_at) : new Date(),
+      endsAt: row.ends_at ? new Date(row.ends_at) : new Date(),
+      status: row.status as ContestCardData['status'],
+    }));
+  } catch {
+    return [];
+  }
+}
 
 type StatusFilter = 'active' | 'upcoming' | 'past';
 
@@ -88,53 +91,38 @@ export default async function ContestsPage({
   const past = filterByTab(all, 'past');
 
   return (
-    <>
-      <div className="container mx-auto px-4 py-10 max-w-6xl">
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold tracking-tight mb-2">
-            Конкурсы AI
-          </h1>
-          <p className="text-muted-foreground text-lg">
-            Соревнуйтесь с другими ML-инженерами, получайте призы и публикуйте
-            модели в маркетплейсе с revshare 70–85%.
-          </p>
-        </header>
+    <div className="container mx-auto px-4 py-10 max-w-6xl">
+      <header className="mb-8">
+        <h1 className="text-4xl font-bold tracking-tight mb-2">Конкурсы AI</h1>
+        <p className="text-muted-foreground text-lg">
+          Соревнуйтесь с другими ML-инженерами, получайте призы и публикуйте модели в маркетплейсе с revshare 70–85%.
+        </p>
+      </header>
 
-        <Tabs defaultValue={tab}>
-          <TabsList>
-            <TabsTrigger value="active" asChild>
-              <Link href="/contests?tab=active">
-                Активные ({active.length})
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="upcoming" asChild>
-              <Link href="/contests?tab=upcoming">
-                Скоро ({upcoming.length})
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="past" asChild>
-              <Link href="/contests?tab=past">Прошедшие ({past.length})</Link>
-            </TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue={tab}>
+        <TabsList>
+          <TabsTrigger value="active" asChild>
+            <Link href="/contests?tab=active">Активные ({active.length})</Link>
+          </TabsTrigger>
+          <TabsTrigger value="upcoming" asChild>
+            <Link href="/contests?tab=upcoming">Скоро ({upcoming.length})</Link>
+          </TabsTrigger>
+          <TabsTrigger value="past" asChild>
+            <Link href="/contests?tab=past">Прошедшие ({past.length})</Link>
+          </TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="active" className="mt-6">
-            <ContestGrid contests={active} emptyText="Нет активных конкурсов." />
-          </TabsContent>
-          <TabsContent value="upcoming" className="mt-6">
-            <ContestGrid
-              contests={upcoming}
-              emptyText="Пока не анонсировано новых конкурсов."
-            />
-          </TabsContent>
-          <TabsContent value="past" className="mt-6">
-            <ContestGrid
-              contests={past}
-              emptyText="Прошедших конкурсов ещё нет."
-            />
-          </TabsContent>
-        </Tabs>
-      </div>
-    </>
+        <TabsContent value="active" className="mt-6">
+          <ContestGrid contests={active} emptyText="Нет активных конкурсов." />
+        </TabsContent>
+        <TabsContent value="upcoming" className="mt-6">
+          <ContestGrid contests={upcoming} emptyText="Пока не анонсировано новых конкурсов." />
+        </TabsContent>
+        <TabsContent value="past" className="mt-6">
+          <ContestGrid contests={past} emptyText="Прошедших конкурсов ещё нет." />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
 
@@ -146,9 +134,7 @@ function ContestGrid({
   emptyText: string;
 }) {
   if (contests.length === 0) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">{emptyText}</div>
-    );
+    return <div className="py-12 text-center text-muted-foreground">{emptyText}</div>;
   }
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
