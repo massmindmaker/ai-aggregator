@@ -106,11 +106,34 @@ function formatPrice(n: number) {
   return n.toLocaleString('ru-RU');
 }
 
-export default function PricingPage() {
+interface PricingClientProps {
+  isLoggedIn: boolean;
+  currentPlanId: string | null;
+}
+
+export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClientProps) {
   const [isYearly, setIsYearly] = useState(false);
   const [provider, setProvider] = useState<ProviderId>('tinkoff');
   const [pendingTier, setPendingTier] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function ctaForTier(tier: Tier): { label: string; href: string | null; isCurrent: boolean } {
+    if (!isLoggedIn) {
+      return {
+        label: tier.id === 'free' ? 'Начать бесплатно' : 'Зарегистрироваться',
+        href: `/register?callbackUrl=${encodeURIComponent('/pricing')}`,
+        isCurrent: false,
+      };
+    }
+    if (currentPlanId && currentPlanId === tier.id) {
+      return { label: 'Текущий тариф', href: null, isCurrent: true };
+    }
+    return {
+      label: tier.cta,
+      href: `/dashboard/billing?upgrade=${tier.id}`,
+      isCurrent: false,
+    };
+  }
 
   async function handleSubscribe(tierId: string) {
     setError(null);
@@ -281,31 +304,45 @@ export default function PricingPage() {
                   ))}
                 </ul>
 
-                {tier.id === 'free' ? (
-                  <Button
-                    asChild
-                    className="mt-6 w-full"
-                    variant="default"
-                    size="lg"
-                  >
-                    <Link href={tier.ctaHref}>
-                      {tier.cta}
+                {(() => {
+                  const cta = ctaForTier(tier);
+                  if (cta.isCurrent) {
+                    return (
+                      <Button
+                        type="button"
+                        className="mt-6 w-full opacity-60 cursor-default"
+                        variant="outline"
+                        size="lg"
+                        disabled
+                      >
+                        {cta.label}
+                      </Button>
+                    );
+                  }
+                  if (cta.href) {
+                    return (
+                      <Button asChild className="mt-6 w-full" variant="default" size="lg">
+                        <Link href={cta.href}>
+                          {cta.label}
+                          <ArrowRight className="ms-2 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    );
+                  }
+                  return (
+                    <Button
+                      type="button"
+                      className="mt-6 w-full"
+                      variant="default"
+                      size="lg"
+                      disabled={pendingTier === tier.id}
+                      onClick={() => handleSubscribe(tier.id)}
+                    >
+                      {pendingTier === tier.id ? 'Перенаправляем…' : cta.label}
                       <ArrowRight className="ms-2 h-4 w-4" />
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    className="mt-6 w-full"
-                    variant="default"
-                    size="lg"
-                    disabled={pendingTier === tier.id}
-                    onClick={() => handleSubscribe(tier.id)}
-                  >
-                    {pendingTier === tier.id ? 'Перенаправляем…' : tier.cta}
-                    <ArrowRight className="ms-2 h-4 w-4" />
-                  </Button>
-                )}
+                    </Button>
+                  );
+                })()}
               </div>
             );
           })}
