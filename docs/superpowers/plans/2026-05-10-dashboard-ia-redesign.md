@@ -1527,6 +1527,12 @@ If any verification fails, open an issue and fix in a follow-up task. The plan i
 ## Notes for the executor
 
 - @superpowers:verification-before-completion — before claiming a task complete, the type-check command MUST have returned 0 errors. No "I'm sure it compiles" — run it.
+- **Verified import paths used in this plan:**
+  - `import { auth } from '@/auth'` (e.g. `apps/web/src/auth.ts:23`)
+  - `import { db } from '@/lib/db'` and `import { sql } from '@/lib/db'` (e.g. `apps/web/src/lib/admin/guard.ts:2`)
+  - `import { eq } from '@aiag/database'` — re-exported from the shared schema package (e.g. `apps/web/src/auth.ts:10`, `apps/web/src/lib/admin/guard.ts:2`).
+  - `import { users } from '@aiag/database/schema'` — barrel re-export of the users Drizzle table (NOT `models` — that one needs the deep import `@aiag/database/schema/models-marketplace`, but this plan only inserts into `models` via raw SQL so the deep import is not needed).
+  - If any of these break in type-check, grep the existing file mentioned for the canonical pattern before deviating.
 - @superpowers:subagent-driven-development — if dispatching subagents, isolate each task fully (file paths + spec section + verify step).
 - Do NOT introduce a `middleware.ts` in this plan. Spec §8 explicitly defers it.
 - Do NOT touch `/admin/*` files — separate space, out of scope.
