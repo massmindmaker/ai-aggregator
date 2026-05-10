@@ -1,7 +1,10 @@
-import * as React from 'react';
+import { redirect } from 'next/navigation';
+import { auth } from '@/auth';
+import { db, sql } from '@/lib/db';
+import { users } from '@aiag/database/schema';
+import { eq } from '@aiag/database';
 import MainLayout from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import {
   Table,
   TableBody,
@@ -10,73 +13,49 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/Table';
+import ModerationActions from './ModerationActions';
 
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Модерация моделей — AI-Aggregator' };
 
-interface PendingModelRow {
+interface PendingRow {
   id: string;
   slug: string;
-  name: string;
-  authorUsername: string;
-  hostedBy: 'platform' | 'author';
-  tierPct: 70 | 75 | 80 | 85;
-  endpointUrl: string;
-  healthStatus: 'ok' | 'degraded' | 'down' | 'auth_fail' | 'pending';
-  submittedAt: string;
-  exclusive: boolean;
+  display_name: string | null;
+  hosting_strategy: string;
+  metadata: {
+    endpoint_url?: string;
+    pricing_hint_per_request_rub?: number | null;
+    tier_pct?: number;
+    exclusive?: boolean;
+    hosted_by_intent?: 'platform' | 'author';
+    submitted_at?: string;
+  };
+  created_at: string;
+  author_email: string | null;
+  author_username: string | null;
 }
 
-const MOCK_PENDING: PendingModelRow[] = [
-  {
-    id: 'm1',
-    slug: 'medner-ru-v2',
-    name: 'MedNER RU v2',
-    authorUsername: 'irina-k',
-    hostedBy: 'author',
-    tierPct: 80,
-    endpointUrl: 'https://api.example.com/v1/ner',
-    healthStatus: 'ok',
-    submittedAt: '2026-04-23T09:00:00Z',
-    exclusive: false,
-  },
-  {
-    id: 'm2',
-    slug: 'ru-summarizer-lite',
-    name: 'RU Summarizer Lite',
-    authorUsername: 'pavel-n',
-    hostedBy: 'platform',
-    tierPct: 70,
-    endpointUrl: '(fal pending)',
-    healthStatus: 'pending',
-    submittedAt: '2026-04-22T19:30:00Z',
-    exclusive: false,
-  },
-  {
-    id: 'm3',
-    slug: 'banking-tx-classifier',
-    name: 'Banking TX Classifier',
-    authorUsername: 'alexey-m',
-    hostedBy: 'author',
-    tierPct: 85,
-    endpointUrl: 'https://self-host.example.ru/tx-cls',
-    healthStatus: 'auth_fail',
-    submittedAt: '2026-04-21T11:15:00Z',
-    exclusive: true,
-  },
-];
+export default async function AdminModelsModerationPage() {
+  const session = await auth();
+  if (!session?.user) redirect('/login?callbackUrl=/admin/moderation/models');
+  const me = await db.query.users.findFirst({
+    where: eq(users.email, session.user.email!),
+  });
+  if (!me || me.role !== 'admin') redirect('/dashboard');
 
-const HEALTH_META: Record<
-  PendingModelRow['healthStatus'],
-  { label: string; variant: 'success' | 'warning' | 'destructive' | 'outline' }
-> = {
-  ok: { label: 'ok', variant: 'success' },
-  degraded: { label: 'degraded', variant: 'warning' },
-  down: { label: 'down', variant: 'destructive' },
-  auth_fail: { label: 'auth fail', variant: 'destructive' },
-  pending: { label: 'pending', variant: 'outline' },
-};
+  const r = await db.execute(sql`
+    SELECT m.id::text AS id, m.slug, m.display_name, m.hosting_strategy,
+           m.metadata, m.created_at,
+           u.email AS author_email, u.username AS author_username
+    FROM models m
+    LEFT JOIN users u ON u.id = m.author_user_id
+    WHERE m.status = 'draft' AND m.metadata->>'review_state' = 'pending'
+    ORDER BY m.created_at ASC
+    LIMIT 200
+  `);
+  const rows = ((r as unknown as { rows?: unknown[] }).rows ?? r) as PendingRow[];
 
-export default function AdminModelsModerationPage() {
   return (
     <MainLayout>
       <div className="container mx-auto px-4 py-10 max-w-6xl">
@@ -84,74 +63,66 @@ export default function AdminModelsModerationPage() {
           Модели на модерацию
         </h1>
         <p className="text-muted-foreground mb-6">
-          Review health-check + pricing. Нажмите «Approve» чтобы опубликовать,
-          либо «Reject» с причиной (автор получит email).
+          Заявки авторов в очереди. Approve переведёт модель в <code>live</code> и сделает доступной в маркетплейсе.
+          Reject требует причину — она вернётся автору в depublished_reason.
         </p>
 
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Модель</TableHead>
-                <TableHead>Автор</TableHead>
-                <TableHead>Хостинг</TableHead>
-                <TableHead>Tier</TableHead>
-                <TableHead>Health</TableHead>
-                <TableHead>Дата</TableHead>
-                <TableHead>Действия</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {MOCK_PENDING.map((m) => {
-                const health = HEALTH_META[m.healthStatus];
-                return (
+        {rows.length === 0 ? (
+          <div className="rounded-lg border bg-card p-12 text-center text-muted-foreground">
+            Очередь пуста — все заявки разобраны.
+          </div>
+        ) : (
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Модель</TableHead>
+                  <TableHead>Автор</TableHead>
+                  <TableHead>Хостинг</TableHead>
+                  <TableHead>Tier</TableHead>
+                  <TableHead>Цена</TableHead>
+                  <TableHead>Дата</TableHead>
+                  <TableHead>Действия</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell>
-                      <div className="font-medium">{m.name}</div>
+                      <div className="font-medium">{m.display_name || m.slug}</div>
                       <div className="text-xs text-muted-foreground font-mono truncate max-w-[18rem]">
-                        {m.endpointUrl}
+                        {m.metadata?.endpoint_url || '—'}
                       </div>
                     </TableCell>
-                    <TableCell>@{m.authorUsername}</TableCell>
+                    <TableCell className="text-sm">
+                      {m.author_username ? `@${m.author_username}` : m.author_email || '—'}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {m.hostedBy === 'author' ? 'self-host' : 'platform'}
+                        {m.hosting_strategy === 'self_hosted_by_author' ? 'self-host' : 'cloud-wrap'}
                       </Badge>
-                      {m.exclusive && (
+                      {m.metadata?.exclusive && (
                         <Badge variant="default" className="ml-1">
                           exclusive
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell>{m.tierPct}%</TableCell>
-                    <TableCell>
-                      <Badge variant={health.variant as any}>
-                        {health.label}
-                      </Badge>
+                    <TableCell>{m.metadata?.tier_pct ?? '—'}%</TableCell>
+                    <TableCell className="text-sm">
+                      {m.metadata?.pricing_hint_per_request_rub != null
+                        ? `${m.metadata.pricing_hint_per_request_rub} ₽`
+                        : '—'}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {new Date(m.submittedAt).toLocaleDateString('ru-RU')}
+                      {new Date(m.created_at).toLocaleDateString('ru-RU')}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="default">
-                          Approve
-                        </Button>
-                        <Button size="sm" variant="outline">
-                          Reject
-                        </Button>
-                      </div>
+                      <ModerationActions modelId={m.id} slug={m.slug} />
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-
-        {MOCK_PENDING.length === 0 && (
-          <div className="py-12 text-center text-muted-foreground">
-            Очередь пуста.
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>

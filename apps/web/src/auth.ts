@@ -30,7 +30,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     signIn: '/login',
     signOut: '/logout',
     error: '/login',
-    newUser: '/onboarding',
+    // newUser intentionally omitted — there is no /onboarding page yet, so a
+    // redirect there gives 404 on first OAuth login. NextAuth defaults to the
+    // configured callbackUrl (/dashboard) without it.
   },
   providers: [
     GitHub({

@@ -113,8 +113,10 @@ function RegisterForm() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        setFormError(data.message || 'Ошибка регистрации');
+        const data = await response.json().catch(() => ({}));
+        // API returns { error, details? } on errors and { message } on success.
+        const detailMsg = Array.isArray(data?.details) && data.details[0]?.message;
+        setFormError(data?.error || detailMsg || data?.message || 'Ошибка регистрации');
         setIsLoading(null);
         return;
       }

@@ -1,27 +1,37 @@
-'use client';
-
-import { useMemo, useState } from 'react';
-import { Filter, RefreshCcw, RotateCcw } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import { auth } from '@/auth';
+import { db, sql } from '@/lib/db';
+import { users } from '@aiag/database/schema';
+import { eq } from '@aiag/database';
 import MainLayout from '@/components/layout/MainLayout';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { cn } from '@/lib/utils';
+import RefundButton from './RefundButton';
 
-type Status = 'pending' | 'authorized' | 'confirmed' | 'refunded' | 'partial_refunded' | 'cancelled' | 'rejected' | 'failed';
+export const dynamic = 'force-dynamic';
+export const metadata = { title: 'Платежи — AI-Aggregator' };
+
+type Status =
+  | 'pending'
+  | 'authorized'
+  | 'confirmed'
+  | 'refunded'
+  | 'partial_refunded'
+  | 'cancelled'
+  | 'rejected'
+  | 'failed';
 
 interface PaymentRow {
   id: string;
-  createdAt: string;
-  user: string;
-  provider: 'tinkoff' | 'yookassa' | 'sbp';
-  amount: number;
+  created_at: string;
+  user_email: string | null;
+  user_name: string | null;
+  amount: string; // numeric → text from PG
+  currency: string;
   status: Status;
-  description: string;
-  providerPaymentId: string;
+  description: string | null;
+  tinkoff_payment_id: string | null;
+  refunded_amount: string | null;
 }
-
-// Empty MVP. TODO: GET /api/admin/payments → render rows.
-const MOCK: PaymentRow[] = [];
 
 const STATUS_LABELS: Record<Status, string> = {
   pending: 'Ожидает',
@@ -34,7 +44,10 @@ const STATUS_LABELS: Record<Status, string> = {
   failed: 'Ошибка',
 };
 
-const STATUS_VARIANT: Record<Status, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+const STATUS_VARIANT: Record<
+  Status,
+  'default' | 'secondary' | 'outline' | 'destructive'
+> = {
   pending: 'outline',
   authorized: 'secondary',
   confirmed: 'default',
@@ -45,43 +58,43 @@ const STATUS_VARIANT: Record<Status, 'default' | 'secondary' | 'outline' | 'dest
   failed: 'destructive',
 };
 
-export default function AdminPaymentsPage() {
-  const [statusFilter, setStatusFilter] = useState<Status | 'all'>('all');
-  const [providerFilter, setProviderFilter] = useState<'all' | PaymentRow['provider']>('all');
-  const [refundingId, setRefundingId] = useState<string | null>(null);
+export default async function AdminPaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const session = await auth();
+  if (!session?.user) redirect('/login?callbackUrl=/admin/payments');
+  const me = await db.query.users.findFirst({
+    where: eq(users.email, session.user.email!),
+  });
+  if (!me || me.role !== 'admin') redirect('/dashboard');
 
-  const filtered = useMemo(() => {
-    return MOCK.filter((p) => {
-      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
-      if (providerFilter !== 'all' && p.provider !== providerFilter) return false;
-      return true;
-    });
-  }, [statusFilter, providerFilter]);
+  const params = await searchParams;
+  const status = params.status;
+  const validStatuses = new Set([
+    'pending',
+    'authorized',
+    'confirmed',
+    'refunded',
+    'cancelled',
+    'failed',
+  ]);
+  const statusFilter =
+    status && validStatuses.has(status) ? (status as Status) : null;
 
-  async function handleRefund(payment: PaymentRow) {
-    if (!confirm(`Вернуть ${payment.amount} ₽ за платёж ${payment.id}?`)) return;
-    setRefundingId(payment.id);
-    try {
-      const res = await fetch('/api/admin/payments/refund', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentId: payment.id,
-          provider: payment.provider,
-          providerPaymentId: payment.providerPaymentId,
-          amount: payment.amount,
-          reason: 'admin_manual_refund',
-        }),
-      });
-      if (!res.ok) {
-        alert(`Ошибка возврата: ${res.status}`);
-      } else {
-        alert('Возврат отправлен');
-      }
-    } finally {
-      setRefundingId(null);
-    }
-  }
+  const r = await db.execute(sql`
+    SELECT p.id::text AS id, p.created_at, p.amount::text AS amount, p.currency,
+           p.status::text AS status, p.description, p.tinkoff_payment_id,
+           p.refunded_amount::text AS refunded_amount,
+           u.email AS user_email, u.name AS user_name
+    FROM payments p
+    LEFT JOIN users u ON u.id = p.user_id
+    ${statusFilter ? sql`WHERE p.status::text = ${statusFilter}` : sql``}
+    ORDER BY p.created_at DESC
+    LIMIT 200
+  `);
+  const rows = ((r as unknown as { rows?: unknown[] }).rows ?? r) as PaymentRow[];
 
   return (
     <MainLayout>
@@ -93,52 +106,33 @@ export default function AdminPaymentsPage() {
               Все платежи и возвраты по провайдерам Tinkoff / YooKassa / СБП.
             </p>
           </div>
-          <Button variant="outline" size="sm">
-            <RefreshCcw className="me-2 h-4 w-4" />
-            Обновить
-          </Button>
         </div>
 
-        {/* Filters */}
-        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
-          <Filter className="h-4 w-4 text-muted-foreground" />
+        <div className="mb-6 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm">
           <span className="text-xs text-muted-foreground">Статус:</span>
-          {(['all', 'pending', 'confirmed', 'refunded', 'cancelled', 'failed'] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setStatusFilter(s)}
-              className={cn(
-                'px-3 py-1 rounded-full border text-xs transition-colors',
-                statusFilter === s
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border hover:border-primary/40'
-              )}
-            >
-              {s === 'all' ? 'Все' : STATUS_LABELS[s as Status] || s}
-            </button>
-          ))}
-          <span className="ms-4 text-xs text-muted-foreground">Провайдер:</span>
-          {(['all', 'tinkoff', 'yookassa', 'sbp'] as const).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setProviderFilter(p)}
-              className={cn(
-                'px-3 py-1 rounded-full border text-xs transition-colors',
-                providerFilter === p
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border hover:border-primary/40'
-              )}
-            >
-              {p === 'all' ? 'Все' : p}
-            </button>
-          ))}
+          {(['all', 'pending', 'confirmed', 'refunded', 'cancelled', 'failed'] as const).map(
+            (s) => {
+              const active = (statusFilter ?? 'all') === s;
+              const href = s === 'all' ? '/admin/payments' : `/admin/payments?status=${s}`;
+              return (
+                <a
+                  key={s}
+                  href={href}
+                  className={`px-3 py-1 rounded-full border text-xs transition-colors ${
+                    active
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-primary/40'
+                  }`}
+                >
+                  {s === 'all' ? 'Все' : STATUS_LABELS[s as Status] || s}
+                </a>
+              );
+            }
+          )}
         </div>
 
-        {/* Table */}
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
-          {filtered.length === 0 ? (
+          {rows.length === 0 ? (
             <div className="px-6 py-16 text-center text-sm text-muted-foreground">
               Платежей не найдено.
             </div>
@@ -148,7 +142,6 @@ export default function AdminPaymentsPage() {
                 <tr>
                   <th className="px-4 py-3 text-left">Дата</th>
                   <th className="px-4 py-3 text-left">Пользователь</th>
-                  <th className="px-4 py-3 text-left">Провайдер</th>
                   <th className="px-4 py-3 text-left">Описание</th>
                   <th className="px-4 py-3 text-right">Сумма</th>
                   <th className="px-4 py-3 text-left">Статус</th>
@@ -156,14 +149,21 @@ export default function AdminPaymentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((p) => (
+                {rows.map((p) => (
                   <tr key={p.id} className="border-t border-border">
-                    <td className="px-4 py-3 whitespace-nowrap">{p.createdAt}</td>
-                    <td className="px-4 py-3">{p.user}</td>
-                    <td className="px-4 py-3">{p.provider}</td>
-                    <td className="px-4 py-3">{p.description}</td>
-                    <td className="px-4 py-3 text-right">
-                      {p.amount.toLocaleString('ru-RU')} ₽
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {new Date(p.created_at).toLocaleString('ru-RU', {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>{p.user_name || '—'}</div>
+                      <div className="text-xs text-muted-foreground">{p.user_email || ''}</div>
+                    </td>
+                    <td className="px-4 py-3">{p.description || '—'}</td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {Number(p.amount).toLocaleString('ru-RU')} {p.currency}
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant={STATUS_VARIANT[p.status]}>
@@ -171,16 +171,12 @@ export default function AdminPaymentsPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {p.status === 'confirmed' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={refundingId === p.id}
-                          onClick={() => handleRefund(p)}
-                        >
-                          <RotateCcw className="me-1 h-3 w-3" />
-                          {refundingId === p.id ? 'Возврат…' : 'Возврат'}
-                        </Button>
+                      {p.status === 'confirmed' && p.tinkoff_payment_id && (
+                        <RefundButton
+                          paymentId={p.id}
+                          providerPaymentId={p.tinkoff_payment_id}
+                          amount={Number(p.amount)}
+                        />
                       )}
                     </td>
                   </tr>
