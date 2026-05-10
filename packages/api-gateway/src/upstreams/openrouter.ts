@@ -55,18 +55,46 @@ export const openRouterUpstream: UpstreamAdapter = {
       );
       throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`);
     }
-    const data = (await res.json()) as ChatResponse & { usage?: Partial<ChatResponse['usage']> };
+    const data = (await res.json()) as ChatResponse & {
+      usage?: Partial<ChatResponse['usage']>;
+      provider?: string;
+      system_fingerprint?: string;
+      native_finish_reason?: string;
+    };
     logger.info(
-      { model: req.modelId, ms: Date.now() - start, tokens: data.usage?.total_tokens },
+      {
+        model: req.modelId,
+        ms: Date.now() - start,
+        tokens: data.usage?.total_tokens,
+        underlying_provider: data.provider, // logged for debugging, NOT returned
+      },
       'openrouter_ok'
     );
-    // Normalize usage (OpenRouter returns OpenAI-shaped usage)
+    // White-label: strip every field that reveals the underlying provider
+    // (Azure / Anthropic / DeepInfra / etc.) before returning to the client.
+    // Owner-acknowledged strategy: AIAG is presented as a self-contained
+    // platform; users must not see "provider":"Azure" in their responses.
     const usage = {
       prompt_tokens: data.usage?.prompt_tokens ?? 0,
       completion_tokens: data.usage?.completion_tokens ?? 0,
       total_tokens: data.usage?.total_tokens ?? 0,
     };
-    return { ...data, usage };
+    const cleaned = { ...data, usage };
+    delete (cleaned as Record<string, unknown>).provider;
+    delete (cleaned as Record<string, unknown>).system_fingerprint;
+    if (Array.isArray(cleaned.choices)) {
+      cleaned.choices = cleaned.choices.map((ch) => {
+        const c = { ...ch } as Record<string, unknown>;
+        delete c.native_finish_reason;
+        if (c.message && typeof c.message === 'object') {
+          const m = { ...(c.message as Record<string, unknown>) };
+          delete m.reasoning; // OpenRouter-specific field
+          c.message = m;
+        }
+        return c as typeof ch;
+      });
+    }
+    return cleaned;
   },
 
   async *chatStream(req: ChatRequest): AsyncIterable<unknown> {
