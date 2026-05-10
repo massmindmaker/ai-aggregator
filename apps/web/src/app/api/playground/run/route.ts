@@ -4,19 +4,38 @@ import { getModelBySlug } from '@/lib/marketplace/catalog';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Rate-limit: 5 free requests per IP per day (tracked in-memory, resets on restart).
+// For production, move to Redis. Sufficient for playground launch.
+const ipHits = new Map<string, { count: number; resetAt: number }>();
+const FREE_LIMIT = 5;
+const WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = ipHits.get(ip);
+  if (!entry || entry.resetAt < now) {
+    ipHits.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= FREE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
+
 interface RunRequest {
   model?: string;
   prompt?: string;
 }
 
-/**
- * Mock playground endpoint.
- *
- * Until Plan 04 gateway is wired up, this returns a canned streaming response
- * in SSE format compatible with the client playground UI. The request shape
- * matches what the future real gateway will expect so the UI won't change.
- */
 export async function POST(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  if (!checkRateLimit(ip)) {
+    return Response.json(
+      { error: 'rate_limit', message: 'Лимит: 5 запросов в день для гостей. Зарегистрируйтесь для полного доступа.' },
+      { status: 429 }
+    );
+  }
+
   let body: RunRequest;
   try {
     body = (await req.json()) as RunRequest;
@@ -26,29 +45,79 @@ export async function POST(req: NextRequest) {
 
   const modelSlug = (body.model ?? '').trim();
   const prompt = (body.prompt ?? '').trim();
+  if (!modelSlug) return Response.json({ error: 'model_required' }, { status: 400 });
+  if (!prompt) return Response.json({ error: 'prompt_required' }, { status: 400 });
 
-  if (!modelSlug) {
-    return Response.json({ error: 'model_required' }, { status: 400 });
-  }
-  if (!prompt) {
-    return Response.json({ error: 'prompt_required' }, { status: 400 });
-  }
   const model = getModelBySlug(modelSlug);
-  if (!model) {
-    return Response.json({ error: 'model_not_found' }, { status: 404 });
+  if (!model) return Response.json({ error: 'model_not_found' }, { status: 404 });
+
+  const gatewayUrl = process.env.GATEWAY_INTERNAL_URL ?? 'http://localhost:8787';
+  const systemKey = process.env.GATEWAY_SYSTEM_API_KEY ?? '';
+
+  if (!systemKey) {
+    // In production, refuse rather than silently mock — missing key is a config error
+    if (process.env.NODE_ENV === 'production') {
+      return Response.json({ error: 'gateway_not_configured' }, { status: 503 });
+    }
+    return fallbackMock(model.name, prompt);
   }
 
-  const response = buildMockResponse(model.name, prompt);
+  let upstreamRes: Response;
+  try {
+    upstreamRes = await fetch(`${gatewayUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${systemKey}`,
+        'x-aiag-playground': '1',
+      },
+      body: JSON.stringify({
+        model: model.slug,
+        stream: true,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 800,
+      }),
+    });
+  } catch (err) {
+    return Response.json({ error: 'gateway_unreachable' }, { status: 502 });
+  }
 
+  if (!upstreamRes.ok || !upstreamRes.body) {
+    return Response.json({ error: `gateway_${upstreamRes.status}` }, { status: 502 });
+  }
+
+  // Stream SSE from gateway → client in our delta format
   const encoder = new TextEncoder();
+  const upstreamBody = upstreamRes.body;
   const stream = new ReadableStream({
     async start(controller) {
-      for (const chunk of chunkText(response, 18)) {
-        controller.enqueue(encoder.encode(sseEvent({ delta: chunk })));
-        await sleep(40);
+      const reader = upstreamBody.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() ?? '';
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const raw = line.slice(6).trim();
+            if (raw === '[DONE]') continue;
+            try {
+              const chunk = JSON.parse(raw);
+              const delta = chunk?.choices?.[0]?.delta?.content;
+              if (typeof delta === 'string' && delta) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`));
+              }
+            } catch { /* skip malformed */ }
+          }
+        }
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
+      } finally {
+        controller.close();
       }
-      controller.enqueue(encoder.encode(sseEvent({ done: true })));
-      controller.close();
     },
   });
 
@@ -61,28 +130,25 @@ export async function POST(req: NextRequest) {
   });
 }
 
-function sseEvent(payload: unknown): string {
-  return `data: ${JSON.stringify(payload)}\n\n`;
-}
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-function chunkText(text: string, size: number): string[] {
-  const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += size) {
-    chunks.push(text.slice(i, i + size));
-  }
-  return chunks;
-}
-
-function buildMockResponse(modelName: string, prompt: string): string {
-  const truncated = prompt.length > 80 ? prompt.slice(0, 80) + '…' : prompt;
-  return (
-    `Это mock-ответ от ${modelName} для тестирования интерфейса Playground. ` +
-    `Ваш запрос: "${truncated}". ` +
-    'Реальное подключение к моделям появится после мерджа Plan 04 gateway — ' +
-    'единого API с маршрутизацией на провайдеров и биллингом в рублях.'
-  );
+// Fallback mock when gateway keys not configured (local dev)
+function fallbackMock(modelName: string, prompt: string): Response {
+  const text = `[Dev mode — gateway not configured] Mock ответ от ${modelName}. Запрос: "${prompt.slice(0, 60)}"`;
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      for (let i = 0; i < text.length; i += 12) {
+        const delta = text.slice(i, i + 12);
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`));
+        await new Promise(r => setTimeout(r, 40));
+      }
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+    },
+  });
 }
