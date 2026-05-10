@@ -12,6 +12,12 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
+  // Evict expired entries to prevent unbounded growth
+  if (ipHits.size > 10_000) {
+    for (const [k, v] of ipHits) {
+      if (v.resetAt < now) ipHits.delete(k);
+    }
+  }
   const entry = ipHits.get(ip);
   if (!entry || entry.resetAt < now) {
     ipHits.set(ip, { count: 1, resetAt: now + WINDOW_MS });
@@ -22,14 +28,19 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
+function decrementRateLimit(ip: string): void {
+  const entry = ipHits.get(ip);
+  if (entry && entry.count > 0) entry.count--;
+}
+
 interface RunRequest {
   model?: string;
   prompt?: string;
 }
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  if (!checkRateLimit(ip)) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  if (ip && !checkRateLimit(ip)) {
     return Response.json(
       { error: 'rate_limit', message: 'Лимит: 5 запросов в день для гостей. Зарегистрируйтесь для полного доступа.' },
       { status: 429 }
@@ -78,11 +89,13 @@ export async function POST(req: NextRequest) {
         max_tokens: 800,
       }),
     });
-  } catch (err) {
+  } catch {
+    if (ip) decrementRateLimit(ip);
     return Response.json({ error: 'gateway_unreachable' }, { status: 502 });
   }
 
   if (!upstreamRes.ok || !upstreamRes.body) {
+    if (ip) decrementRateLimit(ip);
     return Response.json({ error: `gateway_${upstreamRes.status}` }, { status: 502 });
   }
 
