@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { getModelBySlug } from '@/lib/marketplace/catalog';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,8 +58,10 @@ export async function POST(req: NextRequest) {
   if (!modelSlug) return Response.json({ error: 'model_required' }, { status: 400 });
   if (!prompt) return Response.json({ error: 'prompt_required' }, { status: 400 });
 
-  const model = getModelBySlug(modelSlug);
-  if (!model) return Response.json({ error: 'model_not_found' }, { status: 404 });
+  // Slug validation is enforced by the gateway (DB lookup) — no static catalog needed
+  if (!/^[a-z0-9_\-/.]+$/.test(modelSlug)) {
+    return Response.json({ error: 'invalid_model_slug' }, { status: 400 });
+  }
 
   const gatewayUrl = process.env.GATEWAY_INTERNAL_URL ?? 'http://localhost:8787';
   const systemKey = process.env.GATEWAY_SYSTEM_API_KEY ?? '';
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     if (process.env.NODE_ENV === 'production') {
       return Response.json({ error: 'gateway_not_configured' }, { status: 503 });
     }
-    return fallbackMock(model.name, prompt);
+    return fallbackMock(modelSlug, prompt);
   }
 
   let upstreamRes: Response;
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
         'x-aiag-playground': '1',
       },
       body: JSON.stringify({
-        model: model.slug,
+        model: modelSlug,
         stream: true,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 800,
