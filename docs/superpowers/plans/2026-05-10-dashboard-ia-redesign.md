@@ -496,6 +496,7 @@ const ITEMS_PARTICIPANT = [
   { href: '/dashboard?mode=participant', label: 'Обзор', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/submissions', label: 'Мои сабмишены', icon: Inbox },
   { href: '/dashboard/wins', label: 'Победы', icon: Trophy },
+  { href: '/contests', label: 'Конкурсы', icon: Boxes },
 ];
 
 const ALWAYS = [
@@ -995,22 +996,120 @@ git commit -m "feat(dashboard): server overview with real DB queries — drops 7
 ## Task 8: Pricing — auth-aware CTAs
 
 **Files:**
-- Modify: `apps/web/src/app/pricing/page.tsx`
+- Move: existing `apps/web/src/app/pricing/page.tsx` → `apps/web/src/app/pricing/PricingClient.tsx`
+- Create new: `apps/web/src/app/pricing/page.tsx` (server wrapper)
 
-The current file is `'use client'`. We split: a server outer that reads session + current plan, and the existing client UI takes a `derivedCtas` prop.
+The current file is `'use client'`. We split it into a server outer that reads session + current plan, and a client inner that takes derived CTAs as a prop.
 
-- [ ] **Step 1: Read current file to understand existing structure**
+- [ ] **Step 1: Read current file structure**
 
 ```bash
 wc -l apps/web/src/app/pricing/page.tsx
-head -200 apps/web/src/app/pricing/page.tsx
+sed -n '1,80p' apps/web/src/app/pricing/page.tsx
 ```
 
-- [ ] **Step 2: Refactor — wrap in server component, derive CTAs**
+Expected output: `'use client'` directive at line 1, a `Tier` interface, a `tiers: Tier[]` array, and a default export that maps tiers and renders `<Link href={tier.ctaHref}>...</Link>`. Note the existing `Tier` shape exactly — the new wrapper must re-use it.
 
-The structure: rename current default-export client component to `PricingClient`, move it to `PricingClient.tsx`. Create new `page.tsx` that's `async` server component reading session + subscription, computing CTAs, and passing them in.
+- [ ] **Step 2a: Move existing file to PricingClient.tsx (rename only)**
 
-Pseudocode (adapt to existing tier shape):
+```bash
+git mv apps/web/src/app/pricing/page.tsx apps/web/src/app/pricing/PricingClient.tsx
+```
+
+Then in `PricingClient.tsx`:
+- Rename the default export from `PricingPage` (or whatever it is) to `PricingClient`. Keep `'use client'` directive.
+- Add a `Props` interface and accept `{ session, currentPlanId }` from the server wrapper:
+
+```tsx
+interface PricingClientProps {
+  isLoggedIn: boolean;
+  currentPlanId: string | null;
+}
+
+export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClientProps) {
+  // …existing body…
+}
+```
+
+- Replace the existing `tier.ctaHref` reads with a derivation. At the top of the component (above the JSX) add:
+
+```ts
+function ctaForTier(tier: Tier): { label: string; href: string | null } {
+  if (tier.isContact) return { label: 'Связаться', href: '/business?topic=enterprise' };
+  if (!isLoggedIn) {
+    return {
+      label: 'Зарегистрироваться',
+      href: `/register?callbackUrl=${encodeURIComponent('/pricing')}`,
+    };
+  }
+  if (currentPlanId === tier.id) return { label: 'Текущий тариф', href: null };
+  const verb = tier.id === 'free' ? 'Перейти на Free' : `Сменить на ${tier.name}`;
+  return { label: verb, href: `/dashboard/billing?upgrade=${tier.id}` };
+}
+```
+
+- In the JSX where the tier card renders its CTA, replace `<Link href={tier.ctaHref}>{tier.cta}</Link>` (or the equivalent button) with:
+
+```tsx
+{(() => {
+  const cta = ctaForTier(tier);
+  if (!cta.href) {
+    return (
+      <Button disabled className="w-full opacity-60 cursor-default">
+        {cta.label}
+      </Button>
+    );
+  }
+  return (
+    <Link href={cta.href}>
+      <Button className="w-full">{cta.label}</Button>
+    </Link>
+  );
+})()}
+```
+
+Make sure this edit covers BOTH spots if the tier card is rendered twice (header CTA and footer CTA in the same tier).
+
+- [ ] **Step 2b: Create new page.tsx server wrapper**
+
+```tsx
+// apps/web/src/app/pricing/page.tsx
+import { auth } from '@/auth';
+import { db, sql } from '@/lib/db';
+import PricingClient from './PricingClient';
+
+export const dynamic = 'force-dynamic';
+
+interface PlanRow { plan_name: string | null }
+
+async function currentPlanId(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const r = await db.execute(sql`
+    SELECT plan_name FROM subscriptions
+    WHERE user_id = ${userId}::uuid AND status = 'active'
+    ORDER BY created_at DESC LIMIT 1
+  `).catch(() => ({ rows: [] }));
+  const rows = (((r as unknown as { rows?: unknown[] }).rows ?? r) as PlanRow[]);
+  return rows[0]?.plan_name ?? null;
+}
+
+export default async function PricingPage() {
+  const session = await auth();
+  const planId = await currentPlanId(session?.user?.id);
+  return <PricingClient isLoggedIn={Boolean(session?.user)} currentPlanId={planId} />;
+}
+```
+
+- [ ] **Step 2c: Verify both files**
+
+```bash
+ls apps/web/src/app/pricing/
+# Expected: page.tsx (server) + PricingClient.tsx (client)
+head -3 apps/web/src/app/pricing/PricingClient.tsx
+# First non-empty line MUST be: 'use client';
+head -3 apps/web/src/app/pricing/page.tsx
+# First non-empty line should be: import { auth } from '@/auth'; (server, no 'use client')
+```
 
 ```tsx
 // apps/web/src/app/pricing/page.tsx
@@ -1105,7 +1204,7 @@ git add apps/web/src/app/me/submit-model/page.tsx
 git commit -m "refactor(me): /me/submit-model now 308 → /dashboard/models/new"
 ```
 
-> Note on `/account/request-human-review` — spec §11.1 marks this as deferred (anonymous users may need access). Skipped in this iteration; keep the page as is.
+> **BLOCKER — spec §11.1 unresolved.** The spec lists `/account/request-human-review` as an open question — owner needs to choose: keep public (for parents-of-banned-users flow) or migrate to `/dashboard/profile/human-review`. The plan defers it (page untouched) so this task does NOT redirect it. **Before final merge to master, confirm with owner.** If owner chooses migrate-to-dashboard, add follow-up commit replacing the page body with `permanentRedirect('/dashboard/profile/human-review')` and create that page.
 
 ---
 
@@ -1299,6 +1398,47 @@ git commit -m "feat(dashboard): stub pages for profile/security/wins/kyc with re
 
 ---
 
+## Task 10b: FIXME-tag the legacy MOCK pages
+
+Per spec §9 row 10 — pages `billing/earnings/referrals/submissions/usage/keys` are NOT being converted in this plan, but spec demands at minimum a FIXME header so a future iteration knows where to look. This task adds a one-line FIXME comment at the top of each that has hardcoded data.
+
+**Files (audit + add FIXME if MOCK):**
+- `apps/web/src/app/dashboard/billing/page.tsx`
+- `apps/web/src/app/dashboard/earnings/page.tsx`
+- `apps/web/src/app/dashboard/keys/page.tsx`
+- `apps/web/src/app/dashboard/referrals/page.tsx`
+- `apps/web/src/app/dashboard/submissions/page.tsx`
+- `apps/web/src/app/dashboard/usage/page.tsx`
+
+- [ ] **Step 1: Grep for hardcoded data in each**
+
+```bash
+for f in apps/web/src/app/dashboard/{billing,earnings,keys,referrals,submissions,usage}/page.tsx; do
+  echo "=== $f ==="
+  grep -nE "MOCK|hardcoded|^const \w+ = (\[|\{)" "$f" | head -3 || echo "(clean)"
+done
+```
+
+- [ ] **Step 2: For each page that has MOCK arrays/objects, prepend a FIXME comment**
+
+```ts
+// FIXME(spec §9 row 10): this page renders hardcoded data. Convert to a
+// server component reading from DB before public launch. Tracked in
+// docs/superpowers/specs/2026-05-10-dashboard-ia-redesign-design.md §10.
+```
+
+If the file is already a server component reading real data — skip it (no FIXME needed). The grep above tells you which ones to touch.
+
+- [ ] **Step 3: Type-check + commit**
+
+```bash
+bun run --cwd apps/web type-check
+git add apps/web/src/app/dashboard/
+git commit -m "chore(dashboard): FIXME-tag legacy MOCK pages per spec §9 row 10"
+```
+
+---
+
 ## Task 11: Deploy + smoke
 
 **Files:** None (verification only).
@@ -1332,6 +1472,9 @@ Expected: both `build` and `deploy` jobs return `success`. If `build` fails, rea
 ssh aiag-vps 'echo "=== anonymous → /dashboard ==="
 curl -sko /dev/null -w "%{http_code}\n" -m 5 http://127.0.0.1:3000/dashboard
 
+echo "=== anonymous → /admin ==="
+curl -sko /dev/null -w "%{http_code}\n" -m 5 http://127.0.0.1:3000/admin
+
 echo "=== /me/submit-model 308 ==="
 curl -sko /dev/null -w "%{http_code} → %{redirect_url}\n" -m 5 http://127.0.0.1:3000/me/submit-model
 
@@ -1344,16 +1487,24 @@ curl -sko /dev/null -w "%{http_code}\n" -m 5 http://127.0.0.1:3000/onboarding
 echo "=== /dashboard?mode=author 307 (anon) ==="
 curl -sko /dev/null -w "%{http_code}\n" -m 5 "http://127.0.0.1:3000/dashboard?mode=author"
 
+echo "=== /dashboard/profile, /security, /wins, /kyc render (anon → 307) ==="
+for p in /dashboard/profile /dashboard/security /dashboard/wins /dashboard/kyc; do
+  CODE=$(curl -sko /dev/null -w "%{http_code}" -m 5 "http://127.0.0.1:3000$p")
+  echo "$p → $CODE"
+done
+
 echo "=== pm2 ==="
 sudo -u aiag pm2 list 2>&1 | head -8'
 ```
 
 Expected:
 - `/dashboard` → `307` (anonymous, redirected to login)
+- `/admin` → `307` (anonymous gate fires; redirects to `/login?callbackUrl=/admin`)
 - `/me/submit-model` → `308` to `/dashboard/models/new`
 - `/pricing` → `200`
 - `/onboarding` → `404` (harmless — no redirect from auth.ts anymore)
 - `/dashboard?mode=author` → `307` (anonymous gate fires before mode resolution)
+- `/dashboard/{profile,security,wins,kyc}` → `307` each
 - pm2 web/gateway/worker all `online`
 
 - [ ] **Step 5: Owner manual smoke (open in browser)**
@@ -1362,9 +1513,12 @@ Owner verifies via browser:
 - Logged in: see avatar dropdown in header on `/`, `/marketplace`, `/pricing`
 - `/dashboard` shows real numbers (not 750/1200/1234/3); plan = «Free» if no subscription
 - Sidebar visible on every `/dashboard/*` route; mode chip click navigates to `/dashboard?mode=X`
-- `/pricing` shows «Сменить на ...» buttons (not «Регистрация») when logged in
-- `/me/submit-model` redirects to `/dashboard/models/new`
-- Admin sees «Админка →» in sidebar; clicks it, lands in `/admin`
+- **Soft-navigation on chip click:** open DevTools Network → click a mode chip → only an RSC payload request appears, no full document re-fetch. (Spec §12 «soft-nav re-runs the layout».)
+- **Mobile drawer parity:** open in narrow viewport → tap menu → drawer shows avatar block with Dashboard / Профиль / Админка / Выйти (NOT Войти/Регистрация) when logged-in.
+- **signOut flow:** click «Выйти» in dropdown → lands on `/`, header reverts to anonymous variant immediately.
+- `/pricing` shows «Сменить на ...» buttons (not «Регистрация») when logged in. For a user with no subscription row, all tier CTAs offer "Сменить" / "Перейти" — none rendered as «Текущий тариф».
+- `/me/submit-model` redirects to `/dashboard/models/new`.
+- Admin sees «Админка →» in sidebar; clicks it, lands in `/admin`.
 
 If any verification fails, open an issue and fix in a follow-up task. The plan is complete when the smoke commands return the expected codes.
 
