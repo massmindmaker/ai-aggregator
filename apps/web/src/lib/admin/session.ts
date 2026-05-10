@@ -1,5 +1,5 @@
 // Lightweight admin step-up session — separate from the NextAuth session.
-// A logged-in user with role=admin still has to pass through /admin/login
+// A logged-in user with role=admin still has to pass through /admin-login
 // (password) to get this cookie before /admin/* layouts render. Reduces
 // blast radius if a user laptop is unlocked with a regular session active.
 //

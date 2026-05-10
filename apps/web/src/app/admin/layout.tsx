@@ -14,11 +14,11 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   // Two gates: (1) authenticated user with role=admin, (2) admin-session
-  // cookie set via the dedicated /admin/login flow. Without the cookie a
-  // logged-in admin is redirected to /admin/login (NOT /dashboard) so the
+  // cookie set via the dedicated /admin-login flow. Without the cookie a
+  // logged-in admin is redirected to /admin-login (NOT /dashboard) so the
   // step-up is explicit.
   const session = await auth();
-  if (!session?.user?.email) redirect('/admin/login');
+  if (!session?.user?.email) redirect('/admin-login');
 
   const u = await db.query.users.findFirst({
     where: eq(users.email, session.user.email),
@@ -28,7 +28,7 @@ export default async function AdminLayout({
   const cookieStore = await cookies();
   const adminCookie = cookieStore.get('aiag_admin_session')?.value;
   const adminSessionOk = await verifyAdminSession(adminCookie, u.id);
-  if (!adminSessionOk) redirect('/admin/login');
+  if (!adminSessionOk) redirect('/admin-login');
 
   return (
     <div className="min-h-screen flex bg-background">
