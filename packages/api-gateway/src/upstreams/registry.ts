@@ -14,6 +14,7 @@ import type { UpstreamAdapter } from './interface';
 import { mockUpstream } from './mock';
 import { openRouterUpstream } from './openrouter';
 import { kieUpstream } from './kie';
+import { ollamaUpstream } from './ollama';
 
 export function getUpstream(provider: string): UpstreamAdapter {
   if (process.env.AIAG_FORCE_MOCK === '1') return mockUpstream;
@@ -23,6 +24,8 @@ export function getUpstream(provider: string): UpstreamAdapter {
       return process.env.OPENROUTER_API_KEY ? openRouterUpstream : mockUpstream;
     case 'kie':
       return process.env.KIE_API_KEY ? kieUpstream : mockUpstream;
+    case 'ollama':
+      return process.env.OLLAMA_CLOUD_URL ? ollamaUpstream : mockUpstream;
     default:
       return mockUpstream;
   }
