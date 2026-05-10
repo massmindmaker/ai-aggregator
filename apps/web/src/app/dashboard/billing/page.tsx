@@ -1,6 +1,3 @@
-// FIXME(spec §9 row 10): MOCK_PAYMENTS is hardcoded. Convert to a server
-// component reading from `payments` table before public launch. Tracked in
-// docs/superpowers/specs/2026-05-10-dashboard-ia-redesign-design.md §10.
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -22,16 +19,13 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
 
 interface PaymentRow {
   id: string;
-  amount: number;
+  amount: string;
   currency: string;
   status: string;
-  provider: string;
-  description: string;
-  createdAt: string;
+  description: string | null;
+  payment_method: string | null;
+  created_at: string;
 }
-
-// MVP — server data wiring TODO Plan 04 schema sync
-const MOCK_PAYMENTS: PaymentRow[] = [];
 
 const TOPUP_PRESETS = [500, 1000, 2500, 5000, 10000];
 
@@ -47,6 +41,23 @@ export default function BillingPage() {
   const [autoAmount, setAutoAmount] = useState('1000');
   const [autoSaving, setAutoSaving] = useState(false);
   const [autoMsg, setAutoMsg] = useState<string | null>(null);
+
+  // Real payments fetched from /api/dashboard/billing/payments
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/dashboard/billing/payments');
+        if (!res.ok) return;
+        const data = (await res.json()) as { payments?: PaymentRow[] };
+        setPayments(data.payments ?? []);
+      } finally {
+        setPaymentsLoading(false);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -286,9 +297,13 @@ export default function BillingPage() {
           <div className="px-6 py-4 border-b border-border">
             <h2 className="text-lg font-semibold">История платежей</h2>
           </div>
-          {MOCK_PAYMENTS.length === 0 ? (
+          {paymentsLoading ? (
             <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-              Платежей пока нет.
+              Загрузка…
+            </div>
+          ) : payments.length === 0 ? (
+            <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+              Платежей пока нет. Сделайте первое пополнение или подпишитесь на тариф.
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -302,13 +317,17 @@ export default function BillingPage() {
                 </tr>
               </thead>
               <tbody>
-                {MOCK_PAYMENTS.map((p) => (
+                {payments.map((p) => (
                   <tr key={p.id} className="border-t border-border">
-                    <td className="px-6 py-3">{p.createdAt}</td>
-                    <td className="px-6 py-3">{p.description}</td>
-                    <td className="px-6 py-3">{p.provider}</td>
-                    <td className="px-6 py-3 text-right">
-                      {p.amount.toLocaleString('ru-RU')} {p.currency}
+                    <td className="px-6 py-3 whitespace-nowrap font-mono text-xs">
+                      {p.created_at?.slice(0, 16).replace('T', ' ')}
+                    </td>
+                    <td className="px-6 py-3">{p.description ?? '—'}</td>
+                    <td className="px-6 py-3 text-xs text-muted-foreground">
+                      {p.payment_method ?? '—'}
+                    </td>
+                    <td className="px-6 py-3 text-right tabular-nums">
+                      {Number(p.amount).toLocaleString('ru-RU')} {p.currency}
                     </td>
                     <td className="px-6 py-3">
                       <Badge variant="outline">{p.status}</Badge>

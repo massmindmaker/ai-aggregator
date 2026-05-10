@@ -65,29 +65,31 @@ function filterByTab(
 ): ContestCardData[] {
   if (tab === 'active') {
     return contests.filter((c) =>
-      ['open', 'active', 'evaluating', 'announced'].includes(c.status)
+      ['active', 'evaluation'].includes(c.status as string)
     );
   }
   if (tab === 'upcoming') {
-    return contests.filter((c) => c.status === 'upcoming');
+    return contests.filter((c) => c.status === 'upcoming' || c.status === 'pending_review');
   }
   return contests.filter((c) =>
-    ['completed', 'finished', 'archived'].includes(c.status)
+    ['completed', 'cancelled'].includes(c.status as string)
   );
 }
 
-export default function ContestsPage({
+export default async function ContestsPage({
   searchParams,
 }: {
-  searchParams: { tab?: StatusFilter };
+  searchParams: Promise<{ tab?: StatusFilter }>;
 }) {
-  const tab: StatusFilter = searchParams?.tab ?? 'active';
-  const active = filterByTab(MOCK_CONTESTS, 'active');
-  const upcoming = filterByTab(MOCK_CONTESTS, 'upcoming');
-  const past = filterByTab(MOCK_CONTESTS, 'past');
+  const params = await searchParams;
+  const tab: StatusFilter = params?.tab ?? 'active';
+  const all = await fetchContests();
+  const active = filterByTab(all, 'active');
+  const upcoming = filterByTab(all, 'upcoming');
+  const past = filterByTab(all, 'past');
 
   return (
-    <MainLayout>
+    <>
       <div className="container mx-auto px-4 py-10 max-w-6xl">
         <header className="mb-8">
           <h1 className="text-4xl font-bold tracking-tight mb-2">
@@ -133,7 +135,7 @@ export default function ContestsPage({
           </TabsContent>
         </Tabs>
       </div>
-    </MainLayout>
+    </>
   );
 }
 

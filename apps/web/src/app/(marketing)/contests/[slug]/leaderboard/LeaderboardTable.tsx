@@ -76,16 +76,16 @@ export default function LeaderboardTable({ slug }: { slug: string }) {
         cache: 'no-store',
       });
       if (res.ok) {
-        const json = await res.json();
-        if (json?.data) {
-          setData(json.data as LeaderboardPayload);
+        const json = (await res.json()) as LeaderboardPayload;
+        if (Array.isArray(json?.rows)) {
+          setData(json);
           return;
         }
       }
-      // Fallback to mock if API is not ready.
-      setData(MOCK_BY_SLUG[slug] ?? mockData(false));
+      // Real API exists; on failure show empty rather than fake data.
+      setData({ rows: [], privateRevealed: false, updatedAt: new Date().toISOString() });
     } catch {
-      setData(MOCK_BY_SLUG[slug] ?? mockData(false));
+      setData({ rows: [], privateRevealed: false, updatedAt: new Date().toISOString() });
     } finally {
       setLoading(false);
     }

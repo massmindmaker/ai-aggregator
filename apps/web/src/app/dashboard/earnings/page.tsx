@@ -1,9 +1,8 @@
-// FIXME(spec §9 row 10): MOCK_EARNINGS is hardcoded. Convert to a server
-// component reading from `author_earnings` table before public launch. Tracked
-// in docs/superpowers/specs/2026-05-10-dashboard-ia-redesign-design.md §10.
-import * as React from 'react';
+import { auth } from '@/auth';
+import { redirect } from 'next/navigation';
+import Link from 'next/link';
+import { db, sql } from '@/lib/db';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import {
   Table,
@@ -13,99 +12,111 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/Table';
-import { formatPrice } from '@aiag/shared';
+import { Button } from '@/components/ui/Button';
 
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Мои доходы — AI-Aggregator' };
 
-interface EarningRow {
-  month: string;
-  modelName: string;
-  modelSlug: string;
-  grossRevenueRub: number;
-  upstreamCostRub: number;
-  marginRub: number;
-  tierPct: number;
-  authorShareRub: number;
-  status: 'accruing' | 'locked' | 'paid';
+interface Row {
+  period_month: string | null;
+  model_name: string | null;
+  model_slug: string | null;
+  gross_revenue_rub: string;
+  upstream_cost_rub: string;
+  margin_rub: string;
+  tier_pct: number;
+  author_share_rub: string;
+  status: string;
 }
 
-const MOCK_EARNINGS: EarningRow[] = [
-  {
-    month: '2026-03',
-    modelName: 'MedNER RU v2',
-    modelSlug: 'medner-ru-v2',
-    grossRevenueRub: 45_200,
-    upstreamCostRub: 12_800,
-    marginRub: 32_400,
-    tierPct: 70,
-    authorShareRub: 22_680,
-    status: 'paid',
-  },
-  {
-    month: '2026-04',
-    modelName: 'MedNER RU v2',
-    modelSlug: 'medner-ru-v2',
-    grossRevenueRub: 58_900,
-    upstreamCostRub: 14_200,
-    marginRub: 44_700,
-    tierPct: 70,
-    authorShareRub: 31_290,
-    status: 'accruing',
-  },
-];
+const STATUS_LABEL: Record<string, string> = {
+  accruing: 'Начисляется',
+  locked: 'Зафиксировано',
+  paid: 'Выплачено',
+};
 
-const totalAccruing = MOCK_EARNINGS.filter((e) => e.status === 'accruing').reduce(
-  (a, b) => a + b.authorShareRub,
-  0
-);
-const totalPaid = MOCK_EARNINGS.filter((e) => e.status === 'paid').reduce(
-  (a, b) => a + b.authorShareRub,
-  0
-);
+function fmt(s: string): string {
+  return Number(s).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+}
 
-export default function EarningsPage() {
+export default async function EarningsPage() {
+  const session = await auth();
+  if (!session?.user?.id) redirect('/login?callbackUrl=/dashboard/earnings');
+
+  let rows: Row[] = [];
+  try {
+    const r = await db.execute(sql`
+      SELECT e.period_month::text AS period_month,
+             m.display_name AS model_name, m.slug AS model_slug,
+             e.gross_revenue_rub::text AS gross_revenue_rub,
+             e.upstream_cost_rub::text AS upstream_cost_rub,
+             e.margin_rub::text AS margin_rub,
+             e.tier_pct,
+             e.author_share_rub::text AS author_share_rub,
+             e.status
+      FROM author_earnings e
+      LEFT JOIN models m ON m.id = e.model_id
+      WHERE e.author_id = ${session.user.id}::uuid
+      ORDER BY e.period_month DESC NULLS LAST, m.slug
+      LIMIT 100
+    `);
+    rows = (((r as unknown as { rows?: unknown[] }).rows ?? r) as Row[]);
+  } catch {
+    rows = [];
+  }
+
+  const totalAccruing = rows
+    .filter((e) => e.status === 'accruing')
+    .reduce((a, b) => a + Number(b.author_share_rub), 0);
+  const totalPaid = rows
+    .filter((e) => e.status === 'paid')
+    .reduce((a, b) => a + Number(b.author_share_rub), 0);
+
   return (
-    <>
-      <div className="container mx-auto px-4 py-10 max-w-5xl">
-        <h1 className="text-3xl font-bold tracking-tight mb-6">
-          Мои доходы
-        </h1>
+    <div className="container mx-auto px-4 py-10 max-w-5xl">
+      <h1 className="text-3xl font-bold tracking-tight mb-6">Мои доходы</h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <StatCard
-            label="Накоплено (к выплате)"
-            value={formatPrice(totalAccruing)}
-            hint="Будет зафиксировано 2-го числа следующего месяца"
-          />
-          <StatCard
-            label="Выплачено всего"
-            value={formatPrice(totalPaid)}
-          />
-          <StatCard
-            label="Текущий revshare tier"
-            value="70% (baseline)"
-            hint="75% при суммарной выручке >100k ₽ 3 мес подряд"
-          />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <StatCard
+          label="Накоплено (к выплате)"
+          value={`${totalAccruing.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`}
+          hint="Будет зафиксировано 2-го числа следующего месяца"
+        />
+        <StatCard
+          label="Выплачено всего"
+          value={`${totalPaid.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`}
+        />
+        <StatCard
+          label="Текущий revshare tier"
+          value="70% (baseline)"
+          hint="80% при self-host, 85% при exclusive"
+        />
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Реквизиты для выплаты</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between flex-wrap gap-3">
+          <div className="text-sm text-muted-foreground">
+            Метод выплаты не настроен.
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/dashboard/kyc">Настроить</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <h2 className="text-xl font-semibold mb-3">История начислений</h2>
+
+      {rows.length === 0 ? (
+        <div
+          className="rounded-md border p-12 text-center text-muted-foreground"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          Пока нет начислений. Доходы появятся после первого вызова вашей модели через API.
         </div>
-
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Реквизиты для выплаты</CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center justify-between flex-wrap gap-3">
-            <div className="text-sm text-muted-foreground">
-              Метод выплаты не настроен.
-            </div>
-            <Button asChild variant="outline" size="sm">
-              <a href="/dashboard/earnings/payout-method">
-                Настроить метод выплаты
-              </a>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <h2 className="text-xl font-semibold mb-3">История начислений</h2>
-
+      ) : (
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
@@ -121,40 +132,32 @@ export default function EarningsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {MOCK_EARNINGS.map((e) => (
-                <TableRow key={`${e.month}-${e.modelSlug}`}>
-                  <TableCell className="font-mono text-sm">{e.month}</TableCell>
-                  <TableCell>{e.modelName}</TableCell>
-                  <TableCell className="text-right">
-                    {formatPrice(e.grossRevenueRub)}
+              {rows.map((e, i) => (
+                <TableRow key={`${e.period_month}-${e.model_slug}-${i}`}>
+                  <TableCell className="font-mono text-sm">
+                    {e.period_month?.slice(0, 7) ?? '—'}
                   </TableCell>
+                  <TableCell>{e.model_name ?? e.model_slug ?? '—'}</TableCell>
+                  <TableCell className="text-right">{fmt(e.gross_revenue_rub)}</TableCell>
                   <TableCell className="text-right text-muted-foreground">
-                    {formatPrice(e.upstreamCostRub)}
+                    {fmt(e.upstream_cost_rub)}
                   </TableCell>
-                  <TableCell className="text-right">
-                    {formatPrice(e.marginRub)}
-                  </TableCell>
-                  <TableCell className="text-right text-sm">
-                    {e.tierPct}%
-                  </TableCell>
+                  <TableCell className="text-right">{fmt(e.margin_rub)}</TableCell>
+                  <TableCell className="text-right text-sm">{e.tier_pct}%</TableCell>
                   <TableCell className="text-right font-semibold">
-                    {formatPrice(e.authorShareRub)}
+                    {fmt(e.author_share_rub)}
                   </TableCell>
                   <TableCell>
                     <Badge
                       variant={
                         e.status === 'paid'
-                          ? ('success' as any)
+                          ? ('success' as never)
                           : e.status === 'locked'
                             ? 'default'
                             : 'outline'
                       }
                     >
-                      {e.status === 'paid'
-                        ? 'Выплачено'
-                        : e.status === 'locked'
-                          ? 'Зафиксировано'
-                          : 'Начисляется'}
+                      {STATUS_LABEL[e.status] ?? e.status}
                     </Badge>
                   </TableCell>
                 </TableRow>
@@ -162,13 +165,12 @@ export default function EarningsPage() {
             </TableBody>
           </Table>
         </div>
+      )}
 
-        <p className="text-xs text-muted-foreground mt-4">
-          НДФЛ 13%/15% удерживается для физлиц (card_ru). Самозанятые получают
-          gross и сами выставляют чек. ИП/ООО — по счёту.
-        </p>
-      </div>
-    </>
+      <p className="text-xs text-muted-foreground mt-4">
+        НДФЛ 13%/15% удерживается для физлиц (card_ru). Самозанятые получают gross и сами выставляют чек. ИП/ООО — по счёту.
+      </p>
+    </div>
   );
 }
 
@@ -186,9 +188,7 @@ function StatCard({
       <CardContent className="pt-6">
         <div className="text-sm text-muted-foreground">{label}</div>
         <div className="text-2xl font-bold mt-1">{value}</div>
-        {hint && (
-          <div className="text-xs text-muted-foreground mt-1">{hint}</div>
-        )}
+        {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
       </CardContent>
     </Card>
   );
