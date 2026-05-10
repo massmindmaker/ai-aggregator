@@ -6,7 +6,12 @@ import Yandex from 'next-auth/providers/yandex';
 import VK from 'next-auth/providers/vk';
 import Credentials from 'next-auth/providers/credentials';
 import { db } from './lib/db';
-import { users } from '@aiag/database/schema';
+import {
+  users,
+  accounts,
+  sessions,
+  verificationTokens,
+} from '@aiag/database/schema';
 import { eq } from '@aiag/database';
 import bcrypt from 'bcryptjs';
 
@@ -15,9 +20,20 @@ import bcrypt from 'bcryptjs';
 // "Database not initialized" and fails Next page-data collection on every
 // route that imports @/auth (e.g. via requireAdmin in @/lib/admin/guard).
 // JWT session strategy doesn't need the adapter for build-time analysis.
+//
+// Explicit table mapping is required: our DB has plural snake_case tables
+// (users, accounts, sessions, verification_tokens) but DrizzleAdapter's
+// defaults assume singular camelCase (account, session, user) and would
+// fail with `relation "account" does not exist` on every OAuth callback —
+// the actual cause of the user-facing "Configuration" error on /login.
 const adapter =
   typeof process !== 'undefined' && process.env.DATABASE_URL
-    ? DrizzleAdapter(db)
+    ? DrizzleAdapter(db, {
+        usersTable: users,
+        accountsTable: accounts,
+        sessionsTable: sessions,
+        verificationTokensTable: verificationTokens,
+      })
     : undefined;
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
