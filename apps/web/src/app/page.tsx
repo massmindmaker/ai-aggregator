@@ -7,6 +7,7 @@ import HomeFaq from '@/components/home/HomeFaq';
 import { CellsSpot } from '@/components/animations/CellsSpot';
 import { CodeTabsDemo } from '@/components/home/CodeTabsDemo';
 import { TopModelsLeaderboard } from '@/components/home/TopModelsLeaderboard';
+import { CountUp } from '@/components/ui/CountUp';
 
 export const metadata: Metadata = {
   title:
@@ -60,11 +61,21 @@ const providers = [
   'Sber',
 ];
 
-const heroStats = [
-  { value: '400+', label: 'моделей' },
-  { value: '12', label: 'провайдеров' },
-  { value: '99.9%', label: 'аптайм' },
-  { value: '<150мс', label: 'latency p50' },
+interface HeroStat {
+  label: string;
+  end?: number;
+  decimals?: number;
+  prefix?: string;
+  suffix?: string;
+  /** Static value used when no `end` is given (e.g. "<150мс"). */
+  staticValue?: string;
+}
+
+const heroStats: HeroStat[] = [
+  { end: 400, suffix: '+', label: 'моделей' },
+  { end: 12, label: 'провайдеров' },
+  { end: 99.9, decimals: 1, suffix: '%', label: 'аптайм' },
+  { staticValue: '<150мс', label: 'latency p50' },
 ];
 
 const topModels = [
@@ -458,7 +469,16 @@ export default function HomePage() {
                 className="text-3xl font-bold tabular-nums"
                 style={{ color: 'var(--accent)', letterSpacing: '-0.02em' }}
               >
-                {s.value}
+                {s.end !== undefined ? (
+                  <CountUp
+                    end={s.end}
+                    decimals={s.decimals ?? 0}
+                    prefix={s.prefix ?? ''}
+                    suffix={s.suffix ?? ''}
+                  />
+                ) : (
+                  s.staticValue
+                )}
               </div>
               <div
                 className="text-xs uppercase opacity-60 tracking-wider mt-1 font-mono"

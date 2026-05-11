@@ -5,6 +5,37 @@ import { resolveMode } from '@/lib/dashboard/mode';
 import { fetchOverview } from '@/lib/dashboard/overview';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { CountUp } from '@/components/ui/CountUp';
+
+/**
+ * Renders tile value. If string is purely numeric (with optional decimals)
+ * or "N / M" form, animates via CountUp. Otherwise passes through.
+ */
+function TileValue({ value }: { value: string }) {
+  const trimmed = value.trim();
+  // pure integer or decimal
+  const numMatch = /^(\d+)(?:\.(\d+))?$/.exec(trimmed);
+  if (numMatch) {
+    const decimals = numMatch[2]?.length ?? 0;
+    return <CountUp end={Number(trimmed)} decimals={decimals} />;
+  }
+  // "used / limit" pattern
+  const ratio = /^(\d+)\s*\/\s*(\d+)$/.exec(trimmed);
+  if (ratio) {
+    return (
+      <>
+        <CountUp end={Number(ratio[1])} /> / <CountUp end={Number(ratio[2])} />
+      </>
+    );
+  }
+  // "1234 ₽" (number + currency suffix)
+  const numSuffix = /^(\d+(?:\.\d+)?)\s*(.+)$/.exec(trimmed);
+  if (numSuffix) {
+    const decimals = numSuffix[1].includes('.') ? numSuffix[1].split('.')[1].length : 0;
+    return <CountUp end={Number(numSuffix[1])} decimals={decimals} suffix={` ${numSuffix[2]}`} />;
+  }
+  return <>{value}</>;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +90,9 @@ export default async function DashboardPage({
               <div className="text-xs uppercase tracking-wider text-muted-foreground">
                 {t.label}
               </div>
-              <div className="text-3xl font-bold tabular-nums">{t.value}</div>
+              <div className="text-3xl font-bold tabular-nums">
+                <TileValue value={t.value} />
+              </div>
               {t.sublabel && (
                 <div className="text-xs text-muted-foreground">{t.sublabel}</div>
               )}

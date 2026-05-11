@@ -4,6 +4,7 @@ import { db, sql } from '@/lib/db';
 import { rowsOf } from '@/lib/admin/rows';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { CountUp } from '@/components/ui/CountUp';
 import { RevenueChart } from './RevenueChart';
 import { TopOrgsChart } from './TopOrgsChart';
 
@@ -171,10 +172,6 @@ async function getRecentActivity(): Promise<
   }
 }
 
-function fmtRub(n: number) {
-  return n.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
-}
-
 export default async function AdminHomePage() {
   const [kpi, daily, topOrgs, health, recent] = await Promise.all([
     getKpis(),
@@ -194,7 +191,9 @@ export default async function AdminHomePage() {
             <CardTitle className="text-xs text-muted-foreground">Выручка сегодня</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-amber-400">{fmtRub(kpi.revenue_today)} ₽</div>
+            <div className="text-3xl font-bold text-amber-400">
+              <CountUp end={kpi.revenue_today} decimals={2} suffix=" ₽" />
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -202,7 +201,9 @@ export default async function AdminHomePage() {
             <CardTitle className="text-xs text-muted-foreground">MRR</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{fmtRub(kpi.mrr)} ₽</div>
+            <div className="text-3xl font-bold">
+              <CountUp end={kpi.mrr} decimals={2} suffix=" ₽" />
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -211,7 +212,7 @@ export default async function AdminHomePage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {kpi.dau} / {kpi.mau}
+              <CountUp end={kpi.dau} /> / <CountUp end={kpi.mau} />
             </div>
           </CardContent>
         </Card>
@@ -220,7 +221,9 @@ export default async function AdminHomePage() {
             <CardTitle className="text-xs text-muted-foreground">Маржа 24ч</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{kpi.margin_pct.toFixed(1)}%</div>
+            <div className="text-3xl font-bold">
+              <CountUp end={kpi.margin_pct} decimals={1} suffix="%" />
+            </div>
           </CardContent>
         </Card>
       </div>
