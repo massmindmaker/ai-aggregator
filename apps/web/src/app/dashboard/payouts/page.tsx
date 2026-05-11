@@ -63,6 +63,7 @@ export default async function PayoutsPage() {
           style={{ borderColor: 'var(--line)' }}
         >
           <EmptyState
+            illustration="wallet"
             title="Пока ни одной выплаты"
             description="Выплаты создаются 2-го числа каждого месяца за фиксированный заработок предыдущего периода."
             actionLabel="К заработку"

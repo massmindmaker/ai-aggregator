@@ -79,6 +79,7 @@ export default async function MySubmissionsPage() {
       {rows.length === 0 ? (
         <div className="rounded-lg border">
           <EmptyState
+            illustration="submissions"
             title="Пока нет сабмиссий"
             description="Участвуйте в конкурсах чтобы попасть в лидерборд."
             actionLabel="К конкурсам"

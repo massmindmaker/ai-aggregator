@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { CellsSpot } from '@/components/animations/CellsSpot';
+import { Illustration, IllustrationVariant } from './illustrations';
 
 interface Props {
   title: string;
@@ -15,6 +16,8 @@ interface Props {
   size?: 'sm' | 'md' | 'lg';
   /** Скрыть CellsSpot если visualClutter не нужен */
   noVisual?: boolean;
+  /** Variant of static illustration. Если задан — заменяет CellsSpot. */
+  illustration?: IllustrationVariant;
   className?: string;
 }
 
@@ -40,6 +43,7 @@ export function EmptyState({
   actionOnClick,
   size = 'md',
   noVisual = false,
+  illustration,
   className = '',
 }: Props) {
   const s = SIZE[size];
@@ -48,7 +52,11 @@ export function EmptyState({
     <div className={`flex flex-col items-center text-center ${s.pad} ${className}`}>
       {!noVisual && (
         <div className="relative mb-6">
-          <CellsSpot width={s.w} height={s.h} cellSize={size === 'sm' ? 6 : 8} />
+          {illustration ? (
+            <Illustration variant={illustration} width={s.w} height={s.h} />
+          ) : (
+            <CellsSpot width={s.w} height={s.h} cellSize={size === 'sm' ? 6 : 8} />
+          )}
           {icon && (
             <div
               className="absolute inset-0 flex items-center justify-center text-3xl opacity-90"

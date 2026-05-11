@@ -21,6 +21,7 @@ export default async function WebhooksPage() {
         style={{ borderColor: 'var(--line)' }}
       >
         <EmptyState
+          illustration="webhooks"
           title="Скоро"
           description="Управление webhooks через UI готовится. Сейчас доступно через API — см. документацию, раздел «Subscriptions»."
           actionLabel="Открыть документацию"

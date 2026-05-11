@@ -89,6 +89,7 @@ export default async function DashboardModelsPage({
         {rows.length === 0 ? (
           <div className="rounded-lg border bg-card">
             <EmptyState
+              illustration="models"
               title="Пока ни одной модели"
               description="Загрузите свою — мы будем маршрутизировать запросы к её endpoint и платить вам процент с каждого вызова."
               actionLabel="Загрузить первую модель"

@@ -304,6 +304,7 @@ export default function BillingPage() {
             </div>
           ) : payments.length === 0 ? (
             <EmptyState
+              illustration="wallet"
               title="Платежей пока нет"
               description="Сделайте первое пополнение или подпишитесь на тариф."
               size="sm"

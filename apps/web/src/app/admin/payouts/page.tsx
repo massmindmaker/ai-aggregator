@@ -252,6 +252,7 @@ export default async function AdminPayoutsPage({
                 <tr>
                   <td colSpan={9} className="px-3">
                     <EmptyState
+                      illustration="wallet"
                       title="Нет выплат в этом статусе"
                       size="sm"
                     />

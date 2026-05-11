@@ -116,6 +116,7 @@ export default async function EarningsPage() {
           style={{ borderColor: 'var(--line)' }}
         >
           <EmptyState
+            illustration="wallet"
             title="Пока нет начислений"
             description="Доходы появятся после первого вызова вашей модели через API."
             actionLabel="Мои модели"

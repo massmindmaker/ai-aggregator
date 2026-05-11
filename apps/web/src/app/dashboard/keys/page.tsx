@@ -198,6 +198,7 @@ export default function DashboardKeysPage() {
               </div>
             ) : keys.length === 0 ? (
               <EmptyState
+                illustration="keys"
                 title="Нет API-ключей"
                 description="Создайте первый ключ чтобы начать делать запросы к API."
                 icon={<KeyRound className="h-8 w-8" />}

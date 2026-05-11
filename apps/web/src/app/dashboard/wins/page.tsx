@@ -44,6 +44,7 @@ export default async function WinsPage() {
           style={{ borderColor: 'var(--line)' }}
         >
           <EmptyState
+            illustration="trophy"
             title="Побед пока нет"
             description="Призовые попадают сюда после закрытия конкурса."
             actionLabel="К конкурсам"

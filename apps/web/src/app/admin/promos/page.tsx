@@ -111,6 +111,7 @@ export default async function AdminPromosPage() {
                 <tr>
                   <td colSpan={8} className="px-3">
                     <EmptyState
+                      illustration="generic"
                       title="Промокодов нет"
                       description="Создайте первый промокод в форме выше."
                       size="sm"
