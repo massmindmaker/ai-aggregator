@@ -1,65 +1,78 @@
 'use client';
 
 interface Props {
-  /** Размер высоты в пикселях. Width auto-scales. */
+  /** Размер в пикселях (квадратный SVG icon). */
   height?: number;
   /** Цвет основной типографики. По умолчанию current text color. */
   color?: string;
-  /** Включить chain-glow анимацию */
+  /** Включить chain-glow анимацию (свет бежит по цепочке кругов) */
   animated?: boolean;
   className?: string;
+  /** Не рендерить wordmark (только иконку) */
+  iconOnly?: boolean;
 }
 
 /**
- * AI Aggregator logo — wordmark "ai-aggregator" + chain of dots
- * underneath that travels with an amber glow when `animated`.
+ * AI Aggregator brand mark — оригинальная иконка из 4 амбер-кругов
+ * (зигзаг M-shape) соединённых линиями + wordmark "ai-aggregator".
  *
- * Dots representation: 5 кругляшков прогрессивно увеличиваются слева направо.
- * При animated=true свет последовательно зажигает каждую точку с задержкой,
- * создавая ощущение направленного потока.
+ * При animated=true свет последовательно "пробегает" по цепочке
+ * от нижнего-левого круга к верхнему-правому через middle-top и lower-right,
+ * как сигнал по графу.
+ *
+ * Порядок круга в цепочке (chain index 0..3):
+ *   0 — (9, 22)  большой, нижний-левый
+ *   1 — (15, 9)  большой, верхний-middle
+ *   2 — (22, 21) большой, нижний-правый
+ *   3 — (26, 8)  маленький, верхний-правый (финальная "точка отправки")
  */
-export function AiagLogo({ height = 24, color, animated = true, className = '' }: Props) {
+export function AiagLogo({
+  height = 26,
+  color,
+  animated = true,
+  className = '',
+  iconOnly = false,
+}: Props) {
+  const cls = animated ? 'aiag-logo-dot' : '';
+
   return (
     <div className={`inline-flex items-center gap-2 ${className}`} style={{ height }}>
-      {/* Chain of dots (left → right, smallest → largest) */}
       <svg
-        viewBox="0 0 60 24"
-        height={height}
-        width={height * 2.5}
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 32 32"
+        fill="none"
+        className="shrink-0"
+        style={{ width: height, height, overflow: 'visible' }}
         aria-hidden="true"
-        style={{ overflow: 'visible' }}
       >
-        {[
-          { cx: 6,  r: 2.2 },
-          { cx: 16, r: 2.8 },
-          { cx: 27, r: 3.4 },
-          { cx: 40, r: 4.0 },
-          { cx: 54, r: 4.6 },
-        ].map((d, i) => (
-          <circle
-            key={i}
-            cx={d.cx}
-            cy={12}
-            r={d.r}
-            fill="currentColor"
-            opacity={0.35}
-            className={animated ? 'aiag-logo-dot' : ''}
-            style={animated ? { animationDelay: `${i * 180}ms` } : undefined}
-          />
-        ))}
+        {/* Соединительные линии — приглушённый амбер, под кругами */}
+        <line x1="9"    y1="22"   x2="15"   y2="9"  stroke="#f59e0b" strokeOpacity="0.55" strokeWidth="3"   strokeLinecap="round" />
+        <line x1="15"   y1="9"    x2="22"   y2="21" stroke="#f59e0b" strokeOpacity="0.55" strokeWidth="3"   strokeLinecap="round" />
+        <line x1="24.5" y1="18"   x2="26"   y2="10" stroke="#f59e0b" strokeOpacity="0.55" strokeWidth="2"   strokeLinecap="round" />
+        <line x1="11.5" y1="22"   x2="14.5" y2="22" stroke="#f59e0b" strokeOpacity="0.55" strokeWidth="2.5" strokeLinecap="round" />
+
+        {/* 4 круга в порядке цепочки — задержка animation-delay по индексу */}
+        <circle cx="9"  cy="22" r="4.5" fill="#f59e0b"
+                className={cls} style={animated ? { animationDelay: '0ms' } : undefined} />
+        <circle cx="15" cy="9"  r="4.5" fill="#f59e0b"
+                className={cls} style={animated ? { animationDelay: '220ms' } : undefined} />
+        <circle cx="22" cy="21" r="4.5" fill="#f59e0b"
+                className={cls} style={animated ? { animationDelay: '440ms' } : undefined} />
+        <circle cx="26" cy="8"  r="2.5" fill="#f59e0b" opacity="0.65"
+                className={cls} style={animated ? { animationDelay: '660ms' } : undefined} />
       </svg>
 
-      {/* Wordmark */}
-      <span
-        className="font-semibold tracking-tight tabular-nums"
-        style={{
-          color: color ?? 'currentColor',
-          fontSize: height * 0.7,
-          fontFamily: 'ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Code", monospace',
-        }}
-      >
-        ai<span style={{ color: 'var(--accent)' }}>-</span>aggregator
-      </span>
+      {!iconOnly && (
+        <span
+          className="font-mono font-bold tracking-tight"
+          style={{
+            color: color ?? 'currentColor',
+            fontSize: height * 0.6,
+          }}
+        >
+          ai<span style={{ color: 'var(--accent)' }}>-</span>aggregator
+        </span>
+      )}
     </div>
   );
 }

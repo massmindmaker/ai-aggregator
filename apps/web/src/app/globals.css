@@ -386,23 +386,27 @@
   animation: aiag-pulse-dot 1.8s ease-out infinite;
 }
 
-/* === Chain-glow для логотипа AIAG === */
+/* === Chain-glow для логотипа AIAG ===
+ * Свет последовательно пробегает по 4 кругам зигзагом
+ * (lower-left → upper-mid → lower-right → far-upper).
+ * В покое круги амбер с приглушённой яркостью, на пике волны —
+ * полный амбер + drop-shadow halo. */
 @keyframes aiag-logo-dot-glow {
-  0%, 80%, 100% {
-    fill: currentColor;
-    opacity: 0.35;
+  0%, 70%, 100% {
     filter: none;
+    transform: scale(1);
   }
-  20%, 40% {
-    fill: var(--accent, #f59e0b);
-    opacity: 1;
-    filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.7));
+  15%, 30% {
+    filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.85))
+            drop-shadow(0 0 12px rgba(245, 158, 11, 0.45));
+    transform: scale(1.08);
   }
 }
 
 .aiag-logo-dot {
-  animation: aiag-logo-dot-glow 2.4s ease-in-out infinite;
+  animation: aiag-logo-dot-glow 2.8s ease-in-out infinite;
   transform-origin: center;
+  transform-box: fill-box;
 }
 
 /* 8. Checkmark draw-in для success states */
