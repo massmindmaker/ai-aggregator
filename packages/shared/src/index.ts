@@ -2,6 +2,9 @@
 export * from './revshare';
 export * from './tax';
 
+// S3 upload helper
+export * from './s3';
+
 // Constants
 
 export const APP_NAME = 'AIAG';
