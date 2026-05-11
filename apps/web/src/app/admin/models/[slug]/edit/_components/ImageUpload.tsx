@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { toast } from '@/components/ui/Sonner';
 
 interface Props {
   slug: string;
@@ -20,10 +21,13 @@ export function ImageUpload({ slug, currentImageUrl }: Props) {
       const fd = new FormData(e.currentTarget);
       const res = await fetch(`/api/admin/models/${slug}/image`, { method: 'POST', body: fd });
       if (res.ok) {
+        toast.success('Обложка загружена');
         router.refresh();
       } else {
         const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Ошибка загрузки');
+        const msg = body.error ?? 'Ошибка загрузки';
+        setError(msg);
+        toast.error(msg);
       }
     } finally {
       setUploading(false);

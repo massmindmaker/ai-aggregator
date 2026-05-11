@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/Button';
+import { toast } from '@/components/ui/Sonner';
 
 export function ReferralCopyBlock({ code, link }: { code: string; link: string }) {
   const [copied, setCopied] = React.useState<'code' | 'link' | null>(null);
@@ -11,8 +12,12 @@ export function ReferralCopyBlock({ code, link }: { code: string; link: string }
       await navigator.clipboard.writeText(value);
       setCopied(kind);
       setTimeout(() => setCopied(null), 1500);
+      toast.success(
+        kind === 'code' ? 'Реферальный код скопирован' : 'Реферальная ссылка скопирована',
+        { duration: 2000 }
+      );
     } catch {
-      // ignore
+      toast.error('Не удалось скопировать');
     }
   };
 

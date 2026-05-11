@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/Button';
+import { toast } from '@/components/ui/Sonner';
 
 export function PromoRowActions({ id, active }: { id: string; active: boolean }) {
   const [busy, setBusy] = React.useState(false);
@@ -15,8 +16,9 @@ export function PromoRowActions({ id, active }: { id: string; active: boolean })
       });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
-        alert(`Ошибка: ${j.error ?? r.status}`);
+        toast.error(`Ошибка: ${j.error ?? r.status}`);
       } else {
+        toast.success(active ? 'Промокод отключён' : 'Промокод включён');
         window.location.reload();
       }
     } finally {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, Copy, KeyRound, AlertTriangle, Trash2, Pencil } from 'lucide-react';
+import { toast } from '@/components/ui/Sonner';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -365,7 +366,10 @@ export default function DashboardKeysPage() {
             <Button
               leftIcon={<Copy className="h-4 w-4" />}
               onClick={() => {
-                if (shownKey) navigator.clipboard.writeText(shownKey);
+                if (shownKey) {
+                  navigator.clipboard.writeText(shownKey);
+                  toast.success('Ключ скопирован', { duration: 2000 });
+                }
               }}
             >
               Скопировать

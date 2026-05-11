@@ -806,3 +806,35 @@
     animation: none !important;
   }
 }
+
+/* === View Transitions API — smooth cross-fade on page swaps === */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(.23,1,.32,1);
+}
+
+::view-transition-old(root) {
+  animation-name: aiag-vt-fade-out;
+}
+::view-transition-new(root) {
+  animation-name: aiag-vt-fade-in;
+}
+
+@keyframes aiag-vt-fade-out {
+  to { opacity: 0; transform: translateY(-8px); }
+}
+@keyframes aiag-vt-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
