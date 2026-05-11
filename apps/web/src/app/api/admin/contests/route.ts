@@ -15,8 +15,8 @@ const createSchema = z.object({
     .union([z.string(), z.number()])
     .optional()
     .transform((v) => (v != null && v !== '' ? Number(v) : null)),
-  starts_at: z.string().optional().nullable(),
-  ends_at: z.string().optional().nullable(),
+  starts_at: z.string().datetime({ message: 'starts_at: ISO 8601 datetime required' }).optional().nullable(),
+  ends_at: z.string().datetime({ message: 'ends_at: ISO 8601 datetime required' }).optional().nullable(),
   dataset_url: z.string().url().optional().nullable().or(z.literal('')),
   organization_id: z.string().uuid().optional().nullable().or(z.literal('')),
 });
@@ -30,6 +30,13 @@ export async function POST(req: NextRequest) {
     }
     const { slug, name, description, total_prize_pool, starts_at, ends_at, dataset_url, organization_id } =
       parsed.data;
+
+    // Check slug uniqueness
+    const existing = await db.execute(sql`SELECT 1 FROM contests WHERE slug = ${slug} LIMIT 1`);
+    const existingRows = (existing as unknown as { rows?: unknown[] }).rows ?? (existing as unknown as unknown[]);
+    if (existingRows.length > 0) {
+      return NextResponse.json({ error: 'SLUG_TAKEN', message: 'Этот slug уже занят' }, { status: 409 });
+    }
 
     const startsAt = starts_at ? new Date(starts_at) : null;
     const endsAt = ends_at ? new Date(ends_at) : null;
