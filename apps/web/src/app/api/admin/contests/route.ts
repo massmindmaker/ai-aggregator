@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         ${slug}, ${name}, ${description}, ${prize}, ${startsAt}, ${endsAt},
         ${datasetUrlVal}, ${orgId},
         'draft'::contest_status,
-        (SELECT id FROM users WHERE email = ${admin.email}),
+        ${admin.id}::uuid,
         FALSE, NOW(), NOW()
       )
       RETURNING id::text, slug, name, status::text
