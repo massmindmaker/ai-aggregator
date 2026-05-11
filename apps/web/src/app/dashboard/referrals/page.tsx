@@ -20,6 +20,33 @@ interface InviteeRow {
   redeemed_at: string | null;
 }
 
+interface LeaderRow {
+  email: string;
+  invited: string;
+  earned: string;
+}
+
+async function fetchLeaderboard(): Promise<LeaderRow[]> {
+  try {
+    const r = await db.execute(sql`
+      SELECT u.email,
+             COUNT(ref.id)::text AS invited,
+             COALESCE(SUM(CASE WHEN rr.paid_out THEN rr.bonus_referrer_rub ELSE 0 END), 0)::text AS earned
+      FROM users u
+      JOIN users ref ON ref.referrer_user_id = u.id
+      LEFT JOIN referral_redemptions rr ON rr.referred_user_id = ref.id
+      GROUP BY u.id, u.email
+      HAVING COUNT(ref.id) > 0
+      ORDER BY earned DESC NULLS LAST, invited DESC
+      LIMIT 10
+    `);
+    return rowsOf<LeaderRow>(r);
+  } catch (e) {
+    console.error('[referrals/leaderboard] fetch failed', e);
+    return [];
+  }
+}
+
 async function fetchInvitees(referrerId: string): Promise<InviteeRow[]> {
   const r = await db.execute(sql`
     SELECT u.email,
@@ -61,7 +88,10 @@ export default async function DashboardReferralsPage() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-aggregator.ru';
   const link = `${baseUrl}/register?ref=${code}`;
 
-  const invitees = await fetchInvitees(me.id);
+  const [invitees, leaderboard] = await Promise.all([
+    fetchInvitees(me.id),
+    fetchLeaderboard(),
+  ]);
   const stats = {
     invited: invitees.length,
     paid: invitees.filter((i) => i.status === 'paid').length,
@@ -137,6 +167,38 @@ export default async function DashboardReferralsPage() {
           </table>
         </CardContent>
       </Card>
+
+      {leaderboard.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Топ рефереров</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ol className="space-y-2">
+              {leaderboard.map((r, i) => (
+                <li
+                  key={i}
+                  className="flex items-center gap-3 px-3 py-2 rounded border"
+                  style={{ borderColor: 'var(--line)' }}
+                >
+                  <span className="opacity-50 tabular-nums w-6 text-xs">
+                    #{i + 1}
+                  </span>
+                  <div className="flex-1 font-mono text-xs">
+                    {anonymizeEmail(r.email)}
+                  </div>
+                  <div
+                    className="text-xs tabular-nums"
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    {r.invited} ref · ₽{Number(r.earned ?? 0).toFixed(0)}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

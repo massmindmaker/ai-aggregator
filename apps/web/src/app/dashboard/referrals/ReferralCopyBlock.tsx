@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Button } from '@/components/ui/Button';
 import { toast } from '@/components/ui/Sonner';
+import { Send, Share2, MessageCircle } from 'lucide-react';
 
 export function ReferralCopyBlock({ code, link }: { code: string; link: string }) {
   const [copied, setCopied] = React.useState<'code' | 'link' | null>(null);
@@ -21,10 +22,11 @@ export function ReferralCopyBlock({ code, link }: { code: string; link: string }
     }
   };
 
-  const tgShare = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(
-    'AIAG — единый шлюз к российским и зарубежным AI-моделям. Регистрируйся по моей ссылке и получи бонус на баланс'
-  )}`;
+  const pitch =
+    'AIAG — единый шлюз к российским и зарубежным AI-моделям. Регистрируйся по моей ссылке и получи бонус на баланс';
+  const tgShare = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(pitch)}`;
   const vkShare = `https://vk.com/share.php?url=${encodeURIComponent(link)}`;
+  const waShare = `https://wa.me/?text=${encodeURIComponent(`${pitch} — ${link}`)}`;
 
   return (
     <div className="space-y-3">
@@ -55,17 +57,28 @@ export function ReferralCopyBlock({ code, link }: { code: string; link: string }
           href={tgShare}
           target="_blank"
           rel="noopener noreferrer"
-          className="px-3 py-1.5 rounded-md border text-xs hover:bg-muted/40 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs hover:bg-muted/40 transition-colors"
         >
-          Поделиться в Telegram
+          <Send className="h-3 w-3" />
+          Telegram
         </a>
         <a
           href={vkShare}
           target="_blank"
           rel="noopener noreferrer"
-          className="px-3 py-1.5 rounded-md border text-xs hover:bg-muted/40 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs hover:bg-muted/40 transition-colors"
         >
-          Поделиться во ВКонтакте
+          <Share2 className="h-3 w-3" />
+          ВКонтакте
+        </a>
+        <a
+          href={waShare}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs hover:bg-muted/40 transition-colors"
+        >
+          <MessageCircle className="h-3 w-3" />
+          WhatsApp
         </a>
       </div>
     </div>
