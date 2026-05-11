@@ -44,18 +44,20 @@ const scenarios = [
 ];
 
 const providers = [
-  { name: 'OpenAI', icon: '🟢' },
-  { name: 'Anthropic', icon: '🟠' },
-  { name: 'Google', icon: '🔵' },
-  { name: 'DeepSeek', icon: '🔷' },
-  { name: 'Qwen', icon: '🟣' },
-  { name: 'Meta Llama', icon: '🟦' },
-  { name: 'Mistral', icon: '🟨' },
-  { name: 'Cohere', icon: '🟧' },
-  { name: 'xAI', icon: '⚫' },
-  { name: 'Stability AI', icon: '🟩' },
-  { name: 'Black Forest Labs', icon: '⬛' },
-  { name: 'ElevenLabs', icon: '🔊' },
+  'OpenAI',
+  'Anthropic',
+  'Google',
+  'DeepSeek',
+  'Qwen',
+  'Meta Llama',
+  'Mistral',
+  'Cohere',
+  'xAI',
+  'Stability AI',
+  'Black Forest Labs',
+  'ElevenLabs',
+  'Yandex',
+  'Sber',
 ];
 
 const heroStats = [
@@ -483,21 +485,23 @@ export default function HomePage() {
           </p>
           <div className="relative">
             <div
-              className="flex gap-12 whitespace-nowrap"
+              className="flex gap-3 whitespace-nowrap"
               style={{
                 width: 'max-content',
-                animation: 'aiag-scroll-left 40s linear infinite',
+                animation: 'aiag-scroll-left 50s linear infinite',
               }}
             >
-              {[...providers, ...providers].map((p, i) => (
+              {[...providers, ...providers].map((name, i) => (
                 <div
-                  key={`${p.name}-${i}`}
-                  className="flex items-center gap-2 shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+                  key={`${name}-${i}`}
+                  className="shrink-0 px-5 py-2 rounded-full border text-sm tracking-wide opacity-60 hover:opacity-100 transition-opacity"
+                  style={{
+                    borderColor: 'var(--line)',
+                    background: 'rgba(255,255,255,0.02)',
+                    color: 'var(--ink)',
+                  }}
                 >
-                  <span className="text-2xl">{p.icon}</span>
-                  <span className="text-lg font-medium" style={{ color: 'var(--ink)' }}>
-                    {p.name}
-                  </span>
+                  {name}
                 </div>
               ))}
             </div>

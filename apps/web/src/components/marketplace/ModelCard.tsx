@@ -98,7 +98,7 @@ export function ModelCard({ model }: ModelCardProps) {
                   />
                 ) : null}
               </div>
-              <h3 className="font-semibold text-sm leading-tight truncate group-hover:text-primary transition-colors">
+              <h3 className="font-semibold text-sm leading-tight line-clamp-2 break-words group-hover:text-primary transition-colors">
                 {model.name}
               </h3>
             </div>
