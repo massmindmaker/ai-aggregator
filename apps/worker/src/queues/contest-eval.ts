@@ -2,7 +2,7 @@ import { Worker, type Job, type Processor } from 'bullmq';
 import type IORedis from 'ioredis';
 import { logger } from '../logger.js';
 import { QUEUE_NAMES } from './names.js';
-import type { EvalRunResult } from '../eval-runner/runner.js';
+import type { EvalRunResult, SubmissionFileRef } from '../eval-runner/runner.js';
 
 /**
  * Job payload for contest-eval queue. The web/admin enqueues this when a
@@ -13,15 +13,15 @@ export interface ContestEvalJobData {
   evaluatorScriptId: string;
   /** S3 key (or local path in dev) of the python script to run */
   scriptSource: string;
-  /** Map of file name → contents to copy into the eval workdir */
-  submissionFiles: Record<string, string>;
+  /** Submission files (name + S3/public URL) to download into the eval workdir */
+  submissionFiles: SubmissionFileRef[];
   inputJson: unknown;
   timeoutMs?: number;
 }
 
 export type ContestEvalRunner = (opts: {
   evaluatorScript: string;
-  submissionFiles: Record<string, string>;
+  submissionFiles: SubmissionFileRef[];
   inputJson: unknown;
   timeoutMs?: number;
 }) => Promise<EvalRunResult>;

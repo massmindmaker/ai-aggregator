@@ -182,7 +182,7 @@ export async function POST(
         submissionId: submission.id,
         evaluatorScriptId: evaluatorScript.id,
         scriptSource: evaluatorScript.s3Key,
-        submissionFiles: { [submissionFile.name]: fileUrl },
+        submissionFiles: [{ name: submissionFile.name, url: fileUrl }],
         inputJson: null,
       });
 

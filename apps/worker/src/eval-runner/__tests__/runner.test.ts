@@ -25,7 +25,7 @@ describe('runEvaluation', () => {
     const promise = runEvaluation(
       {
         evaluatorScript: 'print(1)',
-        submissionFiles: { 'sub.txt': 'hi' },
+        submissionFiles: [],
         inputJson: { foo: 'bar' },
         timeoutMs: 5000,
       },
@@ -49,7 +49,7 @@ describe('runEvaluation', () => {
     const promise = runEvaluation(
       {
         evaluatorScript: 'print(1)',
-        submissionFiles: {},
+        submissionFiles: [],
         inputJson: {},
         timeoutMs: 5000,
       },
@@ -70,7 +70,7 @@ describe('runEvaluation', () => {
     const promise = runEvaluation(
       {
         evaluatorScript: '',
-        submissionFiles: {},
+        submissionFiles: [],
         inputJson: {},
         timeoutMs: 5000,
       },
@@ -91,7 +91,7 @@ describe('runEvaluation', () => {
     const promise = runEvaluation(
       {
         evaluatorScript: '',
-        submissionFiles: {},
+        submissionFiles: [],
         inputJson: {},
         timeoutMs: 5,
       },

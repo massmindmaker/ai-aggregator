@@ -1,11 +1,19 @@
 import { spawn, type SpawnOptions } from 'node:child_process';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
+
+export interface SubmissionFileRef {
+  /** Original (user-supplied) file name; will be sanitized before writing to disk. */
+  name: string;
+  /** S3 / public URL to fetch the file contents from. */
+  url: string;
+}
 
 export interface EvalRunOptions {
   evaluatorScript: string; // python source
-  submissionFiles: Record<string, string>; // file → content
+  /** Submission files to download into the eval workdir before running. */
+  submissionFiles: SubmissionFileRef[];
   inputJson: unknown;
   /** Default 5min */
   timeoutMs?: number;
@@ -42,8 +50,22 @@ export async function runEvaluation(
   try {
     await writeFile(join(workDir, 'evaluator.py'), opts.evaluatorScript);
     await writeFile(join(workDir, 'input.json'), JSON.stringify(opts.inputJson));
-    for (const [name, content] of Object.entries(opts.submissionFiles)) {
-      await writeFile(join(workDir, name), content);
+    for (const file of opts.submissionFiles) {
+      // Path-traversal hardening: strip directory components and disallow
+      // unsafe chars. User-supplied name is only used for the on-disk file.
+      const safeName =
+        basename(file.name).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100) || 'submission';
+      let bytes: Buffer;
+      try {
+        const res = await fetch(file.url);
+        if (!res.ok) {
+          return { ok: false, error: 'submission_download_failed' };
+        }
+        bytes = Buffer.from(await res.arrayBuffer());
+      } catch {
+        return { ok: false, error: 'submission_download_failed' };
+      }
+      await writeFile(join(workDir, safeName), bytes);
     }
 
     return await new Promise<EvalRunResult>((resolve) => {
