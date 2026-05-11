@@ -12,9 +12,9 @@ interface Item {
 // Outline SVG paths (24×24 viewbox)
 const ITEMS: Item[] = [
   {
-    href: '/',
-    label: 'Главная',
-    iconPath: 'M3 12 12 4l9 8M5 10v10h14V10', // home
+    href: '/agents',
+    label: 'Агенты',
+    iconPath: 'M12 2a3 3 0 013 3v1h2a2 2 0 012 2v3h1v4h-1v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3H4v-4h1V8a2 2 0 012-2h2V5a3 3 0 013-3z M9 13h.01 M15 13h.01', // robot
   },
   {
     href: '/nft',
@@ -33,8 +33,8 @@ export function BottomNav() {
   return (
     <nav className="tma-bottom-nav" aria-label="Главное меню">
       {ITEMS.map((it) => {
-        const active =
-          path === it.href || (it.href !== '/' && (path ?? '').startsWith(it.href));
+        const p = path ?? '';
+        const active = p === it.href || p.startsWith(it.href + '/');
         return (
           <Link
             key={it.href}
