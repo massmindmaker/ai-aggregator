@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/Table';
 import { ModelStatusActions } from './ModelStatusActions';
+import { ImageUpload } from './_components/ImageUpload';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,7 @@ interface ModelRow {
   status: string;
   frozen_reason: string | null;
   depublished_reason: string | null;
+  image_url: string | null;
 }
 
 interface UpstreamRow {
@@ -45,7 +47,7 @@ interface UpstreamRow {
 async function getData(slug: string) {
   const modelRes = await db.execute(sql`
     SELECT id::text AS id, slug, type, enabled, display_name, description,
-           status, frozen_reason, depublished_reason
+           status, frozen_reason, depublished_reason, image_url
     FROM models WHERE slug = ${slug} LIMIT 1
   `);
   const mr = modelRes as unknown as { rows?: ModelRow[] } | ModelRow[];
@@ -164,6 +166,11 @@ export default async function EditModelPage({
           frozenReason={model.frozen_reason}
           depublishedReason={model.depublished_reason}
         />
+      </section>
+
+      <section className="mb-10">
+        <h2 className="text-xl font-semibold mb-3">Обложка</h2>
+        <ImageUpload slug={model.slug} currentImageUrl={model.image_url} />
       </section>
 
       <section className="mb-10">
