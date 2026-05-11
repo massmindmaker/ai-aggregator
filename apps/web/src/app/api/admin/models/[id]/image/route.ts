@@ -63,7 +63,7 @@ export async function POST(
     }
 
     const ext = EXT_MAP[detectedMime];
-    const key = `models/${slug}/cover.${ext}`;
+    const key = `models/${slug}/cover-${Date.now()}.${ext}`;
     const imageUrl = await uploadToS3(key, buffer, detectedMime);
 
     await db.execute(sql`
