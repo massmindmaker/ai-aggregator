@@ -2,12 +2,14 @@
 
 import { TonConnectButton } from '@tonconnect/ui-react';
 import { useAuth } from '@/hooks/useAuth';
+import { BottomNav } from '@/components/BottomNav';
 
 export default function Home() {
   const { user, loading, error } = useAuth();
 
   return (
-    <main className="tma-shell">
+    <>
+    <main className="tma-shell tma-shell--with-nav">
       <header className="tma-header">
         <span className="tma-badge">AIAG</span>
         <h1 className="tma-title">Mini App scaffold OK</h1>
@@ -44,5 +46,7 @@ export default function Home() {
         </div>
       </section>
     </main>
+    <BottomNav />
+    </>
   );
 }

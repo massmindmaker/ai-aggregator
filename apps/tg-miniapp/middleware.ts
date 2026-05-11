@@ -11,7 +11,17 @@ export const config = {
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
-  if (path.startsWith('/api/tma/auth/')) return NextResponse.next();
+  // Public endpoints (no JWT required):
+  //   /api/tma/auth/*           — verify endpoint
+  //   /api/tma/nft/collections  — public catalog
+  //   /api/tma/nft/webhook      — Startonus callback (protected via nginx IP-allowlist)
+  if (
+    path.startsWith('/api/tma/auth/') ||
+    path === '/api/tma/nft/collections' ||
+    path === '/api/tma/nft/webhook'
+  ) {
+    return NextResponse.next();
+  }
 
   const auth = req.headers.get('authorization');
   const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
