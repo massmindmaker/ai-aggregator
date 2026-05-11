@@ -39,13 +39,17 @@ async function fetchUpstreams(): Promise<Row[]> {
   }
 }
 
-function statusOf(r: Row): { label: string; color: 'default' | 'destructive' | 'outline' } {
-  if (!r.enabled) return { label: 'отключён', color: 'outline' };
-  if (r.last_ok === false) return { label: 'down', color: 'destructive' };
+function statusOf(r: Row): {
+  label: string;
+  color: 'default' | 'destructive' | 'outline';
+  dot: 'success' | 'danger' | 'muted';
+} {
+  if (!r.enabled) return { label: 'отключён', color: 'outline', dot: 'muted' };
+  if (r.last_ok === false) return { label: 'down', color: 'destructive', dot: 'danger' };
   if (r.errors_24h > 0 && r.requests_24h > 0 && r.errors_24h / r.requests_24h > 0.1)
-    return { label: 'degraded', color: 'destructive' };
-  if (r.last_ok === true) return { label: 'online', color: 'default' };
-  return { label: 'unknown', color: 'outline' };
+    return { label: 'degraded', color: 'destructive', dot: 'danger' };
+  if (r.last_ok === true) return { label: 'online', color: 'default', dot: 'success' };
+  return { label: 'unknown', color: 'outline', dot: 'muted' };
 }
 
 export default async function AdminUpstreamsPage() {
@@ -84,11 +88,18 @@ export default async function AdminUpstreamsPage() {
                   r.requests_24h > 0 ? ((r.errors_24h / r.requests_24h) * 100).toFixed(1) : '—';
                 const markup = (r.metadata as { markup_pct?: number } | null)?.markup_pct ?? 0;
                 return (
-                  <tr key={r.id} className="border-t">
+                  <tr key={r.id} className="border-t aiag-row-hover">
                     <td className="px-3 py-2 font-mono text-xs">{r.id}</td>
                     <td className="px-3 py-2">{r.provider}</td>
                     <td className="px-3 py-2">
-                      <Badge variant={s.color}>{s.label}</Badge>
+                      <Badge variant={s.color} className="inline-flex items-center gap-1.5">
+                        <span
+                          className={`aiag-pulse-dot aiag-pulse-dot-${s.dot}`}
+                          style={{ width: 6, height: 6 }}
+                          aria-hidden
+                        />
+                        {s.label}
+                      </Badge>
                     </td>
                     <td className="px-3 py-2 text-right">{r.latency_p50_ms} ms</td>
                     <td className="px-3 py-2 text-right">{r.requests_24h}</td>

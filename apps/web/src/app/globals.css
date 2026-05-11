@@ -386,6 +386,35 @@
   animation: aiag-pulse-dot 1.8s ease-out infinite;
 }
 
+/* Цветные модификаторы pulse-dot */
+.aiag-pulse-dot-success { background: var(--success, #22c55e); }
+.aiag-pulse-dot-danger  { background: var(--danger,  #ef4444); }
+.aiag-pulse-dot-muted   { background: rgba(255, 255, 255, 0.35); }
+.aiag-pulse-dot-muted::after { animation: none; }
+
+/* === Table row hover для admin tables === */
+.aiag-row-hover {
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+.aiag-row-hover:hover {
+  background-color: rgba(245, 158, 11, 0.04);
+  box-shadow: inset 3px 0 0 var(--accent, #f59e0b);
+}
+
+/* Compact "status" chip с цветным borderом для tables */
+.aiag-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  white-space: nowrap;
+}
+
 /* === Chain-glow для логотипа AIAG ===
  * Свет последовательно пробегает по 4 кругам зигзагом
  * (lower-left → upper-mid → lower-right → far-upper).
@@ -762,6 +791,7 @@
     animation: none !important;
     opacity: 0.7 !important;
   }
+  .aiag-row-hover { transition: none !important; }
   .aiag-stagger > * {
     opacity: 1 !important;
     animation: none !important;

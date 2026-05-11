@@ -109,7 +109,7 @@ export default async function AdminUsersPage({
             </thead>
             <tbody>
               {rows.map((u) => (
-                <tr key={u.id} className="border-t">
+                <tr key={u.id} className="border-t aiag-row-hover">
                   <td className="px-3 py-2 font-mono text-xs">{u.email}</td>
                   <td className="px-3 py-2">{u.name ?? '—'}</td>
                   <td className="px-3 py-2">

@@ -89,7 +89,7 @@ export default async function AdminAuditPage({
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="border-t align-top">
+                <tr key={r.id} className="border-t align-top aiag-row-hover">
                   <td className="px-3 py-2 text-xs whitespace-nowrap">
                     {new Date(r.created_at).toLocaleString('ru-RU')}
                   </td>

@@ -42,7 +42,7 @@ export function RequestRow(p: Props) {
 
   return (
     <>
-      <tr className="border-t hover:bg-muted/30 cursor-pointer" onClick={onOpen}>
+      <tr className="border-t aiag-row-hover cursor-pointer" onClick={onOpen}>
         <td className="px-3 py-2 font-mono text-xs">{p.requestId}</td>
         <td className="px-3 py-2 text-xs">{new Date(p.createdAt).toLocaleString('ru-RU')}</td>
         <td className="px-3 py-2 text-xs">{p.userEmail ?? '—'}</td>

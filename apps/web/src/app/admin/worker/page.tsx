@@ -123,7 +123,21 @@ export default async function AdminWorkerPage() {
             <Card key={q.name}>
               <CardHeader>
                 <CardTitle className="text-base flex items-center justify-between">
-                  <span className="font-mono">{q.name}</span>
+                  <span className="inline-flex items-center gap-2 font-mono">
+                    <span
+                      className={
+                        q.unavailable
+                          ? 'aiag-pulse-dot aiag-pulse-dot-muted'
+                          : q.failed > 0
+                            ? 'aiag-pulse-dot aiag-pulse-dot-danger'
+                            : q.active > 0 || q.waiting > 0
+                              ? 'aiag-pulse-dot aiag-pulse-dot-success'
+                              : 'aiag-pulse-dot aiag-pulse-dot-muted'
+                      }
+                      aria-hidden
+                    />
+                    {q.name}
+                  </span>
                   {q.unavailable ? (
                     <Badge variant="outline">offline</Badge>
                   ) : q.failed > 0 ? (
@@ -176,7 +190,7 @@ export default async function AdminWorkerPage() {
                 </thead>
                 <tbody>
                   {jobs.map((j) => (
-                    <tr key={`${j.queue}:${j.id}`} className="border-t">
+                    <tr key={`${j.queue}:${j.id}`} className="border-t aiag-row-hover">
                       <td className="py-2 pr-4 font-mono text-xs">{j.queue}</td>
                       <td className="py-2 pr-4 font-mono text-xs">{j.id}</td>
                       <td className="py-2 pr-4">{j.name}</td>

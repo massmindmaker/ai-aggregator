@@ -90,8 +90,16 @@ async function fetchCounters(): Promise<{
 }
 
 function statusBadge(s: string) {
+  if (s === 'running') {
+    return (
+      <Badge variant="outline" className="inline-flex items-center gap-1.5">
+        <span className="aiag-pulse-dot" aria-hidden style={{ width: 6, height: 6 }} />
+        {s}
+      </Badge>
+    );
+  }
   if (s === 'completed') return <Badge variant="default">{s}</Badge>;
-  if (s === 'queued' || s === 'running') return <Badge variant="outline">{s}</Badge>;
+  if (s === 'queued') return <Badge variant="outline">{s}</Badge>;
   return <Badge variant="destructive">{s}</Badge>;
 }
 
@@ -165,7 +173,7 @@ export default async function AdminJobsPage({
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="border-t">
+                <tr key={r.id} className="border-t aiag-row-hover">
                   <td className="px-3 py-2 font-mono text-xs">{r.task_id}</td>
                   <td className="px-3 py-2">{statusBadge(r.status)}</td>
                   <td className="px-3 py-2 text-xs">{r.upstream_id}</td>

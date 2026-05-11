@@ -69,7 +69,7 @@ export default async function AdminOrgsPage() {
             </thead>
             <tbody>
               {rows.map((o) => (
-                <tr key={o.id} className="border-t">
+                <tr key={o.id} className="border-t aiag-row-hover">
                   <td className="px-3 py-2 font-mono text-xs">{o.slug}</td>
                   <td className="px-3 py-2">{o.name}</td>
                   <td className="px-3 py-2 text-xs">{o.owner_email ?? '—'}</td>
