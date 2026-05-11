@@ -44,6 +44,7 @@ export function ImageUpload({ slug, currentImageUrl }: Props) {
           className="text-sm"
           required
         />
+        <span className="text-xs opacity-50">PNG/JPEG/WebP, до 2 МБ</span>
         <button
           type="submit"
           disabled={uploading}
