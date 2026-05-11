@@ -8,7 +8,7 @@ import {
   evaluatorScripts,
 } from '@aiag/database/schema';
 import { eq, and } from '@aiag/database';
-import { uploadToS3 } from '@aiag/shared';
+import { uploadToS3, getSignedDownloadUrl } from '@aiag/shared';
 
 export const runtime = 'nodejs';
 
@@ -94,7 +94,7 @@ export async function POST(
 
   let fileUrl: string;
   try {
-    fileUrl = await uploadToS3(s3Key, fileBuffer, submissionFile.type || 'application/octet-stream');
+    fileUrl = await uploadToS3(s3Key, fileBuffer, submissionFile.type || 'application/octet-stream', { private: true });
   } catch (err) {
     console.error('[submit] S3 upload failed:', err);
     return NextResponse.json(
@@ -153,6 +153,7 @@ export async function POST(
   }
 
   // 8. Try to enqueue BullMQ eval job — silently catch errors
+  let queue: import('bullmq').Queue | null = null;
   try {
     // Look up approved evaluator script for this contest
     const evaluatorScript = await db.query.evaluatorScripts.findFirst({
@@ -169,7 +170,7 @@ export async function POST(
       const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
       const url = new URL(redisUrl);
       // Queue name matches QUEUE_NAMES.contestEval in apps/worker/src/queues/names.ts
-      const queue = new Queue('contest-eval', {
+      queue = new Queue('contest-eval', {
         connection: {
           host: url.hostname,
           port: Number(url.port) || 6379,
@@ -178,19 +179,32 @@ export async function POST(
         },
       });
 
+      // Файл лежит как private — генерим signed URL на 24 часа для воркера.
+      // Если presign упал, фолбэк на storage URL (admin сможет реран позже).
+      let downloadUrl = fileUrl;
+      try {
+        downloadUrl = await getSignedDownloadUrl(s3Key, 24 * 3600);
+      } catch (presignErr) {
+        console.warn('[submit] presign failed, falling back to storage URL:', presignErr);
+      }
+
       await queue.add('eval', {
         submissionId: submission.id,
         evaluatorScriptId: evaluatorScript.id,
         scriptSource: evaluatorScript.s3Key,
-        submissionFiles: [{ name: submissionFile.name, url: fileUrl }],
+        submissionFiles: [{ name: submissionFile.name, url: downloadUrl }],
         inputJson: null,
       });
-
-      await queue.close();
     }
   } catch (err) {
-    // BullMQ not available in web or Redis unreachable — submission is already saved
+    // BullMQ not available in web or Redis unreachable — submission is already saved.
+    // Admin can retrigger evaluation manually.
     console.warn('[submit] Could not enqueue eval job:', err instanceof Error ? err.message : err);
+  } finally {
+    if (queue) {
+      // Avoid leaking Redis connections on enqueue errors.
+      queue.close().catch(() => { /* ignore close errors */ });
+    }
   }
 
   return NextResponse.json(

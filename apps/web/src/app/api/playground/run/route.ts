@@ -37,8 +37,24 @@ interface RunRequest {
   prompt?: string;
 }
 
+// Resolve client IP without trusting spoofable X-Forwarded-For first hop.
+// Prefer X-Real-IP (set by our nginx with $remote_addr). Otherwise take the
+// LAST IP in X-Forwarded-For (the nearest trusted proxy added it).
+function getClientIp(req: NextRequest): string | null {
+  const realIp = req.headers.get('x-real-ip');
+  if (realIp && /^[\d.:a-f]+$/.test(realIp)) return realIp;
+
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) {
+    const ips = xff.split(',').map((s) => s.trim()).filter(Boolean);
+    const last = ips[ips.length - 1];
+    if (last && /^[\d.:a-f]+$/.test(last)) return last;
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const ip = getClientIp(req);
   if (ip && !checkRateLimit(ip)) {
     return Response.json(
       { error: 'rate_limit', message: 'Лимит: 5 запросов в день для гостей. Зарегистрируйтесь для полного доступа.' },

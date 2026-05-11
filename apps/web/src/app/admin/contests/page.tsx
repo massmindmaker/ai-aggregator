@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { db, sql } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { ContestStatusActions } from './ContestStatusActions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Контесты — AIAG Admin' };
@@ -78,12 +79,15 @@ export default async function AdminContestsPage() {
                   <td className="px-3 py-2 text-right">{Number(c.total_prize_pool ?? 0).toFixed(2)}</td>
                   <td className="px-3 py-2 text-right">{c.total_submissions}</td>
                   <td className="px-3 py-2 text-right">
-                    <Link
-                      href={`/admin/contests/${c.slug}`}
-                      className="text-amber-500 hover:text-amber-400 text-xs"
-                    >
-                      Открыть →
-                    </Link>
+                    <span className="inline-flex items-center gap-2">
+                      <ContestStatusActions slug={c.slug} status={c.status} />
+                      <Link
+                        href={`/admin/contests/${c.slug}`}
+                        className="text-amber-500 hover:text-amber-400 text-xs"
+                      >
+                        Открыть →
+                      </Link>
+                    </span>
                   </td>
                 </tr>
               ))}
