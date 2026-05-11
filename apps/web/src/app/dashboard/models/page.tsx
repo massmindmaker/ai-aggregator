@@ -4,6 +4,7 @@ import { auth } from '@/auth';
 import { db, sql } from '@/lib/db';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   Table,
   TableBody,
@@ -86,14 +87,13 @@ export default async function DashboardModelsPage({
         )}
 
         {rows.length === 0 ? (
-          <div className="rounded-lg border bg-card p-12 text-center">
-            <h2 className="text-xl font-semibold mb-2">Пока ни одной модели</h2>
-            <p className="text-muted-foreground mb-4 max-w-md mx-auto">
-              Загрузите свою — мы будем маршрутизировать запросы к её endpoint и платить вам процент с каждого вызова.
-            </p>
-            <Link href="/dashboard/models/new">
-              <Button>Загрузить первую модель</Button>
-            </Link>
+          <div className="rounded-lg border bg-card">
+            <EmptyState
+              title="Пока ни одной модели"
+              description="Загрузите свою — мы будем маршрутизировать запросы к её endpoint и платить вам процент с каждого вызова."
+              actionLabel="Загрузить первую модель"
+              actionHref="/dashboard/models/new"
+            />
           </div>
         ) : (
           <div className="rounded-lg border">

@@ -5,6 +5,7 @@ import { rowsOf } from '@/lib/admin/rows';
 import { requireAdmin } from '@/lib/admin/guard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { PayoutRowActions } from './PayoutRowActions';
 
 export const dynamic = 'force-dynamic';
@@ -249,11 +250,11 @@ export default async function AdminPayoutsPage({
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={9}
-                    className="px-3 py-8 text-center text-muted-foreground"
-                  >
-                    Нет выплат в этом статусе
+                  <td colSpan={9} className="px-3">
+                    <EmptyState
+                      title="Нет выплат в этом статусе"
+                      size="sm"
+                    />
                   </td>
                 </tr>
               )}

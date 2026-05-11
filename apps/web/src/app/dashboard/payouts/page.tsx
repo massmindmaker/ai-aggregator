@@ -1,8 +1,8 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { db, sql } from '@/lib/db';
 import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Выплаты — AI-Aggregator' };
@@ -59,17 +59,15 @@ export default async function PayoutsPage() {
 
       {rows.length === 0 ? (
         <div
-          className="rounded-md border p-12 text-center text-muted-foreground"
+          className="rounded-md border"
           style={{ borderColor: 'var(--line)' }}
         >
-          <p>Пока ни одной выплаты.</p>
-          <p className="mt-2 text-xs">
-            Выплаты создаются 2-го числа каждого месяца за фиксированный заработок предыдущего периода. См.{' '}
-            <Link href="/dashboard/earnings" className="text-[var(--accent)] hover:underline">
-              «Заработок»
-            </Link>{' '}
-            для текущих начислений.
-          </p>
+          <EmptyState
+            title="Пока ни одной выплаты"
+            description="Выплаты создаются 2-го числа каждого месяца за фиксированный заработок предыдущего периода."
+            actionLabel="К заработку"
+            actionHref="/dashboard/earnings"
+          />
         </div>
       ) : (
         <div className="rounded-md border" style={{ borderColor: 'var(--line)' }}>

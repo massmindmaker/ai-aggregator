@@ -3,6 +3,7 @@ import { db, sql } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { rowsOf } from '@/lib/admin/rows';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { PromoCreateForm } from './PromoCreateForm';
 import { PromoRowActions } from './PromoRowActions';
 
@@ -108,8 +109,12 @@ export default async function AdminPromosPage() {
               ))}
               {promos.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
-                    Промокодов нет. Создайте первый.
+                  <td colSpan={8} className="px-3">
+                    <EmptyState
+                      title="Промокодов нет"
+                      description="Создайте первый промокод в форме выше."
+                      size="sm"
+                    />
                   </td>
                 </tr>
               )}

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Copy, KeyRound, AlertTriangle, Trash2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
@@ -195,15 +196,13 @@ export default function DashboardKeysPage() {
                 Загрузка…
               </div>
             ) : keys.length === 0 ? (
-              <div className="px-6 py-16 text-center">
-                <KeyRound className="mx-auto h-10 w-10 text-muted-foreground/60" />
-                <p className="mt-3 text-sm text-muted-foreground">
-                  У вас пока нет API-ключей.
-                </p>
-                <Button className="mt-4" onClick={() => setOpenCreate(true)}>
-                  Создать первый ключ
-                </Button>
-              </div>
+              <EmptyState
+                title="Нет API-ключей"
+                description="Создайте первый ключ чтобы начать делать запросы к API."
+                icon={<KeyRound className="h-8 w-8" />}
+                actionLabel="Создать ключ"
+                actionOnClick={() => setOpenCreate(true)}
+              />
             ) : (
               <Table>
                 <TableHeader>

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { db, sql } from '@/lib/db';
 import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   Table,
   TableBody,
@@ -76,12 +77,13 @@ export default async function MySubmissionsPage() {
       <h1 className="text-3xl font-bold tracking-tight mb-6">Мои submissions</h1>
 
       {rows.length === 0 ? (
-        <div className="py-12 text-center text-muted-foreground border rounded-lg">
-          Пока нет submissions.{' '}
-          <Link href="/contests" className="text-[var(--accent)] underline-offset-4 hover:underline">
-            Найти конкурс
-          </Link>
-          .
+        <div className="rounded-lg border">
+          <EmptyState
+            title="Пока нет сабмиссий"
+            description="Участвуйте в конкурсах чтобы попасть в лидерборд."
+            actionLabel="К конкурсам"
+            actionHref="/contests"
+          />
         </div>
       ) : (
         <div className="rounded-lg border">

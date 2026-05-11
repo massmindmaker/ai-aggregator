@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Switch } from '@/components/ui/Switch';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 
 type ProviderId = 'tinkoff' | 'yookassa' | 'sbp';
@@ -302,9 +303,11 @@ export default function BillingPage() {
               Загрузка…
             </div>
           ) : payments.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-              Платежей пока нет. Сделайте первое пополнение или подпишитесь на тариф.
-            </div>
+            <EmptyState
+              title="Платежей пока нет"
+              description="Сделайте первое пополнение или подпишитесь на тариф."
+              size="sm"
+            />
           ) : (
             <table className="w-full text-sm">
               <thead className="text-xs uppercase text-muted-foreground bg-muted/30">

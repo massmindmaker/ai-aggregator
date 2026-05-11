@@ -1,6 +1,7 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { db, sql } from '@/lib/db';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Победы — AI-Aggregator' };
@@ -39,14 +40,16 @@ export default async function WinsPage() {
       </p>
       {rows.length === 0 ? (
         <div
-          className="rounded-md border p-12 text-center text-muted-foreground"
+          className="rounded-md border"
           style={{ borderColor: 'var(--line)' }}
         >
-          Пока ни одной победы — поучаствуйте в{' '}
-          <a href="/contests" className="text-[var(--accent)] hover:underline">
-            конкурсе
-          </a>
-          .
+          <EmptyState
+            title="Побед пока нет"
+            description="Призовые попадают сюда после закрытия конкурса."
+            actionLabel="К конкурсам"
+            actionHref="/contests"
+            size="sm"
+          />
         </div>
       ) : (
         <table

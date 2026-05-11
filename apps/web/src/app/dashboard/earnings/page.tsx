@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Мои доходы — AI-Aggregator' };
@@ -111,10 +112,15 @@ export default async function EarningsPage() {
 
       {rows.length === 0 ? (
         <div
-          className="rounded-md border p-12 text-center text-muted-foreground"
+          className="rounded-md border"
           style={{ borderColor: 'var(--line)' }}
         >
-          Пока нет начислений. Доходы появятся после первого вызова вашей модели через API.
+          <EmptyState
+            title="Пока нет начислений"
+            description="Доходы появятся после первого вызова вашей модели через API."
+            actionLabel="Мои модели"
+            actionHref="/dashboard/models"
+          />
         </div>
       ) : (
         <div className="rounded-lg border">

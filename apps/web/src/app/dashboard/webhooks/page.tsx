@@ -1,6 +1,6 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Webhooks — AI-Aggregator' };
@@ -17,17 +17,15 @@ export default async function WebhooksPage() {
       </p>
 
       <div
-        className="rounded-md border p-12 text-center"
+        className="rounded-md border"
         style={{ borderColor: 'var(--line)' }}
       >
-        <h2 className="text-xl font-semibold mb-2">Скоро</h2>
-        <p className="text-muted-foreground max-w-md mx-auto">
-          Управление webhooks через UI готовится. Сейчас доступно через{' '}
-          <Link href="/docs" className="text-[var(--accent)] hover:underline">
-            API
-          </Link>{' '}
-          (см. документацию, раздел «Subscriptions»).
-        </p>
+        <EmptyState
+          title="Скоро"
+          description="Управление webhooks через UI готовится. Сейчас доступно через API — см. документацию, раздел «Subscriptions»."
+          actionLabel="Открыть документацию"
+          actionHref="/docs"
+        />
       </div>
 
       <div className="mt-8">
