@@ -42,9 +42,25 @@ const scenarios = [
 ];
 
 const providers = [
-  'OpenAI', 'Anthropic', 'Google DeepMind', 'Meta AI', 'DeepSeek',
-  'Stability AI', 'Black Forest Labs', 'Runway', 'Suno', 'ElevenLabs',
-  'Qwen', 'Mistral', 'Minimax',
+  { name: 'OpenAI', icon: '🟢' },
+  { name: 'Anthropic', icon: '🟠' },
+  { name: 'Google', icon: '🔵' },
+  { name: 'DeepSeek', icon: '🔷' },
+  { name: 'Qwen', icon: '🟣' },
+  { name: 'Meta Llama', icon: '🟦' },
+  { name: 'Mistral', icon: '🟨' },
+  { name: 'Cohere', icon: '🟧' },
+  { name: 'xAI', icon: '⚫' },
+  { name: 'Stability AI', icon: '🟩' },
+  { name: 'Black Forest Labs', icon: '⬛' },
+  { name: 'ElevenLabs', icon: '🔊' },
+];
+
+const heroStats = [
+  { value: '400+', label: 'моделей' },
+  { value: '12', label: 'провайдеров' },
+  { value: '99.9%', label: 'аптайм' },
+  { value: '<150мс', label: 'latency p50' },
 ];
 
 const topModels = [
@@ -426,44 +442,77 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ═══ Providers strip ═══ */}
-      <section
-        className="relative overflow-hidden"
-        style={{
-          padding: '40px 0',
-          borderTop: '1px solid var(--line)',
-          borderBottom: '1px solid var(--line)',
-          maskImage:
-            'linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)',
-          WebkitMaskImage:
-            'linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)',
-        }}
-      >
+      {/* ═══ Inline stat counters ═══ */}
+      <section style={{ padding: '48px 20px 8px' }}>
         <div
-          className="text-center font-mono uppercase"
-          style={{
-            fontSize: 11,
-            color: 'var(--ink-muted)',
-            marginBottom: 24,
-            letterSpacing: '0.12em',
-          }}
+          className="mx-auto grid grid-cols-2 gap-6 sm:grid-cols-4"
+          style={{ maxWidth: 1280 }}
         >
-          Работаем с ведущими AI-провайдерами
+          {heroStats.map((s) => (
+            <div key={s.label}>
+              <div
+                className="text-3xl font-bold tabular-nums"
+                style={{ color: 'var(--accent)', letterSpacing: '-0.02em' }}
+              >
+                {s.value}
+              </div>
+              <div
+                className="text-xs uppercase opacity-60 tracking-wider mt-1 font-mono"
+                style={{ color: 'var(--ink-muted)' }}
+              >
+                {s.label}
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="aiag-logo-track">
-          {[...providers, ...providers].map((p, i) => (
-            <span
-              key={i}
-              className="font-mono whitespace-nowrap font-medium"
+      </section>
+
+      {/* ═══ Provider logos marquee ═══ */}
+      <section
+        className="mt-8 overflow-hidden border-y"
+        style={{ borderColor: 'var(--line)' }}
+      >
+        <div className="py-8">
+          <p
+            className="text-xs uppercase opacity-50 tracking-widest text-center mb-6 font-mono"
+            style={{ color: 'var(--ink-muted)' }}
+          >
+            Под капотом — лучшие модели мира
+          </p>
+          <div className="relative">
+            <div
+              className="flex gap-12 whitespace-nowrap"
               style={{
-                fontSize: 15,
-                color: 'var(--ink-muted)',
-                opacity: 0.6,
+                width: 'max-content',
+                animation: 'aiag-scroll-left 40s linear infinite',
               }}
             >
-              {p}
-            </span>
-          ))}
+              {[...providers, ...providers].map((p, i) => (
+                <div
+                  key={`${p.name}-${i}`}
+                  className="flex items-center gap-2 shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+                >
+                  <span className="text-2xl">{p.icon}</span>
+                  <span className="text-lg font-medium" style={{ color: 'var(--ink)' }}>
+                    {p.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 w-24"
+              style={{
+                background:
+                  'linear-gradient(to right, var(--bg), transparent)',
+              }}
+            />
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0 w-24"
+              style={{
+                background: 'linear-gradient(to left, var(--bg), transparent)',
+              }}
+            />
+          </div>
         </div>
       </section>
 
