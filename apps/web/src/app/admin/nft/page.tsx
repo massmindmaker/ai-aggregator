@@ -4,6 +4,7 @@ import { db, sql } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { nanoToTon } from '@aiag/shared';
+import { CollectionStatusActions } from './CollectionStatusActions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'NFT-коллекции — AIAG Admin' };
@@ -20,16 +21,42 @@ type Row = {
   created_at: string;
 };
 
-async function fetchCollections(): Promise<Row[]> {
+const FILTERS = [
+  { key: 'all', label: 'Все' },
+  { key: 'draft', label: 'Черновики' },
+  { key: 'active', label: 'Активные' },
+  { key: 'sold_out', label: 'Распроданы' },
+  { key: 'archived', label: 'Архив' },
+] as const;
+
+type FilterKey = (typeof FILTERS)[number]['key'];
+
+function normalizeFilter(v: string | undefined): FilterKey {
+  if (v === 'draft' || v === 'active' || v === 'sold_out' || v === 'archived') return v;
+  return 'all';
+}
+
+async function fetchCollections(status: FilterKey): Promise<Row[]> {
   try {
-    const r = await db.execute(sql`
-      SELECT id::text, slug, name, status,
-             price_nano_ton::text, max_supply, minted_count,
-             startonus_collection_id, created_at
-      FROM nft_collections
-      ORDER BY created_at DESC
-      LIMIT 500
-    `);
+    const r =
+      status === 'all'
+        ? await db.execute(sql`
+            SELECT id::text, slug, name, status,
+                   price_nano_ton::text, max_supply, minted_count,
+                   startonus_collection_id, created_at
+            FROM nft_collections
+            ORDER BY created_at DESC
+            LIMIT 500
+          `)
+        : await db.execute(sql`
+            SELECT id::text, slug, name, status,
+                   price_nano_ton::text, max_supply, minted_count,
+                   startonus_collection_id, created_at
+            FROM nft_collections
+            WHERE status = ${status}
+            ORDER BY created_at DESC
+            LIMIT 500
+          `);
     return ((r as unknown as { rows?: Row[] }).rows ?? (r as unknown as Row[])) || [];
   } catch (e) {
     console.error(e);
@@ -43,8 +70,14 @@ function statusVariant(s: string): 'default' | 'outline' | 'secondary' {
   return 'outline';
 }
 
-export default async function AdminNftPage() {
-  const rows = await fetchCollections();
+export default async function AdminNftPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ status?: string }>;
+}) {
+  const sp = (await searchParams) ?? {};
+  const filter = normalizeFilter(sp.status);
+  const rows = await fetchCollections(filter);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -63,9 +96,31 @@ export default async function AdminNftPage() {
         </Link>
       </div>
 
+      <div className="flex gap-1 mb-4 text-xs">
+        {FILTERS.map((f) => {
+          const active = f.key === filter;
+          const href = f.key === 'all' ? '/admin/nft' : `/admin/nft?status=${f.key}`;
+          return (
+            <Link
+              key={f.key}
+              href={href}
+              className={`px-3 py-1.5 rounded-sm font-medium transition-colors ${
+                active
+                  ? 'bg-amber-500 text-black'
+                  : 'border border-border hover:bg-muted/40 text-muted-foreground'
+              }`}
+            >
+              {f.label}
+            </Link>
+          );
+        })}
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Все коллекции ({rows.length})</CardTitle>
+          <CardTitle className="text-sm">
+            {FILTERS.find((f) => f.key === filter)?.label ?? 'Все'} ({rows.length})
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-sm">
@@ -98,12 +153,15 @@ export default async function AdminNftPage() {
                     {c.startonus_collection_id ?? '—'}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <Link
-                      href={`/admin/nft/${c.id}`}
-                      className="text-amber-500 hover:text-amber-400 text-xs"
-                    >
-                      Открыть →
-                    </Link>
+                    <div className="inline-flex items-center gap-2 justify-end">
+                      <CollectionStatusActions collectionId={c.id} currentStatus={c.status} />
+                      <Link
+                        href={`/admin/nft/${c.id}`}
+                        className="text-amber-500 hover:text-amber-400 text-xs"
+                      >
+                        Открыть →
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
