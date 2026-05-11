@@ -68,6 +68,25 @@ Performed manually by the owner via `@BotFather` in Telegram. **Not automated.**
 - `app/page.tsx` — client landing with `<TonConnectButton />` smoke test.
 - `public/tonconnect-manifest.json` — TON Connect dApp manifest.
 
+## Wave 02 — HMAC verify + JWT auth
+
+Adds Telegram WebApp `initData` HMAC-SHA256 verification → issues 24h JWT, persists user in `tg_users`, JWT auth middleware on `/api/tma/*`.
+
+Files:
+- `src/lib/verify-init-data.ts` — pure HMAC verifier (Telegram WebApp algorithm).
+- `app/api/tma/auth/verify/route.ts` — POST { initData } → { token, user }.
+- `src/hooks/useAuth.ts` — client hook; checks `Telegram.WebApp.CloudStorage` cache, falls back to `/tg/api/tma/auth/verify`.
+- `middleware.ts` — protects `/api/tma/*` (except `/api/tma/auth/*`), injects `x-tma-user-id` header.
+- `packages/database/migrations/0016_tg_users.sql` — `tg_users` table linked to `users.id`.
+
+### Required env vars (add manually to `/srv/aiag/shared/.env` on VPS)
+
+```
+TELEGRAM_BOT_TOKEN=<from BotFather>
+TMA_JWT_SECRET=<openssl rand -hex 32>
+DATABASE_URL=<existing>
+```
+
 ## Constraints
 
 - Do not import `@tonconnect/ui-react` from any server component.
