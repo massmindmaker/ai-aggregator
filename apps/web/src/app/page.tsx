@@ -529,7 +529,7 @@ export default function HomePage() {
       <TopModelsLeaderboard />
 
       {/* ═══ Scenarios ═══ */}
-      <section className="aiag-grid-bg" style={{ padding: '96px 20px' }}>
+      <section className="aiag-grid-bg-glow overflow-hidden" style={{ padding: '96px 20px' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div className="mb-14">
             <div
@@ -741,8 +741,8 @@ export default function HomePage() {
 
       {/* ═══ How it works ═══ */}
       <section
-        className="aiag-grid-bg"
-        style={{ padding: '96px 20px', background: 'var(--bg-elev)' }}
+        className="aiag-grid-bg-glow-alt overflow-hidden"
+        style={{ padding: '96px 20px', backgroundColor: 'var(--bg-elev)' }}
       >
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div className="mb-14 flex items-start justify-between gap-6 flex-wrap">

@@ -623,6 +623,104 @@
           mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
 }
 
+/* === Glowing grid background variant === */
+.aiag-grid-bg-glow {
+  position: relative;
+  isolation: isolate;
+  background-image:
+    linear-gradient(rgba(245, 158, 11, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 158, 11, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+.aiag-grid-bg-glow::before {
+  content: '';
+  position: absolute;
+  top: -25%; left: -25%; right: -25%; bottom: -25%;
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(245, 158, 11, 0.18) 0%,
+      rgba(245, 158, 11, 0.08) 12%,
+      transparent 35%);
+  filter: blur(40px);
+  pointer-events: none;
+  animation: aiag-grid-spot-drift 28s ease-in-out infinite;
+  z-index: -1;
+  will-change: transform, opacity;
+}
+
+@keyframes aiag-grid-spot-drift {
+  0%, 100% { transform: translate(-20%, -10%); opacity: 0.7; }
+  25%      { transform: translate(15%, -5%);  opacity: 0.95; }
+  50%      { transform: translate(20%, 15%);  opacity: 0.8; }
+  75%      { transform: translate(-10%, 18%); opacity: 1; }
+}
+
+/* Alt variant — same look, opposite phase, slightly slower (for second section) */
+.aiag-grid-bg-glow-alt {
+  position: relative;
+  isolation: isolate;
+  background-image:
+    linear-gradient(rgba(245, 158, 11, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 158, 11, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+.aiag-grid-bg-glow-alt::before {
+  content: '';
+  position: absolute;
+  top: -25%; left: -25%; right: -25%; bottom: -25%;
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(245, 158, 11, 0.16) 0%,
+      rgba(245, 158, 11, 0.07) 14%,
+      transparent 38%);
+  filter: blur(44px);
+  pointer-events: none;
+  animation: aiag-grid-spot-drift 32s ease-in-out infinite;
+  animation-delay: -12s;
+  z-index: -1;
+  will-change: transform, opacity;
+}
+
+/* Tighter variant (16px grid) for bento/feature cards */
+.aiag-grid-bg-glow-sm {
+  position: relative;
+  isolation: isolate;
+  background-image:
+    linear-gradient(rgba(245, 158, 11, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 158, 11, 0.04) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+.aiag-grid-bg-glow-sm::before {
+  content: '';
+  position: absolute;
+  top: -25%; left: -25%; right: -25%; bottom: -25%;
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(245, 158, 11, 0.14) 0%,
+      rgba(245, 158, 11, 0.06) 15%,
+      transparent 38%);
+  filter: blur(30px);
+  pointer-events: none;
+  animation: aiag-grid-spot-drift 24s ease-in-out infinite reverse;
+  z-index: -1;
+}
+
+/* Optional subtle pulse on the lines themselves */
+.aiag-grid-pulse {
+  animation: aiag-grid-line-pulse 6s ease-in-out infinite;
+}
+@keyframes aiag-grid-line-pulse {
+  0%, 100% { background-image:
+    linear-gradient(rgba(245, 158, 11, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 158, 11, 0.04) 1px, transparent 1px); }
+  50%      { background-image:
+    linear-gradient(rgba(245, 158, 11, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 158, 11, 0.08) 1px, transparent 1px); }
+}
+
 /* === Cell-spot — wrapper class для точечного использования cellular animation === */
 .aiag-cells-spot {
   position: relative;
@@ -662,6 +760,15 @@
   }
   .aiag-stagger > * {
     opacity: 1 !important;
+    animation: none !important;
+  }
+  .aiag-grid-bg-glow::before,
+  .aiag-grid-bg-glow-alt::before,
+  .aiag-grid-bg-glow-sm::before {
+    animation: none !important;
+    opacity: 0.5 !important;
+  }
+  .aiag-grid-pulse {
     animation: none !important;
   }
 }
