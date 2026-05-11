@@ -55,11 +55,13 @@ export async function generateMetadata({
       title,
       description: model.shortDescription,
       type: 'article',
+      ...(model.imageUrl ? { images: [model.imageUrl] } : {}),
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description: model.shortDescription,
+      ...(model.imageUrl ? { images: [model.imageUrl] } : {}),
     },
     alternates: {
       canonical: `/marketplace/${params.org}/${params.model}`,

@@ -69,6 +69,8 @@ export interface CatalogModel {
   capabilities: ModelCapabilities;
   stats: ModelStats;
   featured?: boolean;
+  /** Optional OG/preview image URL for the model. */
+  imageUrl?: string;
 }
 
 /** Foreign-hosted org slugs (trigger transfer warning per 152-ФЗ). */
