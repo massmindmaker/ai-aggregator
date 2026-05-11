@@ -87,47 +87,26 @@ export default function DashboardSidebar({ isAdmin }: Props) {
     setMobileOpen(false);
   }, [pathname, searchParams]);
 
-  return (
+  // Lock body scroll while drawer open
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [mobileOpen]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMobileOpen(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileOpen]);
+
+  const sidebarBody = (
     <>
-      {/* Mobile hamburger — fixed top-left, visible < lg */}
-      <button
-        type="button"
-        aria-label="Открыть меню кабинета"
-        onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed top-3 left-3 z-40 p-2 rounded-md border bg-[var(--bg-elev)] hover:bg-white/[0.04]"
-        style={{ borderColor: 'var(--line)' }}
-      >
-        <Menu className="h-5 w-5" />
-      </button>
-
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/70"
-          onClick={() => setMobileOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      <aside
-        className={cn(
-          'shrink-0 border-r flex flex-col',
-          // Desktop: classic sidebar inline
-          'lg:static lg:w-60 lg:translate-x-0',
-          // Mobile: slide-over drawer
-          'fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200 ease-out',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        )}
-        style={{ borderColor: 'var(--line)', background: 'var(--bg-elev)' }}
-      >
-        <button
-          type="button"
-          aria-label="Закрыть меню"
-          onClick={() => setMobileOpen(false)}
-          className="lg:hidden absolute top-3 right-3 p-1.5 rounded hover:bg-white/[0.04]"
-        >
-          <X className="h-5 w-5" />
-        </button>
       <div className="p-4 flex flex-col gap-1">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
           Режим
@@ -214,7 +193,59 @@ export default function DashboardSidebar({ isAdmin }: Props) {
           </Link>
         )}
       </nav>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger — visible < lg */}
+      <button
+        type="button"
+        aria-label="Открыть меню кабинета"
+        onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed top-3 left-3 z-40 p-2 rounded-md border bg-[var(--bg-elev)] hover:bg-white/[0.04]"
+        style={{ borderColor: 'var(--line)' }}
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Desktop static sidebar */}
+      <aside
+        className="hidden lg:flex shrink-0 w-60 border-r flex-col"
+        style={{ borderColor: 'var(--line)', background: 'var(--bg-elev)' }}
+      >
+        {sidebarBody}
       </aside>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Меню кабинета"
+        >
+          <div
+            className="absolute inset-0 bg-black/70 aiag-drawer-overlay"
+            onClick={() => setMobileOpen(false)}
+            aria-hidden="true"
+          />
+          <aside
+            className="aiag-drawer-panel-enter absolute inset-y-0 left-0 w-72 border-r flex flex-col"
+            style={{ borderColor: 'var(--line)', background: 'var(--bg-elev)' }}
+          >
+            <button
+              type="button"
+              aria-label="Закрыть меню"
+              onClick={() => setMobileOpen(false)}
+              className="absolute top-3 right-3 p-1.5 rounded hover:bg-white/[0.04] z-10"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {sidebarBody}
+          </aside>
+        </div>
+      )}
     </>
   );
 }
