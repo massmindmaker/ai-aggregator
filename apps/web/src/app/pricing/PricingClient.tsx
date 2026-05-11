@@ -257,7 +257,7 @@ export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClie
                 className={cn(
                   'relative flex flex-col rounded-2xl border bg-card p-6 transition-all',
                   tier.isPopular
-                    ? 'border-primary/60 shadow-[0_0_0_1px_rgba(245,158,11,0.4),0_24px_64px_-16px_rgba(245,158,11,0.25)] aiag-featured-ring'
+                    ? 'border-primary/60 shadow-[0_0_0_1px_rgba(245,158,11,0.4),0_24px_64px_-16px_rgba(245,158,11,0.25)]'
                     : 'border-border hover:border-primary/30 aiag-glow-hover'
                 )}
               >
