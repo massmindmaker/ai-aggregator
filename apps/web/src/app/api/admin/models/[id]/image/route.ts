@@ -1,5 +1,5 @@
 /**
- * POST /api/admin/models/[slug]/image
+ * POST /api/admin/models/[id]/image
  *
  * Upload a cover image for a model. Stores file in S3 and updates
  * the `image_url` column on the `models` table.
@@ -8,6 +8,8 @@
  *   - Admin auth required
  *   - Accepted types: image/png, image/jpeg, image/webp (validated by magic bytes)
  *   - Max size: 2 MB
+ *
+ * Note: [id] param is the model slug (matches sibling routes convention).
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdmin } from '@/lib/admin/api';
@@ -35,10 +37,10 @@ function detectMime(buf: Buffer): string | null {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return withAdmin(async () => {
-    const { slug } = await params;
+    const { id: slug } = await params;
 
     if (!SLUG_RE.test(slug)) {
       return NextResponse.json({ error: 'invalid_slug' }, { status: 400 });
