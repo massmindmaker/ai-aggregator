@@ -34,7 +34,7 @@ export default async function DashboardLayout({
       <MainNavbar />
       <div className="flex-1 flex">
         <DashboardSidebar isAdmin={isAdmin} />
-        <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
+        <main className="aiag-grid-bg-sm flex-1 min-w-0 overflow-x-hidden">{children}</main>
       </div>
     </div>
   );

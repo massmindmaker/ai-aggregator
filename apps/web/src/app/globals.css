@@ -422,18 +422,19 @@
  * полный амбер + drop-shadow halo. */
 @keyframes aiag-logo-dot-glow {
   0%, 70%, 100% {
-    filter: none;
+    filter: brightness(1);
     transform: scale(1);
   }
-  15%, 30% {
-    filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.85))
-            drop-shadow(0 0 12px rgba(245, 158, 11, 0.45));
-    transform: scale(1.08);
+  15%, 35% {
+    filter: brightness(1.4)
+            drop-shadow(0 0 6px rgba(245, 158, 11, 0.95))
+            drop-shadow(0 0 16px rgba(245, 158, 11, 0.55))
+            drop-shadow(0 0 28px rgba(245, 158, 11, 0.25));
+    transform: scale(1.12);
   }
 }
-
 .aiag-logo-dot {
-  animation: aiag-logo-dot-glow 2.8s ease-in-out infinite;
+  animation: aiag-logo-dot-glow 3.2s ease-in-out infinite;
   transform-origin: center;
   transform-box: fill-box;
 }

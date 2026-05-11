@@ -55,11 +55,11 @@ export function AiagLogo({
         <circle cx="9"  cy="22" r="4.5" fill="#f59e0b"
                 className={cls} style={animated ? { animationDelay: '0ms' } : undefined} />
         <circle cx="15" cy="9"  r="4.5" fill="#f59e0b"
-                className={cls} style={animated ? { animationDelay: '220ms' } : undefined} />
+                className={cls} style={animated ? { animationDelay: '300ms' } : undefined} />
         <circle cx="22" cy="21" r="4.5" fill="#f59e0b"
-                className={cls} style={animated ? { animationDelay: '440ms' } : undefined} />
+                className={cls} style={animated ? { animationDelay: '600ms' } : undefined} />
         <circle cx="26" cy="8"  r="2.5" fill="#f59e0b" opacity="0.65"
-                className={cls} style={animated ? { animationDelay: '660ms' } : undefined} />
+                className={cls} style={animated ? { animationDelay: '900ms' } : undefined} />
       </svg>
 
       {!iconOnly && (

@@ -150,7 +150,7 @@ export default function AdminSidebar({ email }: Props) {
 
       <aside
         className={cn(
-          'shrink-0 border-r flex flex-col',
+          'aiag-grid-bg-sm shrink-0 border-r flex flex-col',
           'lg:static lg:w-60 lg:translate-x-0',
           'fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200 ease-out',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
@@ -194,18 +194,30 @@ export default function AdminSidebar({ email }: Props) {
                 type="button"
                 onClick={() => toggleSection(section.heading)}
                 className={cn(
-                  'flex items-center justify-between px-3 py-1.5 rounded',
-                  'text-[10px] uppercase tracking-wider font-semibold',
-                  'hover:bg-white/[0.04] transition-colors cursor-pointer select-none',
-                  hasActive && isCollapsed
-                    ? 'text-[var(--accent)]'
-                    : 'text-muted-foreground'
+                  'flex items-center justify-between px-3 py-1.5 mt-3 rounded',
+                  'hover:bg-white/[0.03] transition-colors cursor-pointer select-none'
                 )}
               >
-                <span>{section.heading}</span>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="w-1 h-1 rounded-full"
+                    style={{
+                      background: 'var(--accent)',
+                      opacity: hasActive && isCollapsed ? 0.9 : 0.4,
+                    }}
+                  />
+                  <span
+                    className={cn(
+                      'text-[10px] uppercase tracking-[0.12em] font-semibold',
+                      hasActive && isCollapsed ? 'text-[var(--accent)] opacity-100' : 'opacity-40'
+                    )}
+                  >
+                    {section.heading}
+                  </span>
+                </span>
                 <ChevronDown
                   className={cn(
-                    'h-3 w-3 transition-transform duration-150',
+                    'h-3 w-3 transition-transform duration-150 opacity-40',
                     isCollapsed ? '-rotate-90' : 'rotate-0'
                   )}
                 />
@@ -222,10 +234,11 @@ export default function AdminSidebar({ email }: Props) {
                         key={item.href}
                         href={item.href}
                         className={cn(
-                          'flex items-center gap-2 px-3 py-2 text-[13px] rounded transition-colors',
+                          'flex items-center gap-3 px-3 py-2 text-[13px] rounded-sm transition-all relative',
+                          'hover:bg-white/[0.03] hover:translate-x-0.5',
                           active
-                            ? 'bg-[rgba(245,158,11,0.08)] text-foreground border-l-2 border-l-[var(--accent)]'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04] border-l-2 border-l-transparent'
+                            ? 'bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] text-[var(--ink)] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[2px] before:h-5 before:bg-[var(--accent)] before:rounded-r-full'
+                            : 'text-[var(--ink-muted)] hover:text-[var(--ink)]'
                         )}
                       >
                         <Icon className="h-4 w-4 shrink-0" />

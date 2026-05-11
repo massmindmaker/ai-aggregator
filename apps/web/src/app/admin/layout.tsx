@@ -33,7 +33,7 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen flex bg-background">
       <AdminSidebar email={session.user.email} />
-      <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
+      <main className="aiag-grid-bg-sm flex-1 min-w-0 overflow-x-hidden">{children}</main>
     </div>
   );
 }

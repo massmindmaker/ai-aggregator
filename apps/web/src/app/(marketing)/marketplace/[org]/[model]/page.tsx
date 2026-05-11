@@ -69,16 +69,16 @@ export async function generateMetadata({
   };
 }
 
-const TYPE_ICON: Record<string, string> = {
-  llm: '💬',
-  image: '🎨',
-  audio: '🎵',
-  video: '🎬',
-  embedding: '🔢',
-  code: '💻',
-  'speech-to-text': '🎤',
-  'text-to-speech': '🔊',
-  multimodal: '🌐',
+const TYPE_ABBR: Record<string, string> = {
+  llm: 'LLM',
+  image: 'IMG',
+  audio: 'AUD',
+  video: 'VID',
+  embedding: 'EMB',
+  code: 'CODE',
+  'speech-to-text': 'STT',
+  'text-to-speech': 'TTS',
+  multimodal: 'MM',
 };
 
 function buildProductJsonLd(model: CatalogModel) {
@@ -146,10 +146,15 @@ export default function ModelDetailPage({ params }: RouteParams) {
           <div className="flex items-start gap-4">
             <span
               aria-hidden
-              className="text-4xl shrink-0"
+              className="shrink-0 inline-flex items-center justify-center px-2.5 h-10 rounded-sm font-mono font-semibold text-[11px] tracking-wider"
+              style={{
+                background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                color: 'var(--accent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+              }}
               title={MODEL_TYPE_LABEL_RU[model.type]}
             >
-              {TYPE_ICON[model.type]}
+              {TYPE_ABBR[model.type]}
             </span>
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-1">
