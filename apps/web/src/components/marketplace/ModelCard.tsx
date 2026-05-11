@@ -1,36 +1,76 @@
 import * as React from 'react';
 import Link from 'next/link';
-import { Star, Zap, Shield } from 'lucide-react';
+import { TrendingUp, TrendingDown, Shield, Globe } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { TransferWarningBadge } from '@/components/TransferWarningBadge';
 import { cn } from '@/lib/utils';
 import {
   type CatalogModel,
-  MODEL_TYPE_LABEL_RU,
   isForeignHosted,
 } from '@/lib/marketplace/catalog';
 import { formatPriceLabel } from '@/lib/marketplace/pricing-calc';
+import {
+  placeholderRuns,
+  placeholderTrend,
+  placeholderHue,
+} from '@/lib/marketplace/placeholders';
 
 interface ModelCardProps {
   model: CatalogModel;
 }
 
-const TYPE_ICON: Record<string, string> = {
-  llm: '💬',
-  image: '🎨',
-  audio: '🎵',
-  video: '🎬',
-  embedding: '🔢',
-  code: '💻',
-  'speech-to-text': '🎤',
-  'text-to-speech': '🔊',
-  multimodal: '🌐',
-};
+function ProviderAvatar({ model }: { model: CatalogModel }) {
+  if (model.imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={model.imageUrl}
+        alt=""
+        width={32}
+        height={32}
+        className="h-8 w-8 rounded-md object-cover shrink-0 border border-white/10"
+      />
+    );
+  }
+  const hue = placeholderHue(model.orgSlug);
+  const letter = model.orgName.charAt(0).toUpperCase();
+  return (
+    <div
+      aria-hidden
+      className="h-8 w-8 rounded-md shrink-0 flex items-center justify-center text-xs font-semibold text-white/90 border border-white/10"
+      style={{
+        background: `linear-gradient(135deg, hsl(${hue} 60% 32%), hsl(${(hue + 40) % 360} 50% 20%))`,
+      }}
+    >
+      {letter}
+    </div>
+  );
+}
+
+function TrendChip({ trend }: { trend: number }) {
+  if (trend === 0) return null;
+  const up = trend > 0;
+  const Icon = up ? TrendingUp : TrendingDown;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-0.5 text-[11px] font-medium tabular-nums',
+        up ? 'text-emerald-500' : 'text-red-500'
+      )}
+      title="Изменение за неделю (placeholder)"
+    >
+      <Icon className="h-3 w-3" aria-hidden />
+      {up ? '+' : ''}
+      {trend.toFixed(1)}%
+    </span>
+  );
+}
 
 export function ModelCard({ model }: ModelCardProps) {
   const foreign = isForeignHosted(model.orgSlug);
   const href = `/marketplace/${model.orgSlug}/${model.modelSlug}`;
+  const runs = placeholderRuns(model.slug);
+  const trend = placeholderTrend(model.slug);
 
   return (
     <Link
@@ -39,76 +79,62 @@ export function ModelCard({ model }: ModelCardProps) {
       className="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg aiag-glow-hover"
     >
       <Card className="h-full hover:border-primary/50 transition-colors">
-        <CardContent className="p-5 flex flex-col gap-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                aria-hidden
-                className="text-2xl shrink-0"
-                title={MODEL_TYPE_LABEL_RU[model.type]}
-              >
-                {TYPE_ICON[model.type]}
-              </span>
-              <div className="min-w-0">
-                <h3 className="font-semibold text-sm truncate group-hover:text-primary transition-colors">
-                  {model.name}
-                </h3>
-                <p className="text-xs text-muted-foreground truncate">
-                  {model.orgName}
-                </p>
+        <CardContent className="p-4 flex flex-col gap-2.5">
+          {/* Header */}
+          <div className="flex items-start gap-2.5 min-w-0">
+            <ProviderAvatar model={model} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground truncate">
+                <span className="truncate">{model.orgName}</span>
+                {model.hostingRegion === 'ru' ? (
+                  <Shield
+                    className="h-3 w-3 text-emerald-500 shrink-0"
+                    aria-label="Хостинг РФ"
+                  />
+                ) : foreign ? (
+                  <Globe
+                    className="h-3 w-3 text-amber-500/80 shrink-0"
+                    aria-label="Трансгран. передача (152-ФЗ)"
+                  />
+                ) : null}
               </div>
+              <h3 className="font-semibold text-sm leading-tight truncate group-hover:text-primary transition-colors">
+                {model.name}
+              </h3>
             </div>
-            <div className="flex flex-col items-end gap-1 shrink-0">
-              {model.hostingRegion === 'ru' ? (
-                <Badge
-                  variant="secondary"
-                  className="gap-1 text-[10px] h-5 bg-emerald-500/15 text-emerald-500 border-emerald-500/20"
-                >
-                  <Shield className="h-3 w-3" aria-hidden />
-                  Хостинг РФ
-                </Badge>
-              ) : foreign ? (
-                <TransferWarningBadge variant="chip" />
-              ) : null}
-            </div>
+            <TrendChip trend={trend} />
           </div>
 
-          <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2.5rem]">
+          {/* Description */}
+          <p className="text-[12px] text-muted-foreground line-clamp-1">
             {model.shortDescription}
           </p>
 
-          <div className="flex flex-wrap gap-1">
-            {model.tags.slice(0, 3).map((t) => (
-              <Badge key={t} variant="outline" className="text-[10px] h-5">
-                {t}
-              </Badge>
-            ))}
-            {model.derivedTags.includes('fast') && (
-              <Badge
-                variant="outline"
-                className="text-[10px] h-5 gap-1 border-amber-500/40 text-amber-500"
-              >
-                <Zap className="h-3 w-3" aria-hidden />
-                быстрая
-              </Badge>
-            )}
-          </div>
+          {/* Tags (compact, optional) */}
+          {model.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {model.tags.slice(0, 2).map((t) => (
+                <Badge
+                  key={t}
+                  variant="outline"
+                  className="text-[10px] h-4 px-1.5 font-normal text-muted-foreground/80"
+                >
+                  {t}
+                </Badge>
+              ))}
+            </div>
+          )}
 
+          {/* Stats row */}
           <div className="mt-auto pt-2 border-t border-border flex items-center justify-between gap-2">
-            <span className="text-xs font-mono text-foreground/80 truncate">
+            <span className="text-[12px] font-mono text-amber-500 truncate">
               {formatPriceLabel(model)}
             </span>
-            <span className="inline-flex items-center gap-1 text-xs">
-              <Star
-                className="h-3 w-3 fill-amber-500 text-amber-500"
-                aria-hidden
-              />
-              <span className="font-medium">
-                {model.stats.avgRating.toFixed(1)}
-              </span>
-              <span className="text-muted-foreground">
-                ({model.stats.totalReviews})
-              </span>
+            <span
+              className="text-[11px] text-muted-foreground tabular-nums shrink-0"
+              title="Запросов за неделю (placeholder)"
+            >
+              {runs} runs
             </span>
           </div>
         </CardContent>
@@ -120,16 +146,16 @@ export function ModelCard({ model }: ModelCardProps) {
 export function ModelCardSkeleton() {
   return (
     <Card>
-      <CardContent className="p-5 flex flex-col gap-3">
-        <div className="flex items-start gap-2">
-          <div className="h-8 w-8 bg-muted rounded animate-pulse" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
+      <CardContent className="p-4 flex flex-col gap-2.5">
+        <div className="flex items-start gap-2.5">
+          <div className="h-8 w-8 bg-muted rounded-md animate-pulse" />
+          <div className="flex-1 space-y-1.5">
             <div className="h-3 bg-muted rounded animate-pulse w-1/3" />
+            <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
           </div>
         </div>
-        <div className="h-8 bg-muted rounded animate-pulse" />
-        <div className="h-5 bg-muted rounded animate-pulse w-2/3" />
+        <div className="h-3 bg-muted rounded animate-pulse" />
+        <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
       </CardContent>
     </Card>
   );
@@ -154,7 +180,7 @@ export function ModelGrid({
   return (
     <div
       className={cn(
-        'grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 aiag-stagger',
+        'grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 aiag-stagger',
         className
       )}
     >
