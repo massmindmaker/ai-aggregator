@@ -5,6 +5,8 @@ import HeroAnimation from '@/components/HeroAnimation';
 import HeroTerminal from '@/components/home/HeroTerminal';
 import HomeFaq from '@/components/home/HomeFaq';
 import { CellsSpot } from '@/components/animations/CellsSpot';
+import { CodeTabsDemo } from '@/components/home/CodeTabsDemo';
+import { TopModelsLeaderboard } from '@/components/home/TopModelsLeaderboard';
 
 export const metadata: Metadata = {
   title:
@@ -515,6 +517,12 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ═══ Code-tabs demo with streaming preview ═══ */}
+      <CodeTabsDemo />
+
+      {/* ═══ Live top-models leaderboard ═══ */}
+      <TopModelsLeaderboard />
 
       {/* ═══ Scenarios ═══ */}
       <section className="aiag-grid-bg" style={{ padding: '96px 20px' }}>
