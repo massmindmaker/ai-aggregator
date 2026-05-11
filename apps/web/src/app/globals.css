@@ -577,6 +577,47 @@
   }
 }
 
+/* === Grid pattern background (static, used as decorative bg) === */
+.aiag-grid-bg {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+.aiag-grid-bg-sm {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-position: -1px -1px;
+}
+
+/* Radial-masked grid for hero-section overlay (fades at edges) */
+.aiag-grid-bg-masked {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+          mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+}
+
+/* === Cell-spot — wrapper class для точечного использования cellular animation === */
+.aiag-cells-spot {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 50%, transparent 85%);
+          mask-image: radial-gradient(ellipse at center, #000 50%, transparent 85%);
+}
+
+.aiag-cells-spot.no-mask {
+  -webkit-mask-image: none;
+          mask-image: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

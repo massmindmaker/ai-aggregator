@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { db, sql } from '@/lib/db';
 import ContestCard, { ContestCardData } from './ContestCard';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import { CellsSpot } from '@/components/animations/CellsSpot';
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
@@ -134,7 +135,12 @@ function ContestGrid({
   emptyText: string;
 }) {
   if (contests.length === 0) {
-    return <div className="py-12 text-center text-muted-foreground">{emptyText}</div>;
+    return (
+      <div className="flex flex-col items-center py-12 text-muted-foreground">
+        <CellsSpot width={240} height={160} />
+        <p className="mt-6 text-sm">{emptyText}</p>
+      </div>
+    );
   }
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 aiag-stagger">

@@ -4,6 +4,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import HeroAnimation from '@/components/HeroAnimation';
 import HeroTerminal from '@/components/home/HeroTerminal';
 import HomeFaq from '@/components/home/HomeFaq';
+import { CellsSpot } from '@/components/animations/CellsSpot';
 
 export const metadata: Metadata = {
   title:
@@ -467,7 +468,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══ Scenarios ═══ */}
-      <section style={{ padding: '96px 20px' }}>
+      <section className="aiag-grid-bg" style={{ padding: '96px 20px' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div className="mb-14">
             <div
@@ -679,10 +680,12 @@ export default function HomePage() {
 
       {/* ═══ How it works ═══ */}
       <section
+        className="aiag-grid-bg"
         style={{ padding: '96px 20px', background: 'var(--bg-elev)' }}
       >
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div className="mb-14">
+          <div className="mb-14 flex items-start justify-between gap-6 flex-wrap">
+            <div className="min-w-0 flex-1">
             <div
               className="font-mono uppercase mb-3.5"
               style={{
@@ -707,6 +710,10 @@ export default function HomePage() {
             <p style={{ fontSize: 17, color: 'var(--ink-muted)', maxWidth: 600 }}>
               OpenAI SDK → меняете base URL → работает. Без миграции кода.
             </p>
+            </div>
+            <div className="hidden md:block shrink-0">
+              <CellsSpot width={240} height={160} cellSize={6} />
+            </div>
           </div>
 
           <div

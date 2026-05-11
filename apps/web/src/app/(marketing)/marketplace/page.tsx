@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { SlidersHorizontal } from 'lucide-react';
 import { ModelGrid } from '@/components/marketplace/ModelCard';
+import { CellsSpot } from '@/components/animations/CellsSpot';
 import { FilterPanel } from '@/components/marketplace/FilterPanel';
 import { computeFacets } from '@/lib/marketplace/facets';
 import { ActiveFilterChips } from '@/components/marketplace/ActiveFilterChips';
@@ -125,7 +126,17 @@ export default function MarketplacePage({ searchParams }: PageProps) {
               )}
             </div>
 
-            <ModelGrid items={result.items} />
+            <ModelGrid
+              items={result.items}
+              empty={
+                <div className="flex flex-col items-center py-8">
+                  <CellsSpot width={240} height={160} />
+                  <p className="mt-6 text-sm opacity-70">
+                    Моделей не найдено. Попробуйте изменить фильтры.
+                  </p>
+                </div>
+              }
+            />
 
             <Pagination
               page={result.page}
