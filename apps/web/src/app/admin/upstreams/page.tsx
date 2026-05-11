@@ -2,7 +2,17 @@ import * as React from 'react';
 import { db, sql } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Sparkline } from '@/components/ui/Sparkline';
 import { UpstreamRowActions } from './UpstreamRowActions';
+
+// FIXME: replace with real per-upstream latency series (hourly bins from upstream_health)
+function placeholderLatency(seed: string, len = 12): number[] {
+  let h = 0;
+  for (const c of seed) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
+  const rng = (i: number) =>
+    Math.sin(h + i * 0.9) * 30 + 150 + Math.sin(i * 0.4) * 15;
+  return Array.from({ length: len }, (_, i) => Math.max(20, rng(i)));
+}
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Аплинки — AIAG Admin' };
@@ -101,7 +111,19 @@ export default async function AdminUpstreamsPage() {
                         {s.label}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2 text-right">{r.latency_p50_ms} ms</td>
+                    <td className="px-3 py-2 text-right">
+                      <div className="inline-flex items-center gap-2 justify-end">
+                        <Sparkline
+                          data={placeholderLatency(r.id, 12)}
+                          width={60}
+                          height={18}
+                          strokeWidth={1}
+                          color={r.latency_p50_ms > 500 ? '#ef4444' : '#22c55e'}
+                          animate={false}
+                        />
+                        <span>{r.latency_p50_ms} ms</span>
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-right">{r.requests_24h}</td>
                     <td className="px-3 py-2 text-right">{errRate}%</td>
                     <td className="px-3 py-2 text-right">{markup}</td>
