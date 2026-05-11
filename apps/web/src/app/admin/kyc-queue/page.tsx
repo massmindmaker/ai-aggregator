@@ -3,24 +3,12 @@ import { db, sql } from '@/lib/db';
 import { rowsOf } from '@/lib/admin/rows';
 import { requireAdmin } from '@/lib/admin/guard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { KycRowActions } from './KycRowActions';
+import { KycQueueClient, type KycRow } from './KycQueueClient';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'KYC очередь — AIAG Admin' };
 
-type Row = {
-  doc_id: string;
-  user_id: string;
-  email: string;
-  kyc_type: string | null;
-  kyc_status: string;
-  doc_type: string;
-  storage_key: string;
-  uploaded_at: string;
-};
-
-async function fetchPending(): Promise<Row[]> {
+async function fetchPending(): Promise<KycRow[]> {
   try {
     const r = await db.execute(sql`
       SELECT d.id::text AS doc_id,
@@ -33,7 +21,7 @@ async function fetchPending(): Promise<Row[]> {
       ORDER BY d.uploaded_at ASC
       LIMIT 200
     `);
-    return rowsOf<Row>(r);
+    return rowsOf<KycRow>(r);
   } catch (e) {
     console.error('[admin/kyc-queue] fetch failed', e);
     return [];
@@ -104,64 +92,7 @@ export default async function AdminKycQueuePage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Документы на проверке</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-xs uppercase">
-              <tr>
-                <th className="text-left px-3 py-2">Email</th>
-                <th className="text-left px-3 py-2">KYC type</th>
-                <th className="text-left px-3 py-2">Doc</th>
-                <th className="text-left px-3 py-2">Файл</th>
-                <th className="text-left px-3 py-2">Загружен</th>
-                <th className="text-right px-3 py-2">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.doc_id} className="border-t">
-                  <td className="px-3 py-2 text-xs font-mono">{r.email}</td>
-                  <td className="px-3 py-2">
-                    <Badge variant="outline">{r.kyc_type ?? '—'}</Badge>
-                  </td>
-                  <td className="px-3 py-2 text-xs">{r.doc_type}</td>
-                  <td className="px-3 py-2 text-xs">
-                    <a
-                      href={`${S3_BASE}/${r.storage_key}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-amber-400 underline"
-                      title={r.storage_key}
-                    >
-                      открыть
-                    </a>
-                  </td>
-                  <td className="px-3 py-2 text-xs">
-                    {new Date(r.uploaded_at).toLocaleString('ru-RU')}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <KycRowActions
-                      docId={r.doc_id}
-                      userId={r.user_id}
-                      kycType={r.kyc_type}
-                    />
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
-                    Очередь пуста
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <KycQueueClient rows={rows} s3Base={S3_BASE} />
     </div>
   );
 }
