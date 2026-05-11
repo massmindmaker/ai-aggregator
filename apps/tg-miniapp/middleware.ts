@@ -18,7 +18,8 @@ export async function middleware(req: NextRequest) {
   if (
     path.startsWith('/api/tma/auth/') ||
     path === '/api/tma/nft/collections' ||
-    path === '/api/tma/nft/webhook'
+    path === '/api/tma/nft/webhook' ||
+    path.startsWith('/api/tma/marketplace')
   ) {
     return NextResponse.next();
   }

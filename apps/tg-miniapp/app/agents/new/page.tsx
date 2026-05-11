@@ -28,6 +28,19 @@ export default function NewAgentPage() {
     setModelSlug(t.defaultModelSlug);
   }, [pickedKind]);
 
+  // Handoff from /market/[slug] — pre-fill modelSlug from localStorage
+  useEffect(() => {
+    try {
+      const slug = localStorage.getItem('aiag_selected_model_slug');
+      if (slug) {
+        setModelSlug(slug);
+        localStorage.removeItem('aiag_selected_model_slug');
+      }
+    } catch {
+      // ignore
+    }
+  }, [pickedKind]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!token || !pickedKind) return;
