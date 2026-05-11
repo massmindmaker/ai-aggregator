@@ -33,6 +33,7 @@ export const models = pgTable(
     enabled: boolean('enabled').notNull().default(true),
     displayName: text('display_name'),
     description: text('description'),
+    imageUrl: text('image_url'),
     metadata: jsonb('metadata').notNull().default({}),
 
     // Phase 14 additions (spec §3.2)
