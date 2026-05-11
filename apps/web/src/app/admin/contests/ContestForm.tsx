@@ -28,7 +28,8 @@ export function ContestForm({
       const fd = new FormData(e.currentTarget);
       const body = Object.fromEntries(fd.entries());
       const slug = (initial?.slug ?? body.slug) as string;
-      const r = await fetch(`/api/admin/contests/${initial ? slug : 'new'}`, {
+      const url = initial ? `/api/admin/contests/${slug}` : '/api/admin/contests';
+      const r = await fetch(url, {
         method: initial ? 'PATCH' : 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -37,7 +38,8 @@ export function ContestForm({
       if (!r.ok) {
         alert(`Ошибка: ${j.error ?? r.status}`);
       } else {
-        window.location.href = `/admin/contests/${j.slug ?? slug}`;
+        const createdSlug = j.contest?.slug ?? j.slug ?? slug;
+        window.location.href = `/admin/contests/${createdSlug}`;
       }
     } finally {
       setBusy(false);
