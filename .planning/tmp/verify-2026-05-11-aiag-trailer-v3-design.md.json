@@ -1,0 +1,166 @@
+{
+  "doc_path": "C:\\Users\\боб\\brain\\Projects\\AIAG\\Wireframes\\p15-tg-miniapp\\video\\docs\\superpowers\\specs\\2026-05-11-aiag-trailer-v3-design.md",
+  "verified_against": "C:\\Users\\боб\\brain\\Projects\\AIAG\\Wireframes\\p15-tg-miniapp\\video\\index.html",
+  "verification_date": "2026-05-11",
+  "claims_checked": 32,
+  "claims_passed": 19,
+  "claims_failed": 13,
+  "summary": {
+    "CRITICAL": 4,
+    "HIGH": 5,
+    "MEDIUM": 3,
+    "LOW": 1
+  },
+  "findings": [
+    {
+      "id": "F01",
+      "category": "ASSETS",
+      "status": "MISSING",
+      "severity": "CRITICAL",
+      "claim": "assets/ directory with robot1.jpg, robot2.jpg, gesaffelstein-opr.mp3 must exist at video/assets/",
+      "actual": "video/assets/ directory does not exist. No asset files are present in the composition directory.",
+      "spec_line": "Assets Required table + Audio section",
+      "remediation": "Create video/assets/ and copy:\n  C:/Users/боб/Downloads/0c78e19469e5183097778d2749754234.jpg → video/assets/robot1.jpg\n  C:/Users/боб/Downloads/543feccff50cc5ab9498c2efaa1859b3.jpg → video/assets/robot2.jpg\n  'C:/Users/боб/Downloads/GESAFFELSTEIN - OPR (OFFICIAL VIDEOCLIP)_320k.mp3' → video/assets/gesaffelstein-opr.mp3\nSource files confirmed present in Downloads."
+    },
+    {
+      "id": "F02",
+      "category": "COMPOSITION_DURATION",
+      "status": "MISMATCH",
+      "severity": "CRITICAL",
+      "claim": "Composition total duration is 90s across 9 scenes",
+      "actual": "index.html root element has data-duration=\"30\", not 90. GSAP timeline only covers 0–30s with 7 scenes (S1–S7 in HTML). Spec describes 9 scenes totaling 90s (S0–S8) including MLAuto BG, Robot emergence, Particle Morph, Climax Stats Slam, and CTA Finale — none of those are implemented.",
+      "spec_line": "Technical Architecture + Scene-by-Scene Spec",
+      "remediation": "Change root data-duration from 30 to 90. Add missing scenes: S0 (cold open), S2 v3 (particle morph), S5 v3 (Robot 2), S6 v3 (marketplace+schedule), S7 v3 (stats slam), S8 (CTA finale). Note: scene IDs in index.html (s1–s7) do NOT map 1:1 to spec scene IDs (S0–S8) — index.html is an earlier 30s draft, not a 90s composition."
+    },
+    {
+      "id": "F03",
+      "category": "MLAUTO_CANVAS",
+      "status": "MISSING",
+      "severity": "CRITICAL",
+      "claim": "MLAuto cellular automaton canvas on Track 1 (BG), seeded mulberry32(42), GSAP-driven ticks via onUpdate",
+      "actual": "No MLAuto canvas element exists in index.html. No mulberry32 function. No GSAP onUpdate tick loop. The spec's MLAuto architecture (Tracks 0–4, seeded PRNG, 1080×1920 canvas cellSize:5) is entirely absent from the current file.",
+      "spec_line": "Cellular Automaton section + Track layout",
+      "remediation": "Add <canvas id='mlauto'> as a Track 1 clip (data-start=0 data-duration=90 data-track-index=1). Implement mulberry32 as shown in spec. Replace requestAnimationFrame ticks with the GSAP onUpdate pattern exactly as spec shows. Set cellSize:5, amber + #a1a1aa palette."
+    },
+    {
+      "id": "F04",
+      "category": "AUDIO_ELEMENT",
+      "status": "MISSING",
+      "severity": "CRITICAL",
+      "claim": "Audio element: <audio src='assets/gesaffelstein-opr.mp3' class='clip' data-start='0' data-duration='90' data-track-index='0' data-volume='0.88'>",
+      "actual": "No <audio> element exists anywhere in index.html. Track 0 is not defined.",
+      "spec_line": "Audio section (lines 123–131)",
+      "remediation": "Add the exact <audio> element specified. HyperFrames requires the clip class and all four data-* attributes for audio tracks. data-track-index=0 is the dedicated audio track per the spec's architecture."
+    },
+    {
+      "id": "F05",
+      "category": "PHONE_SIZE",
+      "status": "MISMATCH",
+      "severity": "HIGH",
+      "claim": "Phone width: 760px (70% of 1080px). phone-inner 375px → scale(2.024) → 760px rendered.",
+      "actual": "index.html .phone CSS sets width:340px (31%), not 760px. .phone-inner is 375×812px at scale(0.907), rendering to ~340px. This matches the OLD spec the document explicitly says was superseded ('было 340px (31%)').",
+      "spec_line": "Phone Screens section",
+      "remediation": "Update .phone width to 760px. Update .phone-inner transform to scale(2.024) from transform-origin:top left. Update .phone height proportionally (~1645px at 2.024× scale of 812px). Update box-shadow to spec value (0 0 120px rgba(245,158,11,0.25))."
+    },
+    {
+      "id": "F06",
+      "category": "SCENE_MAPPING",
+      "status": "MISMATCH",
+      "severity": "HIGH",
+      "claim": "S0 Cold Open 0–4s: black bg, scan-lines, boot text, ERROR shake, screen flash",
+      "actual": "index.html has no S0 scene. Timeslot 0–4s is occupied by #s1 (Brand Intro / SVG logo + wordmark), which corresponds to spec scene S8 CTA Finale elements. The scene ID namespace is completely different between spec and implementation.",
+      "spec_line": "S0 scene spec",
+      "remediation": "Add #s0 clip (data-start=0 data-duration=4 data-track-index=2). Implement: scan-lines overlay element, typewriter for 'SYSTEM_BOOT_v2.6..', dots stagger for 'LOADING AGENTS.........', red shake for 'ERROR: TOO_MANY_MODELS', scaleX:1→0 wipe, screen flash."
+    },
+    {
+      "id": "F07",
+      "category": "SCENE_MAPPING",
+      "status": "MISMATCH",
+      "severity": "HIGH",
+      "claim": "S1 System Boot 4–12s: Robot 1 emergence, blur:40→0 contrast:0→1, RGB split, amber glow, AGENT_01 label",
+      "actual": "index.html timeslot 4–9s is #s2 (Agents screen showing phone mockup with template cards). Robot 1 image, blur/contrast emergence, RGB split divs, and AGENT_01 label are entirely absent.",
+      "spec_line": "S1 scene spec",
+      "remediation": "Add #scene-s1 clip (data-start=4 data-duration=8 data-track-index=2). Requires robot1.jpg asset. Implement blur filter GSAP animation (filter: blur(40px)→blur(0)), RGB split via 3 absolutely-positioned copies with translateX offsets, amber radial glow div, AGENT_01 / TRADER ANALYST text elements."
+    },
+    {
+      "id": "F08",
+      "category": "SCENE_MAPPING",
+      "status": "MISSING",
+      "severity": "HIGH",
+      "claim": "S2 Particle Morph 12–22s: particles converge to Robot 1 silhouette, breathing yoyo, Robot 2 fade-in",
+      "actual": "Completely absent. No canvas particle system, no particle morph, no Robot 2 element. No off-screen canvas mask extraction logic.",
+      "spec_line": "S2 scene spec + Particle Morph System section",
+      "remediation": "Requires: (1) pixel-art mask of Robot 1 as coordinate array (Open Question #2 must be resolved first). (2) Off-screen canvas to extract target points from robot1.jpg. (3) 600–800 particle objects initialized with mulberry32 positions. (4) GSAP tweens per spec with power3.out ease. (5) Breathing loop with sine.inOut yoyo. (6) Robot 2 img element fading in at 18s."
+    },
+    {
+      "id": "F09",
+      "category": "GSAP_PATTERNS",
+      "status": "PARTIAL",
+      "severity": "MEDIUM",
+      "claim": "Hero Section CSS→GSAP conversions: lattice-drift, float-drift-1, char-reveal, runCodeDemo, scroll-left — all converted to deterministic GSAP",
+      "actual": "index.html does not contain a Hero Section (S3 in spec, 22–32s). The hero canvas, lattice element, floating cards, code-card, and provider strip are not present. However the GSAP patterns listed in the spec table are all technically valid GSAP 3 syntax. The specific ease string 'sine.inOut' used in the float-drift conversion would need to be 'sine.inOut' — confirmed valid in GSAP 3.x.",
+      "spec_line": "Hero Section table",
+      "remediation": "Implement the Hero Section as a scene clip (data-start=22 data-duration=10). The GSAP conversion table in the spec is accurate and implementable as written."
+    },
+    {
+      "id": "F10",
+      "category": "GSAP_PATTERNS",
+      "status": "PARTIAL",
+      "severity": "MEDIUM",
+      "claim": "ease: 'out-quint' used for phone entry (y:400→0, scale:0.85→1, duration:0.7)",
+      "actual": "'out-quint' is NOT a valid GSAP 3 ease string. GSAP 3 uses 'power3.out' (equivalent) or 'quint.out' (legacy alias, not guaranteed in 3.14.2 without EasePack). The correct GSAP 3 string is 'power3.out'. index.html correctly uses 'back.out(1.2)' for phone entry animations, not 'out-quint'.",
+      "spec_line": "Phone Screens section: Entry line",
+      "remediation": "Replace 'out-quint' with 'power3.out' in implementation. The spec table entry should read: ease:'power3.out'. This is a spec authoring error."
+    },
+    {
+      "id": "F11",
+      "category": "GSAP_PATTERNS",
+      "status": "COVERED",
+      "severity": "LOW",
+      "claim": "mulberry32 PRNG implementation correctness",
+      "actual": "The mulberry32 code in the spec is correct and matches the canonical implementation. The hash step using Math.imul with the two mixing passes (t^t>>>15 * t|1, then t^t + Math.imul(t^t>>>7, t|61)) is accurate. The final (t^t>>>14)>>>0 / 4294967296 produces a float in [0,1). This is the correct mulberry32 algorithm. Math.imul is available in all modern browsers. No issues.",
+      "spec_line": "Cellular Automaton section (lines 42–47)",
+      "remediation": "None required. Implementation is correct."
+    },
+    {
+      "id": "F12",
+      "category": "HYPERFRAMES_CONSTRAINTS",
+      "status": "PARTIAL",
+      "severity": "MEDIUM",
+      "claim": "All clips have data-start, data-duration, data-track-index attributes. No Math.random() in composition.",
+      "actual": "Existing clips in index.html (#s1–#s7) correctly use data-start, data-duration, data-track-index on every .clip div. No Math.random() is present in the current JS. The root #root element has data-composition-id='main', data-start=0, data-duration=30, data-width=1080, data-height=1920 — all correct HyperFrames attributes. HOWEVER: window.__timelines['main'] = tl at the end is the correct HyperFrames timeline registration pattern. The 90s scenes not yet implemented cannot be verified for constraint compliance.",
+      "spec_line": "HyperFrames Composition section",
+      "remediation": "When adding new scene clips, ensure every element using .clip class has all three required data-* attributes. The seeded mulberry32 must replace any Math.random() call — spec correctly mandates this."
+    },
+    {
+      "id": "F13",
+      "category": "SCENE_TIMING",
+      "status": "MISMATCH",
+      "severity": "HIGH",
+      "claim": "9 scenes totaling exactly 90s: S0(0–4) + S1(4–12) + S2(12–22) + S3(22–32) + S4(32–48) + S5(48–58) + S6(58–70) + S7(70–80) + S8(80–90)",
+      "actual": "Spec scene durations sum correctly: 4+8+10+10+16+10+12+10+10 = 90s. Timing is internally consistent. HOWEVER: index.html implements a 30s composition with 7 scenes with different scene content and different timing. The 30s draft is NOT the same as the 90s spec — it is an earlier proof-of-concept. All 9 spec scenes need to be built from scratch or the 30s draft extended.",
+      "spec_line": "All scene sections",
+      "remediation": "The 90s timing math is correct and usable. Update data-duration on #root to 90. Scenes S4–S8 need to be added as new clip divs. Scenes S0–S3 need to replace/augment the current 0–30s clips."
+    },
+    {
+      "id": "F14",
+      "category": "ROBOT_IMAGES",
+      "status": "COVERED",
+      "severity": "INFO",
+      "claim": "Robot 1: 0c78e19469e5183097778d2749754234.jpg (orange hoodie). Robot 2: 543feccff50cc5ab9498c2efaa1859b3.jpg (yellow t-shirt).",
+      "actual": "Both source files confirmed present in C:/Users/боб/Downloads/. mix-blend-mode:multiply CSS treatment for robot images is valid CSS and will work in headless Chrome (Chromium). The spec notes this as Open Question #3 — it is a valid concern since multiply blend mode requires the background to not be pure black (#000) to show effect; amber glow background behind robot images addresses this correctly.",
+      "spec_line": "Robot Images CSS Treatment section",
+      "remediation": "None for source file availability. For blend mode: ensure robot-wrap::after amber glow is rendered before the robot image in stacking order (pseudo-element). The z-index layering in .robot-wrap CSS must be verified during implementation."
+    },
+    {
+      "id": "F15",
+      "category": "OPEN_QUESTIONS",
+      "status": "MISSING",
+      "severity": "HIGH",
+      "claim": "OPR timecode sync points (bass drops) for flash event alignment",
+      "actual": "Open Question #1 is unresolved. No timecodes specified for flash events. S0 flash at 3.8s, S1 flash at 5.0s, S7 impacts at 70.0/72.5/75.0s, S8 final flash at 87.0s — all these require manual audio analysis to align with actual bass hits in the OPR track. Without this, flash events will be misaligned.",
+      "spec_line": "Open Questions #1",
+      "remediation": "Load the MP3 in an audio editor (Audacity, Adobe Audition) or use ffprobe with beat detection. Map bass onset times. Then hard-code those exact seconds as GSAP keyframe positions. This BLOCKS correct implementation of all flash/slam timing."
+    }
+  ]
+}

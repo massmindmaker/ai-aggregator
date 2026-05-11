@@ -1,12 +1,12 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-08T10:23:15.577Z",
+  "timestamp": "2026-05-11T01:25:23.182Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
-  "phase_name": "post-launch hardening (v0.5.0-mvp-integration shipped to https://ai-aggregator.ru)",
+  "phase_name": "--phase (14) — EXECUTING",
   "phase_dir": null,
-  "plan": "rolling bug-sweep + UI polish on master (no active GSD phase)",
+  "plan": "1",
   "task": null,
   "total_tasks": null,
   "status": "auto-checkpoint",
@@ -95,21 +95,37 @@
   "uncommitted_files": [
     {
       "status": "M",
-      "path": ".planning/ROADMAP.md"
-    },
-    {
-      "status": "M",
-      "path": "docs/superpowers/specs/2026-05-08-phase14-contest-marketplace-workflow-design.md"
-    },
-    {
-      "status": "??",
       "path": ".planning/HANDOFF.json"
     },
     {
+      "status": "M",
+      "path": ".serena/project.yml"
+    },
+    {
+      "status": "M",
+      "path": "apps/worker/package.json"
+    },
+    {
       "status": "??",
-      "path": ".planning/phases/14-contest-marketplace-admin/"
+      "path": ".claude/"
+    },
+    {
+      "status": "??",
+      "path": ".firecrawl/"
+    },
+    {
+      "status": "??",
+      "path": ".planning/config.json"
+    },
+    {
+      "status": "??",
+      "path": ".planning/tmp/"
+    },
+    {
+      "status": "??",
+      "path": ".serena/memories/aiag_session_2026_05_08_phase14_planning_complete.md"
     }
   ],
-  "next_action": "Production live. Web + gateway online behind pm2 + nginx. Marketplace, /api/auth/*, all 10 surveyed routes return 200 OK with no console errors.",
-  "context_notes": "Status: Production live. Web + gateway online behind pm2 + nginx. Marketplace, /api/auth/*, all 10 surveyed routes return 200 OK with no console errors.\n\nRecent commits:\n11adf71 docs(specs): apply post-research deltas + bring phase14-17 specs to master (#2)\ncb82067 chore(security): bump hono ^4.3.2 → ^4.12.16 (#1)\n1464889 chore: GSD phase 10/11 directories + oauth test scripts + .gitignore deploy artifacts\nfefa610 feat(growth): Phase 13 — referrals + promo codes + cohort retention\n09195b9 feat(admin): add Phase 12 critical views — requests/routing/jobs/dashboard"
+  "next_action": "Executing Phase --phase",
+  "context_notes": "Status: Executing Phase --phase\n\nStopped at: production stable, all 10 surveyed routes return 200 OK with zero console errors. Hero CA animation live.\n\nRecent commits:\n18f0737 feat(contests): public submission page\n6335b37 feat(contests): submission upload endpoint + enqueue eval job\n31c71de fix(admin): contests API - datetime validation, slug uniqueness 409, remove taskType\n682bdef feat(admin): contest creation API + UI\n690674f fix(eval-runner): correct LimitFSIZE to 256MB, add PrivateTmp+ProtectHome+LimitNOFILE"
 }

@@ -16,7 +16,7 @@
     "@aiag/database": "*",
     "@aiag/shared": "*",
     "@aiag/upstream-adapters": "*",
-    "bullmq": "^5.20.0",
+    "bullmq": "^5.76.6",
     "ioredis": "^5.4.0",
     "pino": "^9.0.0"
   },
