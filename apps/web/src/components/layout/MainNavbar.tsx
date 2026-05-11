@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Menu, X } from 'lucide-react';
 import UserMenu from '@/components/UserMenu';
+import { AiagLogo } from '@/components/ui/AiagLogo';
 
 const mainMenu = [
   { title: 'Маркетплейс', href: '/marketplace' },
@@ -33,30 +34,8 @@ const MainNavbar = () => {
       style={{ background: 'rgba(10,10,11,0.72)', borderColor: 'var(--line)' }}
     >
       <div className="flex items-center justify-between px-5 md:px-12 py-4">
-        <Link
-          href="/"
-          className="flex items-center gap-2 select-none"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 32 32"
-            fill="none"
-            className="shrink-0"
-            style={{ width: 26, height: 26 }}
-            aria-hidden="true"
-          >
-            <line x1="9"  y1="22" x2="15" y2="9"  stroke="#f59e0b" strokeWidth="3"   strokeLinecap="round"/>
-            <line x1="15" y1="9"  x2="22" y2="21" stroke="#f59e0b" strokeWidth="3"   strokeLinecap="round"/>
-            <line x1="24.5" y1="18" x2="26" y2="10" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"/>
-            <line x1="11.5" y1="22" x2="14.5" y2="22" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round"/>
-            <circle cx="9"  cy="22" r="4.5" fill="#f59e0b"/>
-            <circle cx="15" cy="9"  r="4.5" fill="#f59e0b"/>
-            <circle cx="22" cy="21" r="4.5" fill="#f59e0b"/>
-            <circle cx="26" cy="8"  r="2.5" fill="#f59e0b" opacity="0.65"/>
-          </svg>
-          <span className="font-mono font-bold tracking-tight text-[15px] text-foreground">
-            ai<span style={{ color: 'var(--accent)' }}>-</span>aggregator
-          </span>
+        <Link href="/" className="flex items-center select-none">
+          <AiagLogo height={22} animated />
         </Link>
 
         <nav className="hidden lg:flex items-center gap-7 text-[13px]">

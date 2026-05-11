@@ -28,6 +28,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AiagLogo } from '@/components/ui/AiagLogo';
 
 interface NavItem {
   href: string;
@@ -168,10 +169,13 @@ export default function AdminSidebar({ email }: Props) {
         className="px-4 py-4 border-b"
         style={{ borderColor: 'var(--line)' }}
       >
-        <Link href="/admin" className="font-mono font-bold text-[14px] tracking-tight">
-          ai<span style={{ color: 'var(--accent)' }}>-</span>aggregator
-          <span className="ms-2 text-[11px] uppercase tracking-wider text-muted-foreground">
-            admin
+        <Link href="/admin" className="flex items-center gap-2">
+          <AiagLogo height={22} animated />
+          <span
+            className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded"
+            style={{ background: 'rgba(245,158,11,0.15)', color: 'var(--accent)' }}
+          >
+            ADMIN
           </span>
         </Link>
       </div>

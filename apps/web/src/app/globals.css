@@ -386,6 +386,25 @@
   animation: aiag-pulse-dot 1.8s ease-out infinite;
 }
 
+/* === Chain-glow для логотипа AIAG === */
+@keyframes aiag-logo-dot-glow {
+  0%, 80%, 100% {
+    fill: currentColor;
+    opacity: 0.35;
+    filter: none;
+  }
+  20%, 40% {
+    fill: var(--accent, #f59e0b);
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.7));
+  }
+}
+
+.aiag-logo-dot {
+  animation: aiag-logo-dot-glow 2.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
 /* 8. Checkmark draw-in для success states */
 @keyframes aiag-check-draw {
   to { stroke-dashoffset: 0; }
@@ -636,6 +655,10 @@
   .aiag-pulse-dot::after,
   .aiag-featured-ring::before {
     animation: none !important;
+  }
+  .aiag-logo-dot {
+    animation: none !important;
+    opacity: 0.7 !important;
   }
   .aiag-stagger > * {
     opacity: 1 !important;
