@@ -36,7 +36,7 @@ export function ModelCard({ model }: ModelCardProps) {
     <Link
       href={href}
       aria-label={`Открыть модель ${model.name}`}
-      className="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg"
+      className="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg aiag-glow-hover"
     >
       <Card className="h-full hover:border-primary/50 transition-colors">
         <CardContent className="p-5 flex flex-col gap-3">
@@ -154,7 +154,7 @@ export function ModelGrid({
   return (
     <div
       className={cn(
-        'grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+        'grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 aiag-stagger',
         className
       )}
     >

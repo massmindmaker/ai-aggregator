@@ -252,6 +252,13 @@ export default function HomePage() {
         {/* Layer: vignette overlay */}
         <div className="aiag-hero-overlay" />
 
+        {/* Layer: aurora accent spots */}
+        <div className="aiag-aurora" style={{ top: '10%', left: '15%', zIndex: 0 }} />
+        <div
+          className="aiag-aurora"
+          style={{ top: '40%', right: '10%', zIndex: 0, animationDelay: '6s' }}
+        />
+
         {/* Floating model cards (right side) — hidden on mobile via CSS */}
         <div
           className="aiag-floating-cards absolute inset-0 pointer-events-none"

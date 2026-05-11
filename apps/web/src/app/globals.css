@@ -247,6 +247,161 @@
   }
 }
 
+/* === New Wave: Supabase-style animation primitives === */
+
+/* 1. Glow border on hover (карточки моделей/контестов) */
+@keyframes aiag-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.15); }
+  50%      { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.45), 0 0 24px rgba(245, 158, 11, 0.12); }
+}
+
+.aiag-glow-hover {
+  transition: box-shadow 240ms cubic-bezier(.23,1,.32,1),
+              transform 240ms cubic-bezier(.23,1,.32,1);
+}
+.aiag-glow-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4),
+              0 8px 32px rgba(245, 158, 11, 0.08);
+}
+
+/* 2. Shimmer for skeleton loaders */
+@keyframes aiag-shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+
+.aiag-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-elev, #111114) 0%,
+    rgba(245, 158, 11, 0.06) 50%,
+    var(--bg-elev, #111114) 100%
+  );
+  background-size: 200% 100%;
+  animation: aiag-shimmer 1.8s linear infinite;
+  border-radius: 4px;
+}
+
+/* 3. Aurora-blur drifting accent spots (для hero/landing backgrounds) */
+@keyframes aiag-aurora-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.4; }
+  33%      { transform: translate3d(40px, -30px, 0) scale(1.15); opacity: 0.55; }
+  66%      { transform: translate3d(-30px, 20px, 0) scale(0.95); opacity: 0.35; }
+}
+
+.aiag-aurora {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center,
+    rgba(245, 158, 11, 0.18) 0%,
+    rgba(245, 158, 11, 0.05) 40%,
+    transparent 70%);
+  filter: blur(60px);
+  pointer-events: none;
+  animation: aiag-aurora-drift 18s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* 4. Stagger fade-up для grid списков (применяется через nth-child) */
+.aiag-stagger > * {
+  opacity: 0;
+  animation: aiag-fade-up 600ms cubic-bezier(.23,1,.32,1) forwards;
+}
+.aiag-stagger > *:nth-child(1)  { animation-delay: 40ms; }
+.aiag-stagger > *:nth-child(2)  { animation-delay: 110ms; }
+.aiag-stagger > *:nth-child(3)  { animation-delay: 180ms; }
+.aiag-stagger > *:nth-child(4)  { animation-delay: 250ms; }
+.aiag-stagger > *:nth-child(5)  { animation-delay: 320ms; }
+.aiag-stagger > *:nth-child(6)  { animation-delay: 390ms; }
+.aiag-stagger > *:nth-child(7)  { animation-delay: 460ms; }
+.aiag-stagger > *:nth-child(8)  { animation-delay: 530ms; }
+.aiag-stagger > *:nth-child(9)  { animation-delay: 600ms; }
+.aiag-stagger > *:nth-child(n+10) { animation-delay: 670ms; }
+
+/* 5. Conic gradient spin для featured/premium элементов */
+@keyframes aiag-conic-spin {
+  to { transform: rotate(360deg); }
+}
+
+.aiag-featured-ring {
+  position: relative;
+  isolation: isolate;
+}
+.aiag-featured-ring::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from 0deg,
+    rgba(245, 158, 11, 0) 0deg,
+    rgba(245, 158, 11, 0.8) 60deg,
+    rgba(245, 158, 11, 0) 120deg,
+    rgba(245, 158, 11, 0) 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: aiag-conic-spin 8s linear infinite;
+  z-index: -1;
+}
+
+/* 6. Count-up для статистики (используется с inline style --num) */
+@property --aiag-num {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.aiag-count-up {
+  counter-reset: aiag-n var(--aiag-num);
+  transition: --aiag-num 1.2s cubic-bezier(.23,1,.32,1);
+}
+.aiag-count-up::after {
+  content: counter(aiag-n);
+}
+
+/* 7. Pulse-dot для live indicators (streaming, online status) */
+@keyframes aiag-pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.6); opacity: 0; }
+}
+
+.aiag-pulse-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent, #f59e0b);
+}
+.aiag-pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: aiag-pulse-dot 1.8s ease-out infinite;
+}
+
+/* 8. Checkmark draw-in для success states */
+@keyframes aiag-check-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.aiag-check-svg path {
+  stroke: var(--accent, #f59e0b);
+  stroke-width: 2.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 50;
+  stroke-dashoffset: 50;
+  animation: aiag-check-draw 600ms ease-out forwards;
+}
+
 .aiag-cursor {
   display: inline-block;
   width: 8px;
@@ -434,7 +589,15 @@
   .aiag-hero-lattice,
   .aiag-cursor,
   .aiag-logo-track,
-  .aiag-float-card {
+  .aiag-float-card,
+  .aiag-aurora,
+  .aiag-skeleton,
+  .aiag-pulse-dot::after,
+  .aiag-featured-ring::before {
+    animation: none !important;
+  }
+  .aiag-stagger > * {
+    opacity: 1 !important;
     animation: none !important;
   }
 }

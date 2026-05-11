@@ -245,7 +245,7 @@ export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClie
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 aiag-stagger">
           {tiers.map((tier) => {
             const displayPrice = isYearly
               ? Math.round(tier.yearlyPrice / 12)
@@ -257,8 +257,8 @@ export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClie
                 className={cn(
                   'relative flex flex-col rounded-2xl border bg-card p-6 transition-all',
                   tier.isPopular
-                    ? 'border-primary/60 shadow-[0_0_0_1px_rgba(245,158,11,0.4),0_24px_64px_-16px_rgba(245,158,11,0.25)]'
-                    : 'border-border hover:border-primary/30'
+                    ? 'border-primary/60 shadow-[0_0_0_1px_rgba(245,158,11,0.4),0_24px_64px_-16px_rgba(245,158,11,0.25)] aiag-featured-ring'
+                    : 'border-border hover:border-primary/30 aiag-glow-hover'
                 )}
               >
                 {tier.isPopular && (

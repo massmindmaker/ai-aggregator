@@ -65,7 +65,12 @@ export default function DirectSubmitForm({ slug }: { slug: string }) {
   if (status === 'done') {
     return (
       <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800 space-y-1">
-        <p className="font-medium">Submission принят!</p>
+        <p className="font-medium inline-flex items-center gap-2">
+          <svg className="aiag-check-svg inline-block" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M7 16 L13 22 L25 10" />
+          </svg>
+          Submission принят!
+        </p>
         {submissionId && (
           <p className="text-xs text-green-700">ID: {submissionId}</p>
         )}
@@ -79,7 +84,7 @@ export default function DirectSubmitForm({ slug }: { slug: string }) {
   const busy = status === 'uploading';
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 aiag-stagger">
       <div>
         <label className="text-sm font-medium mb-2 block">
           Файл (до 50 MB)

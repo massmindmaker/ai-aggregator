@@ -137,9 +137,11 @@ function ContestGrid({
     return <div className="py-12 text-center text-muted-foreground">{emptyText}</div>;
   }
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 aiag-stagger">
       {contests.map((c) => (
-        <ContestCard key={c.id} contest={c} />
+        <div key={c.id} className="aiag-glow-hover rounded-lg">
+          <ContestCard contest={c} />
+        </div>
       ))}
     </div>
   );
