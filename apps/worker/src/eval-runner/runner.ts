@@ -66,6 +66,8 @@ export async function runEvaluation(
             '-p',
             'PrivateNetwork=yes',
             '-p',
+            'LimitFSIZE=524288',
+            '-p',
             'ProtectSystem=strict',
             '-p',
             `ReadWritePaths=${workDir}`,
