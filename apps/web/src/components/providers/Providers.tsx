@@ -5,6 +5,7 @@ import type { Session } from 'next-auth';
 import { usePathname } from 'next/navigation';
 import { Toaster } from '@/components/ui/Sonner';
 import { OnboardingTour } from '@/components/onboarding/OnboardingTour';
+import { CommandPalette } from '@/components/command/CommandPalette';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -21,6 +22,7 @@ export function Providers({ children, session }: ProvidersProps) {
       {children}
       <Toaster position="top-right" richColors closeButton />
       {showOnboarding && <OnboardingTour />}
+      <CommandPalette />
     </SessionProvider>
   );
 }

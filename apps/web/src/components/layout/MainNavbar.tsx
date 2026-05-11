@@ -51,6 +51,18 @@ const MainNavbar = () => {
         </nav>
 
         <div className="hidden lg:flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent('aiag-command-palette-open'))
+            }
+            className="hidden lg:inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md border opacity-60 hover:opacity-100 transition-opacity"
+            style={{ borderColor: 'var(--line)' }}
+            aria-label="Открыть команды"
+          >
+            <span>Поиск</span>
+            <kbd className="font-mono">⌘K</kbd>
+          </button>
           {session?.user ? (
             <UserMenu
               name={session.user.name ?? null}
