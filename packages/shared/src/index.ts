@@ -5,6 +5,9 @@ export * from './tax';
 // S3 upload helper
 export * from './s3';
 
+// Startonus NFT minter API client (Phase 15 — TG Mini-App)
+export * from './startonus';
+
 // Constants
 
 export const APP_NAME = 'AIAG';
