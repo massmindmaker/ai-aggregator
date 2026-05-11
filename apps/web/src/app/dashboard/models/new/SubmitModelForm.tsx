@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import {
@@ -14,6 +13,7 @@ import {
 } from '@/components/ui/Select';
 import { ConsentCheckbox } from '@/components/ConsentCheckbox';
 import { Badge } from '@/components/ui/Badge';
+import { FormWizard, WizardStep } from '@/components/ui/FormWizard';
 
 type HostedBy = 'platform' | 'author';
 
@@ -31,8 +31,6 @@ export default function SubmitModelForm() {
   const [authHeader, setAuthHeader] = React.useState('Authorization');
   const [pricingHint, setPricingHint] = React.useState('');
   const [termsAccepted, setTermsAccepted] = React.useState(false);
-  const [submitting, setSubmitting] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
 
   const tierPct = React.useMemo(() => {
     if (hostedBy === 'author' && exclusive) return 85;
@@ -40,233 +38,228 @@ export default function SubmitModelForm() {
     return 70;
   }, [hostedBy, exclusive]);
 
-  const canSubmit =
-    name &&
-    slug &&
-    description &&
-    endpointUrl &&
-    authToken &&
-    termsAccepted &&
-    !submitting;
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      const res = await fetch('/api/models/request-publish', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          slug,
-          description,
-          contestSubmissionId: contestSubmissionId || null,
-          hostedBy,
-          exclusive,
-          endpointUrl,
-          authToken,
-          authHeader,
-          pricingHintPerRequestRub: parseFloat(pricingHint) || null,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error?.message || 'Ошибка отправки');
-      }
-      router.push('/dashboard/models?submitted=1');
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка');
-      setSubmitting(false);
+  async function handleSubmit() {
+    const res = await fetch('/api/models/request-publish', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        slug,
+        description,
+        contestSubmissionId: contestSubmissionId || null,
+        hostedBy,
+        exclusive,
+        endpointUrl,
+        authToken,
+        authHeader,
+        pricingHintPerRequestRub: parseFloat(pricingHint) || null,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.error?.message || 'Ошибка отправки');
     }
+    router.push('/dashboard/models?submitted=1');
+    router.refresh();
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <section className="space-y-4">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          1. Источник
-        </h3>
-        <div>
-          <Label htmlFor="sub-id">
-            Из конкурса (submission ID, необязательно)
-          </Label>
-          <Input
-            id="sub-id"
-            value={contestSubmissionId}
-            onChange={(e) => setContestSubmissionId(e.target.value)}
-            placeholder="uuid submission из топа конкурса"
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Оставьте пустым, если модель не связана с конкурсом.
-          </p>
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          2. Метаданные
-        </h3>
-        <div>
-          <Label htmlFor="m-name">Название</Label>
-          <Input
-            id="m-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="m-slug">Slug (URL-идентификатор)</Label>
-          <Input
-            id="m-slug"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            required
-            pattern="[a-z0-9-]+"
-            placeholder="medner-ru-v2"
-          />
-        </div>
-        <div>
-          <Label htmlFor="m-desc">Описание</Label>
-          <Input
-            id="m-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            required
-            placeholder="NER модель для медицинских анамнезов"
-          />
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          3. Технические параметры (Path 2 — pass-through)
-        </h3>
-        <div>
-          <Label htmlFor="m-endpoint">Endpoint URL</Label>
-          <Input
-            id="m-endpoint"
-            type="url"
-            value={endpointUrl}
-            onChange={(e) => setEndpointUrl(e.target.value)}
-            required
-            placeholder="https://api.example.com/v1/predict"
-          />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <FormWizard
+      onSubmit={handleSubmit}
+      submitLabel="Отправить на модерацию"
+      hint="4 шага — описание модели, технические параметры, условия публикации."
+    >
+      <WizardStep title="Описание">
+        <div className="space-y-4">
           <div>
-            <Label htmlFor="m-header">Заголовок авторизации</Label>
+            <Label htmlFor="sub-id">
+              Из конкурса (submission ID, необязательно)
+            </Label>
             <Input
-              id="m-header"
-              value={authHeader}
-              onChange={(e) => setAuthHeader(e.target.value)}
+              id="sub-id"
+              value={contestSubmissionId}
+              onChange={(e) => setContestSubmissionId(e.target.value)}
+              placeholder="uuid submission из топа конкурса"
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Оставьте пустым, если модель не связана с конкурсом.
+            </p>
           </div>
+        </div>
+      </WizardStep>
+
+      <WizardStep
+        title="Метаданные"
+        validate={() => {
+          if (!name.trim()) return 'Укажите название';
+          if (!slug.trim()) return 'Укажите slug';
+          if (!/^[a-z0-9-]+$/.test(slug)) return 'Slug — только латиница, цифры и дефисы';
+          if (!description.trim()) return 'Укажите описание';
+          return true;
+        }}
+      >
+        <div className="space-y-4">
           <div>
-            <Label htmlFor="m-token">Token</Label>
+            <Label htmlFor="m-name">Название</Label>
             <Input
-              id="m-token"
-              type="password"
-              value={authToken}
-              onChange={(e) => setAuthToken(e.target.value)}
+              id="m-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               required
             />
           </div>
+          <div>
+            <Label htmlFor="m-slug">Slug (URL-идентификатор)</Label>
+            <Input
+              id="m-slug"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              required
+              pattern="[a-z0-9-]+"
+              placeholder="medner-ru-v2"
+            />
+          </div>
+          <div>
+            <Label htmlFor="m-desc">Описание</Label>
+            <Input
+              id="m-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              required
+              placeholder="NER модель для медицинских анамнезов"
+            />
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Token шифруется AES-256-GCM перед сохранением. Расшифровка только в
-          gateway при форвардинге запроса.
-        </p>
-        <div>
-          <Label htmlFor="m-price">
-            Ориентировочная цена за запрос (RUB, подсказка)
-          </Label>
-          <Input
-            id="m-price"
-            type="number"
-            step="0.0001"
-            min="0"
-            value={pricingHint}
-            onChange={(e) => setPricingHint(e.target.value)}
-            placeholder="0.50"
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Финальную цену установит админ при approve.
-          </p>
-        </div>
-      </section>
+      </WizardStep>
 
-      <section className="space-y-4">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          4. Условия публикации
-        </h3>
-        <div>
-          <Label htmlFor="m-host">Тип хостинга</Label>
-          <Select
-            value={hostedBy}
-            onValueChange={(v) => setHostedBy(v as HostedBy)}
-          >
-            <SelectTrigger id="m-host">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="platform">
-                Платформа хостит (Path 1 / Fal.ai) — 70%
-              </SelectItem>
-              <SelectItem value="author">
-                Автор хостит (pass-through) — 80%
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {hostedBy === 'author' && (
-          <ConsentCheckbox
-            id="exclusive"
-            checked={exclusive}
-            onChange={setExclusive}
-            label="Эксклюзивно (12 мес) — revshare 85%"
-          />
-        )}
-
-        <div className="p-4 rounded-lg bg-muted/50 border">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Ваш revshare tier</span>
-            <Badge variant="default">{tierPct}%</Badge>
+      <WizardStep
+        title="Технические параметры"
+        validate={() => {
+          if (!endpointUrl.trim()) return 'Укажите Endpoint URL';
+          if (!authToken.trim()) return 'Укажите Token';
+          return true;
+        }}
+      >
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="m-endpoint">Endpoint URL</Label>
+            <Input
+              id="m-endpoint"
+              type="url"
+              value={endpointUrl}
+              onChange={(e) => setEndpointUrl(e.target.value)}
+              required
+              placeholder="https://api.example.com/v1/predict"
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="m-header">Заголовок авторизации</Label>
+              <Input
+                id="m-header"
+                value={authHeader}
+                onChange={(e) => setAuthHeader(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="m-token">Token</Label>
+              <Input
+                id="m-token"
+                type="password"
+                value={authToken}
+                onChange={(e) => setAuthToken(e.target.value)}
+                required
+              />
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            {tierPct === 70 &&
-              'Baseline. Повышается до 75% автоматически после 3 месяцев подряд с выручкой >100 000 ₽.'}
-            {tierPct === 80 && 'Self-hosted, вы держите endpoint сами.'}
-            {tierPct === 85 &&
-              'Эксклюзивный self-hosted на 12 месяцев — наивысший tier.'}
+            Token шифруется AES-256-GCM перед сохранением. Расшифровка только в
+            gateway при форвардинге запроса.
           </p>
+          <div>
+            <Label htmlFor="m-price">
+              Ориентировочная цена за запрос (RUB, подсказка)
+            </Label>
+            <Input
+              id="m-price"
+              type="number"
+              step="0.0001"
+              min="0"
+              value={pricingHint}
+              onChange={(e) => setPricingHint(e.target.value)}
+              placeholder="0.50"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Финальную цену установит админ при approve.
+            </p>
+          </div>
         </div>
+      </WizardStep>
 
-        <ConsentCheckbox
-          id="terms"
-          checked={termsAccepted}
-          onChange={setTermsAccepted}
-          required
-          detailsHref="/docs/legal/author-standard"
-          label={
-            exclusive
-              ? 'Согласен с эксклюзивным договором автора (12 мес)'
-              : 'Согласен со стандартным договором автора'
-          }
-        />
-      </section>
+      <WizardStep
+        title="Условия"
+        validate={() => {
+          if (!termsAccepted) return 'Подтвердите согласие с договором автора';
+          return true;
+        }}
+      >
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="m-host">Тип хостинга</Label>
+            <Select
+              value={hostedBy}
+              onValueChange={(v) => setHostedBy(v as HostedBy)}
+            >
+              <SelectTrigger id="m-host">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="platform">
+                  Платформа хостит (Path 1 / Fal.ai) — 70%
+                </SelectItem>
+                <SelectItem value="author">
+                  Автор хостит (pass-through) — 80%
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {hostedBy === 'author' && (
+            <ConsentCheckbox
+              id="exclusive"
+              checked={exclusive}
+              onChange={setExclusive}
+              label="Эксклюзивно (12 мес) — revshare 85%"
+            />
+          )}
 
-      {error && (
-        <div className="text-sm text-destructive" role="alert">
-          {error}
+          <div className="p-4 rounded-lg bg-muted/50 border">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">Ваш revshare tier</span>
+              <Badge variant="default">{tierPct}%</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {tierPct === 70 &&
+                'Baseline. Повышается до 75% автоматически после 3 месяцев подряд с выручкой >100 000 ₽.'}
+              {tierPct === 80 && 'Self-hosted, вы держите endpoint сами.'}
+              {tierPct === 85 &&
+                'Эксклюзивный self-hosted на 12 месяцев — наивысший tier.'}
+            </p>
+          </div>
+
+          <ConsentCheckbox
+            id="terms"
+            checked={termsAccepted}
+            onChange={setTermsAccepted}
+            required
+            detailsHref="/docs/legal/author-standard"
+            label={
+              exclusive
+                ? 'Согласен с эксклюзивным договором автора (12 мес)'
+                : 'Согласен со стандартным договором автора'
+            }
+          />
         </div>
-      )}
-
-      <Button type="submit" disabled={!canSubmit} className="w-full">
-        {submitting ? 'Отправляем на модерацию…' : 'Отправить на модерацию'}
-      </Button>
-    </form>
+      </WizardStep>
+    </FormWizard>
   );
 }
