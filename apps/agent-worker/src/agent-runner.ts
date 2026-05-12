@@ -16,30 +16,39 @@ import {
   buildRunCompletedMessage,
   buildRunFailedMessage,
 } from './bot-api.js';
-import { decryptSecret } from './secret-box.js';
+import { decryptSecret } from './crypto.js';
 
-const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MODEL = 'nousresearch/hermes-4-405b';
 const MAX_ITERATIONS = 12;
 const USD_TO_RUB = 90;
 
-interface UpstreamEndpoint {
-  baseUrl: string;
+interface Upstream {
+  url: string;          // full chat-completions URL
   apiKey: string;
-  isExternal: boolean;
+  model: string;
+  isExternal: boolean;  // external = user-supplied; cost stays 0
 }
 
-function resolveEndpoint(agent: AgentRow): UpstreamEndpoint {
+function resolveUpstream(agent: AgentRow): Upstream {
   if (agent.connection_type === 'external_openai') {
-    if (!agent.external_base_url || !agent.external_api_key_encrypted) {
-      throw new Error('external_agent_misconfigured');
-    }
+    if (!agent.external_base_url) throw new Error('external_base_url missing');
+    if (!agent.external_api_key_encrypted) throw new Error('external_api_key missing');
+    const base = agent.external_base_url.replace(/\/+$/, '');
+    // Accept either "https://x/v1" (we append /chat/completions) or
+    // a complete "https://x/v1/chat/completions" URL.
+    const url = /\/chat\/completions$/.test(base) ? base : `${base}/chat/completions`;
     const apiKey = decryptSecret(agent.external_api_key_encrypted);
-    return { baseUrl: agent.external_base_url, apiKey, isExternal: true };
+    const model =
+      agent.external_model_slug?.trim() ||
+      agent.model_slug?.trim() ||
+      DEFAULT_MODEL;
+    return { url, apiKey, model, isExternal: true };
   }
-  const ourKey = process.env.OPENROUTER_API_KEY;
-  if (!ourKey) throw new Error('OPENROUTER_API_KEY not set');
-  return { baseUrl: OPENROUTER_BASE, apiKey: ourKey, isExternal: false };
+  const model = agent.model_slug?.trim() || DEFAULT_MODEL;
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
+  return { url: OPENROUTER_URL, apiKey, model, isExternal: false };
 }
 
 // OpenRouter approximate pricing per model (USD per 1M tokens).
@@ -83,13 +92,12 @@ interface ModelResponse {
 }
 
 async function callModel(
-  endpoint: UpstreamEndpoint,
-  modelSlug: string,
+  upstream: Upstream,
   messages: Message[],
   tools: ToolDef[],
 ): Promise<ModelResponse> {
   const body: Record<string, unknown> = {
-    model: modelSlug,
+    model: upstream.model,
     messages,
     max_tokens: 2000,
   };
@@ -98,21 +106,23 @@ async function callModel(
     body.tool_choice = 'auto';
   }
   const headers: Record<string, string> = {
-    authorization: `Bearer ${endpoint.apiKey}`,
+    authorization: `Bearer ${upstream.apiKey}`,
     'content-type': 'application/json',
   };
-  if (!endpoint.isExternal) {
+  // OpenRouter wants these for routing/attribution; harmless on other servers.
+  if (!upstream.isExternal) {
     headers['HTTP-Referer'] = 'https://ai-aggregator.ru';
     headers['X-Title'] = 'AIAG TMA';
   }
-  const res = await fetch(`${endpoint.baseUrl}/chat/completions`, {
+  const res = await fetch(upstream.url, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`upstream ${res.status}: ${text.slice(0, 300)}`);
+    const label = upstream.isExternal ? 'external' : 'openrouter';
+    throw new Error(`${label} ${res.status}: ${text.slice(0, 300)}`);
   }
   return (await res.json()) as ModelResponse;
 }
@@ -173,17 +183,6 @@ export async function runAgent(runId: string): Promise<void> {
     return;
   }
 
-  // ---- resolve upstream endpoint (aiag default or user's external) ----
-  let endpoint: UpstreamEndpoint;
-  try {
-    endpoint = resolveEndpoint(agent);
-  } catch (e) {
-    const msg = `endpoint_resolve_failed: ${(e as Error).message}`;
-    await markFailed(runId, msg);
-    await notifyFailed(agent.tg_user_id, agent.name, agent.id, msg);
-    return;
-  }
-
   await markStarted(runId);
 
   // ---- conversation history ----
@@ -195,12 +194,16 @@ export async function runAgent(runId: string): Promise<void> {
   }
   messages.push({ role: 'user', content: run.input });
 
-  // ---- model + tools ----
-  // External agents may name their own private model (`external_model_slug`).
-  // For AIAG-routed agents we honour the marketplace pick (`model_slug`).
-  const modelSlug = endpoint.isExternal
-    ? (agent.external_model_slug?.trim() || agent.model_slug?.trim() || DEFAULT_MODEL)
-    : (agent.model_slug?.trim() || DEFAULT_MODEL);
+  // ---- upstream resolution (aiag vs external) + tools ----
+  let upstream: Upstream;
+  try {
+    upstream = resolveUpstream(agent);
+  } catch (e) {
+    const msg = `upstream_misconfigured: ${(e as Error).message.slice(0, 160)}`;
+    await markFailed(runId, msg);
+    await notifyFailed(agent.tg_user_id, agent.name, agent.id, msg);
+    return;
+  }
   const tools = pickToolDefs(agent.tools);
 
   let tokensIn = 0;
@@ -210,7 +213,7 @@ export async function runAgent(runId: string): Promise<void> {
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     let resp: ModelResponse;
     try {
-      resp = await callModel(endpoint, modelSlug, messages, tools);
+      resp = await callModel(upstream, messages, tools);
     } catch (e) {
       const msg = `openrouter_error: ${(e as Error).message.slice(0, 200)}`;
       await markFailed(runId, msg);
@@ -220,11 +223,11 @@ export async function runAgent(runId: string): Promise<void> {
 
     tokensIn += resp.usage?.prompt_tokens ?? 0;
     tokensOut += resp.usage?.completion_tokens ?? 0;
-    // External endpoints are billed on the user's side — AIAG charges 0 ₽
-    // for the model call itself, only its in-app tools (image_gen etc.).
-    totalCostRub = endpoint.isExternal
-      ? totalCostRub
-      : estimateCostRub(modelSlug, tokensIn, tokensOut);
+    // External upstream — cost stays 0 (user pays their own provider). AIAG
+    // is just the UI / orchestrator in that case.
+    totalCostRub = upstream.isExternal
+      ? 0
+      : estimateCostRub(upstream.model, tokensIn, tokensOut);
 
     // Mid-run budget cutoff (monthly + daily)
     if (monthlySpend + totalCostRub > monthlyBudget) {

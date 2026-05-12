@@ -7,17 +7,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
 import { AGENT_TEMPLATES, getTemplate } from '@/lib/agent-templates';
 
-type ConnectionType = 'aiag' | 'external_openai';
-
-interface TestResult {
-  ok: boolean;
-  models_count?: number;
-  sample_model?: string;
-  latency_ms?: number;
-  reason?: string;
-  detail?: string;
-}
-
 export default function NewAgentPage() {
   const router = useRouter();
   const { user, token, loading, error } = useAuth();
@@ -29,14 +18,59 @@ export default function NewAgentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
-  // External connection state
-  const [connType, setConnType] = useState<ConnectionType>('aiag');
-  const [extUrl, setExtUrl] = useState('');
-  const [extKey, setExtKey] = useState('');
-  const [extModel, setExtModel] = useState('');
+  // "Свой агент" — Path 1 (external OpenAI-compatible endpoint)
+  const [useExternal, setUseExternal] = useState(false);
+  const [extBaseUrl, setExtBaseUrl] = useState('');
+  const [extApiKey, setExtApiKey] = useState('');
+  const [extModelSlug, setExtModelSlug] = useState('');
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [testResult, setTestResult] = useState<
+    | { ok: true; status?: number; model_count?: number; sample_models?: string[] }
+    | { ok: false; reason: string }
+    | null
+  >(null);
 
+  async function handleTest() {
+    if (!token) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/tg/api/tma/agents/test-external', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          base_url: extBaseUrl.trim(),
+          api_key: extApiKey.trim(),
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        setTestResult({
+          ok: true,
+          status: j.status,
+          model_count: j.model_count,
+          sample_models: j.sample_models,
+        });
+      } else {
+        setTestResult({
+          ok: false,
+          reason: j.error ?? j.reason ?? `HTTP ${res.status}`,
+        });
+      }
+    } catch (err) {
+      setTestResult({
+        ok: false,
+        reason: err instanceof Error ? err.message : 'test_failed',
+      });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  // Prefill form when template chosen
   useEffect(() => {
     if (!pickedKind) return;
     const t = getTemplate(pickedKind);
@@ -46,6 +80,7 @@ export default function NewAgentPage() {
     setModelSlug(t.defaultModelSlug);
   }, [pickedKind]);
 
+  // Handoff from /market/[slug] — pre-fill modelSlug from localStorage
   useEffect(() => {
     try {
       const slug = localStorage.getItem('aiag_selected_model_slug');
@@ -54,35 +89,9 @@ export default function NewAgentPage() {
         localStorage.removeItem('aiag_selected_model_slug');
       }
     } catch {
-      /* ignore */
+      // ignore
     }
   }, [pickedKind]);
-
-  async function handleTest() {
-    if (!token) return;
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const res = await fetch('/tg/api/tma/agents/test-connection', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          base_url: extUrl.trim(),
-          api_key: extKey.trim(),
-          model_slug: extModel.trim() || undefined,
-        }),
-      });
-      const body = (await res.json().catch(() => null)) as TestResult | null;
-      setTestResult(body ?? { ok: false, reason: `HTTP ${res.status}` });
-    } catch (err) {
-      setTestResult({ ok: false, reason: 'network_error', detail: String(err) });
-    } finally {
-      setTesting(false);
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,27 +99,24 @@ export default function NewAgentPage() {
     setSubmitting(true);
     setSubmitErr(null);
     try {
-      const payload: Record<string, unknown> = {
-        template_kind: pickedKind,
-        name: name.trim(),
-        system_prompt: systemPrompt.trim(),
-        budget_rub_monthly: budget,
-        connection_type: connType,
-      };
-      if (connType === 'external_openai') {
-        payload.external_base_url = extUrl.trim();
-        payload.external_api_key = extKey.trim();
-        payload.external_model_slug = extModel.trim() || undefined;
-      } else {
-        payload.model_slug = modelSlug.trim() || undefined;
-      }
       const res = await fetch('/tg/api/tma/agents', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          template_kind: pickedKind,
+          name: name.trim(),
+          system_prompt: systemPrompt.trim(),
+          model_slug: modelSlug.trim() || undefined,
+          budget_rub_monthly: budget,
+          connection_type: useExternal ? 'external_openai' : 'aiag',
+          external_base_url: useExternal ? extBaseUrl.trim() : undefined,
+          external_api_key: useExternal ? extApiKey.trim() : undefined,
+          external_model_slug:
+            useExternal && extModelSlug.trim() ? extModelSlug.trim() : undefined,
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -125,10 +131,6 @@ export default function NewAgentPage() {
       setSubmitting(false);
     }
   }
-
-  const externalReadyToSave =
-    connType === 'aiag' ||
-    (testResult?.ok === true && extUrl.trim().length > 8 && extKey.trim().length > 8);
 
   return (
     <>
@@ -154,7 +156,13 @@ export default function NewAgentPage() {
               <h1 className="tma-title">Выберите шаблон</h1>
               <p className="tma-subtitle">Стартовая конфигурация — потом всё можно поправить.</p>
             </header>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 12,
+              }}
+            >
               {AGENT_TEMPLATES.map((t) => (
                 <button
                   key={t.kind}
@@ -169,7 +177,9 @@ export default function NewAgentPage() {
                 >
                   <div style={{ fontSize: 28 }}>{t.emoji}</div>
                   <h2 className="tma-card-title">{t.name}</h2>
-                  <p className="tma-card-text" style={{ fontSize: 12 }}>{t.description}</p>
+                  <p className="tma-card-text" style={{ fontSize: 12 }}>
+                    {t.description}
+                  </p>
                 </button>
               ))}
             </div>
@@ -183,7 +193,10 @@ export default function NewAgentPage() {
               <p className="tma-subtitle">Шаблон: {getTemplate(pickedKind)?.name}</p>
             </header>
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <form
+              onSubmit={handleSubmit}
+              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span className="tma-card-text">Имя</span>
                 <input
@@ -208,114 +221,19 @@ export default function NewAgentPage() {
                 />
               </label>
 
-              {/* Connection picker */}
-              <div className="tma-card" style={{ padding: 12 }}>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                  <button
-                    type="button"
-                    onClick={() => setConnType('aiag')}
-                    className={`tma-btn${connType === 'aiag' ? ' tma-btn--primary' : ''}`}
-                    style={{ flex: 1 }}
-                  >
-                    AIAG модели
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConnType('external_openai')}
-                    className={`tma-btn${connType === 'external_openai' ? ' tma-btn--primary' : ''}`}
-                    style={{ flex: 1 }}
-                  >
-                    🌐 Свой агент
-                  </button>
-                </div>
-
-                {connType === 'aiag' ? (
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <span className="tma-card-text">Модель (slug OpenRouter)</span>
-                    <input
-                      type="text"
-                      value={modelSlug}
-                      onChange={(e) => setModelSlug(e.target.value)}
-                      placeholder="anthropic/claude-3.5-sonnet"
-                      style={inputStyle}
-                    />
-                  </label>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <span className="tma-card-text">URL (OpenAI-совместимый, https)</span>
-                      <input
-                        type="url"
-                        value={extUrl}
-                        onChange={(e) => { setExtUrl(e.target.value); setTestResult(null); }}
-                        placeholder="https://my-agent.example.com/v1"
-                        style={inputStyle}
-                        required
-                      />
-                    </label>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <span className="tma-card-text">API-ключ</span>
-                      <input
-                        type="password"
-                        value={extKey}
-                        onChange={(e) => { setExtKey(e.target.value); setTestResult(null); }}
-                        placeholder="sk-..."
-                        style={inputStyle}
-                        required
-                        autoComplete="off"
-                      />
-                    </label>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <span className="tma-card-text">Модель (если у эндпоинта несколько)</span>
-                      <input
-                        type="text"
-                        value={extModel}
-                        onChange={(e) => setExtModel(e.target.value)}
-                        placeholder="gpt-4o-mini / llama3.1 / etc"
-                        style={inputStyle}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleTest}
-                      className="tma-btn"
-                      disabled={testing || extUrl.trim().length < 8 || extKey.trim().length < 8}
-                    >
-                      {testing ? 'Проверяю…' : 'Проверить соединение'}
-                    </button>
-                    {testResult && (
-                      <div
-                        className={testResult.ok ? 'tma-card' : 'tma-error'}
-                        style={{ padding: 10, fontSize: 13 }}
-                      >
-                        {testResult.ok ? (
-                          <>
-                            ✓ Подключение работает. {testResult.models_count != null && (
-                              <>Моделей: {testResult.models_count}. </>
-                            )}
-                            {testResult.sample_model && (
-                              <>Пример: <code>{testResult.sample_model}</code>. </>
-                            )}
-                            {testResult.latency_ms != null && <>Лат: {testResult.latency_ms} мс.</>}
-                          </>
-                        ) : (
-                          <>
-                            ✗ {testResult.reason}
-                            {testResult.detail && <div style={{ opacity: 0.7, marginTop: 4 }}>{testResult.detail}</div>}
-                          </>
-                        )}
-                      </div>
-                    )}
-                    <p className="tma-card-text" style={{ fontSize: 12, opacity: 0.7 }}>
-                      Ключ хранится в зашифрованном виде. Оплата моделей — по вашему API-ключу,
-                      AIAG не списывает с баланса за эти запросы.
-                    </p>
-                  </div>
-                )}
-              </div>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span className="tma-card-text">Модель (slug OpenRouter)</span>
+                <input
+                  type="text"
+                  value={modelSlug}
+                  onChange={(e) => setModelSlug(e.target.value)}
+                  placeholder="anthropic/claude-3.5-sonnet"
+                  style={inputStyle}
+                />
+              </label>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span className="tma-card-text">Бюджет AIAG, ₽/мес (для tools — image_gen и др.)</span>
+                <span className="tma-card-text">Бюджет, ₽/мес</span>
                 <input
                   type="number"
                   value={budget}
@@ -323,8 +241,122 @@ export default function NewAgentPage() {
                   min={0}
                   step={100}
                   style={inputStyle}
+                  disabled={useExternal}
                 />
+                {useExternal && (
+                  <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>
+                    Не применяется для своего агента — оплата у твоего провайдера.
+                  </span>
+                )}
               </label>
+
+              <div
+                style={{
+                  border: '1px solid var(--line)',
+                  borderRadius: 8,
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  background: 'var(--bg-surface)',
+                }}
+              >
+                <label
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={useExternal}
+                    onChange={(e) => {
+                      setUseExternal(e.target.checked);
+                      setTestResult(null);
+                    }}
+                  />
+                  <span className="tma-card-text" style={{ fontWeight: 600 }}>
+                    🌐 Свой агент (URL + ключ)
+                  </span>
+                </label>
+                <p className="tma-card-text" style={{ fontSize: 12, opacity: 0.75, marginTop: -6 }}>
+                  Любой OpenAI-совместимый endpoint: Ollama, vLLM, LM Studio, твой
+                  Hermes за прокси, OpenRouter с твоим ключом и т.д.
+                </p>
+
+                {useExternal && (
+                  <>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span className="tma-card-text">URL</span>
+                      <input
+                        type="url"
+                        value={extBaseUrl}
+                        onChange={(e) => {
+                          setExtBaseUrl(e.target.value);
+                          setTestResult(null);
+                        }}
+                        placeholder="https://example.com/v1"
+                        style={inputStyle}
+                        required={useExternal}
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span className="tma-card-text">API key</span>
+                      <input
+                        type="password"
+                        value={extApiKey}
+                        onChange={(e) => {
+                          setExtApiKey(e.target.value);
+                          setTestResult(null);
+                        }}
+                        placeholder="sk-…"
+                        style={inputStyle}
+                        autoComplete="off"
+                        required={useExternal}
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span className="tma-card-text">Модель (опционально)</span>
+                      <input
+                        type="text"
+                        value={extModelSlug}
+                        onChange={(e) => setExtModelSlug(e.target.value)}
+                        placeholder="например: llama-3.3-70b или gpt-4o"
+                        style={inputStyle}
+                      />
+                      <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>
+                        Если пусто — используется поле «Модель» выше.
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleTest}
+                      disabled={testing || !extBaseUrl.trim() || !extApiKey.trim()}
+                      className="tma-btn"
+                    >
+                      {testing ? 'Проверяю…' : 'Проверить соединение'}
+                    </button>
+                    {testResult?.ok && (
+                      <div
+                        className="tma-card"
+                        style={{ background: 'rgba(34,197,94,0.12)', borderColor: '#22c55e' }}
+                      >
+                        <p className="tma-card-text">
+                          ✓ Endpoint работает{' '}
+                          {testResult.model_count != null
+                            ? `(моделей: ${testResult.model_count})`
+                            : ''}
+                        </p>
+                        {testResult.sample_models && testResult.sample_models.length > 0 && (
+                          <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7 }}>
+                            Примеры: {testResult.sample_models.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {testResult && !testResult.ok && (
+                      <div className="tma-error">Не получилось: {testResult.reason}</div>
+                    )}
+                  </>
+                )}
+              </div>
 
               {submitErr && <div className="tma-error">Ошибка: {submitErr}</div>}
 
@@ -340,7 +372,7 @@ export default function NewAgentPage() {
                 <button
                   type="submit"
                   className="tma-btn tma-btn--primary"
-                  disabled={submitting || !externalReadyToSave}
+                  disabled={submitting}
                   style={{ flex: 1 }}
                 >
                   {submitting ? 'Создание…' : 'Создать агента'}

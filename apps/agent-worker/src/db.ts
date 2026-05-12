@@ -20,7 +20,7 @@ export interface AgentRow {
   spent_today_rub: string;
   spent_today_date: string;
   status: string;
-  connection_type: string;
+  connection_type: 'aiag' | 'external_openai';
   external_base_url: string | null;
   external_api_key_encrypted: Buffer | null;
   external_model_slug: string | null;

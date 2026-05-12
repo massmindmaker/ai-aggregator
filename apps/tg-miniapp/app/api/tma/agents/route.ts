@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
 import { getTemplate } from '@/lib/agent-templates';
-import { encryptSecret, lastFour } from '@/lib/secret-box';
-import { validateExternalUrl } from '@/lib/url-validate';
+import { encryptSecret, hintFromSecret } from '@/lib/crypto';
+import { validateExternalUrl } from '@/lib/external-agent';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,10 +20,6 @@ interface AgentRow {
   model_slug: string | null;
   budget_rub_monthly: string;
   status: string;
-  connection_type: string;
-  external_base_url: string | null;
-  external_api_key_hint: string | null;
-  external_model_slug: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,8 +31,7 @@ export async function GET(req: NextRequest) {
   const rows = (await sql`
     SELECT id::text, tg_user_id::text, template_kind, name, description,
            system_prompt, tools, model_slug, budget_rub_monthly::text,
-           status, connection_type, external_base_url, external_api_key_hint,
-           external_model_slug, created_at, updated_at
+           status, created_at, updated_at
     FROM agents
     WHERE tg_user_id = ${tgUserId}::bigint
       AND status != 'deleted'
@@ -54,7 +49,7 @@ interface CreateBody {
   tools?: unknown[];
   model_slug?: string;
   budget_rub_monthly?: number;
-  // External agent fields:
+  // "Свой агент" (Path 1, OpenAI-compatible external endpoint)
   connection_type?: 'aiag' | 'external_openai';
   external_base_url?: string;
   external_api_key?: string;
@@ -88,31 +83,23 @@ export async function POST(req: NextRequest) {
       ? body.budget_rub_monthly
       : 1000;
 
-  // ---- external endpoint validation ----
+  // ---- "Свой агент" (external OpenAI-compatible upstream) ----
   const connectionType = body.connection_type === 'external_openai' ? 'external_openai' : 'aiag';
   let externalBaseUrl: string | null = null;
+  let externalApiKeyEncrypted: Buffer | null = null;
   let externalApiKeyHint: string | null = null;
-  let externalKeyBlob: Buffer | null = null;
   let externalModelSlug: string | null = null;
-
   if (connectionType === 'external_openai') {
-    const urlCheck = validateExternalUrl(body.external_base_url ?? '');
-    if (!urlCheck.ok || !urlCheck.normalised) {
-      return NextResponse.json({ error: `url_${urlCheck.reason ?? 'invalid'}` }, { status: 400 });
-    }
-    externalBaseUrl = urlCheck.normalised;
-    const rawKey = body.external_api_key?.trim();
-    if (!rawKey || rawKey.length < 8) {
-      return NextResponse.json({ error: 'api_key_required' }, { status: 400 });
-    }
-    try {
-      externalKeyBlob = encryptSecret(rawKey);
-    } catch (e) {
-      console.error('[agents.create] secret-box failure', e);
-      return NextResponse.json({ error: 'secret_box_misconfigured' }, { status: 500 });
-    }
-    externalApiKeyHint = lastFour(rawKey);
-    externalModelSlug = body.external_model_slug?.trim().slice(0, 200) || null;
+    const url = body.external_base_url?.trim() ?? '';
+    const key = body.external_api_key?.trim() ?? '';
+    if (!url) return NextResponse.json({ error: 'external_base_url_required' }, { status: 400 });
+    if (!key) return NextResponse.json({ error: 'external_api_key_required' }, { status: 400 });
+    const guard = validateExternalUrl(url);
+    if (!guard.ok) return NextResponse.json({ error: guard.reason }, { status: 400 });
+    externalBaseUrl = url.replace(/\/+$/, '');
+    externalApiKeyEncrypted = encryptSecret(key);
+    externalApiKeyHint = hintFromSecret(key);
+    externalModelSlug = body.external_model_slug?.trim() || null;
   }
 
   const ins = (await sql`
@@ -133,14 +120,14 @@ export async function POST(req: NextRequest) {
       ${budget},
       ${connectionType},
       ${externalBaseUrl},
-      ${externalKeyBlob},
+      ${externalApiKeyEncrypted},
       ${externalApiKeyHint},
       ${externalModelSlug}
     )
     RETURNING id::text, tg_user_id::text, template_kind, name, description,
               system_prompt, tools, model_slug, budget_rub_monthly::text,
-              status, connection_type, external_base_url, external_api_key_hint,
-              external_model_slug, created_at, updated_at
+              status, created_at, updated_at, connection_type,
+              external_base_url, external_api_key_hint, external_model_slug
   `) as unknown as AgentRow[];
 
   return NextResponse.json({ agent: ins[0] }, { status: 201 });
