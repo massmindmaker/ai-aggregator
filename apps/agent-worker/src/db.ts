@@ -16,6 +16,9 @@ export interface AgentRow {
   tools: string[];
   model_slug: string | null;
   budget_rub_monthly: string;
+  daily_budget_rub: string;
+  spent_today_rub: string;
+  spent_today_date: string;
   status: string;
 }
 
@@ -25,6 +28,11 @@ export interface AgentRunRow {
   tg_user_id: string;
   input: string;
   status: string;
+}
+
+export interface HistoryRow {
+  input: string;
+  output: string | null;
 }
 
 export async function loadRun(runId: string): Promise<AgentRunRow | null> {
@@ -38,7 +46,11 @@ export async function loadRun(runId: string): Promise<AgentRunRow | null> {
 export async function loadAgent(agentId: string): Promise<AgentRow | null> {
   const rows = (await sql`
     SELECT id::text, tg_user_id::text, name, system_prompt, tools, model_slug,
-           budget_rub_monthly::text AS budget_rub_monthly, status
+           budget_rub_monthly::text  AS budget_rub_monthly,
+           daily_budget_rub::text    AS daily_budget_rub,
+           spent_today_rub::text     AS spent_today_rub,
+           spent_today_date::text    AS spent_today_date,
+           status
     FROM agents WHERE id = ${agentId}::uuid LIMIT 1
   `) as unknown as AgentRow[];
   return rows[0] ?? null;
@@ -46,6 +58,7 @@ export async function loadAgent(agentId: string): Promise<AgentRow | null> {
 
 /**
  * Sum cost_rub spent by this tg_user this calendar month (UTC).
+ * Used for the monthly aggregate budget gate at the user level.
  */
 export async function sumMonthlySpend(tgUserId: string): Promise<number> {
   const rows = (await sql`
@@ -55,6 +68,65 @@ export async function sumMonthlySpend(tgUserId: string): Promise<number> {
       AND created_at >= date_trunc('month', NOW())
   `) as unknown as Array<{ total: string }>;
   return Number(rows[0]?.total ?? 0);
+}
+
+/**
+ * Atomically reset today's counter if the stored date is stale, then
+ * return the current bucket. Race-safe under concurrent runs.
+ */
+export async function getOrResetDailyBucket(
+  agentId: string,
+): Promise<{ daily_budget_rub: number; spent_today_rub: number }> {
+  const rows = (await sql`
+    UPDATE agents
+       SET spent_today_rub  = CASE
+             WHEN spent_today_date < (now() AT TIME ZONE 'Europe/Moscow')::date THEN 0
+             ELSE spent_today_rub
+           END,
+           spent_today_date = (now() AT TIME ZONE 'Europe/Moscow')::date
+     WHERE id = ${agentId}::uuid
+     RETURNING daily_budget_rub::text AS daily_budget_rub,
+               spent_today_rub::text  AS spent_today_rub
+  `) as unknown as Array<{ daily_budget_rub: string; spent_today_rub: string }>;
+  const r = rows[0];
+  if (!r) return { daily_budget_rub: 0, spent_today_rub: 0 };
+  return {
+    daily_budget_rub: Number(r.daily_budget_rub),
+    spent_today_rub: Number(r.spent_today_rub),
+  };
+}
+
+export async function incrementDailySpend(
+  agentId: string,
+  deltaRub: number,
+): Promise<void> {
+  await sql`
+    UPDATE agents
+       SET spent_today_rub = spent_today_rub + ${deltaRub}
+     WHERE id = ${agentId}::uuid
+  `;
+}
+
+/**
+ * Last N COMPLETED runs (excluding the current one) — input + output pairs,
+ * ordered oldest-first so they slot naturally into messages[].
+ */
+export async function loadHistory(
+  agentId: string,
+  excludeRunId: string,
+  limit = 10,
+): Promise<HistoryRow[]> {
+  const rows = (await sql`
+    SELECT input, output
+      FROM agent_runs
+     WHERE agent_id = ${agentId}::uuid
+       AND id <> ${excludeRunId}::uuid
+       AND status = 'completed'
+       AND output IS NOT NULL
+     ORDER BY created_at DESC
+     LIMIT ${limit}
+  `) as unknown as HistoryRow[];
+  return rows.reverse();
 }
 
 export async function markStarted(runId: string): Promise<void> {
