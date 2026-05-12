@@ -12,6 +12,9 @@ interface Agent {
   description: string | null;
   model_slug: string | null;
   budget_rub_monthly: string;
+  connection_type?: string;
+  external_base_url?: string | null;
+  external_model_slug?: string | null;
   created_at: string;
 }
 
@@ -102,16 +105,25 @@ export default function AgentsPage() {
                       <h2 className="tma-card-title">
                         <span style={{ marginRight: 8 }}>{EMOJI[a.template_kind] ?? '🤖'}</span>
                         {a.name}
+                        {a.connection_type === 'external_openai' && (
+                          <span title="Свой агент (внешний endpoint)" style={{ marginLeft: 8 }}>🌐</span>
+                        )}
                       </h2>
                       <span className="tma-nft-supply">
                         {Number(a.budget_rub_monthly).toFixed(0)} ₽/мес
                       </span>
                     </div>
                     {a.description && <p className="tma-card-text">{a.description}</p>}
-                    {a.model_slug && (
+                    {a.connection_type === 'external_openai' ? (
                       <p className="tma-card-text tma-text-small">
-                        <code>{a.model_slug}</code>
+                        <code>{a.external_model_slug || 'свой endpoint'}</code> · оплата по вашему ключу
                       </p>
+                    ) : (
+                      a.model_slug && (
+                        <p className="tma-card-text tma-text-small">
+                          <code>{a.model_slug}</code>
+                        </p>
+                      )
                     )}
                   </Link>
                 ))}

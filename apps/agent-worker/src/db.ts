@@ -20,6 +20,10 @@ export interface AgentRow {
   spent_today_rub: string;
   spent_today_date: string;
   status: string;
+  connection_type: string;
+  external_base_url: string | null;
+  external_api_key_encrypted: Buffer | null;
+  external_model_slug: string | null;
 }
 
 export interface AgentRunRow {
@@ -50,7 +54,11 @@ export async function loadAgent(agentId: string): Promise<AgentRow | null> {
            daily_budget_rub::text    AS daily_budget_rub,
            spent_today_rub::text     AS spent_today_rub,
            spent_today_date::text    AS spent_today_date,
-           status
+           status,
+           connection_type,
+           external_base_url,
+           external_api_key_encrypted,
+           external_model_slug
     FROM agents WHERE id = ${agentId}::uuid LIMIT 1
   `) as unknown as AgentRow[];
   return rows[0] ?? null;

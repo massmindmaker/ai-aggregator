@@ -16,11 +16,31 @@ import {
   buildRunCompletedMessage,
   buildRunFailedMessage,
 } from './bot-api.js';
+import { decryptSecret } from './secret-box.js';
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 const DEFAULT_MODEL = 'nousresearch/hermes-4-405b';
 const MAX_ITERATIONS = 12;
 const USD_TO_RUB = 90;
+
+interface UpstreamEndpoint {
+  baseUrl: string;
+  apiKey: string;
+  isExternal: boolean;
+}
+
+function resolveEndpoint(agent: AgentRow): UpstreamEndpoint {
+  if (agent.connection_type === 'external_openai') {
+    if (!agent.external_base_url || !agent.external_api_key_encrypted) {
+      throw new Error('external_agent_misconfigured');
+    }
+    const apiKey = decryptSecret(agent.external_api_key_encrypted);
+    return { baseUrl: agent.external_base_url, apiKey, isExternal: true };
+  }
+  const ourKey = process.env.OPENROUTER_API_KEY;
+  if (!ourKey) throw new Error('OPENROUTER_API_KEY not set');
+  return { baseUrl: OPENROUTER_BASE, apiKey: ourKey, isExternal: false };
+}
 
 // OpenRouter approximate pricing per model (USD per 1M tokens).
 // Conservative numbers — slight over-estimate is OK, we won't undercharge.
@@ -63,12 +83,11 @@ interface ModelResponse {
 }
 
 async function callModel(
+  endpoint: UpstreamEndpoint,
   modelSlug: string,
   messages: Message[],
   tools: ToolDef[],
 ): Promise<ModelResponse> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
   const body: Record<string, unknown> = {
     model: modelSlug,
     messages,
@@ -78,19 +97,22 @@ async function callModel(
     body.tools = tools;
     body.tool_choice = 'auto';
   }
-  const res = await fetch(OPENROUTER_URL, {
+  const headers: Record<string, string> = {
+    authorization: `Bearer ${endpoint.apiKey}`,
+    'content-type': 'application/json',
+  };
+  if (!endpoint.isExternal) {
+    headers['HTTP-Referer'] = 'https://ai-aggregator.ru';
+    headers['X-Title'] = 'AIAG TMA';
+  }
+  const res = await fetch(`${endpoint.baseUrl}/chat/completions`, {
     method: 'POST',
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      'content-type': 'application/json',
-      'HTTP-Referer': 'https://ai-aggregator.ru',
-      'X-Title': 'AIAG TMA',
-    },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 300)}`);
+    throw new Error(`upstream ${res.status}: ${text.slice(0, 300)}`);
   }
   return (await res.json()) as ModelResponse;
 }
@@ -151,6 +173,17 @@ export async function runAgent(runId: string): Promise<void> {
     return;
   }
 
+  // ---- resolve upstream endpoint (aiag default or user's external) ----
+  let endpoint: UpstreamEndpoint;
+  try {
+    endpoint = resolveEndpoint(agent);
+  } catch (e) {
+    const msg = `endpoint_resolve_failed: ${(e as Error).message}`;
+    await markFailed(runId, msg);
+    await notifyFailed(agent.tg_user_id, agent.name, agent.id, msg);
+    return;
+  }
+
   await markStarted(runId);
 
   // ---- conversation history ----
@@ -163,9 +196,11 @@ export async function runAgent(runId: string): Promise<void> {
   messages.push({ role: 'user', content: run.input });
 
   // ---- model + tools ----
-  const modelSlug = agent.model_slug && agent.model_slug.trim().length > 0
-    ? agent.model_slug
-    : DEFAULT_MODEL;
+  // External agents may name their own private model (`external_model_slug`).
+  // For AIAG-routed agents we honour the marketplace pick (`model_slug`).
+  const modelSlug = endpoint.isExternal
+    ? (agent.external_model_slug?.trim() || agent.model_slug?.trim() || DEFAULT_MODEL)
+    : (agent.model_slug?.trim() || DEFAULT_MODEL);
   const tools = pickToolDefs(agent.tools);
 
   let tokensIn = 0;
@@ -175,7 +210,7 @@ export async function runAgent(runId: string): Promise<void> {
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     let resp: ModelResponse;
     try {
-      resp = await callModel(modelSlug, messages, tools);
+      resp = await callModel(endpoint, modelSlug, messages, tools);
     } catch (e) {
       const msg = `openrouter_error: ${(e as Error).message.slice(0, 200)}`;
       await markFailed(runId, msg);
@@ -185,7 +220,11 @@ export async function runAgent(runId: string): Promise<void> {
 
     tokensIn += resp.usage?.prompt_tokens ?? 0;
     tokensOut += resp.usage?.completion_tokens ?? 0;
-    totalCostRub = estimateCostRub(modelSlug, tokensIn, tokensOut);
+    // External endpoints are billed on the user's side — AIAG charges 0 ₽
+    // for the model call itself, only its in-app tools (image_gen etc.).
+    totalCostRub = endpoint.isExternal
+      ? totalCostRub
+      : estimateCostRub(modelSlug, tokensIn, tokensOut);
 
     // Mid-run budget cutoff (monthly + daily)
     if (monthlySpend + totalCostRub > monthlyBudget) {
