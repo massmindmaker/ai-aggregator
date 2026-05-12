@@ -66,6 +66,13 @@ export default function AgentDetailPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const hasActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
+    if (!hasActive) return;
+    const t = setInterval(load, 1500);
+    return () => clearInterval(t);
+  }, [runs, load]);
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!token || !id || !input.trim()) return;
@@ -175,9 +182,9 @@ export default function AgentDetailPage() {
                         {r.output}
                       </div>
                     )}
-                    {!r.output && r.status === 'pending' && (
+                    {!r.output && (r.status === 'pending' || r.status === 'running') && (
                       <div style={{ ...bubbleStyle, alignSelf: 'flex-start', background: 'var(--bg-elev)', opacity: 0.6 }}>
-                        …думает (worker не запущен — Wave 04)
+                        …думает
                       </div>
                     )}
                     {r.error && (

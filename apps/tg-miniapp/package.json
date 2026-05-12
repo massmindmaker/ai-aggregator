@@ -19,7 +19,9 @@
     "@ton/core": "^0.59.0",
     "@ton/crypto": "^3.3.0",
     "jose": "^5.9.6",
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "bullmq": "^5.27.0",
+    "ioredis": "^5.4.1"
   },
   "devDependencies": {
     "@aiag/typescript-config": "*",

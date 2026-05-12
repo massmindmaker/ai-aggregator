@@ -47,10 +47,12 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
 
   for app in "${APPS[@]}"; do
     case "$app" in
-      web)     run "bun run --cwd '$REPO_ROOT/apps/web' build" ;;
-      gateway) run "bun run --cwd '$REPO_ROOT/packages/api-gateway' build || true" ;;
-      worker)  run "bun run --cwd '$REPO_ROOT/packages/worker' build || true" ;;
-      *)       fail "Unknown app: $app" ;;
+      web)          run "bun run --cwd '$REPO_ROOT/apps/web' build" ;;
+      gateway)      run "bun run --cwd '$REPO_ROOT/packages/api-gateway' build || true" ;;
+      worker)       run "bun run --cwd '$REPO_ROOT/packages/worker' build || true" ;;
+      tma)          run "bun run --cwd '$REPO_ROOT/apps/tg-miniapp' build" ;;
+      agent-worker) run "bun run --cwd '$REPO_ROOT/apps/agent-worker' build" ;;
+      *)            fail "Unknown app: $app" ;;
     esac
   done
 else
