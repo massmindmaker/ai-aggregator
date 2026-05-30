@@ -4,7 +4,10 @@
  * - web_search: DuckDuckGo HTML scrape (no API key required)
  * - calc:       sandboxed math expression eval (whitelisted charset)
  * - image_gen:  Kie.ai nano-banana-pro async task (createTask → poll → URL)
+ * - memory:     per-agent key-value store (set/get/list), backed by Postgres
  */
+
+import { memorySet, memoryGet, memoryList } from './db.js';
 
 export interface ToolDef {
   type: 'function';
@@ -61,7 +64,32 @@ export const TOOL_DEFS: ToolDef[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'memory',
+      description:
+        'Persistent key-value memory for this agent. Use it to remember facts across runs ' +
+        '(user preferences, names, running notes). op="set" stores value under key; ' +
+        'op="get" returns the value for key; op="list" returns all stored keys & values.',
+      parameters: {
+        type: 'object',
+        properties: {
+          op: { type: 'string', enum: ['set', 'get', 'list'], description: 'Operation to perform' },
+          key: { type: 'string', description: 'Key (required for set/get)' },
+          value: { type: 'string', description: 'Value to store (required for set)' },
+        },
+        required: ['op'],
+      },
+    },
+  },
 ];
+
+// Tools that may appear in templates / agent.tools[] but have no real
+// implementation here. They degrade gracefully (see executeTool) instead of
+// crashing the run. `code_interpreter` is intentionally NOT implemented:
+// arbitrary code execution is a security risk we don't take on.
+const UNIMPLEMENTED_TOOLS = new Set(['code_interpreter']);
 
 /**
  * Filter TOOL_DEFS by an agent's tools[] whitelist. An empty whitelist
@@ -252,6 +280,40 @@ function normaliseAspect(a?: string): string {
   return allowed.has(a) ? a : '1:1';
 }
 
+// -- memory --------------------------------------------------------------
+
+const MEM_KEY_MAX = 200;
+const MEM_VAL_MAX = 4000;
+
+async function memoryTool(
+  agentId: string,
+  op: string,
+  key?: string,
+  value?: string,
+): Promise<unknown> {
+  switch (op) {
+    case 'set': {
+      if (!key) return { error: 'memory.set requires "key"' };
+      if (value === undefined) return { error: 'memory.set requires "value"' };
+      const k = key.slice(0, MEM_KEY_MAX);
+      const v = value.slice(0, MEM_VAL_MAX);
+      await memorySet(agentId, k, v);
+      return { ok: true, key: k };
+    }
+    case 'get': {
+      if (!key) return { error: 'memory.get requires "key"' };
+      const v = await memoryGet(agentId, key.slice(0, MEM_KEY_MAX));
+      return v === null ? { found: false, key } : { found: true, key, value: v };
+    }
+    case 'list': {
+      const items = await memoryList(agentId);
+      return { items };
+    }
+    default:
+      return { error: `unknown memory op: ${op} (use set/get/list)` };
+  }
+}
+
 // -- dispatcher ----------------------------------------------------------
 
 export interface ToolExecResult {
@@ -259,10 +321,24 @@ export interface ToolExecResult {
   cost_rub: number;
 }
 
+/** Context passed to tools that need to know which agent is running. */
+export interface ToolContext {
+  agentId: string;
+}
+
 export async function executeTool(
   name: string,
   args: Record<string, unknown>,
+  ctx: ToolContext,
 ): Promise<ToolExecResult> {
+  // Declared-but-unimplemented tools (e.g. code_interpreter): never crash the
+  // run — return a clean "not available" result the model can reason about.
+  if (UNIMPLEMENTED_TOOLS.has(name)) {
+    return {
+      result: { error: `tool "${name}" is not available in this environment` },
+      cost_rub: 0,
+    };
+  }
   try {
     switch (name) {
       case 'web_search':
@@ -276,8 +352,18 @@ export async function executeTool(
         );
         return { result: { url: r.url, aspect_ratio: r.aspect_ratio }, cost_rub: r.cost_rub };
       }
+      case 'memory': {
+        const result = await memoryTool(
+          ctx.agentId,
+          String(args.op ?? ''),
+          args.key !== undefined ? String(args.key) : undefined,
+          args.value !== undefined ? String(args.value) : undefined,
+        );
+        return { result, cost_rub: 0 };
+      }
       default:
-        return { result: { error: `unknown tool: ${name}` }, cost_rub: 0 };
+        // Unknown tool — degrade gracefully rather than throwing.
+        return { result: { error: `tool "${name}" is not available` }, cost_rub: 0 };
     }
   } catch (e) {
     return { result: { error: (e as Error).message }, cost_rub: 0 };

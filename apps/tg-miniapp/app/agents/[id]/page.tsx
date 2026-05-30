@@ -14,7 +14,16 @@ interface Agent {
   system_prompt: string;
   model_slug: string | null;
   budget_rub_monthly: string;
+  tools: unknown;
 }
+
+// Tools implemented by the agent-worker (apps/agent-worker/src/tools.ts).
+const AVAILABLE_TOOLS: { id: string; label: string }[] = [
+  { id: 'web_search', label: 'Веб-поиск' },
+  { id: 'calc', label: 'Калькулятор' },
+  { id: 'image_gen', label: 'Генерация картинок' },
+  { id: 'memory', label: 'Память' },
+];
 
 interface Run {
   id: string;
@@ -39,6 +48,67 @@ export default function AgentDetailPage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // ---- edit mode ----
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editErr, setEditErr] = useState<string | null>(null);
+  const [eName, setEName] = useState('');
+  const [eDescription, setEDescription] = useState('');
+  const [eSystemPrompt, setESystemPrompt] = useState('');
+  const [eModelSlug, setEModelSlug] = useState('');
+  const [eBudget, setEBudget] = useState(0);
+  const [eTools, setETools] = useState<string[]>([]);
+
+  const runActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
+
+  function startEdit() {
+    if (!agent) return;
+    setEName(agent.name);
+    setEDescription(agent.description ?? '');
+    setESystemPrompt(agent.system_prompt);
+    setEModelSlug(agent.model_slug ?? '');
+    setEBudget(Number(agent.budget_rub_monthly));
+    setETools(Array.isArray(agent.tools) ? (agent.tools as string[]) : []);
+    setEditErr(null);
+    setEditing(true);
+  }
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!token || !id) return;
+    setSaving(true);
+    setEditErr(null);
+    try {
+      const res = await fetch(`/tg/api/tma/agents/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: eName.trim(),
+          description: eDescription.trim(),
+          system_prompt: eSystemPrompt.trim(),
+          model_slug: eModelSlug.trim(),
+          budget_rub_monthly: eBudget,
+          tools: eTools,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setEditErr(body.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      if (data.agent) setAgent(data.agent);
+      setEditing(false);
+    } catch (err) {
+      setEditErr(err instanceof Error ? err.message : 'save_failed');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -138,7 +208,7 @@ export default function AgentDetailPage() {
 
         {fetchErr && <div className="tma-error">{fetchErr}</div>}
 
-        {agent && (
+        {agent && !editing && (
           <>
             <header className="tma-header">
               <h1 className="tma-title">{agent.name}</h1>
@@ -151,6 +221,16 @@ export default function AgentDetailPage() {
                 </p>
               )}
             </header>
+
+            <button
+              type="button"
+              onClick={startEdit}
+              className="tma-btn"
+              disabled={runActive}
+              title={runActive ? 'Дождитесь завершения запуска' : undefined}
+            >
+              {runActive ? 'Идёт запуск — редактирование недоступно' : '✎ Редактировать'}
+            </button>
 
             <section className="tma-card">
               <h2 className="tma-card-title">System prompt</h2>
@@ -234,11 +314,152 @@ export default function AgentDetailPage() {
             </button>
           </>
         )}
+
+        {agent && editing && (
+          <>
+            <header className="tma-header">
+              <h1 className="tma-title">Редактирование</h1>
+              <p className="tma-subtitle">{agent.name}</p>
+            </header>
+
+            <form
+              onSubmit={handleSaveEdit}
+              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span className="tma-card-text">Имя</span>
+                <input
+                  type="text"
+                  value={eName}
+                  onChange={(e) => setEName(e.target.value)}
+                  required
+                  maxLength={200}
+                  style={editInputStyle}
+                />
+              </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span className="tma-card-text">Описание</span>
+                <input
+                  type="text"
+                  value={eDescription}
+                  onChange={(e) => setEDescription(e.target.value)}
+                  maxLength={500}
+                  style={editInputStyle}
+                />
+              </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span className="tma-card-text">System prompt</span>
+                <textarea
+                  value={eSystemPrompt}
+                  onChange={(e) => setESystemPrompt(e.target.value)}
+                  required
+                  rows={8}
+                  maxLength={8000}
+                  style={{ ...editInputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+                />
+              </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span className="tma-card-text">Модель (slug OpenRouter)</span>
+                <input
+                  type="text"
+                  value={eModelSlug}
+                  onChange={(e) => setEModelSlug(e.target.value)}
+                  placeholder="anthropic/claude-3.5-sonnet"
+                  style={editInputStyle}
+                />
+              </label>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span className="tma-card-text">Инструменты</span>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    border: '1px solid var(--line)',
+                    borderRadius: 8,
+                    padding: 12,
+                    background: 'var(--bg-surface)',
+                  }}
+                >
+                  {AVAILABLE_TOOLS.map((tool) => {
+                    const checked = eTools.includes(tool.id);
+                    return (
+                      <label
+                        key={tool.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(ev) =>
+                            setETools((prev) =>
+                              ev.target.checked
+                                ? [...prev, tool.id]
+                                : prev.filter((t) => t !== tool.id),
+                            )
+                          }
+                        />
+                        <span className="tma-card-text">{tool.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span className="tma-card-text">Бюджет, ₽/мес</span>
+                <input
+                  type="number"
+                  value={eBudget}
+                  onChange={(e) => setEBudget(Number(e.target.value))}
+                  min={0}
+                  step={100}
+                  style={editInputStyle}
+                />
+              </label>
+
+              {editErr && <div className="tma-error">Ошибка: {editErr}</div>}
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  className="tma-btn"
+                  disabled={saving}
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  className="tma-btn tma-btn--primary"
+                  disabled={saving}
+                  style={{ flex: 1 }}
+                >
+                  {saving ? 'Сохранение…' : 'Сохранить'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </main>
       <BottomNav />
     </>
   );
 }
+
+const editInputStyle: React.CSSProperties = {
+  padding: '10px 12px',
+  borderRadius: 8,
+  border: '1px solid var(--line)',
+  background: 'var(--bg-surface)',
+  color: 'var(--ink)',
+  fontSize: 14,
+  outline: 'none',
+};
 
 const bubbleStyle: React.CSSProperties = {
   padding: '10px 14px',

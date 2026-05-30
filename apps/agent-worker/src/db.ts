@@ -137,6 +137,46 @@ export async function loadHistory(
   return rows.reverse();
 }
 
+// -- agent_memory (key-value store backing the `memory` tool) -------------
+
+export async function memorySet(
+  agentId: string,
+  key: string,
+  value: string,
+): Promise<void> {
+  await sql`
+    INSERT INTO agent_memory (agent_id, key, value, updated_at)
+    VALUES (${agentId}::uuid, ${key}, ${value}, NOW())
+    ON CONFLICT (agent_id, key)
+    DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+  `;
+}
+
+export async function memoryGet(
+  agentId: string,
+  key: string,
+): Promise<string | null> {
+  const rows = (await sql`
+    SELECT value FROM agent_memory
+    WHERE agent_id = ${agentId}::uuid AND key = ${key}
+    LIMIT 1
+  `) as unknown as Array<{ value: string }>;
+  return rows[0]?.value ?? null;
+}
+
+export async function memoryList(
+  agentId: string,
+  limit = 100,
+): Promise<Array<{ key: string; value: string }>> {
+  const rows = (await sql`
+    SELECT key, value FROM agent_memory
+    WHERE agent_id = ${agentId}::uuid
+    ORDER BY updated_at DESC
+    LIMIT ${limit}
+  `) as unknown as Array<{ key: string; value: string }>;
+  return rows;
+}
+
 export async function markStarted(runId: string): Promise<void> {
   await sql`
     UPDATE agent_runs
