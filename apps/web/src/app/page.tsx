@@ -1270,6 +1270,7 @@ export default function HomePage() {
               h: 'Компания',
               links: [
                 ['Для бизнеса', '/business'],
+                ['Хроника', '/manifesto'],
                 ['Telegram', 'https://t.me/aiaggregatorsupport'],
                 ['Email', 'mailto:team@ai-aggregator.ru'],
               ],

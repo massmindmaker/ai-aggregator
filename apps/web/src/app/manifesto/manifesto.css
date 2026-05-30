@@ -1,0 +1,227 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * /manifesto — cinematic, self-contained dark surface.
+ * Nolan mood: vast, cold, inevitable. Near-black + a single amber accent.
+ * All rules scoped under .manifesto-root so this never bleeds into the app.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.manifesto-root {
+  --m-bg: #0a0a0b;
+  --m-bg-2: #08080a;
+  --m-ink: #ece9e3; /* warm off-white, like aged paper under low light */
+  --m-ink-dim: #8a8780;
+  --m-ink-faint: #5a5854;
+  --m-amber: #f59e0b;
+  --m-amber-soft: rgba(245, 158, 11, 0.16);
+  --m-line: rgba(236, 233, 227, 0.08);
+  --m-line-strong: rgba(236, 233, 227, 0.16);
+
+  position: relative;
+  min-height: 100vh;
+  background: var(--m-bg);
+  color: var(--m-ink);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  overflow-x: clip;
+  /* subtle film grain via tiled fractal noise, layered over a deep vignette */
+  isolation: isolate;
+}
+
+/* Deep vignette that frames the whole reel */
+.manifesto-root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 120% 80% at 50% -10%,
+      rgba(245, 158, 11, 0.05) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse 140% 120% at 50% 50%,
+      transparent 55%,
+      rgba(0, 0, 0, 0.55) 100%
+    );
+}
+
+/* Fine film grain — fixed so it feels like the lens, not the page */
+.manifesto-grain {
+  position: fixed;
+  inset: -50%;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: m-grain-shift 7s steps(6) infinite;
+  will-change: transform;
+}
+@keyframes m-grain-shift {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-3%, 2%); }
+  40% { transform: translate(2%, -4%); }
+  60% { transform: translate(-2%, 3%); }
+  80% { transform: translate(3%, -1%); }
+  100% { transform: translate(0, 0); }
+}
+
+/* Star-field canvas — slow cold drift behind everything */
+.manifesto-stars {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  animation: m-fade-in 2600ms ease-out 200ms forwards;
+}
+@keyframes m-fade-in {
+  to { opacity: 1; }
+}
+
+/* All real content sits above the atmosphere layers */
+.manifesto-content {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Typography ─────────────────────────────────────────────────────── */
+
+.m-display {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.m-chapter-num {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-weight: 500;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+}
+
+/* The recurring refrain — small caps, amber, breathing */
+.m-refrain {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  color: var(--m-amber);
+  letter-spacing: 0.04em;
+}
+
+/* Lead-in word emphasis inside paragraphs */
+.m-em {
+  color: var(--m-ink);
+  font-weight: 500;
+}
+.m-key {
+  color: var(--m-amber);
+  font-weight: 500;
+}
+
+/* ── Scroll-reveal primitive (driven by IntersectionObserver) ───────── */
+.m-reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 1100ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 1100ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--m-delay, 0ms);
+  will-change: opacity, transform;
+}
+.m-reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── Hairline rule that draws itself in ─────────────────────────────── */
+.m-rule {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--m-line-strong) 18%,
+    var(--m-amber-soft) 50%,
+    var(--m-line-strong) 82%,
+    transparent
+  );
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 1400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.m-reveal.is-in .m-rule,
+.m-rule.is-in {
+  transform: scaleX(1);
+}
+
+/* ── Sigil divider glow (the 4-node graph mark between scenes) ───────── */
+.m-sigil-glow {
+  filter: drop-shadow(0 0 14px rgba(245, 158, 11, 0.35));
+}
+
+/* The numbered "Знак" tokens in scene V */
+.m-token {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  border: 1px solid var(--m-line-strong);
+  background: rgba(245, 158, 11, 0.04);
+  color: var(--m-ink-dim);
+  letter-spacing: 0.06em;
+  transition:
+    border-color 500ms ease,
+    color 500ms ease,
+    background 500ms ease,
+    box-shadow 500ms ease;
+}
+.m-token:hover {
+  border-color: rgba(245, 158, 11, 0.5);
+  color: var(--m-amber);
+  background: rgba(245, 158, 11, 0.08);
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.12);
+}
+
+/* Scroll cue at the bottom of the hero */
+@keyframes m-scroll-cue {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50% { transform: translateY(8px); opacity: 1; }
+}
+.m-scroll-cue {
+  animation: m-scroll-cue 2.4s ease-in-out infinite;
+}
+
+/* Hero title slow rise on load */
+@keyframes m-hero-rise {
+  from { opacity: 0; transform: translateY(40px); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+.m-hero-line {
+  opacity: 0;
+  animation: m-hero-rise 1500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Amber word that pulses once on arrival */
+@keyframes m-amber-breathe {
+  0%, 100% { text-shadow: 0 0 30px rgba(245, 158, 11, 0.25); }
+  50% { text-shadow: 0 0 48px rgba(245, 158, 11, 0.5); }
+}
+.m-amber-breathe {
+  color: var(--m-amber);
+  animation: m-amber-breathe 6s ease-in-out infinite;
+}
+
+/* ── Reduced motion: strip all of it, keep content fully visible ─────── */
+@media (prefers-reduced-motion: reduce) {
+  .manifesto-grain,
+  .manifesto-stars,
+  .m-scroll-cue,
+  .m-amber-breathe {
+    animation: none !important;
+  }
+  .manifesto-stars { opacity: 1; }
+  .m-reveal,
+  .m-hero-line {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  .m-rule { transform: scaleX(1) !important; }
+}
