@@ -3,7 +3,13 @@
  * Ollama Cloud upstream — OpenAI-compatible /chat/completions endpoint.
  * Reads OLLAMA_CLOUD_URL and OLLAMA_CLOUD_API_KEY from env.
  */
-import type { UpstreamAdapter, ChatRequest, ChatResponse, EmbeddingsRequest } from './interface';
+import type {
+  UpstreamAdapter,
+  ChatRequest,
+  ChatResponse,
+  EmbeddingsRequest,
+  EmbeddingsResponse,
+} from './interface';
 import { logger } from '../lib/logger';
 
 function getBaseUrl(): string {
@@ -61,7 +67,40 @@ export const ollamaUpstream: UpstreamAdapter = {
     };
   },
 
-  async embeddings(_req: EmbeddingsRequest) {
-    throw new Error('Ollama Cloud embeddings not implemented');
+  async embeddings(req: EmbeddingsRequest): Promise<EmbeddingsResponse> {
+    const baseUrl = getBaseUrl();
+    const apiKey = req.byokKey ?? process.env.OLLAMA_CLOUD_API_KEY;
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (apiKey) headers['authorization'] = `Bearer ${apiKey}`;
+
+    // Native Ollama embeddings: POST /api/embeddings with { model, prompt }
+    // returns { embedding: number[] } for a single input. The OpenAI shape
+    // accepts string | string[], so we fan out array inputs sequentially and
+    // re-assemble into the standard {object:'list', data:[...]} envelope.
+    const inputs = Array.isArray(req.input) ? req.input : [req.input];
+
+    const data: EmbeddingsResponse['data'] = [];
+    for (let i = 0; i < inputs.length; i++) {
+      const res = await fetch(`${baseUrl}/api/embeddings`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model: req.modelId, prompt: inputs[i] }),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        logger.warn({ status: res.status, body: txt }, 'ollama_embeddings_error');
+        throw new Error(`Ollama embeddings ${res.status}: ${txt.slice(0, 200)}`);
+      }
+      const json = (await res.json()) as { embedding?: number[] };
+      data.push({ object: 'embedding', embedding: json.embedding ?? [], index: i });
+    }
+
+    return {
+      object: 'list',
+      model: req.modelId,
+      data,
+      // Ollama's /api/embeddings does not report token usage.
+      usage: { prompt_tokens: 0, total_tokens: 0 },
+    };
   },
 };
