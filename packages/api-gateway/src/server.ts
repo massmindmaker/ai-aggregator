@@ -21,6 +21,7 @@ import { balance as balanceRoute } from './routes/v1/balance';
 import { images } from './routes/v1/images';
 import { video } from './routes/v1/video';
 import { audio } from './routes/v1/audio';
+import { batches } from './routes/v1/batches';
 
 const bootTime = Date.now();
 
@@ -81,6 +82,7 @@ app.route('/v1/balance', balanceRoute);
 app.route('/v1/images', images);
 app.route('/v1/video', video);
 app.route('/v1/audio', audio);
+app.route('/v1/batches', batches);
 
 app.notFound((c) =>
   c.json(errors.notFound('Route not found').toResponseBody(), 404)
