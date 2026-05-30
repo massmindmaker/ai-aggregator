@@ -271,7 +271,7 @@ export async function runAgent(runId: string): Promise<void> {
       } catch {
         parsed = {};
       }
-      const exec = await executeTool(call.function.name, parsed);
+      const exec = await executeTool(call.function.name, parsed, { agentId: agent.id });
       if (exec.cost_rub > 0) {
         totalCostRub += exec.cost_rub;
       }

@@ -7,6 +7,30 @@ interface TGUser {
   username?: string;
 }
 
+// Re-auth this many seconds before the JWT actually expires, so a request
+// started right at the boundary doesn't land with an already-expired token.
+const NEAR_EXPIRY_SKEW_SEC = 60;
+
+/**
+ * Decode a JWT payload (no signature check — server verifies that) and decide
+ * whether it's still safely usable. Returns false on any malformed/expired token.
+ */
+function isTokenUsable(jwt: string): boolean {
+  try {
+    const part = jwt.split('.')[1];
+    if (!part) return false;
+    // base64url → base64
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(b64);
+    const payload = JSON.parse(json) as { exp?: number };
+    if (typeof payload.exp !== 'number') return false;
+    const nowSec = Math.floor(Date.now() / 1000);
+    return payload.exp - NEAR_EXPIRY_SKEW_SEC > nowSec;
+  } catch {
+    return false;
+  }
+}
+
 export function useAuth() {
   const [user, setUser] = useState<TGUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -28,8 +52,7 @@ export function useAuth() {
           tg.CloudStorage.getItem('aiag_jwt', (_err: any, val: string) => resolve(val ?? ''));
         }).catch(() => '');
 
-        if (cached) {
-          // TODO: verify expiry — for MVP just use it
+        if (cached && isTokenUsable(cached)) {
           setToken(cached);
           setUser({
             id: tg.initDataUnsafe?.user?.id ?? 0,

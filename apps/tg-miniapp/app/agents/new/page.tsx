@@ -7,6 +7,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
 import { AGENT_TEMPLATES, getTemplate } from '@/lib/agent-templates';
 
+// Tools actually implemented by the agent-worker (apps/agent-worker/src/tools.ts).
+const AVAILABLE_TOOLS: { id: string; label: string; hint: string }[] = [
+  { id: 'web_search', label: 'Веб-поиск', hint: 'Поиск актуальной информации в интернете' },
+  { id: 'calc', label: 'Калькулятор', hint: 'Точные арифметические вычисления' },
+  { id: 'image_gen', label: 'Генерация картинок', hint: 'Картинка по текстовому описанию' },
+  { id: 'memory', label: 'Память', hint: 'Запоминает факты между запусками' },
+];
+const AVAILABLE_TOOL_IDS = new Set(AVAILABLE_TOOLS.map((t) => t.id));
+
 export default function NewAgentPage() {
   const router = useRouter();
   const { user, token, loading, error } = useAuth();
@@ -14,6 +23,7 @@ export default function NewAgentPage() {
   const [name, setName] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [modelSlug, setModelSlug] = useState('');
+  const [tools, setTools] = useState<string[]>([]);
   const [budget, setBudget] = useState(1000);
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
@@ -78,6 +88,9 @@ export default function NewAgentPage() {
     setName(t.name);
     setSystemPrompt(t.systemPrompt);
     setModelSlug(t.defaultModelSlug);
+    // Seed from template, keeping only tools the worker actually implements
+    // (e.g. code_interpreter is suggested by some templates but unimplemented).
+    setTools(t.suggestedTools.filter((id) => AVAILABLE_TOOL_IDS.has(id)));
   }, [pickedKind]);
 
   // Handoff from /market/[slug] — pre-fill modelSlug from localStorage
@@ -110,6 +123,7 @@ export default function NewAgentPage() {
           name: name.trim(),
           system_prompt: systemPrompt.trim(),
           model_slug: modelSlug.trim() || undefined,
+          tools,
           budget_rub_monthly: budget,
           connection_type: useExternal ? 'external_openai' : 'aiag',
           external_base_url: useExternal ? extBaseUrl.trim() : undefined,
@@ -231,6 +245,52 @@ export default function NewAgentPage() {
                   style={inputStyle}
                 />
               </label>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span className="tma-card-text">Инструменты</span>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    border: '1px solid var(--line)',
+                    borderRadius: 8,
+                    padding: 12,
+                    background: 'var(--bg-surface)',
+                  }}
+                >
+                  {AVAILABLE_TOOLS.map((tool) => {
+                    const checked = tools.includes(tool.id);
+                    return (
+                      <label
+                        key={tool.id}
+                        style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) =>
+                            setTools((prev) =>
+                              e.target.checked
+                                ? [...prev, tool.id]
+                                : prev.filter((t) => t !== tool.id),
+                            )
+                          }
+                          style={{ marginTop: 2 }}
+                        />
+                        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span className="tma-card-text" style={{ fontWeight: 600 }}>
+                            {tool.label}
+                          </span>
+                          <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.65 }}>
+                            {tool.hint}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span className="tma-card-text">Бюджет, ₽/мес</span>
