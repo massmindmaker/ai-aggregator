@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Chamber from './Chamber';
-import './глубина.css';
+import './glubina.css';
 
 /**
  * /manifesto/глубина — «ГЛУБИНА ГОРОДА».

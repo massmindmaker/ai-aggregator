@@ -45,7 +45,7 @@ const BEAT_MIN = 90; // ms per lit letter (accelerates toward the end)
 const BEAT_MAX = 160;
 const WORD_GAP = 420; // ms pause between answer words
 const WAKE_BUFFER_MAX = 16; // keep only the tail of the accumulated clicks
-const CHAMBER_ROUTE = '/manifesto/глубина'; // the secret chamber
+const CHAMBER_ROUTE = '/manifesto/glubina'; // the secret chamber
 const WARP_TO_NAV_MS = 1600; // let the warp play before navigating
 
 export default function LivingText() {
