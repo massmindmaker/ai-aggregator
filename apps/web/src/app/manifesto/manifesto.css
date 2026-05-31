@@ -177,6 +177,69 @@
   box-shadow: 0 0 24px rgba(245, 158, 11, 0.12);
 }
 
+/* ── «Голос города» — a set-apart in-character voice (diary / letter / oath) ──
+ * A left-ruled, italic serif block that reads like a fragment lifted out of the
+ * Chronicle. Uses the same tokens (amber rule, warm ink), just framed apart. */
+.m-voice {
+  position: relative;
+  margin: clamp(40px, 8vh, 72px) 0;
+  padding: clamp(20px, 4vw, 34px) 0 clamp(20px, 4vw, 34px)
+    clamp(22px, 4vw, 38px);
+  border-left: 1px solid var(--m-line-strong);
+}
+.m-voice::before {
+  /* a faint amber spine that "lights" the quote from its left edge */
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 12%;
+  bottom: 12%;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--m-amber-soft) 22%,
+    rgba(245, 158, 11, 0.32) 50%,
+    var(--m-amber-soft) 78%,
+    transparent
+  );
+}
+.m-voice-label {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-weight: 500;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--m-amber);
+  margin: 0 0 1.4em;
+}
+.m-voice p {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: clamp(18px, 2.4vw, 23px);
+  line-height: 1.62;
+  color: var(--m-ink);
+  margin: 0 0 1em;
+}
+.m-voice p:last-child {
+  margin-bottom: 0;
+}
+.m-voice .m-voice-sign {
+  font-style: italic;
+  color: var(--m-ink-dim);
+  font-size: clamp(15px, 1.9vw, 18px);
+}
+
+/* ── Pull-quote — a large centred serif line that interrupts the prose ────── */
+.m-pull {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  text-align: center;
+  color: var(--m-ink);
+  line-height: 1.42;
+  margin: clamp(36px, 7vh, 64px) 0;
+}
+
 /* Scroll cue at the bottom of the hero */
 @keyframes m-scroll-cue {
   0%, 100% { transform: translateY(0); opacity: 0.5; }
