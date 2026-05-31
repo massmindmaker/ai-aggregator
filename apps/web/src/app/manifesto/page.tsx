@@ -1049,6 +1049,7 @@ export default function ManifestoPage() {
         </div>
 
         <p
+          data-warp-trigger
           className="m-display m-reveal m-ignite text-center"
           style={{
             fontSize: 'clamp(28px, 5vw, 52px)',
