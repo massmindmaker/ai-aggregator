@@ -1,12 +1,14 @@
 'use client';
 
 /**
- * LivingText — the star mechanic of the Chronicle.
+ * LivingText — the «ПРОСНИСЬ» mechanic of the Chronicle.
  *
- * The manifesto SPEAKS BACK. The reader clicks letters of the prose to "spell"
- * a word (they speak); the presence hidden inside the page ANSWERS by lighting
- * EXISTING letters of the manifesto, one by one, top→down — so every reply is
- * assembled from glyphs that were always there.
+ * The manifesto SPEAKS BACK. It is SILENT and gives ZERO hints: letters only
+ * breathe amber near the cursor and turn touchable. The reader discovers they
+ * can click letters and, in order, spell the WAKE WORD «ПРОСНИСЬ». The presence
+ * then wakes with the creepy inversion «Я НЕ СПЛЮ» and runs a fixed three-
+ * question lore quest. Answer all three and the climax warps you to the
+ * secret chamber. Every reply is assembled from glyphs that were always there.
  *
  * Design constraints honoured here:
  *  - No React re-render over thousands of spans: we wrap glyphs once via a
@@ -14,16 +16,26 @@
  *    thereafter mutate classList / inline custom props imperatively.
  *  - One rAF loop, one pointer listener (delegated on the prose root).
  *  - Cyrillic-safe grapheme splitting via Intl.Segmenter (graceful fallback).
- *  - Full prefers-reduced-motion path (no scramble, no scroll, no breath).
- *  - Eerie, not chatty: stays silent until earned, then ≤1 reply / 20s.
- *  - Loose warp coupling: fires window.__manifestoWarp?.() + a CustomEvent and
- *    listens for `manifesto:warpflash`, all optional so it degrades alone.
+ *  - Full prefers-reduced-motion path (no scramble, no scroll, no breath) — the
+ *    quest still works.
+ *  - Deterministic puzzle: wake word + the 3 Q&A are fixed (dialogue.ts). The
+ *    LLM route is consulted ONLY to flavour a wrong-answer deflection.
+ *  - Loose warp coupling: fires window.__manifestoWarp?.() + a CustomEvent.
  *
  * Owns: this file + LivingText.css + presence/dialogue.ts + the presence route.
  */
 
 import { useEffect } from 'react';
-import { fallbackReply, normalizeSpelled } from './presence/dialogue';
+import { useRouter } from 'next/navigation';
+import {
+  DEFLECTIONS,
+  FINAL_REPLY,
+  isCorrectAnswer,
+  isWakeWord,
+  normalizeSpelled,
+  QUESTIONS,
+  WAKE_REPLY,
+} from './presence/dialogue';
 import './LivingText.css';
 
 /* ── Tunables ─────────────────────────────────────────────────────────── */
@@ -32,12 +44,13 @@ const PROXIMITY_MAX = 15; // only the N nearest letters get style writes / frame
 const BEAT_MIN = 90; // ms per lit letter (accelerates toward the end)
 const BEAT_MAX = 160;
 const WORD_GAP = 420; // ms pause between answer words
-const REPLY_COOLDOWN_MS = 20_000; // ≤1 reply / 20s
-const IDLE_MS = 30_000; // ~30s idle nudge once letters are noticed
-const MIN_SPELL = 3; // first answer earned at ≥3 letters
-const ACROSTIC = 'хроника'; // substring of the hidden «ХРОНИКА ПОМНИТ»
+const WAKE_BUFFER_MAX = 16; // keep only the tail of the accumulated clicks
+const CHAMBER_ROUTE = '/manifesto/глубина'; // the secret chamber
+const WARP_TO_NAV_MS = 1600; // let the warp play before navigating
 
 export default function LivingText() {
+  const router = useRouter();
+
   useEffect(() => {
     const root = document.querySelector<HTMLElement>('.manifesto-root');
     if (!root) return;
@@ -51,8 +64,6 @@ export default function LivingText() {
     ).matches;
 
     /* ── 1. Grapheme splitter (Cyrillic-safe) ──────────────────────────── */
-    // Typed loosely so this compiles even if the TS lib lacks Intl.Segmenter,
-    // and falls back to code-point iteration where the runtime lacks it.
     interface SegmentLike {
       segment: string;
     }
@@ -117,9 +128,6 @@ export default function LivingText() {
           acceptNode(n) {
             const parent = (n as Text).parentElement;
             if (!parent) return NodeFilter.FILTER_REJECT;
-            // Skip interactive content, already-wrapped glyphs, and the
-            // author's own coloured emphasis (.m-em/.m-key/.m-refrain etc.) so
-            // those keep their intended styling instead of the breath gradient.
             if (
               parent.closest(
                 'a, button, code, [data-ch], .m-em, .m-key, .m-refrain, .m-pull, .m-amber-breathe',
@@ -163,7 +171,7 @@ export default function LivingText() {
         }
       });
       document
-        .querySelectorAll('.m-prose .lt-missing, .lt-rune')
+        .querySelectorAll('.m-prose .lt-missing')
         .forEach((el) => el.remove());
     }
 
@@ -187,20 +195,27 @@ export default function LivingText() {
       geomDirty = false;
     };
 
-    /* ── 4. Reader input: speak by clicking ────────────────────────────── */
+    /* ── 4. Quest state machine ────────────────────────────────────────── */
+    // phase: 'sleeping'  → reader is spelling toward the wake word (silent)
+    //        'questing'  → presence has woken; running the 3-question quest
+    //        'done'      → final line said, climax fired
+    type Phase = 'sleeping' | 'questing' | 'done';
+    let phase: Phase = 'sleeping';
+    let questIndex = 0; // which QUESTIONS[] we're on
+    let wrongTurn = 0; // rotates the deflection line
+
     const selected = new Set<number>();
-    const spelledIdx: number[] = []; // click order
-    let acrosticBuf = '';
-    let awakened = false; // reader has clearly noticed letters glow
-    let lastReplyAt = 0;
-    let lastInteractAt = Date.now();
-    let unknownTurn = 0;
+    const spelledIdx: number[] = []; // click order (resets each spell attempt)
+    let wakeBuffer = ''; // accumulating tail of clicked letters (sleeping phase)
     let speaking = false;
 
     const charOf = (i: number) =>
       (spans[i]!.textContent ?? '').toLowerCase().replace(/ё/g, 'е');
 
+    const spelledWord = () => normalizeSpelled(spelledIdx.map(charOf).join(''));
+
     const onPointerDown = (e: PointerEvent) => {
+      if (speaking || phase === 'done') return;
       const target = e.target as HTMLElement | null;
       if (!target) return;
       const span = target.closest<HTMLElement>('[data-ch]');
@@ -210,11 +225,8 @@ export default function LivingText() {
       const ch = charOf(i);
       if (!/[а-яa-z0-9]/i.test(ch)) return; // ignore punctuation glyphs
 
-      lastInteractAt = Date.now();
-      if (!awakened) {
-        awakened = true;
-        root.classList.add('lt-awake');
-      }
+      // Mark the page as "discovered" so letters read as touchable (cursor).
+      if (!root.classList.contains('lt-awake')) root.classList.add('lt-awake');
 
       if (selected.has(i)) {
         selected.delete(i);
@@ -224,49 +236,96 @@ export default function LivingText() {
       } else {
         selected.add(i);
         span.classList.remove('lit');
-        // restart ignite animation
-        void span.offsetWidth;
+        void span.offsetWidth; // restart ignite animation
         span.classList.add('lit');
         spelledIdx.push(i);
       }
 
-      // Track acrostic progress (any order forms the substring «хроника»).
-      acrosticBuf = spelledIdx.map(charOf).join('');
-      maybeAnswer();
-    };
-
-    /* ── 5. Trigger discipline ─────────────────────────────────────────── */
-    const spelledWord = () =>
-      normalizeSpelled(spelledIdx.map(charOf).join(''));
-
-    const cooledDown = () => Date.now() - lastReplyAt >= REPLY_COOLDOWN_MS;
-
-    const clearSelection = () => {
-      for (const i of selected) spans[i]!.classList.remove('lit');
-      selected.clear();
-      spelledIdx.length = 0;
-      acrosticBuf = '';
-    };
-
-    const maybeAnswer = () => {
-      if (speaking || !cooledDown()) return;
-      const word = spelledWord();
-      const hitAcrostic =
-        acrosticBuf.includes(ACROSTIC) || word.includes(ACROSTIC);
-      if (word.length >= MIN_SPELL || hitAcrostic) {
-        respond(word);
+      if (phase === 'sleeping') {
+        // Accumulate the click tail; wake when it spells «ПРОСНИСЬ».
+        wakeBuffer = (wakeBuffer + ch).slice(-WAKE_BUFFER_MAX);
+        if (isWakeWord(wakeBuffer)) {
+          wakeBuffer = '';
+          wake();
+        }
+      } else if (phase === 'questing') {
+        // Check the running spelled word against the current expected answer.
+        const q = QUESTIONS[questIndex]!;
+        if (isCorrectAnswer(q, spelledWord())) {
+          answerCorrect();
+        }
       }
     };
 
-    /* ── 6. The answer: light existing letters top→down ────────────────── */
+    /* ── 5. Quest transitions ──────────────────────────────────────────── */
+    const wake = () => {
+      phase = 'questing';
+      questIndex = 0;
+      void runSequence(WAKE_REPLY, () => askCurrentQuestion());
+    };
+
+    const askCurrentQuestion = () => {
+      const q = QUESTIONS[questIndex];
+      if (!q) return;
+      void runSequence(q.ask);
+    };
+
+    const answerCorrect = () => {
+      questIndex++;
+      if (questIndex >= QUESTIONS.length) {
+        // Final line, then the climax.
+        void runSequence(FINAL_REPLY, () => climax());
+      } else {
+        // Brief affirmation by simply asking the next question.
+        void runSequence(QUESTIONS[questIndex]!.ask);
+      }
+    };
+
+    const answerWrong = async () => {
+      const reply = await fetchDeflection(spelledWord());
+      void runSequence(reply); // stay on the same question
+    };
+
+    /* The reader finished spelling but it doesn't match → deflect.
+     * We can't know "finished" without a commit gesture, so wrong answers are
+     * surfaced lazily: when the spelled buffer grows past the answer length
+     * without matching, the next non-matching click triggers a deflection and
+     * resets the attempt. */
+    const maybeDeflect = () => {
+      if (phase !== 'questing' || speaking) return;
+      const q = QUESTIONS[questIndex]!;
+      const w = spelledWord();
+      if (w.length > q.answer.length && !w.endsWith(q.answer)) {
+        void answerWrong();
+      }
+    };
+
+    /* ── 6. Climax → warp + navigate to the chamber ────────────────────── */
+    const climax = () => {
+      phase = 'done';
+      try {
+        sessionStorage.setItem('manifesto:awoke', '1');
+      } catch {
+        /* storage unavailable — proceed anyway */
+      }
+      triggerWarp();
+      window.setTimeout(() => {
+        try {
+          router.push(CHAMBER_ROUTE);
+        } catch {
+          window.location.href = CHAMBER_ROUTE;
+        }
+      }, WARP_TO_NAV_MS);
+    };
+
+    /* ── 7. The presence speaks: light existing letters top→down ───────── */
     const cursorByChar = new Map<string, number>(); // round-robin per letter
-    const litTrail: number[] = []; // glyphs lit during the current answer
+    const litTrail: number[] = []; // glyphs lit during the current line
     let lastLitIndex = -1;
 
     const nextOccurrence = (ch: string): number | null => {
       const bucket = lettersByChar.get(ch);
       if (!bucket || bucket.length === 0) return null;
-      // pick the next occurrence AFTER the last lit (scan forward), else wrap
       let chosen = -1;
       for (const idx of bucket) {
         if (idx > lastLitIndex) {
@@ -275,7 +334,6 @@ export default function LivingText() {
         }
       }
       if (chosen === -1) {
-        // round-robin fallback so repeats don't always reuse the first glyph
         const rr = (cursorByChar.get(ch) ?? 0) % bucket.length;
         chosen = bucket[rr]!;
         cursorByChar.set(ch, rr + 1);
@@ -300,7 +358,6 @@ export default function LivingText() {
     let thinkTimers: number[] = [];
     const startThinking = () => {
       if (reduceMotion) return;
-      // scatter shimmer on a handful of letters near the last interaction
       const pool = spelledIdx.length
         ? spelledIdx
         : Array.from({ length: Math.min(8, spans.length) }, (_, k) =>
@@ -341,41 +398,18 @@ export default function LivingText() {
       thinkTimers.forEach((t) => window.clearInterval(t));
       thinkTimers = [];
       for (const s of spans) {
-        if (s.classList.contains('think')) {
-          s.classList.remove('think');
-        }
+        if (s.classList.contains('think')) s.classList.remove('think');
       }
-    };
-
-    /** Fetch a reply (LLM route → server fallback; on route failure → local). */
-    const fetchReply = async (word: string): Promise<string> => {
-      try {
-        const res = await fetch('/api/manifesto/presence', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ word, inventory }),
-        });
-        if (!res.ok) throw new Error('bad status');
-        const data = (await res.json()) as { reply?: string };
-        const reply = (data.reply ?? '').trim();
-        if (reply) return reply;
-      } catch {
-        /* route unreachable — fall through to local tree */
-      }
-      return fallbackReply(word, unknownTurn++);
     };
 
     /** Light one glyph for `ch`, or render a faint amber `_` if the page lacks it. */
     const lightGlyph = async (ch: string, isLast: boolean) => {
       const idx = nextOccurrence(ch);
       if (idx === null) {
-        // The presence lacks this letter — emit a ghost underscore in place.
         const missing = document.createElement('span');
         missing.className = 'lt-missing';
         missing.textContent = '_';
-        // park it after the last lit glyph if possible, else at prose start
-        const anchor =
-          lastLitIndex >= 0 ? spans[lastLitIndex] : spans[0];
+        const anchor = lastLitIndex >= 0 ? spans[lastLitIndex] : spans[0];
         anchor?.after(missing);
         await sleep(reduceMotion ? 40 : 110);
         missing.remove();
@@ -390,20 +424,24 @@ export default function LivingText() {
       litTrail.push(idx);
     };
 
-    const respond = async (word: string) => {
+    /**
+     * Light the letters of `line` top→down, then settle them into a ghost
+     * trail and clear the reader's own selection. Runs `after()` when done.
+     * The reader's input is locked (`speaking`) for the duration.
+     */
+    const runSequence = async (line: string, after?: () => void) => {
       speaking = true;
-      lastReplyAt = Date.now();
 
-      // brief "thinking" shimmer while the reply resolves
+      // brief "thinking" shimmer before the line resolves
       startThinking();
-      const reply = await fetchReply(word);
+      await sleep(reduceMotion ? 120 : 360);
       stopThinking();
 
-      // reset the scan so each answer flows top→down afresh
+      // reset the scan so each line flows top→down afresh
       lastLitIndex = -1;
       litTrail.length = 0;
 
-      const words = reply.split(' ').filter(Boolean);
+      const words = line.split(' ').filter(Boolean);
       const totalLetters = words.reduce((n, w) => n + w.length, 0);
       let done = 0;
 
@@ -416,11 +454,11 @@ export default function LivingText() {
           await lightGlyph(ch, isLast);
           done++;
           if (!isLast) {
-            // accelerate toward the end: beat shrinks as we progress
             const t = totalLetters > 1 ? done / totalLetters : 1;
             const beat = reduceMotion
               ? 60
-              : BEAT_MAX - (BEAT_MAX - BEAT_MIN) * t +
+              : BEAT_MAX -
+                (BEAT_MAX - BEAT_MIN) * t +
                 (Math.random() * 24 - 12);
             await sleep(Math.max(40, beat));
           }
@@ -439,15 +477,36 @@ export default function LivingText() {
       // the reader's own selection fades after the page has answered
       clearSelection();
 
-      // Final payload → warp coupling (loose/optional).
-      if (normalizeSpelled(word).includes(ACROSTIC)) {
-        triggerWarp();
-      }
-
       speaking = false;
+      after?.();
     };
 
-    /* ── 7. Warp coupling (StarField exposes the hook; degrade if absent) ─ */
+    const clearSelection = () => {
+      for (const i of selected) spans[i]!.classList.remove('lit');
+      selected.clear();
+      spelledIdx.length = 0;
+    };
+
+    /* ── 8. Optional LLM flavour for wrong-answer deflections ──────────── */
+    const fetchDeflection = async (word: string): Promise<string> => {
+      try {
+        const res = await fetch('/api/manifesto/presence', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ word, inventory }),
+        });
+        if (!res.ok) throw new Error('bad status');
+        const data = (await res.json()) as { reply?: string };
+        const reply = (data.reply ?? '').trim();
+        if (reply) return reply;
+      } catch {
+        /* route unreachable — fall through to local deflection */
+      }
+      const n = DEFLECTIONS.length;
+      return DEFLECTIONS[wrongTurn++ % n]!;
+    };
+
+    /* ── 9. Warp coupling (StarField exposes the hook; degrade if absent) ─ */
     const triggerWarp = () => {
       try {
         (
@@ -463,25 +522,13 @@ export default function LivingText() {
       }
     };
 
-    const onWarpFlash = () => {
-      if (reduceMotion) return;
-      const rune = document.createElement('div');
-      rune.className = 'lt-rune';
-      rune.textContent = 'ᚺ'; // a single cipher rune
-      root.appendChild(rune);
-      window.setTimeout(() => rune.remove(), 2400);
-    };
-    window.addEventListener('manifesto:warpflash', onWarpFlash);
-
-    /* ── 8. Ambient proximity breath (single rAF; ≤15 nearest get writes) ─ */
+    /* ── 10. Ambient proximity breath (single rAF; ≤15 nearest get writes) ─ */
     let pointerX = -9999;
     let pointerY = -9999;
-    let glowing: number[] = []; // currently breathing indices (to reset)
+    let glowing: number[] = [];
     let raf = 0;
 
     const onPointerMove = (e: PointerEvent) => {
-      // The breath only ever writes color/text-shadow (never font metrics), so
-      // it is already touch-safe — no special-casing of pointerType needed.
       pointerX = e.clientX;
       pointerY = e.clientY;
     };
@@ -491,13 +538,11 @@ export default function LivingText() {
       if (document.hidden) return;
       if (geomDirty) recomputeCenters();
 
-      // reset last frame's breathers
       for (const i of glowing) spans[i]?.style.setProperty('--g', '0');
       glowing = [];
 
       if (pointerX < -9000) return;
 
-      // find the nearest few within radius (cheap: scan, keep best PROXIMITY_MAX)
       const r2 = PROXIMITY_RADIUS * PROXIMITY_RADIUS;
       const near: { i: number; d: number }[] = [];
       for (let i = 0; i < spans.length; i++) {
@@ -529,30 +574,26 @@ export default function LivingText() {
     window.addEventListener('scroll', markDirty, { passive: true });
 
     /* ── Pointer listener (delegated — single listener on root) ────────── */
-    root.addEventListener('pointerdown', onPointerDown);
-
-    /* ── Idle nudge: once awakened, ~30s of silence earns a soft answer ── */
-    const idleTimer = window.setInterval(() => {
-      if (!awakened || speaking || !cooledDown()) return;
-      if (Date.now() - lastInteractAt < IDLE_MS) return;
-      lastInteractAt = Date.now();
-      // a quiet self-spoken line — uses the known tree (no spell required)
-      respond('ты');
-    }, 5000);
+    // Deflection is surfaced after selection mutates: onPointerDown handles the
+    // correct-answer / wake transitions synchronously; maybeDeflect runs right
+    // after so an over-long wrong spelling earns a coy line.
+    const onPointerDownWrapped = (e: PointerEvent) => {
+      onPointerDown(e);
+      maybeDeflect();
+    };
+    root.addEventListener('pointerdown', onPointerDownWrapped);
 
     /* ── Cleanup ───────────────────────────────────────────────────────── */
     return () => {
       cancelAnimationFrame(raf);
-      window.clearInterval(idleTimer);
       stopThinking();
-      root.removeEventListener('pointerdown', onPointerDown);
+      root.removeEventListener('pointerdown', onPointerDownWrapped);
       root.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('resize', markDirty);
       window.removeEventListener('scroll', markDirty);
-      window.removeEventListener('manifesto:warpflash', onWarpFlash);
       root.classList.remove('lt-awake');
     };
-  }, []);
+  }, [router]);
 
   return null;
 }

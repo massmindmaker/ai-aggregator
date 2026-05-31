@@ -126,45 +126,6 @@
   animation: lt-glow-ramp 220ms ease-out;
 }
 
-/* ── Warp cipher rune flash (optional, fired on manifesto:warpflash) ──── */
-.manifesto-root .lt-rune {
-  position: fixed;
-  left: 50%;
-  top: 42%;
-  transform: translate(-50%, -50%) scale(0.7);
-  z-index: 5;
-  pointer-events: none;
-  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
-  font-size: clamp(40px, 9vw, 110px);
-  color: var(--m-amber);
-  text-shadow:
-    0 0 30px rgba(245, 158, 11, 0.7),
-    0 0 70px rgba(245, 158, 11, 0.4);
-  opacity: 0;
-  animation: lt-rune 2200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-@keyframes lt-rune {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.7);
-    filter: blur(8px);
-  }
-  22% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-    filter: blur(0);
-  }
-  72% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.02);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(1.14);
-    filter: blur(6px);
-  }
-}
-
 /* ── Reduced motion: keep the meaning (color), drop the movement ──────── */
 @media (prefers-reduced-motion: reduce) {
   .manifesto-root [data-ch] {
@@ -175,17 +136,12 @@
   .manifesto-root [data-ch].glow,
   .manifesto-root [data-ch].settle,
   .manifesto-root [data-ch].think,
-  .manifesto-root .lt-missing,
-  .manifesto-root .lt-rune {
+  .manifesto-root .lt-missing {
     animation: none !important;
   }
   .manifesto-root [data-ch].lit,
   .manifesto-root [data-ch].glow {
     color: var(--m-amber);
     text-shadow: 0 0 10px rgba(245, 158, 11, 0.4) !important;
-  }
-  .manifesto-root .lt-rune {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
   }
 }
