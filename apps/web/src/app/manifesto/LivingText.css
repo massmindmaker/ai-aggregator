@@ -1,12 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════
- * LivingText — the manifesto that speaks back by rolling its own letters.
+ * LivingText — the manifesto that speaks through its OWN body text.
  *
- * Glyph states:
- *   .lit    — the reader selected it (they are "spelling")
- * The presence's reply appears in a COMPACT amber line (.lt-voice — not a
- * full-screen band): each slot (.lt-roll) is a split-flap reel that spins
- * around its own axis through glyphs and settles on its letter, left→right,
- * so the answer resolves in place. The reader's own spelling echoes in a quiet
+ * Glyph states (all on the real prose <span data-ch>):
+ *   .lit      — the reader selected it, OR a settled answer glyph (amber)
+ *   .rolling  — this prose glyph is spinning (split-flap) toward an answer letter
+ *   .settled  — it just landed on its answer letter (one-shot pop)
+ * The presence rewrites a contiguous run of real letters into its reply in
+ * place, then the text restores. The reader's spelling echoes in a quiet
  * bottom ribbon (.lt-ribbon).
  *
  * Reuses the globally-defined tokens --m-amber / --m-ink / --m-ink-dim
@@ -39,7 +39,7 @@
   cursor: pointer;
 }
 
-/* ── .lit — the reader spells (click-selected glyph) ─────────────────── */
+/* ── .lit — reader selection OR a settled answer glyph (persistent amber) ─ */
 .manifesto-root [data-ch].lit {
   color: var(--m-amber);
   text-shadow:
@@ -63,62 +63,15 @@
   }
 }
 
-/* ── The page dims a touch while the presence speaks (no blur, not modal) ─ */
-.manifesto-root.lt-speaking .m-prose {
-  opacity: 0.72;
-  transition: opacity 360ms ease;
-}
-
-/* ── The presence's voice: a COMPACT centred line (not full-screen) ───── */
-.lt-voice {
-  position: fixed;
-  left: 50%;
-  top: 42%;
-  transform: translate(-50%, -50%) translateY(6px);
-  pointer-events: none;
-  z-index: 60;
-  opacity: 0;
-  transition: opacity 300ms ease, transform 300ms ease;
-}
-.lt-voice.show {
-  opacity: 1;
-  transform: translate(-50%, -50%) translateY(0);
-}
-.lt-voice-line {
-  display: inline-flex;
-  align-items: baseline;
-  white-space: nowrap;
-  font-family: var(--m-display, Georgia, 'Times New Roman', serif);
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  font-size: clamp(1.3rem, 3.4vw, 2rem);
-  color: var(--m-amber);
-  text-shadow:
-    0 0 14px rgba(245, 158, 11, 0.45),
-    0 0 34px rgba(245, 158, 11, 0.22);
-  padding: 0.4em 0.85em;
-  border-radius: 0.6em;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(0, 0, 0, 0.6),
-    rgba(0, 0, 0, 0) 72%
-  );
-}
-.lt-space {
-  display: inline-block;
-  width: 0.45em;
-}
-
-/* A single split-flap slot. Rests on its settled letter; spins while rolling. */
-.lt-roll {
+/* ── .rolling — a prose glyph spins around its own axis toward its letter ─ */
+.manifesto-root [data-ch].rolling {
   display: inline-block;
   transform-origin: center;
   backface-visibility: hidden;
-  min-width: 0.55em;
-  text-align: center;
-}
-.lt-roll.rolling {
-  opacity: 0.85;
+  color: var(--m-amber);
+  text-shadow:
+    0 0 12px rgba(245, 158, 11, 0.6),
+    0 0 30px rgba(245, 158, 11, 0.3);
   animation: lt-roll-spin 90ms linear infinite;
 }
 @keyframes lt-roll-spin {
@@ -129,7 +82,11 @@
     transform: rotateX(360deg);
   }
 }
-.lt-roll.settled {
+
+/* ── .settled — the landing pop (placed after .lit so it wins the once) ── */
+.manifesto-root [data-ch].settled {
+  display: inline-block;
+  transform-origin: center;
   animation: lt-roll-settle 340ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes lt-roll-settle {
@@ -167,22 +124,18 @@
   transform: translateX(-50%) translateY(0);
 }
 
-/* ── Reduced motion: keep the meaning (legible line), drop the spin ────── */
+/* ── Reduced motion: keep the meaning (legible answer), drop the spin ──── */
 @media (prefers-reduced-motion: reduce) {
   .manifesto-root [data-ch] {
     transition: color 200ms ease !important;
     text-shadow: none !important;
   }
-  .manifesto-root [data-ch].lit {
-    animation: none !important;
-    color: var(--m-amber);
-    text-shadow: 0 0 10px rgba(245, 158, 11, 0.4) !important;
-  }
-  .lt-roll,
-  .lt-roll.rolling,
-  .lt-roll.settled {
+  .manifesto-root [data-ch].lit,
+  .manifesto-root [data-ch].rolling,
+  .manifesto-root [data-ch].settled {
     animation: none !important;
     transform: none !important;
-    opacity: 1 !important;
+    color: var(--m-amber);
+    text-shadow: 0 0 10px rgba(245, 158, 11, 0.4) !important;
   }
 }

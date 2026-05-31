@@ -3,26 +3,23 @@
 /**
  * LivingText — the «ПРОСНИСЬ» mechanic of the Chronicle.
  *
- * The manifesto SPEAKS BACK. Letters breathe amber near the cursor and turn
- * touchable. The reader discovers they can click letters and, in order, spell
- * the WAKE WORD «ПРОСНИСЬ» — a quiet «лента» echoes what they are spelling so
- * progress is always legible. The presence then wakes with the inversion
- * «Я НЕ СПЛЮ» and runs a fixed three-question lore quest.
- *
- * How the presence answers (legible by design): the letters of each reply
- * LIFT OUT of the surrounding prose and FLY into one focused, readable amber
- * line in the centre of the screen (FLIP). They hold, then drift back into the
- * text. No scramble, no scattered flashes — the page gathers its own glyphs
- * into a word you can actually read.
+ * The manifesto SPEAKS BACK with its OWN body text. Letters breathe amber near
+ * the cursor and turn touchable. The reader spells the WAKE WORD «ПРОСНИСЬ» by
+ * clicking letters of the prose (a quiet «лента» echoes their spelling). The
+ * presence then wakes: a run of REAL prose letters — in the line where the
+ * reader was typing and the lines below — light up and ROLL around their own
+ * axis (split-flap), re-forming into the reply «Я НЕ СПЛЮ» right inside the
+ * text, then settle back to the original words. A fixed three-question lore
+ * quest follows; the climax warps to the secret chamber.
  *
  * Design constraints honoured here:
  *  - No React re-render over thousands of spans: we wrap glyphs once via a
- *    DocumentFragment and thereafter mutate classList / inline custom props.
+ *    DocumentFragment and thereafter mutate classList / textContent.
  *  - One rAF loop, one pointer listener (delegated on the prose root).
  *  - Cyrillic-safe grapheme splitting via Intl.Segmenter (graceful fallback).
- *  - Full prefers-reduced-motion path (static legible reveal, no flight).
- *  - Deterministic puzzle: wake word + the 3 Q&A are fixed (dialogue.ts). The
- *    LLM route is consulted ONLY to flavour a wrong-answer deflection.
+ *  - Full prefers-reduced-motion path (no spin — letters just resolve).
+ *  - The body text is ALWAYS restored after the presence finishes a line.
+ *  - Deterministic puzzle: wake word + the 3 Q&A are fixed (dialogue.ts).
  *  - Loose warp coupling: fires window.__manifestoWarp?.() + a CustomEvent.
  *
  * Owns: this file + LivingText.css + presence/dialogue.ts + the presence route.
@@ -46,10 +43,11 @@ const PROXIMITY_RADIUS = 120; // px — ambient breath reach
 const PROXIMITY_MAX = 15; // only the N nearest letters get style writes / frame
 const WAKE_BUFFER_MAX = 16; // keep only the tail of the accumulated clicks
 const ROLL_GLYPHS = 'АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ'; // reel chars (letters only)
-const SLOT_STAGGER = 70; // ms between consecutive slots starting to roll
-const ROLL_TICK = 45; // ms per glyph flip while a slot rolls
-const ROLL_TICKS = 7; // glyphs a slot rolls through before it settles
-const HOLD_MS = 1500; // ms the assembled word lingers before it dissolves
+const SLOT_STAGGER = 65; // ms between consecutive letters starting to roll
+const ROLL_TICK = 45; // ms per glyph flip while a letter rolls
+const ROLL_TICKS = 7; // glyphs a letter rolls through before it settles
+const HOLD_MS = 1500; // ms the assembled word lingers before the text restores
+const ANSWER_GAP = 6; // letters skipped between consecutive answers (flow down)
 const CHAMBER_ROUTE = '/manifesto/glubina'; // the secret chamber
 const WARP_TO_NAV_MS = 1600; // let the warp play before navigating
 
@@ -164,7 +162,7 @@ export default function LivingText() {
       );
       existing.forEach((span, i) => {
         span.setAttribute('data-i', String(i));
-        span.classList.remove('lit', 'ghost');
+        span.classList.remove('lit', 'rolling', 'settled');
         span.style.removeProperty('--g');
         spans.push(span);
         const g = span.textContent ?? '';
@@ -184,6 +182,17 @@ export default function LivingText() {
       .filter((c) => /[а-я]/.test(c))
       .sort()
       .join('');
+
+    // Document-ordered sequence of letter-span indices + reverse lookup. The
+    // presence rewrites a CONTIGUOUS run of these into its reply, in place.
+    const letterSeq: number[] = [];
+    const seqPos = new Map<number, number>();
+    for (let i = 0; i < spans.length; i++) {
+      if (isLetter(spans[i]!.textContent ?? '')) {
+        seqPos.set(i, letterSeq.length);
+        letterSeq.push(i);
+      }
+    }
 
     /* ── 3. Geometry cache (centres) for proximity glow ────────────────── */
     const centers = new Float32Array(spans.length * 2);
@@ -205,6 +214,7 @@ export default function LivingText() {
     let phase: Phase = 'sleeping';
     let questIndex = 0; // which QUESTIONS[] we're on
     let wrongTurn = 0; // rotates the deflection line
+    let speakCursor = 0; // position in letterSeq where the next reply rewrites
 
     const selected = new Set<number>();
     const spelledIdx: number[] = []; // click order (resets each spell attempt)
@@ -265,7 +275,7 @@ export default function LivingText() {
       }
 
       if (phase === 'sleeping') {
-        // Accumulate the click tail; wake when it spells «ПРОСНИСЬ».
+        // Accumulate the click tail; wake when it spells the FULL «ПРОСНИСЬ».
         wakeBuffer = normalizeSpelled(wakeBuffer + ch).slice(-WAKE_BUFFER_MAX);
         setRibbon(wakeBuffer.slice(-12)); // reader sees their spelling form
         if (isWakeWord(wakeBuffer)) {
@@ -315,8 +325,7 @@ export default function LivingText() {
     /* The reader finished spelling but it doesn't match → deflect.
      * We can't know "finished" without a commit gesture, so wrong answers are
      * surfaced lazily: when the spelled buffer grows past the answer length
-     * without matching, the next non-matching click triggers a deflection and
-     * resets the attempt. */
+     * without matching, the next non-matching click triggers a deflection. */
     const maybeDeflect = () => {
       if (phase !== 'questing' || speaking) return;
       const q = QUESTIONS[questIndex]!;
@@ -346,95 +355,99 @@ export default function LivingText() {
 
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-    /* ── 7. Split-flap roll: one slot spins around itself, settles on `ch` ─ */
-    const rollSlot = (el: HTMLElement, target: string, delay: number) =>
+    /* ── 7. Roll ONE real prose glyph: light it, spin it, settle on `ch` ── */
+    const rollSpan = (span: HTMLElement, target: string, delay: number) =>
       new Promise<void>((resolve) => {
         if (reduceMotion) {
-          el.textContent = target;
-          el.classList.add('settled');
+          span.classList.add('lit', 'settled');
+          span.textContent = target;
           resolve();
           return;
         }
         window.setTimeout(() => {
           let n = 0;
-          el.classList.add('rolling');
+          span.classList.add('rolling');
           const id = window.setInterval(() => {
             n++;
             if (n >= ROLL_TICKS) {
               window.clearInterval(id);
-              el.textContent = target;
-              el.classList.remove('rolling');
-              el.classList.add('settled');
+              span.textContent = target;
+              span.classList.remove('rolling');
+              span.classList.add('lit', 'settled');
               resolve();
             } else {
-              el.textContent =
+              span.textContent =
                 ROLL_GLYPHS[(Math.random() * ROLL_GLYPHS.length) | 0]!;
             }
           }, ROLL_TICK);
         }, delay);
       });
 
-    /* ── 7b. The presence speaks: a compact line rolls into the answer ──── */
-    let voiceWrap: HTMLDivElement | null = null;
-    let voiceLine: HTMLDivElement | null = null;
-    const ensureVoice = () => {
-      if (voiceWrap) return;
-      voiceWrap = document.createElement('div');
-      voiceWrap.className = 'lt-voice';
-      voiceWrap.setAttribute('aria-hidden', 'true');
-      voiceLine = document.createElement('div');
-      voiceLine.className = 'lt-voice-line';
-      voiceWrap.appendChild(voiceLine);
-      document.body.appendChild(voiceWrap);
-    };
-
-    /**
-     * Reveal `line` in a compact amber line: each slot is a split-flap reel
-     * that rolls around itself through glyphs and settles on its letter,
-     * left→right, so the word resolves in place. Hold, then dissolve.
-     */
+    /* ── 7b. The presence speaks THROUGH the body text ──────────────────
+     * Rewrite a contiguous run of real prose letters into `line`: each rolls
+     * into place, the word holds, then every glyph restores to its original.
+     * Anchored where the reader just typed; flows into the lines below. */
     const speak = async (line: string, after?: () => void) => {
       speaking = true;
-      setRibbon(''); // hide the reader's ribbon while the page speaks
-      ensureVoice();
-      voiceLine!.replaceChildren();
-      root.classList.add('lt-speaking');
-      voiceWrap!.classList.add('show');
+      setRibbon('');
 
-      const slots: { el: HTMLElement; ch: string }[] = [];
-      const words = line.split(' ').filter(Boolean);
-
-      for (let wi = 0; wi < words.length; wi++) {
-        if (wi > 0) {
-          const gap = document.createElement('span');
-          gap.className = 'lt-space';
-          gap.textContent = ' ';
-          voiceLine!.appendChild(gap);
+      // Anchor just after the reader's most recent click (the line they typed
+      // in); if they have no live selection, continue down from where we were.
+      if (selected.size > 0) {
+        let maxSel = -1;
+        for (const i of selected) if (i > maxSel) maxSel = i;
+        let p = seqPos.get(maxSel);
+        if (p == null) {
+          p = letterSeq.findIndex((idx) => idx > maxSel);
+          if (p < 0) p = 0;
         }
-        for (const g of graphemes(words[wi]!)) {
-          const el = document.createElement('span');
-          el.className = 'lt-roll';
-          // start the reel mid-spin (stable width) unless reduced motion
-          el.textContent = reduceMotion
-            ? g.toUpperCase()
-            : ROLL_GLYPHS[(Math.random() * ROLL_GLYPHS.length) | 0]!;
-          voiceLine!.appendChild(el);
-          slots.push({ el, ch: g.toUpperCase() });
+        speakCursor = Math.min(p + 2, Math.max(0, letterSeq.length - 1));
+      }
+
+      clearSelection(); // the reader's lit letters fade before the page answers
+
+      const touched: { span: HTMLElement; orig: string }[] = [];
+      const rolls: Promise<void>[] = [];
+      let firstSpan: HTMLElement | null = null;
+      let slot = 0;
+
+      for (const g of Array.from(line)) {
+        if (letterSeq.length === 0) break;
+        if (speakCursor >= letterSeq.length) speakCursor = 0; // wrap around
+        const span = spans[letterSeq[speakCursor++]!]!;
+        touched.push({ span, orig: span.textContent ?? '' });
+        if (!firstSpan) firstSpan = span;
+        if (g === ' ') {
+          span.classList.remove('lit');
+          span.textContent = ' '; // a quiet gap between the answer's words
+          continue;
+        }
+        rolls.push(rollSpan(span, g.toUpperCase(), slot * SLOT_STAGGER));
+        slot++;
+      }
+
+      // bring the forming answer into view (it may start below the fold)
+      if (firstSpan && !reduceMotion) {
+        const r = firstSpan.getBoundingClientRect();
+        if (r.top < 64 || r.bottom > window.innerHeight - 64) {
+          firstSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }
 
-      // roll every slot (staggered start → word resolves left→right)
-      await Promise.all(
-        slots.map((s, i) => rollSlot(s.el, s.ch, i * SLOT_STAGGER)),
-      );
+      await Promise.all(rolls);
       await sleep(HOLD_MS);
 
-      voiceWrap!.classList.remove('show');
-      await sleep(reduceMotion ? 160 : 380);
-      voiceLine!.replaceChildren();
-      root.classList.remove('lt-speaking');
+      // restore the manifesto to its original words
+      for (const { span, orig } of touched) {
+        span.classList.remove('lit', 'rolling', 'settled');
+        span.style.removeProperty('--g');
+        span.textContent = orig;
+      }
+      geomDirty = true;
 
-      clearSelection();
+      // leave a gap so the next reply flows into the following lines
+      speakCursor = Math.min(speakCursor + ANSWER_GAP, letterSeq.length);
+
       speaking = false;
       after?.();
     };
@@ -495,6 +508,7 @@ export default function LivingText() {
     const tick = () => {
       raf = requestAnimationFrame(tick);
       if (document.hidden) return;
+      if (speaking) return; // don't fight the presence for these glyphs
       if (geomDirty) recomputeCenters();
 
       for (const i of glowing) spans[i]?.style.setProperty('--g', '0');
@@ -533,8 +547,6 @@ export default function LivingText() {
     window.addEventListener('scroll', markDirty, { passive: true });
 
     /* ── Pointer listener (delegated — single listener on root) ────────── */
-    // onPointerDown handles the correct-answer / wake transitions; maybeDeflect
-    // runs right after so an over-long wrong spelling earns a coy line.
     const onPointerDownWrapped = (e: PointerEvent) => {
       onPointerDown(e);
       maybeDeflect();
@@ -549,7 +561,6 @@ export default function LivingText() {
       window.removeEventListener('resize', markDirty);
       window.removeEventListener('scroll', markDirty);
       root.classList.remove('lt-awake', 'lt-speaking');
-      voiceWrap?.remove();
       ribbon?.remove();
     };
   }, [router]);
