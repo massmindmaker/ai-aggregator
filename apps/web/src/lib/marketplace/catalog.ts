@@ -71,6 +71,26 @@ export interface CatalogModel {
   featured?: boolean;
   /** Optional OG/preview image URL for the model. */
   imageUrl?: string;
+  /** Model family, e.g. "claude-opus", "gpt". Added by the DB generator. */
+  family?: string;
+  /** Model version string, e.g. "4.8". Added by the DB generator. */
+  version?: string;
+  /** Slug of the model that supersedes this one, if any. */
+  supersededBySlug?: string;
+  /** Display name of the model that supersedes this one, if any. */
+  supersededByName?: string;
+}
+
+// Import the generated catalog (empty placeholder until `gen:catalog` is run).
+// eslint-disable-next-line import/no-cycle
+import { GENERATED_CATALOG } from './catalog.generated';
+
+/**
+ * Runtime source: prefer DB-generated data when available, fall back to the
+ * static CATALOG so the app always has something to render.
+ */
+function getSource(): CatalogModel[] {
+  return GENERATED_CATALOG.length > 0 ? GENERATED_CATALOG : CATALOG;
 }
 
 /** Foreign-hosted org slugs (trigger transfer warning per 152-ФЗ). */
@@ -472,25 +492,25 @@ export const CATALOG: CatalogModel[] = [
 ];
 
 export function getAllModels(): CatalogModel[] {
-  return CATALOG;
+  return getSource();
 }
 
 export function getModelBySlug(slug: string): CatalogModel | undefined {
-  return CATALOG.find((m) => m.slug === slug);
+  return getSource().find((m) => m.slug === slug);
 }
 
 export function getModelByOrgAndSlug(
   orgSlug: string,
   modelSlug: string
 ): CatalogModel | undefined {
-  return CATALOG.find(
+  return getSource().find(
     (m) => m.orgSlug === orgSlug && m.modelSlug === modelSlug
   );
 }
 
 export function getAllOrgs(): Array<{ slug: string; name: string; count: number }> {
   const map = new Map<string, { slug: string; name: string; count: number }>();
-  for (const m of CATALOG) {
+  for (const m of getSource()) {
     const existing = map.get(m.orgSlug);
     if (existing) existing.count += 1;
     else map.set(m.orgSlug, { slug: m.orgSlug, name: m.orgName, count: 1 });
@@ -506,7 +526,8 @@ export function findRelatedModels(
   model: CatalogModel,
   limit = 4
 ): CatalogModel[] {
-  const scored = CATALOG.filter((m) => m.slug !== model.slug).map((m) => {
+  const source = getSource();
+  const scored = source.filter((m) => m.slug !== model.slug).map((m) => {
     const typeScore = m.type === model.type ? 10 : 0;
     const sharedTags = m.tags.filter((t) => model.tags.includes(t)).length;
     const hostingScore = m.hostingRegion === model.hostingRegion ? 1 : 0;
@@ -520,7 +541,7 @@ export function findRelatedModels(
 
 export function getAllTags(): Array<{ tag: string; count: number }> {
   const map = new Map<string, number>();
-  for (const m of CATALOG) {
+  for (const m of getSource()) {
     for (const t of m.tags) map.set(t, (map.get(t) || 0) + 1);
   }
   return Array.from(map.entries())
