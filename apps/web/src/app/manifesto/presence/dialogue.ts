@@ -22,17 +22,15 @@ export function normalizeSpelled(raw: string): string {
 /* ── The wake word ──────────────────────────────────────────────────────── */
 
 /**
- * The reader accumulates clicked letters in order. The presence wakes when the
- * tail of that buffer spells «ПРОСНИСЬ». The trailing soft sign Ь is lenient:
- * «ПРОСНИС» also wakes it (so the reader needn't hunt down a final Ь).
+ * The reader accumulates clicked letters in order. The presence wakes ONLY when
+ * the tail of that buffer spells the FULL «ПРОСНИСЬ» — the trailing soft sign Ь
+ * is required, so the word never fires a click early.
  */
 export const WAKE_WORD = 'проснись';
-const WAKE_LENIENT = 'проснис'; // accept without the trailing soft sign
 
-/** Does the accumulated (normalised) buffer END with the wake word? */
+/** Does the accumulated (normalised) buffer END with the full wake word? */
 export function isWakeWord(buffer: string): boolean {
-  const b = normalizeSpelled(buffer);
-  return b.endsWith(WAKE_WORD) || b.endsWith(WAKE_LENIENT);
+  return normalizeSpelled(buffer).endsWith(WAKE_WORD);
 }
 
 /** The inversion: you tried to wake it; it was never asleep. */

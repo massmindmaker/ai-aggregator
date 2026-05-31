@@ -45,9 +45,11 @@ import './LivingText.css';
 const PROXIMITY_RADIUS = 120; // px — ambient breath reach
 const PROXIMITY_MAX = 15; // only the N nearest letters get style writes / frame
 const WAKE_BUFFER_MAX = 16; // keep only the tail of the accumulated clicks
-const FLY_STAGGER = 55; // ms between consecutive letters arriving in the line
-const FLY_TRAVEL = 540; // ms a single letter takes to fly in (mirror of CSS)
-const HOLD_MS = 1550; // ms the assembled line lingers before it dissolves
+const ROLL_GLYPHS = 'АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ'; // reel chars (letters only)
+const SLOT_STAGGER = 70; // ms between consecutive slots starting to roll
+const ROLL_TICK = 45; // ms per glyph flip while a slot rolls
+const ROLL_TICKS = 7; // glyphs a slot rolls through before it settles
+const HOLD_MS = 1500; // ms the assembled word lingers before it dissolves
 const CHAMBER_ROUTE = '/manifesto/glubina'; // the secret chamber
 const WARP_TO_NAV_MS = 1600; // let the warp play before navigating
 
@@ -342,32 +344,37 @@ export default function LivingText() {
       }, WARP_TO_NAV_MS);
     };
 
-    /* ── 7. Source-glyph picker (which existing letter "gives" its glyph) ─ */
-    const cursorByChar = new Map<string, number>(); // round-robin per letter
-    let lastSrcIndex = -1;
-
-    const nextOccurrence = (ch: string): number | null => {
-      const bucket = lettersByChar.get(ch);
-      if (!bucket || bucket.length === 0) return null;
-      let chosen = -1;
-      for (const idx of bucket) {
-        if (idx > lastSrcIndex) {
-          chosen = idx;
-          break;
-        }
-      }
-      if (chosen === -1) {
-        const rr = (cursorByChar.get(ch) ?? 0) % bucket.length;
-        chosen = bucket[rr]!;
-        cursorByChar.set(ch, rr + 1);
-      }
-      lastSrcIndex = chosen;
-      return chosen;
-    };
-
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-    /* ── 7b. The presence speaks: letters fly into one readable line ────── */
+    /* ── 7. Split-flap roll: one slot spins around itself, settles on `ch` ─ */
+    const rollSlot = (el: HTMLElement, target: string, delay: number) =>
+      new Promise<void>((resolve) => {
+        if (reduceMotion) {
+          el.textContent = target;
+          el.classList.add('settled');
+          resolve();
+          return;
+        }
+        window.setTimeout(() => {
+          let n = 0;
+          el.classList.add('rolling');
+          const id = window.setInterval(() => {
+            n++;
+            if (n >= ROLL_TICKS) {
+              window.clearInterval(id);
+              el.textContent = target;
+              el.classList.remove('rolling');
+              el.classList.add('settled');
+              resolve();
+            } else {
+              el.textContent =
+                ROLL_GLYPHS[(Math.random() * ROLL_GLYPHS.length) | 0]!;
+            }
+          }, ROLL_TICK);
+        }, delay);
+      });
+
+    /* ── 7b. The presence speaks: a compact line rolls into the answer ──── */
     let voiceWrap: HTMLDivElement | null = null;
     let voiceLine: HTMLDivElement | null = null;
     const ensureVoice = () => {
@@ -382,8 +389,9 @@ export default function LivingText() {
     };
 
     /**
-     * Assemble `line` into the focus band by flying each letter out of the
-     * prose, hold it, then dissolve back. Locks reader input for the duration.
+     * Reveal `line` in a compact amber line: each slot is a split-flap reel
+     * that rolls around itself through glyphs and settles on its letter,
+     * left→right, so the word resolves in place. Hold, then dissolve.
      */
     const speak = async (line: string, after?: () => void) => {
       speaking = true;
@@ -392,10 +400,8 @@ export default function LivingText() {
       voiceLine!.replaceChildren();
       root.classList.add('lt-speaking');
       voiceWrap!.classList.add('show');
-      lastSrcIndex = -1;
 
-      const flies: { el: HTMLElement; srcIdx: number | null }[] = [];
-      const ghosted: number[] = [];
+      const slots: { el: HTMLElement; ch: string }[] = [];
       const words = line.split(' ').filter(Boolean);
 
       for (let wi = 0; wi < words.length; wi++) {
@@ -406,58 +412,25 @@ export default function LivingText() {
           voiceLine!.appendChild(gap);
         }
         for (const g of graphemes(words[wi]!)) {
-          const ch = g.toLowerCase().replace(/ё/g, 'е');
           const el = document.createElement('span');
-          el.className = 'lt-fly';
-          el.textContent = g.toUpperCase();
+          el.className = 'lt-roll';
+          // start the reel mid-spin (stable width) unless reduced motion
+          el.textContent = reduceMotion
+            ? g.toUpperCase()
+            : ROLL_GLYPHS[(Math.random() * ROLL_GLYPHS.length) | 0]!;
           voiceLine!.appendChild(el);
-          flies.push({ el, srcIdx: nextOccurrence(ch) });
+          slots.push({ el, ch: g.toUpperCase() });
         }
       }
 
-      if (reduceMotion) {
-        // Static legible reveal — no flight, just fade the line in.
-        for (const f of flies) f.el.classList.add('in');
-        await sleep(HOLD_MS);
-      } else {
-        // FLIP: measure each letter's final slot, offset it to its source
-        // glyph, then release (staggered) so it flies home into the line.
-        for (const f of flies) {
-          const tr = f.el.getBoundingClientRect();
-          const tcx = tr.left + tr.width / 2;
-          const tcy = tr.top + tr.height / 2;
-          let sx = tcx;
-          let sy = tr.top - 56; // missing glyph: drop in from just above
-          if (f.srcIdx != null) {
-            const r = spans[f.srcIdx]!.getBoundingClientRect();
-            sx = r.left + r.width / 2;
-            sy = r.top + r.height / 2;
-            spans[f.srcIdx]!.classList.add('ghost');
-            ghosted.push(f.srcIdx);
-          }
-          f.el.style.setProperty('--dx', `${(sx - tcx).toFixed(1)}px`);
-          f.el.style.setProperty('--dy', `${(sy - tcy).toFixed(1)}px`);
-          f.el.classList.add('pre');
-        }
-        void voiceWrap!.offsetWidth; // reflow so .pre offsets take hold
-        flies.forEach((f, i) => {
-          f.el.style.transitionDelay = `${i * FLY_STAGGER}ms`;
-          f.el.classList.remove('pre');
-          f.el.classList.add('in');
-        });
-        await sleep((flies.length - 1) * FLY_STAGGER + FLY_TRAVEL + HOLD_MS);
+      // roll every slot (staggered start → word resolves left→right)
+      await Promise.all(
+        slots.map((s, i) => rollSlot(s.el, s.ch, i * SLOT_STAGGER)),
+      );
+      await sleep(HOLD_MS);
 
-        // Dissolve: letters drift back toward their source and fade out.
-        flies.forEach((f, i) => {
-          f.el.style.transitionDelay = `${i * 24}ms`;
-          f.el.classList.remove('in');
-          f.el.classList.add('pre', 'out');
-        });
-        await sleep((flies.length - 1) * 24 + 460);
-      }
-
-      for (const idx of ghosted) spans[idx]?.classList.remove('ghost');
       voiceWrap!.classList.remove('show');
+      await sleep(reduceMotion ? 160 : 380);
       voiceLine!.replaceChildren();
       root.classList.remove('lt-speaking');
 
