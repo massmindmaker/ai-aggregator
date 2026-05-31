@@ -1,22 +1,22 @@
 /* ═══════════════════════════════════════════════════════════════════════
  * LivingText — the manifesto that speaks through its OWN body text.
  *
- * Glyph states (all on the real prose <span data-ch>):
- *   .lit      — the reader selected it, OR a settled answer glyph (amber)
- *   .rolling  — this prose glyph is spinning (split-flap) toward an answer letter
- *   .settled  — it just landed on its answer letter (one-shot pop)
- * The presence rewrites a contiguous run of real letters into its reply in
- * place, then the text restores. The reader's spelling echoes in a quiet
- * bottom ribbon (.lt-ribbon).
+ * Reader state:   .lit  — a click-selected glyph (the reader spelling)
+ * Presence states (class-based so they apply to BOTH letters AND spaces that
+ * get rewritten into the answer):
+ *   .lt-spin  — this character is spinning around its axis toward an answer letter
+ *   .lt-land  — it just landed (one-shot pop)
+ *   .lt-on    — it is holding the answer letter, burning amber
+ *   .lt-fade  — the inscription dissolving before the original words return
+ *
+ * Ambient: a constant very-slow wave + the cursor breath drive `--g` (0..1)
+ * per letter from the rAF loop.
  *
  * Reuses the globally-defined tokens --m-amber / --m-ink / --m-ink-dim
- * (declared on .manifesto-root in manifesto.css) so the presence reads as the
- * page's OWN light, not a bolted-on widget.
+ * (declared on .manifesto-root in manifesto.css).
  * ═══════════════════════════════════════════════════════════════════════ */
 
-/* Each wrapped glyph. Kept cheap: no layout-affecting props in the base state.
- * `--g` (0..1) is the ambient proximity factor written from rAF for the ~15
- * letters nearest the cursor; everything else stays at its resting ink. */
+/* Each wrapped glyph. `--g` is the ambient factor written from rAF. */
 .manifesto-root [data-ch] {
   --g: 0;
   position: relative;
@@ -24,7 +24,6 @@
   color: inherit;
   cursor: default;
   transition: color 220ms ease, text-shadow 220ms ease;
-  /* ambient breath: subtle warm lift toward amber as the cursor nears */
   color: color-mix(
     in srgb,
     var(--m-ink-dim) calc(100% - var(--g) * 55%),
@@ -39,7 +38,7 @@
   cursor: pointer;
 }
 
-/* ── .lit — reader selection OR a settled answer glyph (persistent amber) ─ */
+/* ── .lit — the reader spells (click-selected glyph) ─────────────────── */
 .manifesto-root [data-ch].lit {
   color: var(--m-amber);
   text-shadow:
@@ -63,8 +62,10 @@
   }
 }
 
-/* ── .rolling — a prose glyph spins around its own axis toward its letter ─ */
-.manifesto-root [data-ch].rolling {
+/* ── .lt-spin — a character spinning around its own axis toward its letter ─
+ * Same font and SIZE as the surrounding prose (it IS a prose span) — we only
+ * flip it; no font-size change. */
+.manifesto-root .lt-spin {
   display: inline-block;
   transform-origin: center;
   backface-visibility: hidden;
@@ -83,15 +84,15 @@
   }
 }
 
-/* ── .settled — the landing pop (placed after .lit so it wins the once) ── */
-.manifesto-root [data-ch].settled {
+/* ── .lt-land — the landing pop (placed after .lt-spin/.lt-on so it wins) ── */
+.manifesto-root .lt-land {
   display: inline-block;
   transform-origin: center;
   animation: lt-roll-settle 340ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes lt-roll-settle {
   0% {
-    transform: rotateX(170deg) scale(1.18);
+    transform: rotateX(160deg) scale(1.1);
     text-shadow:
       0 0 22px rgba(245, 158, 11, 0.85),
       0 0 48px rgba(245, 158, 11, 0.45);
@@ -99,6 +100,20 @@
   100% {
     transform: rotateX(0deg) scale(1);
   }
+}
+
+/* ── .lt-on — the settled answer letter, burning amber while it holds ──── */
+.manifesto-root .lt-on {
+  color: var(--m-amber);
+  text-shadow:
+    0 0 12px rgba(245, 158, 11, 0.6),
+    0 0 30px rgba(245, 158, 11, 0.32);
+}
+
+/* ── .lt-fade — the inscription dissolving before the words return ─────── */
+.manifesto-root .lt-fade {
+  transition: opacity 300ms ease, text-shadow 300ms ease;
+  opacity: 0;
 }
 
 /* ── The reader's «лента»: a quiet echo of what they are spelling ────── */
@@ -112,7 +127,6 @@
   font-family: var(--m-display, Georgia, 'Times New Roman', serif);
   letter-spacing: 0.34em;
   font-size: clamp(0.85rem, 2.6vw, 1.2rem);
-  /* the reader's own voice reads cool/pale — distinct from the amber presence */
   color: color-mix(in srgb, var(--m-ink, #e8e8e8) 80%, var(--m-amber) 20%);
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.16);
   opacity: 0;
@@ -124,17 +138,20 @@
   transform: translateX(-50%) translateY(0);
 }
 
-/* ── Reduced motion: keep the meaning (legible answer), drop the spin ──── */
+/* ── Reduced motion: keep the meaning (legible answer), drop spin + wave ── */
 @media (prefers-reduced-motion: reduce) {
   .manifesto-root [data-ch] {
     transition: color 200ms ease !important;
     text-shadow: none !important;
   }
   .manifesto-root [data-ch].lit,
-  .manifesto-root [data-ch].rolling,
-  .manifesto-root [data-ch].settled {
+  .manifesto-root .lt-spin,
+  .manifesto-root .lt-land {
     animation: none !important;
     transform: none !important;
+  }
+  .manifesto-root [data-ch].lit,
+  .manifesto-root .lt-on {
     color: var(--m-amber);
     text-shadow: 0 0 10px rgba(245, 158, 11, 0.4) !important;
   }
