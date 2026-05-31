@@ -1,0 +1,353 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * /manifesto/глубина — «ГЛУБИНА ГОРОДА».
+ * The secret chamber the warp-jump lands on. Inherits the manifesto palette
+ * (--m-bg, --m-amber, fonts) from .manifesto-root; everything here is scoped
+ * under .gl-chamber so it never touches the shared manifesto.css.
+ *
+ * Mood: a slow fade-up from black, a single amber ember, a struck relic.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.gl-chamber {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(2rem, 5vh, 3.4rem);
+  padding: clamp(3rem, 12vh, 7rem) 1.5rem clamp(4rem, 14vh, 8rem);
+  text-align: center;
+  /* fallback colors if vars are somehow absent */
+  color: var(--m-ink, #ece9e3);
+}
+
+/* ── Gate (locked) state ──────────────────────────────────────────────── */
+.gl-gate {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.4rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+.gl-gate-mark {
+  opacity: 0.5;
+}
+.gl-gate-line {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: clamp(1.4rem, 4vw, 2.1rem);
+  color: var(--m-ink-dim, #8a8780);
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+.gl-gate-sub {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--m-ink-faint, #6e6b66);
+}
+.gl-gate-back {
+  margin-top: 0.6rem;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  color: var(--m-amber, #f59e0b);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.35);
+  padding-bottom: 2px;
+  transition: border-color 200ms ease, opacity 200ms ease;
+}
+.gl-gate-back:hover {
+  border-color: var(--m-amber, #f59e0b);
+}
+
+/* ── Cinematic dark reveal (warp arrival) ─────────────────────────────── */
+/* A black curtain that lifts after mount, plus a staged fade-up of content. */
+.gl-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  background: radial-gradient(
+      ellipse 90% 60% at 50% 42%,
+      rgba(245, 158, 11, 0.06),
+      transparent 60%
+    ),
+    #000;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 1600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.gl-chamber.is-arrived .gl-curtain {
+  opacity: 0;
+}
+
+/* Staged entrance — each child rises out of black on arrival. */
+.gl-rise {
+  opacity: 0;
+  transform: translateY(18px);
+  filter: blur(6px);
+  transition: opacity 1400ms ease, transform 1400ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 1400ms ease;
+  transition-delay: var(--gl-delay, 0ms);
+}
+.gl-chamber.is-arrived .gl-rise {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+/* ── The relic (Знак artifact) ────────────────────────────────────────── */
+.gl-relic {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: clamp(2rem, 5vw, 3.2rem) clamp(2rem, 6vw, 4rem);
+  border: 1px solid var(--m-line-strong, rgba(236, 233, 227, 0.16));
+  border-radius: 2px;
+  background: linear-gradient(
+    180deg,
+    rgba(245, 158, 11, 0.03),
+    rgba(0, 0, 0, 0.35)
+  );
+  box-shadow: 0 0 80px rgba(245, 158, 11, 0.06),
+    inset 0 0 60px rgba(0, 0, 0, 0.5);
+}
+/* faint corner ticks — like a struck plate */
+.gl-relic::before,
+.gl-relic::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.gl-relic::before {
+  top: 10px;
+  left: 10px;
+  border-right: none;
+  border-bottom: none;
+}
+.gl-relic::after {
+  bottom: 10px;
+  right: 10px;
+  border-left: none;
+  border-top: none;
+}
+
+.gl-relic-halo {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.gl-relic-halo::after {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(245, 158, 11, 0.22),
+    transparent 65%
+  );
+  filter: blur(8px);
+  z-index: -1;
+  animation: gl-breathe 5.5s ease-in-out infinite;
+  animation-delay: var(--gl-pulse, 0s);
+}
+@keyframes gl-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+.gl-relic-sigil {
+  transform: rotate(var(--gl-tilt, 0deg));
+}
+
+.gl-code {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: clamp(0.9rem, 2.6vw, 1.15rem);
+  letter-spacing: 0.16em;
+  color: var(--m-amber, #f59e0b);
+  text-shadow: 0 0 18px rgba(245, 158, 11, 0.35);
+  margin: 0;
+  white-space: nowrap;
+}
+.gl-code-label {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--m-ink-faint, #6e6b66);
+}
+
+/* ── Titles & lines ───────────────────────────────────────────────────── */
+.gl-overline {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--m-ink-faint, #6e6b66);
+  margin: 0;
+}
+.gl-title {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(2.6rem, 9vw, 5.2rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  margin: 0.3rem 0 0;
+  color: var(--m-ink, #ece9e3);
+  text-shadow: 0 0 40px rgba(245, 158, 11, 0.12);
+}
+
+.gl-chronicle {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: clamp(1.25rem, 4vw, 1.9rem);
+  line-height: 1.4;
+  color: var(--m-ink, #ece9e3);
+  max-width: 34ch;
+  margin: 0;
+}
+.gl-chronicle .gl-num {
+  font-style: normal;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  color: var(--m-amber, #f59e0b);
+  letter-spacing: 0.08em;
+}
+
+/* ── Тайный круг ──────────────────────────────────────────────────────── */
+.gl-circle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 0.5rem;
+}
+.gl-circle-head {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--m-ink-dim, #8a8780);
+}
+.gl-circle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #0a0a0b;
+  background: var(--m-amber, #f59e0b);
+  border: 1px solid var(--m-amber, #f59e0b);
+  border-radius: 2px;
+  padding: 0.85rem 1.8rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: box-shadow 220ms ease, transform 220ms ease,
+    background 220ms ease;
+  box-shadow: 0 0 28px rgba(245, 158, 11, 0.28);
+}
+.gl-circle-btn:hover {
+  box-shadow: 0 0 44px rgba(245, 158, 11, 0.5);
+  transform: translateY(-1px);
+}
+/* placeholder variant — when no env URL is set */
+.gl-circle-btn.is-locked {
+  background: transparent;
+  color: var(--m-amber, #f59e0b);
+  box-shadow: none;
+  cursor: default;
+}
+.gl-circle-btn.is-locked:hover {
+  transform: none;
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.18);
+}
+.gl-pass {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.92rem;
+  letter-spacing: 0.22em;
+  color: var(--m-amber, #f59e0b);
+  border: 1px dashed rgba(245, 158, 11, 0.45);
+  border-radius: 2px;
+  padding: 0.5rem 1rem;
+  user-select: all;
+}
+.gl-circle-note {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--m-ink-dim, #8a8780);
+  margin: 0;
+}
+
+/* ── Final presence line ──────────────────────────────────────────────── */
+.gl-final {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-weight: 500;
+  font-size: clamp(1.3rem, 5vw, 2.3rem);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--m-amber, #f59e0b);
+  text-shadow: 0 0 30px rgba(245, 158, 11, 0.4);
+  margin: clamp(1rem, 4vh, 2rem) 0 0;
+  animation: gl-glow 6s ease-in-out infinite;
+}
+@keyframes gl-glow {
+  0%,
+  100% {
+    text-shadow: 0 0 22px rgba(245, 158, 11, 0.3);
+    opacity: 0.92;
+  }
+  50% {
+    text-shadow: 0 0 40px rgba(245, 158, 11, 0.55);
+    opacity: 1;
+  }
+}
+
+.gl-fineprint {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--m-ink-faint, #6e6b66);
+  max-width: 40ch;
+  margin: 0;
+  opacity: 0.7;
+}
+
+/* ── Reduced motion — collapse all entrances & loops ──────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .gl-curtain {
+    transition: none;
+    opacity: 0;
+  }
+  .gl-rise {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  .gl-relic-halo::after,
+  .gl-final {
+    animation: none;
+  }
+}
