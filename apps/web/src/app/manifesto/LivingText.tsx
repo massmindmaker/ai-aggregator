@@ -3,21 +3,24 @@
 /**
  * LivingText — the «ПРОСНИСЬ» mechanic of the Chronicle.
  *
- * The manifesto SPEAKS BACK. It is SILENT and gives ZERO hints: letters only
- * breathe amber near the cursor and turn touchable. The reader discovers they
- * can click letters and, in order, spell the WAKE WORD «ПРОСНИСЬ». The presence
- * then wakes with the creepy inversion «Я НЕ СПЛЮ» and runs a fixed three-
- * question lore quest. Answer all three and the climax warps you to the
- * secret chamber. Every reply is assembled from glyphs that were always there.
+ * The manifesto SPEAKS BACK. Letters breathe amber near the cursor and turn
+ * touchable. The reader discovers they can click letters and, in order, spell
+ * the WAKE WORD «ПРОСНИСЬ» — a quiet «лента» echoes what they are spelling so
+ * progress is always legible. The presence then wakes with the inversion
+ * «Я НЕ СПЛЮ» and runs a fixed three-question lore quest.
+ *
+ * How the presence answers (legible by design): the letters of each reply
+ * LIFT OUT of the surrounding prose and FLY into one focused, readable amber
+ * line in the centre of the screen (FLIP). They hold, then drift back into the
+ * text. No scramble, no scattered flashes — the page gathers its own glyphs
+ * into a word you can actually read.
  *
  * Design constraints honoured here:
  *  - No React re-render over thousands of spans: we wrap glyphs once via a
- *    DocumentFragment (keeping the server-rendered reveal/theme intact) and
- *    thereafter mutate classList / inline custom props imperatively.
+ *    DocumentFragment and thereafter mutate classList / inline custom props.
  *  - One rAF loop, one pointer listener (delegated on the prose root).
  *  - Cyrillic-safe grapheme splitting via Intl.Segmenter (graceful fallback).
- *  - Full prefers-reduced-motion path (no scramble, no scroll, no breath) — the
- *    quest still works.
+ *  - Full prefers-reduced-motion path (static legible reveal, no flight).
  *  - Deterministic puzzle: wake word + the 3 Q&A are fixed (dialogue.ts). The
  *    LLM route is consulted ONLY to flavour a wrong-answer deflection.
  *  - Loose warp coupling: fires window.__manifestoWarp?.() + a CustomEvent.
@@ -41,10 +44,10 @@ import './LivingText.css';
 /* ── Tunables ─────────────────────────────────────────────────────────── */
 const PROXIMITY_RADIUS = 120; // px — ambient breath reach
 const PROXIMITY_MAX = 15; // only the N nearest letters get style writes / frame
-const BEAT_MIN = 90; // ms per lit letter (accelerates toward the end)
-const BEAT_MAX = 160;
-const WORD_GAP = 420; // ms pause between answer words
 const WAKE_BUFFER_MAX = 16; // keep only the tail of the accumulated clicks
+const FLY_STAGGER = 55; // ms between consecutive letters arriving in the line
+const FLY_TRAVEL = 540; // ms a single letter takes to fly in (mirror of CSS)
+const HOLD_MS = 1550; // ms the assembled line lingers before it dissolves
 const CHAMBER_ROUTE = '/manifesto/glubina'; // the secret chamber
 const WARP_TO_NAV_MS = 1600; // let the warp play before navigating
 
@@ -159,7 +162,7 @@ export default function LivingText() {
       );
       existing.forEach((span, i) => {
         span.setAttribute('data-i', String(i));
-        span.classList.remove('lit', 'glow', 'settle', 'ghost', 'think');
+        span.classList.remove('lit', 'ghost');
         span.style.removeProperty('--g');
         spans.push(span);
         const g = span.textContent ?? '';
@@ -170,9 +173,6 @@ export default function LivingText() {
           else lettersByChar.set(key, [i]);
         }
       });
-      document
-        .querySelectorAll('.m-prose .lt-missing')
-        .forEach((el) => el.remove());
     }
 
     if (spans.length === 0) return;
@@ -196,7 +196,7 @@ export default function LivingText() {
     };
 
     /* ── 4. Quest state machine ────────────────────────────────────────── */
-    // phase: 'sleeping'  → reader is spelling toward the wake word (silent)
+    // phase: 'sleeping'  → reader is spelling toward the wake word
     //        'questing'  → presence has woken; running the 3-question quest
     //        'done'      → final line said, climax fired
     type Phase = 'sleeping' | 'questing' | 'done';
@@ -213,6 +213,27 @@ export default function LivingText() {
       (spans[i]!.textContent ?? '').toLowerCase().replace(/ё/g, 'е');
 
     const spelledWord = () => normalizeSpelled(spelledIdx.map(charOf).join(''));
+
+    /* ── 4b. The reader's «лента»: echoes what they are spelling ───────── */
+    let ribbon: HTMLDivElement | null = null;
+    const ensureRibbon = () => {
+      if (ribbon) return;
+      ribbon = document.createElement('div');
+      ribbon.className = 'lt-ribbon';
+      ribbon.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(ribbon);
+    };
+    const setRibbon = (text: string) => {
+      ensureRibbon();
+      const t = text.trim();
+      if (!t) {
+        ribbon!.classList.remove('show');
+        ribbon!.textContent = '';
+        return;
+      }
+      ribbon!.textContent = t.toUpperCase();
+      ribbon!.classList.add('show');
+    };
 
     const onPointerDown = (e: PointerEvent) => {
       if (speaking || phase === 'done') return;
@@ -243,15 +264,18 @@ export default function LivingText() {
 
       if (phase === 'sleeping') {
         // Accumulate the click tail; wake when it spells «ПРОСНИСЬ».
-        wakeBuffer = (wakeBuffer + ch).slice(-WAKE_BUFFER_MAX);
+        wakeBuffer = normalizeSpelled(wakeBuffer + ch).slice(-WAKE_BUFFER_MAX);
+        setRibbon(wakeBuffer.slice(-12)); // reader sees their spelling form
         if (isWakeWord(wakeBuffer)) {
           wakeBuffer = '';
           wake();
         }
       } else if (phase === 'questing') {
         // Check the running spelled word against the current expected answer.
+        const w = spelledWord();
+        setRibbon(w.slice(-14));
         const q = QUESTIONS[questIndex]!;
-        if (isCorrectAnswer(q, spelledWord())) {
+        if (isCorrectAnswer(q, w)) {
           answerCorrect();
         }
       }
@@ -261,29 +285,29 @@ export default function LivingText() {
     const wake = () => {
       phase = 'questing';
       questIndex = 0;
-      void runSequence(WAKE_REPLY, () => askCurrentQuestion());
+      void speak(WAKE_REPLY, () => askCurrentQuestion());
     };
 
     const askCurrentQuestion = () => {
       const q = QUESTIONS[questIndex];
       if (!q) return;
-      void runSequence(q.ask);
+      void speak(q.ask);
     };
 
     const answerCorrect = () => {
       questIndex++;
       if (questIndex >= QUESTIONS.length) {
         // Final line, then the climax.
-        void runSequence(FINAL_REPLY, () => climax());
+        void speak(FINAL_REPLY, () => climax());
       } else {
         // Brief affirmation by simply asking the next question.
-        void runSequence(QUESTIONS[questIndex]!.ask);
+        void speak(QUESTIONS[questIndex]!.ask);
       }
     };
 
     const answerWrong = async () => {
       const reply = await fetchDeflection(spelledWord());
-      void runSequence(reply); // stay on the same question
+      void speak(reply); // stay on the same question
     };
 
     /* The reader finished spelling but it doesn't match → deflect.
@@ -318,17 +342,16 @@ export default function LivingText() {
       }, WARP_TO_NAV_MS);
     };
 
-    /* ── 7. The presence speaks: light existing letters top→down ───────── */
+    /* ── 7. Source-glyph picker (which existing letter "gives" its glyph) ─ */
     const cursorByChar = new Map<string, number>(); // round-robin per letter
-    const litTrail: number[] = []; // glyphs lit during the current line
-    let lastLitIndex = -1;
+    let lastSrcIndex = -1;
 
     const nextOccurrence = (ch: string): number | null => {
       const bucket = lettersByChar.get(ch);
       if (!bucket || bucket.length === 0) return null;
       let chosen = -1;
       for (const idx of bucket) {
-        if (idx > lastLitIndex) {
+        if (idx > lastSrcIndex) {
           chosen = idx;
           break;
         }
@@ -338,145 +361,107 @@ export default function LivingText() {
         chosen = bucket[rr]!;
         cursorByChar.set(ch, rr + 1);
       }
+      lastSrcIndex = chosen;
       return chosen;
-    };
-
-    let lastScrollAt = 0;
-    const maybeScrollTo = (span: HTMLElement) => {
-      if (reduceMotion) return;
-      const now = performance.now();
-      if (now - lastScrollAt < 500) return;
-      const r = span.getBoundingClientRect();
-      if (r.top < 80 || r.bottom > window.innerHeight - 80) {
-        lastScrollAt = now;
-        span.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
     };
 
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-    let thinkTimers: number[] = [];
-    const startThinking = () => {
-      if (reduceMotion) return;
-      const pool = spelledIdx.length
-        ? spelledIdx
-        : Array.from({ length: Math.min(8, spans.length) }, (_, k) =>
-            Math.floor((spans.length / 8) * k),
-          );
-      const original: { i: number; ch: string }[] = [];
-      for (const i of pool.slice(-6)) {
-        const span = spans[i];
-        if (!span) continue;
-        original.push({ i, ch: span.textContent ?? '' });
-        span.classList.add('think');
-      }
-      const scrambleChars = '0123456789АБВГДЕЖЗИКЛМНОПРСТ#@';
-      let ticks = 0;
-      const id = window.setInterval(() => {
-        ticks++;
-        for (const { i } of original) {
-          const span = spans[i];
-          if (span) {
-            span.textContent =
-              scrambleChars[(Math.random() * scrambleChars.length) | 0];
-          }
-        }
-        if (ticks > 6) {
-          window.clearInterval(id);
-          for (const { i, ch } of original) {
-            const span = spans[i];
-            if (span) {
-              span.textContent = ch;
-              span.classList.remove('think');
-            }
-          }
-        }
-      }, 70);
-      thinkTimers.push(id);
-    };
-    const stopThinking = () => {
-      thinkTimers.forEach((t) => window.clearInterval(t));
-      thinkTimers = [];
-      for (const s of spans) {
-        if (s.classList.contains('think')) s.classList.remove('think');
-      }
-    };
-
-    /** Light one glyph for `ch`, or render a faint amber `_` if the page lacks it. */
-    const lightGlyph = async (ch: string, isLast: boolean) => {
-      const idx = nextOccurrence(ch);
-      if (idx === null) {
-        const missing = document.createElement('span');
-        missing.className = 'lt-missing';
-        missing.textContent = '_';
-        const anchor = lastLitIndex >= 0 ? spans[lastLitIndex] : spans[0];
-        anchor?.after(missing);
-        await sleep(reduceMotion ? 40 : 110);
-        missing.remove();
-        return;
-      }
-      const span = spans[idx]!;
-      lastLitIndex = idx;
-      maybeScrollTo(span);
-      span.classList.remove('ghost');
-      span.classList.add('glow');
-      if (isLast) span.classList.add('settle');
-      litTrail.push(idx);
+    /* ── 7b. The presence speaks: letters fly into one readable line ────── */
+    let voiceWrap: HTMLDivElement | null = null;
+    let voiceLine: HTMLDivElement | null = null;
+    const ensureVoice = () => {
+      if (voiceWrap) return;
+      voiceWrap = document.createElement('div');
+      voiceWrap.className = 'lt-voice';
+      voiceWrap.setAttribute('aria-hidden', 'true');
+      voiceLine = document.createElement('div');
+      voiceLine.className = 'lt-voice-line';
+      voiceWrap.appendChild(voiceLine);
+      document.body.appendChild(voiceWrap);
     };
 
     /**
-     * Light the letters of `line` top→down, then settle them into a ghost
-     * trail and clear the reader's own selection. Runs `after()` when done.
-     * The reader's input is locked (`speaking`) for the duration.
+     * Assemble `line` into the focus band by flying each letter out of the
+     * prose, hold it, then dissolve back. Locks reader input for the duration.
      */
-    const runSequence = async (line: string, after?: () => void) => {
+    const speak = async (line: string, after?: () => void) => {
       speaking = true;
+      setRibbon(''); // hide the reader's ribbon while the page speaks
+      ensureVoice();
+      voiceLine!.replaceChildren();
+      root.classList.add('lt-speaking');
+      voiceWrap!.classList.add('show');
+      lastSrcIndex = -1;
 
-      // brief "thinking" shimmer before the line resolves
-      startThinking();
-      await sleep(reduceMotion ? 120 : 360);
-      stopThinking();
-
-      // reset the scan so each line flows top→down afresh
-      lastLitIndex = -1;
-      litTrail.length = 0;
-
+      const flies: { el: HTMLElement; srcIdx: number | null }[] = [];
+      const ghosted: number[] = [];
       const words = line.split(' ').filter(Boolean);
-      const totalLetters = words.reduce((n, w) => n + w.length, 0);
-      let done = 0;
 
       for (let wi = 0; wi < words.length; wi++) {
-        const w = words[wi]!;
-        const letters = graphemes(w);
-        for (let li = 0; li < letters.length; li++) {
-          const ch = letters[li]!.toLowerCase().replace(/ё/g, 'е');
-          const isLast = wi === words.length - 1 && li === letters.length - 1;
-          await lightGlyph(ch, isLast);
-          done++;
-          if (!isLast) {
-            const t = totalLetters > 1 ? done / totalLetters : 1;
-            const beat = reduceMotion
-              ? 60
-              : BEAT_MAX -
-                (BEAT_MAX - BEAT_MIN) * t +
-                (Math.random() * 24 - 12);
-            await sleep(Math.max(40, beat));
-          }
+        if (wi > 0) {
+          const gap = document.createElement('span');
+          gap.className = 'lt-space';
+          gap.textContent = ' ';
+          voiceLine!.appendChild(gap);
         }
-        if (wi < words.length - 1) await sleep(reduceMotion ? 120 : WORD_GAP);
+        for (const g of graphemes(words[wi]!)) {
+          const ch = g.toLowerCase().replace(/ё/g, 'е');
+          const el = document.createElement('span');
+          el.className = 'lt-fly';
+          el.textContent = g.toUpperCase();
+          voiceLine!.appendChild(el);
+          flies.push({ el, srcIdx: nextOccurrence(ch) });
+        }
       }
 
-      // settle: convert the lit trail into a faint lingering ghost
-      await sleep(reduceMotion ? 200 : 520);
-      for (const idx of litTrail) {
-        const s = spans[idx]!;
-        s.classList.remove('glow', 'settle');
-        s.classList.add('ghost');
+      if (reduceMotion) {
+        // Static legible reveal — no flight, just fade the line in.
+        for (const f of flies) f.el.classList.add('in');
+        await sleep(HOLD_MS);
+      } else {
+        // FLIP: measure each letter's final slot, offset it to its source
+        // glyph, then release (staggered) so it flies home into the line.
+        for (const f of flies) {
+          const tr = f.el.getBoundingClientRect();
+          const tcx = tr.left + tr.width / 2;
+          const tcy = tr.top + tr.height / 2;
+          let sx = tcx;
+          let sy = tr.top - 56; // missing glyph: drop in from just above
+          if (f.srcIdx != null) {
+            const r = spans[f.srcIdx]!.getBoundingClientRect();
+            sx = r.left + r.width / 2;
+            sy = r.top + r.height / 2;
+            spans[f.srcIdx]!.classList.add('ghost');
+            ghosted.push(f.srcIdx);
+          }
+          f.el.style.setProperty('--dx', `${(sx - tcx).toFixed(1)}px`);
+          f.el.style.setProperty('--dy', `${(sy - tcy).toFixed(1)}px`);
+          f.el.classList.add('pre');
+        }
+        void voiceWrap!.offsetWidth; // reflow so .pre offsets take hold
+        flies.forEach((f, i) => {
+          f.el.style.transitionDelay = `${i * FLY_STAGGER}ms`;
+          f.el.classList.remove('pre');
+          f.el.classList.add('in');
+        });
+        await sleep((flies.length - 1) * FLY_STAGGER + FLY_TRAVEL + HOLD_MS);
+
+        // Dissolve: letters drift back toward their source and fade out.
+        flies.forEach((f, i) => {
+          f.el.style.transitionDelay = `${i * 24}ms`;
+          f.el.classList.remove('in');
+          f.el.classList.add('pre', 'out');
+        });
+        await sleep((flies.length - 1) * 24 + 460);
       }
 
-      // the reader's own selection fades after the page has answered
+      for (const idx of ghosted) spans[idx]?.classList.remove('ghost');
+      voiceWrap!.classList.remove('show');
+      voiceLine!.replaceChildren();
+      root.classList.remove('lt-speaking');
+
       clearSelection();
-
       speaking = false;
       after?.();
     };
@@ -485,6 +470,7 @@ export default function LivingText() {
       for (const i of selected) spans[i]!.classList.remove('lit');
       selected.clear();
       spelledIdx.length = 0;
+      setRibbon('');
     };
 
     /* ── 8. Optional LLM flavour for wrong-answer deflections ──────────── */
@@ -574,9 +560,8 @@ export default function LivingText() {
     window.addEventListener('scroll', markDirty, { passive: true });
 
     /* ── Pointer listener (delegated — single listener on root) ────────── */
-    // Deflection is surfaced after selection mutates: onPointerDown handles the
-    // correct-answer / wake transitions synchronously; maybeDeflect runs right
-    // after so an over-long wrong spelling earns a coy line.
+    // onPointerDown handles the correct-answer / wake transitions; maybeDeflect
+    // runs right after so an over-long wrong spelling earns a coy line.
     const onPointerDownWrapped = (e: PointerEvent) => {
       onPointerDown(e);
       maybeDeflect();
@@ -586,12 +571,13 @@ export default function LivingText() {
     /* ── Cleanup ───────────────────────────────────────────────────────── */
     return () => {
       cancelAnimationFrame(raf);
-      stopThinking();
       root.removeEventListener('pointerdown', onPointerDownWrapped);
       root.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('resize', markDirty);
       window.removeEventListener('scroll', markDirty);
-      root.classList.remove('lt-awake');
+      root.classList.remove('lt-awake', 'lt-speaking');
+      voiceWrap?.remove();
+      ribbon?.remove();
     };
   }, [router]);
 

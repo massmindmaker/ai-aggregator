@@ -1,12 +1,13 @@
 /* ═══════════════════════════════════════════════════════════════════════
- * LivingText — the manifesto that speaks back by lighting its own letters.
+ * LivingText — the manifesto that speaks back by gathering its own letters.
  *
- * Every non-space glyph of the prose is wrapped in a <span data-ch>. These
- * rules style the three states a glyph can be in:
- *   .lit    — the reader selected it (they are "speaking")
- *   .glow   — the presence is lighting it as part of an answer
- *   .ghost  — a faint amber after-trail left once an answer settles
- * Plus an ambient proximity breath driven by inline custom props from JS.
+ * Glyph states:
+ *   .lit    — the reader selected it (they are "spelling")
+ *   .ghost  — this glyph is currently "lent" to the presence's flying line
+ * The presence's reply is assembled in a centred focus band (.lt-voice): its
+ * letters (.lt-fly) start at the source glyph's position and fly into the line,
+ * so the answer reads as a real word instead of scattered flashes.
+ * The reader's own spelling echoes in a quiet bottom ribbon (.lt-ribbon).
  *
  * Reuses the globally-defined tokens --m-amber / --m-ink / --m-ink-dim
  * (declared on .manifesto-root in manifesto.css) so the presence reads as the
@@ -38,7 +39,7 @@
   cursor: pointer;
 }
 
-/* ── .lit — the reader speaks (click-selected glyph) ─────────────────── */
+/* ── .lit — the reader spells (click-selected glyph) ─────────────────── */
 .manifesto-root [data-ch].lit {
   color: var(--m-amber);
   text-shadow:
@@ -62,86 +63,118 @@
   }
 }
 
-/* ── .glow — the presence answers (lit during speak() sequence) ──────── */
-.manifesto-root [data-ch].glow {
+/* ── .ghost — a source glyph dims while it "lends" itself to the line ── */
+.manifesto-root [data-ch].ghost {
+  color: color-mix(in srgb, var(--m-ink-dim) 70%, transparent 30%);
+  opacity: 0.45;
+  transition: color 240ms ease, opacity 240ms ease;
+}
+
+/* ── The page dims while the presence speaks (focus on the band) ─────── */
+.manifesto-root.lt-speaking .m-prose {
+  opacity: 0.3;
+  filter: blur(1.3px);
+  transition: opacity 380ms ease, filter 380ms ease;
+}
+
+/* ── The presence's voice: a centred focus band of flying letters ────── */
+.lt-voice {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 60;
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+.lt-voice.show {
+  opacity: 1;
+}
+.lt-voice-line {
+  display: flex;
+  align-items: baseline;
+  max-width: 92vw;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-family: var(--m-display, Georgia, 'Times New Roman', serif);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  font-size: clamp(1.7rem, 6.4vw, 3.6rem);
+  line-height: 1.1;
   color: var(--m-amber);
   text-shadow:
-    0 0 14px rgba(245, 158, 11, 0.7),
-    0 0 34px rgba(245, 158, 11, 0.35);
-  animation: lt-glow-ramp 220ms ease-out;
+    0 0 18px rgba(245, 158, 11, 0.5),
+    0 0 46px rgba(245, 158, 11, 0.28);
+  padding: 0.4em 0.8em;
 }
-@keyframes lt-glow-ramp {
-  from {
-    color: var(--m-ink);
-    text-shadow: 0 0 0 rgba(245, 158, 11, 0);
-  }
-}
-
-/* The very last glyph of an answer gets a single settle pulse. */
-.manifesto-root [data-ch].settle {
-  animation: lt-settle 520ms ease-out;
-}
-@keyframes lt-settle {
-  0% {
-    text-shadow:
-      0 0 18px rgba(245, 158, 11, 0.9),
-      0 0 46px rgba(245, 158, 11, 0.5);
-  }
-  100% {
-    text-shadow:
-      0 0 12px rgba(245, 158, 11, 0.5),
-      0 0 26px rgba(245, 158, 11, 0.25);
-  }
-}
-
-/* ── .ghost — faint lingering amber after an answer settles ──────────── */
-.manifesto-root [data-ch].ghost {
-  color: color-mix(in srgb, var(--m-ink-dim) 62%, var(--m-amber) 38%);
-  text-shadow: 0 0 8px rgba(245, 158, 11, 0.18);
-  transition: color 1600ms ease, text-shadow 1600ms ease;
-}
-
-/* ── "Thinking" scramble — masks LLM latency near the cursor ─────────── */
-.manifesto-root [data-ch].think {
-  color: var(--m-amber);
-  opacity: 0.85;
-  animation: lt-think 360ms steps(2) infinite;
-}
-@keyframes lt-think {
-  0%,
-  100% {
-    text-shadow: 0 0 6px rgba(245, 158, 11, 0.25);
-  }
-  50% {
-    text-shadow: 0 0 14px rgba(245, 158, 11, 0.55);
-  }
-}
-
-/* ── Missing letter — the presence "lacks" this glyph: a faint amber _ ── */
-.manifesto-root .lt-missing {
+.lt-space {
   display: inline-block;
-  color: var(--m-amber);
-  opacity: 0.4;
-  text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
-  animation: lt-glow-ramp 220ms ease-out;
+  width: 0.5em;
 }
 
-/* ── Reduced motion: keep the meaning (color), drop the movement ──────── */
+/* A single flying letter. Resting state = home (in the line). `.pre` parks it
+ * at its source glyph (offset via --dx/--dy); releasing `.pre` flies it home. */
+.lt-fly {
+  display: inline-block;
+  transform: none;
+  opacity: 1;
+  will-change: transform, opacity;
+  transition:
+    transform 540ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 380ms ease;
+}
+.lt-fly.pre {
+  transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.5);
+  opacity: 0.08;
+}
+.lt-fly.out {
+  opacity: 0;
+}
+
+/* ── The reader's «лента»: a quiet echo of what they are spelling ────── */
+.lt-ribbon {
+  position: fixed;
+  left: 50%;
+  bottom: 5vh;
+  transform: translateX(-50%) translateY(8px);
+  pointer-events: none;
+  z-index: 59;
+  font-family: var(--m-display, Georgia, 'Times New Roman', serif);
+  letter-spacing: 0.34em;
+  font-size: clamp(0.85rem, 2.6vw, 1.2rem);
+  /* the reader's own voice reads cool/pale — distinct from the amber presence */
+  color: color-mix(in srgb, var(--m-ink, #e8e8e8) 80%, var(--m-amber) 20%);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.16);
+  opacity: 0;
+  transition: opacity 240ms ease, transform 240ms ease;
+  white-space: nowrap;
+}
+.lt-ribbon.show {
+  opacity: 0.92;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── Reduced motion: keep the meaning (legible line), drop the movement ─ */
 @media (prefers-reduced-motion: reduce) {
   .manifesto-root [data-ch] {
     transition: color 200ms ease !important;
     text-shadow: none !important;
   }
-  .manifesto-root [data-ch].lit,
-  .manifesto-root [data-ch].glow,
-  .manifesto-root [data-ch].settle,
-  .manifesto-root [data-ch].think,
-  .manifesto-root .lt-missing {
+  .manifesto-root [data-ch].lit {
     animation: none !important;
-  }
-  .manifesto-root [data-ch].lit,
-  .manifesto-root [data-ch].glow {
     color: var(--m-amber);
     text-shadow: 0 0 10px rgba(245, 158, 11, 0.4) !important;
+  }
+  .manifesto-root.lt-speaking .m-prose {
+    filter: none !important;
+  }
+  .lt-fly {
+    transition: opacity 200ms ease !important;
+    transform: none !important;
+  }
+  .lt-fly.pre {
+    transform: none !important;
   }
 }
