@@ -9,15 +9,16 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * /api/manifesto/presence — the voice inside the Chronicle.
+ * /api/manifesto/presence — OPTIONAL flavour layer for the «ПРОСНИСЬ» quest.
  *
  * POST { word, inventory } → { reply }   (always 200, always a reply)
  *
- * Talks to our OpenAI-compatible gateway server-side. EVERY failure path —
- * missing env, timeout, non-200, empty/mock body, a reply that uses letters the
- * page doesn't physically have — collapses into a deterministic fallback from
- * dialogue.ts. The page must NEVER see an error: the presence simply answers
- * with what it remembers.
+ * The quest itself (wake word, the three questions, expected answers) is
+ * DETERMINISTIC and lives client-side in LivingText. This route is consulted
+ * ONLY to dress up a WRONG-answer deflection with a little variety. EVERY
+ * failure path — missing env, timeout, non-200, empty/mock body, a reply that
+ * uses letters the page doesn't physically have — collapses into a
+ * deterministic deflection from dialogue.ts. The page must NEVER see an error.
  */
 
 const PRESENCE_URL =
@@ -27,7 +28,7 @@ const PRESENCE_KEY = process.env.MANIFESTO_PRESENCE_KEY ?? '';
 const PRESENCE_MODEL = process.env.MANIFESTO_PRESENCE_MODEL ?? 'gpt-4o-mini';
 
 const TIMEOUT_MS = 6000;
-const MAX_WORDS = 4;
+const MAX_WORDS = 3;
 
 // ── Rate-limit: ≤1 generated reply / 20s / IP (in-memory, resets on restart) ──
 const ipHits = new Map<string, number>();
