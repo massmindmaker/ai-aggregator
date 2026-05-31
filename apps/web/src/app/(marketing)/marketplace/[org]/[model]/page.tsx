@@ -161,6 +161,11 @@ export default function ModelDetailPage({ params }: RouteParams) {
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
                   {model.name}
                 </h1>
+                {model.version && (
+                  <span className="inline-flex items-center text-xs font-mono px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground bg-muted/50 leading-none">
+                    v{model.version}
+                  </span>
+                )}
                 <Badge variant="secondary">{MODEL_TYPE_LABEL_RU[model.type]}</Badge>
                 {ruHosted && (
                   <Badge
@@ -182,6 +187,20 @@ export default function ModelDetailPage({ params }: RouteParams) {
               <p className="mt-3 text-foreground/90 max-w-2xl">
                 {model.shortDescription}
               </p>
+              {model.supersededBySlug && (() => {
+                const [supOrg, supModel] = model.supersededBySlug!.split('/');
+                return (
+                  <p className="mt-2 text-sm text-amber-500/90">
+                    Есть новее:{' '}
+                    <Link
+                      href={`/marketplace/${supOrg}/${supModel}`}
+                      className="underline underline-offset-2 hover:text-amber-400 transition-colors"
+                    >
+                      {model.supersededByName ?? model.supersededBySlug}
+                    </Link>
+                  </p>
+                );
+              })()}
             </div>
           </div>
         </header>

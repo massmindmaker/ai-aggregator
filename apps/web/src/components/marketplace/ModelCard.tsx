@@ -98,9 +98,24 @@ export function ModelCard({ model }: ModelCardProps) {
                   />
                 ) : null}
               </div>
-              <h3 className="font-semibold text-sm leading-tight line-clamp-2 break-words group-hover:text-primary transition-colors">
-                {model.name}
-              </h3>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="font-semibold text-sm leading-tight line-clamp-2 break-words group-hover:text-primary transition-colors">
+                  {model.name}
+                </h3>
+                {model.version && (
+                  <span className="inline-flex items-center shrink-0 text-[10px] font-mono px-1 py-px rounded border border-border/60 text-muted-foreground/70 bg-muted/40 leading-none">
+                    v{model.version}
+                  </span>
+                )}
+              </div>
+              {model.supersededBySlug && (
+                <span
+                  className="inline-flex items-center text-[10px] text-amber-500/80 leading-none mt-0.5"
+                  title={`Новее: ${model.supersededByName ?? model.supersededBySlug}`}
+                >
+                  ↑ новее
+                </span>
+              )}
             </div>
             <TrendChip trend={trend} />
           </div>
