@@ -1,7 +1,8 @@
 /* warp.css — companion styling for StarField's scroll-coupled warp tunnel.
  * The canvas itself is positioned by manifesto.css (.manifesto-stars, fixed).
- * Here we only add the additive-glow blend + a subtle vignette so the tunnel
- * reads as light punching out of deep space rather than dots on a flat plane. */
+ * Here we add the additive-glow blend + a subtle vignette so the tunnel reads
+ * as light punching out of deep space, and the centered brand-sigil overlay
+ * that crystallises out of the hyper-jump flash. */
 
 .manifesto-stars {
   /* let the streaks bloom against the near-black bg without a hard edge */
@@ -26,6 +27,156 @@
   mix-blend-mode: screen;
 }
 
+/* ════════════════════ WARP LOGO — brand sigil ignite ════════════════════ */
+/* Centered, fixed overlay above the canvas. Hidden until the burst clock adds
+ * .is-igniting (live) or .is-static (reduced motion). pointer-events: none so
+ * it never blocks the page. Geometry mirrors Sigil.tsx / AiagLogo.tsx. */
+.m-warp-logo {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 160px;
+  height: 160px;
+  margin: -80px 0 0 -80px;
+  z-index: 1; /* above .manifesto-stars (z 0), below page content */
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+  transform: scale(0.9);
+}
+
+.m-warp-logo-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Lines + nodes default state (assembled, will be animated from "off") */
+.m-wl-line {
+  stroke: #f59e0b;
+  stroke-opacity: 0.55;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.m-wl-l3 {
+  stroke-width: 1.8;
+}
+.m-wl-l4 {
+  stroke-width: 2;
+}
+.m-wl-node {
+  fill: #f59e0b;
+}
+.m-wl-n4 {
+  fill-opacity: 0.65;
+}
+
+/* ── STATIC (reduced motion): show the assembled mark at the climax ── */
+.m-warp-logo.is-static {
+  opacity: 1;
+  transform: scale(1);
+  filter: drop-shadow(0 0 14px rgba(245, 158, 11, 0.5));
+}
+
+/* ── LIVE: the whole mark crystallises out of the flash over ~1.4s ──
+ * Container handles scale 0.9→1.05→1.0 + opacity 0→1→fade + amber glow flare.
+ * Nodes scale-in staggered; lines draw via stroke-dashoffset. */
+.m-warp-logo.is-igniting {
+  animation: m-wl-container 1400ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes m-wl-container {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+    filter: drop-shadow(0 0 0 rgba(245, 158, 11, 0));
+  }
+  18% {
+    opacity: 1;
+    /* glow flares hard right as the mark snaps into being */
+    filter: drop-shadow(0 0 26px rgba(255, 224, 170, 0.95));
+  }
+  42% {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 22px rgba(245, 158, 11, 0.85));
+  }
+  62% {
+    opacity: 1;
+    transform: scale(1);
+    /* glow settles */
+    filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.5));
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+    filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0));
+  }
+}
+
+/* Nodes: scale-in from 0, staggered along the chain (lower-left → mid →
+ * lower-right → ember). transform-box/origin so scale pivots on each circle. */
+.is-igniting .m-wl-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0);
+  animation: m-wl-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.is-igniting .m-wl-n1 {
+  animation-delay: 60ms;
+}
+.is-igniting .m-wl-n2 {
+  animation-delay: 200ms;
+}
+.is-igniting .m-wl-n3 {
+  animation-delay: 340ms;
+}
+.is-igniting .m-wl-n4 {
+  animation-delay: 480ms;
+}
+@keyframes m-wl-pop {
+  0% {
+    transform: scale(0);
+  }
+  70% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Lines: draw on via stroke-dashoffset, timed just behind their end-nodes.
+ * pathLength is normalised to 1 in markup-free way via large dasharray. */
+.is-igniting .m-wl-line {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  stroke-opacity: 0;
+  animation: m-wl-draw 420ms ease-out forwards;
+}
+.is-igniting .m-wl-l1 {
+  animation-delay: 200ms;
+}
+.is-igniting .m-wl-l2 {
+  animation-delay: 340ms;
+}
+.is-igniting .m-wl-l4 {
+  animation-delay: 340ms;
+}
+.is-igniting .m-wl-l3 {
+  animation-delay: 480ms;
+}
+@keyframes m-wl-draw {
+  0% {
+    stroke-dashoffset: 30;
+    stroke-opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    stroke-opacity: 0.55;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .manifesto-stars {
     /* a calm, evenly-lit static frame — drop the heavy vignette */
@@ -39,5 +190,24 @@
       #000 70%,
       rgba(0, 0, 0, 0.85) 100%
     );
+  }
+
+  /* never animate the logo under reduced motion — show it assembled */
+  .m-warp-logo,
+  .m-warp-logo.is-igniting {
+    animation: none !important;
+    opacity: 1;
+    transform: scale(1);
+    filter: drop-shadow(0 0 14px rgba(245, 158, 11, 0.5));
+  }
+  .m-warp-logo .m-wl-node,
+  .m-warp-logo .m-wl-line {
+    animation: none !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+    stroke-opacity: 0.55;
+  }
+  .m-warp-logo .m-wl-node {
+    transform: scale(1) !important;
   }
 }
