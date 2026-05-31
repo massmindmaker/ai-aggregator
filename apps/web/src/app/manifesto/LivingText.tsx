@@ -215,6 +215,7 @@ export default function LivingText() {
     const spelledIdx: number[] = [];
     let wakeBuffer = '';
     let speaking = false;
+    const pendingRolls = new Set<number>(); // live roll intervals (cleared on unmount)
 
     const charOf = (i: number) =>
       (spans[i]!.textContent ?? '').toLowerCase().replace(/ё/g, 'е');
@@ -309,6 +310,7 @@ export default function LivingText() {
     };
 
     const answerWrong = async () => {
+      speaking = true; // lock immediately so the async fetch can't be raced
       const reply = await fetchDeflection(spelledWord());
       void speak(reply); // stay on the same question
     };
@@ -358,6 +360,7 @@ export default function LivingText() {
             n++;
             if (n >= ROLL_TICKS) {
               window.clearInterval(id);
+              pendingRolls.delete(id);
               el.textContent = target;
               el.classList.remove('lt-spin');
               el.classList.add('lt-on', 'lt-land');
@@ -367,6 +370,7 @@ export default function LivingText() {
                 ROLL_GLYPHS[(Math.random() * ROLL_GLYPHS.length) | 0]!;
             }
           }, ROLL_TICK);
+          pendingRolls.add(id);
         }, delay);
       });
 
@@ -403,7 +407,7 @@ export default function LivingText() {
         touched.push({ el, orig: el.textContent ?? '' });
         if (!firstEl) firstEl = el;
         if (g === ' ') {
-          el.classList.remove('lt-spin', 'lt-land', 'lt-on');
+          el.classList.remove('lt-spin', 'lt-land', 'lt-on', 'lt-fade');
           el.textContent = ' '; // a real gap between the answer's words
           continue;
         }
@@ -560,6 +564,8 @@ export default function LivingText() {
     /* ── Cleanup ───────────────────────────────────────────────────────── */
     return () => {
       cancelAnimationFrame(raf);
+      pendingRolls.forEach((id) => window.clearInterval(id));
+      pendingRolls.clear();
       root.removeEventListener('pointerdown', onPointerDownWrapped);
       root.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('resize', markDirty);
