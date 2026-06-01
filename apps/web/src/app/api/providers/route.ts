@@ -28,28 +28,31 @@ interface ProviderRow {
 }
 
 export async function GET() {
-  let rows: ProviderRow[];
   try {
-    rows = (await db.execute(sql`
+    const result = await db.execute(sql`
       SELECT id, name, api_base, auth_kind, requires_base_url
       FROM providers
       WHERE enabled = true
       ORDER BY sort ASC
-    `)) as unknown as ProviderRow[];
+    `);
+    // node-postgres / neon both return a QueryResult with `.rows`; fall back to
+    // the value itself if a driver ever returns the array directly.
+    const rows = ((result as { rows?: ProviderRow[] }).rows ??
+      (result as unknown as ProviderRow[])) as ProviderRow[];
+
+    const providers = rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      apiBase: r.api_base,
+      authKind: r.auth_kind,
+      requiresBaseUrl: r.requires_base_url,
+    }));
+
+    return NextResponse.json({ providers });
   } catch {
     return NextResponse.json(
       { error: 'database_unavailable' },
       { status: 503 },
     );
   }
-
-  const providers = rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    apiBase: r.api_base,
-    authKind: r.auth_kind,
-    requiresBaseUrl: r.requires_base_url,
-  }));
-
-  return NextResponse.json({ providers });
 }
