@@ -1,0 +1,325 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * AIAG TMA wireframe board — dark/amber lo-fi.
+ * Structural wireframes in the product's own palette (not hi-fi). One board,
+ * phone artboards (390×844), sidebar nav. No JS interactivity — static mocks.
+ * ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --bg: #0b0d10;
+  --surface: #14171c;
+  --surface-2: #1a1e25;
+  --line: #252b34;
+  --line-soft: #1d222a;
+  --ink: #e9edf2;
+  --ink-dim: #8b95a3;
+  --ink-faint: #5c6571;
+  --amber: #f59e0b;
+  --amber-dim: rgba(245, 158, 11, 0.16);
+  --amber-line: rgba(245, 158, 11, 0.4);
+  --good: #34d399;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --sans: -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--sans);
+  background: #060708;
+  color: var(--ink);
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar IA nav ─────────────────────────────────────────────────────── */
+.sidebar {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  width: 250px;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 22px 16px;
+  background: #0a0c0f;
+  border-right: 1px solid var(--line);
+  flex: none;
+}
+.sidebar h1 {
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  margin-bottom: 4px;
+}
+.sidebar h1 b { color: var(--amber); }
+.sidebar .meta { font-size: 11px; color: var(--ink-faint); margin-bottom: 18px; }
+.sidebar .grp {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--ink-faint);
+  margin: 16px 0 6px;
+}
+.sidebar a {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  text-decoration: none;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border-left: 2px solid transparent;
+}
+.sidebar a:hover { color: var(--ink); background: var(--surface); border-left-color: var(--amber); }
+.sidebar a .n { color: var(--ink-faint); font-family: var(--mono); font-size: 11px; margin-right: 6px; }
+
+/* ── Board ──────────────────────────────────────────────────────────────── */
+.board {
+  flex: 1;
+  padding: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 30px 26px;
+  align-content: flex-start;
+}
+.artboard { scroll-margin-top: 16px; }
+.cap {
+  font-size: 12px;
+  color: var(--ink-dim);
+  margin-bottom: 8px;
+  font-family: var(--mono);
+}
+.cap b { color: var(--ink); }
+.cap .tag {
+  color: var(--amber);
+  border: 1px solid var(--amber-line);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  margin-left: 6px;
+}
+
+/* ── Phone frame ────────────────────────────────────────────────────────── */
+.phone {
+  width: 320px;
+  height: 660px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+/* Telegram top chrome */
+.tg-bar {
+  height: 38px;
+  flex: none;
+  background: #11151a;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  gap: 8px;
+}
+.tg-bar .dom { color: var(--ink); }
+.tg-bar .sp { flex: 1; }
+.tg-bar .ic { color: var(--ink-faint); }
+/* screen scroll body */
+.screen {
+  flex: 1;
+  overflow: hidden;
+  padding: 14px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* page header */
+.ph { margin-bottom: 2px; }
+.ph .kicker {
+  display: inline-block;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--amber);
+  background: var(--amber-dim);
+  border-radius: 4px;
+  padding: 2px 7px;
+  margin-bottom: 7px;
+}
+.ph h2 { font-size: 21px; letter-spacing: -0.01em; }
+.ph p { font-size: 11.5px; color: var(--ink-dim); margin-top: 4px; line-height: 1.4; }
+
+/* bottom nav */
+.tabbar {
+  height: 56px;
+  flex: none;
+  background: #0d1014;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.tabbar .t {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 9.5px;
+  color: var(--ink-faint);
+}
+.tabbar .t .g {
+  width: 18px; height: 18px;
+  border: 1.5px solid currentColor;
+  border-radius: 5px;
+}
+.tabbar .t.on { color: var(--amber); }
+
+/* ── Components ─────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+.card.amber { border-color: var(--amber-line); }
+.row { display: flex; align-items: center; gap: 10px; }
+.row.between { justify-content: space-between; }
+.av {
+  width: 34px; height: 34px; flex: none;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+}
+.av.amber { border-color: var(--amber-line); background: var(--amber-dim); }
+.t-title { font-size: 13.5px; font-weight: 600; }
+.t-sub { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+.num { font-family: var(--mono); }
+.muted { color: var(--ink-dim); }
+.faint { color: var(--ink-faint); }
+.amber-tx { color: var(--amber); }
+
+.metric { font-family: var(--mono); font-size: 10.5px; color: var(--ink-dim); }
+.metric b { color: var(--ink); }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 3px 9px;
+}
+.chip.on { color: var(--amber); border-color: var(--amber-line); background: var(--amber-dim); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  height: 42px;
+  border-radius: 10px;
+  font-size: 13px; font-weight: 600;
+  background: var(--amber);
+  color: #1a1206;
+}
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn.sm { height: 32px; font-size: 11.5px; border-radius: 8px; padding: 0 12px; }
+
+.fab {
+  position: absolute; right: 16px; bottom: 70px;
+  height: 46px; padding: 0 18px;
+  border-radius: 24px;
+  background: var(--amber); color: #1a1206;
+  font-weight: 700; font-size: 13px;
+  display: flex; align-items: center; gap: 7px;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
+}
+
+.input {
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+  display: flex; align-items: center;
+  padding: 0 12px;
+  font-size: 12px; color: var(--ink-dim);
+}
+.input.area { height: 70px; align-items: flex-start; padding-top: 10px; }
+.label { font-size: 10.5px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+.field { display: flex; flex-direction: column; }
+
+.list { display: flex; flex-direction: column; gap: 8px; }
+.empty {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 22px 14px;
+  text-align: center;
+  color: var(--ink-dim);
+  font-size: 12px;
+}
+
+.bubble { max-width: 78%; font-size: 12px; line-height: 1.45; padding: 9px 12px; border-radius: 12px; }
+.bubble.them { align-self: flex-start; background: var(--amber-dim); border: 1px solid var(--amber-line); border-bottom-left-radius: 4px; }
+.bubble.me { align-self: flex-end; background: var(--surface-2); border: 1px solid var(--line); border-bottom-right-radius: 4px; }
+
+.seg { display: flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
+.seg .s { flex: 1; text-align: center; font-size: 11px; padding: 6px; border-radius: 6px; color: var(--ink-dim); }
+.seg .s.on { background: var(--amber-dim); color: var(--amber); }
+
+.balance { font-family: var(--mono); font-size: 26px; }
+
+/* modal overlay artboard */
+.scrim {
+  position: absolute; inset: 0;
+  background: rgba(2, 3, 4, 0.7);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: flex-end;
+}
+.sheet {
+  width: 100%;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
+  padding: 16px 14px 18px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.grab { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 4px; }
+
+.scrollnote { font-size: 10px; color: var(--ink-faint); text-align: center; padding-top: 2px; }
+
+/* ── v2 components ──────────────────────────────────────────────────────── */
+.hrow { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.hrow .mini { flex: none; width: 124px; }
+.mini { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.mini.amber { border-color: var(--amber-line); }
+.author { font-size: 10px; color: var(--ink-dim); }
+.author b { color: var(--amber); font-weight: 600; }
+.runs { font-family: var(--mono); font-size: 10px; color: var(--ink-dim); }
+.runs b { color: var(--ink); }
+.route { font-size: 9px; color: var(--good); border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 4px; padding: 1px 5px; }
+.starter { display: inline-flex; font-size: 11px; border: 1px solid var(--line); border-radius: 18px; padding: 6px 11px; color: var(--ink-dim); }
+.starter.on { color: var(--amber); border-color: var(--amber-line); background: var(--amber-dim); }
+.out { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 11px; font-size: 11.5px; line-height: 1.5; }
+.meter { height: 8px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+.meter > i { display: block; height: 100%; background: var(--amber); }
+.slider { height: 4px; border-radius: 3px; background: var(--surface-2); position: relative; margin: 14px 6px; }
+.slider::before { content: ''; position: absolute; left: 0; width: 60%; height: 100%; background: var(--amber); border-radius: 3px; }
+.slider::after { content: ''; position: absolute; left: 58%; top: -5px; width: 14px; height: 14px; border-radius: 50%; background: var(--amber); }
+.examples { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.examples .ex { aspect-ratio: 1; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--ink-faint); }
+
+/* ── v3 components: wizard stepper + kanban ─────────────────────────────── */
+.steps { display: flex; gap: 6px; align-items: center; font-size: 10.5px; color: var(--ink-faint); }
+.steps .dot { width: 19px; height: 19px; border-radius: 50%; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 10px; }
+.steps .dot.on { border-color: var(--amber-line); color: var(--amber); background: var(--amber-dim); }
+.steps .dot.done { border-color: var(--amber-line); color: var(--amber); }
+.steps .ln { flex: 1; height: 1px; background: var(--line); }
+.steps .lbl.on { color: var(--amber); }
+.kanban { display: flex; gap: 8px; overflow-x: auto; }
+.kanban .col { flex: none; width: 130px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.kanban .col h4 { font-size: 9.5px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 7px; display: flex; justify-content: space-between; }
+.kanban .col.done h4 { color: var(--good); }
+.kanban .tk { background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; padding: 8px; margin-bottom: 6px; font-size: 11px; line-height: 1.3; }
+.kanban .tk.amber { border-color: var(--amber-line); }
+.kanban .tk .m { font-size: 9px; color: var(--ink-faint); font-family: var(--mono); margin-top: 4px; }
+.toggle { width: 34px; height: 19px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); position: relative; flex: none; }
+.toggle::after { content: ''; position: absolute; left: 2px; top: 1px; width: 15px; height: 15px; border-radius: 50%; background: var(--ink-faint); }
+.toggle.on { background: var(--amber-dim); border-color: var(--amber-line); }
+.toggle.on::after { left: auto; right: 2px; background: var(--amber); }

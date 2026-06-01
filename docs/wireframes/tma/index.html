@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIAG TMA — Wireframes</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<aside class="sidebar">
+  <h1>AIAG · <b>TMA</b></h1>
+  <div class="meta">Wireframes · dark lo-fi · 2026-06-01</div>
+
+  <div class="grp">Агенты</div>
+  <a href="#s01"><span class="n">01</span>Агенты — список</a>
+  <a href="#s02"><span class="n">02</span>Создать — выбор пути</a>
+  <a href="#s03"><span class="n">03</span>Создать — шаблоны</a>
+  <a href="#s04"><span class="n">04</span>Создать — с нуля</a>
+  <a href="#s05"><span class="n">05</span>Подключение провайдера</a>
+  <a href="#s06"><span class="n">06</span>Агент — чат</a>
+  <a href="#s07"><span class="n">07</span>Агент — раны</a>
+
+  <div class="grp">NFT</div>
+  <a href="#s08"><span class="n">08</span>NFT — коллекции</a>
+
+  <div class="grp">Маркет</div>
+  <a href="#s09"><span class="n">09</span>Маркет — список</a>
+  <a href="#s10"><span class="n">10</span>Маркет — модель</a>
+
+  <div class="grp">Профиль</div>
+  <a href="#s11"><span class="n">11</span>Профиль — баланс/ключи</a>
+  <a href="#s12"><span class="n">12</span>Пополнить (модалка)</a>
+
+  <div class="grp">Онбординг · система</div>
+  <a href="#s13"><span class="n">13</span>Онбординг</a>
+  <a href="#s14"><span class="n">14</span>TON Connect — кошелёк</a>
+  <a href="#s15"><span class="n">15</span>NFT — минт (Startonus)</a>
+  <a href="#s16"><span class="n">16</span>API-ключи</a>
+  <a href="#s17"><span class="n">17</span>Подключённые провайдеры</a>
+  <a href="#s18"><span class="n">18</span>Агент — настройки</a>
+  <a href="#s19"><span class="n">19</span>Модалки (успех/ошибка)</a>
+
+  <div class="grp">v2 · по конкурентам ★</div>
+  <a href="#s20"><span class="n">20</span>Маркетплейс агентов</a>
+  <a href="#s21"><span class="n">21</span>Агент — карточка + RUN</a>
+  <a href="#s22"><span class="n">22</span>Создать — словами (AI)</a>
+  <a href="#s23"><span class="n">23</span>Маркет — фильтр (лист)</a>
+  <a href="#s24"><span class="n">24</span>Агент — TON-лимит</a>
+
+  <div class="grp">v3 · воркфлоу + тулзы ★</div>
+  <a href="#s25"><span class="n">25</span>Создать · Шаг 1 «Кто»</a>
+  <a href="#s26"><span class="n">26</span>Создать · Шаг 2 «Где»</a>
+  <a href="#s27"><span class="n">27</span>Создать · Шаг 3 «Что»</a>
+  <a href="#s28"><span class="n">28</span>Telegram-деплой (деталь)</a>
+  <a href="#s29"><span class="n">29</span>Канбан — задачи агента</a>
+  <a href="#s30"><span class="n">30</span>Маркет тулзов</a>
+  <a href="#s31"><span class="n">31</span>Агент — оснастить тулзами</a>
+  <a href="#s32"><span class="n">32</span>Подключить свой агент (Hermes)</a>
+
+  <div class="grp">v4 · Hermes-центр ★★</div>
+  <a href="#s33"><span class="n">33</span>Онбординг — твой облачный Hermes</a>
+  <a href="#s34"><span class="n">34</span>Мой Hermes — дашборд</a>
+  <a href="#s35"><span class="n">35</span>Маркет — Скиллы</a>
+  <a href="#s36"><span class="n">36</span>Маркет — MCP-серверы</a>
+  <a href="#s37"><span class="n">37</span>Тулза — деталь (pay-per-call)</a>
+
+  <div class="grp">v5 · рефрейм (агенты-маркет) ★★★</div>
+  <a href="#s38"><span class="n">38</span>Агенты — ДОМ = каталог</a>
+  <a href="#s39"><span class="n">39</span>Провайдеры (AIAG=один из)</a>
+  <a href="#s40"><span class="n">40</span>Подключить Gonka-кошелёк</a>
+  <a href="#s41"><span class="n">41</span>Кошелёк (TON/USDT · x402)</a>
+</aside>
+
+<main class="board">
+
+  <!-- 01 · Агенты — список -->
+  <figure class="artboard" id="s01">
+    <figcaption class="cap"><b>01 · Агенты — список</b><span class="tag">Агенты</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><span class="kicker">AIAG</span><h2>Агенты</h2><p>Твои AI-агенты под задачи. Запускай, общайся, следи за расходом.</p></div>
+        <div class="row between">
+          <div class="chips"><span class="chip on">Все · 3</span><span class="chip">Активные</span><span class="chip">На паузе</span></div>
+        </div>
+        <div class="list">
+          <div class="card amber">
+            <div class="row between">
+              <div class="row"><div class="av amber">🔥</div><div><div class="t-title">Контент-маг</div><div class="t-sub">GPT-5.5 · контент</div></div></div>
+              <span class="chip on">● live</span>
+            </div>
+            <div class="row between" style="margin-top:10px">
+              <span class="metric"><b>12.4k</b> запросов</span><span class="metric">★ <b>4.8</b></span><span class="metric"><b>$8</b>/нед</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="row between">
+              <div class="row"><div class="av">🤖</div><div><div class="t-title">Саппорт-бот</div><div class="t-sub">Claude Sonnet 4.6 · свой ключ</div></div></div>
+              <span class="chip">⏸ пауза</span>
+            </div>
+            <div class="row between" style="margin-top:10px">
+              <span class="metric"><b>2.1k</b> запросов</span><span class="metric">★ <b>4.6</b></span><span class="metric faint">BYOK</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="row"><div class="av">📊</div><div><div class="t-title">Аналитик</div><div class="t-sub">DeepSeek V4 · данные</div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="fab">＋ Создать</div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 02 · Создать — выбор пути -->
+  <figure class="artboard" id="s02">
+    <figcaption class="cap"><b>02 · Создать агента — выбор пути</b><span class="tag">Агенты</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Новый агент</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Как создаём?</h2><p>Три пути — от двух кликов до полного контроля.</p></div>
+        <div class="list">
+          <div class="card amber"><div class="row"><div class="av amber">⚡</div><div><div class="t-title">Из шаблона — 2 клика</div><div class="t-sub">Готовая роль + модель + промпт. Запуск сразу.</div></div></div></div>
+          <div class="card"><div class="row"><div class="av">✎</div><div><div class="t-title">С нуля</div><div class="t-sub">Имя, модель из каталога, свой промпт, бюджет.</div></div></div></div>
+          <div class="card"><div class="row"><div class="av">🔌</div><div><div class="t-title">Подключить свой провайдер</div><div class="t-sub">Твой ключ (OpenAI/Anthropic/…), оплата по нему.</div></div></div></div>
+        </div>
+        <div class="scrollnote">↓ прокрутка</div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 03 · Создать — шаблоны -->
+  <figure class="artboard" id="s03">
+    <figcaption class="cap"><b>03 · Создать — галерея шаблонов</b><span class="tag">Агенты</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Шаблоны</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="input">🔎 Поиск шаблона…</div>
+        <div class="chips"><span class="chip on">Все</span><span class="chip">Контент</span><span class="chip">Код</span><span class="chip">Саппорт</span><span class="chip">Данные</span></div>
+        <div class="list">
+          <div class="card"><div class="row between"><div class="row"><div class="av amber">✍️</div><div><div class="t-title">Копирайтер</div><div class="t-sub">GPT-5.5 · посты, лендинги</div></div></div><div class="btn sm">2 клика →</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">💻</div><div><div class="t-title">Код-ревьюер</div><div class="t-sub">Claude Opus 4.8 · PR-ревью</div></div></div><div class="btn sm ghost">→</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🎧</div><div><div class="t-title">Саппорт 24/7</div><div class="t-sub">Gemini 3.5 · ответы клиентам</div></div></div><div class="btn sm ghost">→</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">📈</div><div><div class="t-title">SQL-аналитик</div><div class="t-sub">DeepSeek V4 · запросы к БД</div></div></div><div class="btn sm ghost">→</div></div></div>
+        </div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 04 · Создать — с нуля -->
+  <figure class="artboard" id="s04">
+    <figcaption class="cap"><b>04 · Создать — с нуля (форма)</b><span class="tag">Агенты</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Новый агент</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="field"><div class="label">Имя</div><div class="input">Мой агент</div></div>
+        <div class="field"><div class="label">Модель</div><div class="input row between"><span>GPT-5.5 · $5/1M</span><span class="faint">сменить ›</span></div></div>
+        <div class="field"><div class="label">Системный промпт</div><div class="input area muted">Ты — полезный ассистент, который…</div></div>
+        <div class="field"><div class="label">Дневной бюджет</div><div class="input"><span class="num">$2</span> / день</div></div>
+        <div class="row" style="gap:8px"><div class="chip on">Streaming</div><div class="chip on">Tools</div><div class="chip">Память</div></div>
+        <div class="btn">Создать агента</div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 05 · Подключение провайдера (BYOK) -->
+  <figure class="artboard" id="s05">
+    <figcaption class="cap"><b>05 · Подключение провайдера (BYOK)</b><span class="tag">Агенты · P0</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Подключение</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Свой провайдер</h2><p>Ключ хранится зашифрованным. Оплата идёт по твоему ключу — не через наш баланс.</p></div>
+        <div class="field"><div class="label">1 · Провайдер</div>
+          <div class="chips"><span class="chip on">OpenAI</span><span class="chip">Anthropic</span><span class="chip">Google</span><span class="chip">DeepSeek</span><span class="chip">Mistral</span><span class="chip">Groq</span><span class="chip">OpenRouter</span><span class="chip">Gonka · бета</span><span class="chip">Custom URL</span></div>
+        </div>
+        <div class="field"><div class="label">2 · API-ключ</div><div class="input row between"><span class="num muted">sk-···············abcd</span><span class="amber-tx">вставить</span></div></div>
+        <div class="field"><div class="label">3 · Модель</div><div class="input row between"><span>gpt-5.5</span><span class="faint">список ›</span></div></div>
+        <div class="card"><div class="row"><div class="av">🔒</div><div class="t-sub">Проверим ключ запросом к /models. Сохраняем только шифр + последние 4 символа.</div></div></div>
+        <div class="btn">Проверить и сохранить</div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 06 · Агент — чат -->
+  <figure class="artboard" id="s06">
+    <figcaption class="cap"><b>06 · Агент — чат (streaming)</b><span class="tag">Агенты</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">🔥 Контент-маг</span><span class="sp"></span><span class="ic">⋮</span></div>
+      <div class="screen" style="gap:8px">
+        <div class="seg"><div class="s on">Чат</div><div class="s">Раны</div><div class="s">Настройки</div></div>
+        <div class="bubble them">Привет! Я Контент-маг на GPT-5.5. Что напишем сегодня?</div>
+        <div class="bubble me">Пост в TG про запуск, 3 варианта хука</div>
+        <div class="bubble them">Лови. 1) «Мы убрали VPN из формулы…» 2) «Готовый агент — за 2 клика…» 3) «Пока ты читаешь — агент уже…» ▍</div>
+        <div class="sp" style="flex:1"></div>
+        <div class="input row between"><span class="muted">Сообщение…</span><span class="amber-tx">↑</span></div>
+        <div class="metric faint">контекст 1M · $5/1M · сегодня $0.40</div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 07 · Агент — раны -->
+  <figure class="artboard" id="s07">
+    <figcaption class="cap"><b>07 · Агент — раны / история</b><span class="tag">Агенты</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">🔥 Контент-маг</span><span class="sp"></span><span class="ic">⋮</span></div>
+      <div class="screen" style="gap:8px">
+        <div class="seg"><div class="s">Чат</div><div class="s on">Раны</div><div class="s">Настройки</div></div>
+        <div class="list">
+          <div class="card"><div class="row between"><div><div class="t-title">Пост · 3 хука</div><div class="t-sub num">сегодня 14:02 · 1.2с · $0.01</div></div><span class="chip on">✓ ok</span></div></div>
+          <div class="card"><div class="row between"><div><div class="t-title">Сценарий рилса</div><div class="t-sub num">сегодня 11:30 · 2.1с · $0.02</div></div><span class="chip on">✓ ok</span></div></div>
+          <div class="card"><div class="row between"><div><div class="t-title">Письмо рассылки</div><div class="t-sub num">вчера · таймаут</div></div><span class="chip">⚠ retry</span></div></div>
+        </div>
+        <div class="card"><div class="row between"><span class="metric"><b>128</b> ранов</span><span class="metric"><b>99.2%</b> ok</span><span class="metric"><b>$8</b>/нед</span></div></div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 08 · NFT -->
+  <figure class="artboard" id="s08">
+    <figcaption class="cap"><b>08 · NFT — коллекции</b><span class="tag">NFT</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><span class="kicker">NFT</span><h2>Коллекции</h2><p>Минт через Startonus за TON. Приходит на подключённый кошелёк.</p></div>
+        <div class="card amber"><div class="row between"><div class="row"><div class="av amber">👛</div><div class="t-sub">Кошелёк не подключён</div></div><div class="btn sm">TON Connect</div></div></div>
+        <div class="row" style="gap:10px">
+          <div class="card" style="flex:1;text-align:center"><div class="av amber" style="margin:0 auto 8px">◆</div><div class="t-title">Знаки Первых</div><div class="t-sub num">от 1.5 TON</div></div>
+          <div class="card" style="flex:1;text-align:center"><div class="av" style="margin:0 auto 8px">◇</div><div class="t-title">Хроника</div><div class="t-sub faint">скоро</div></div>
+        </div>
+        <div class="empty">Твои NFT появятся здесь после минта.</div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t on"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 09 · Маркет — список -->
+  <figure class="artboard" id="s09">
+    <figcaption class="cap"><b>09 · Маркет — список моделей</b><span class="tag">Маркет</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><span class="kicker">МАРКЕТ</span><h2>Модели · от провайдеров</h2></div>
+        <div class="input">🔎 GPT, Claude, Gemini…</div>
+        <div class="chips"><span class="chip on">Все</span><span class="chip">LLM</span><span class="chip">Изобр.</span><span class="chip">Видео</span><span class="chip">Аудио</span></div>
+        <div class="list">
+          <div class="card"><div class="row between"><div class="row"><div class="av amber">A</div><div><div class="t-title">Claude Opus 4.8 <span class="chip" style="padding:0 5px">v4.8</span></div><div class="t-sub num">$5 / $25 за 1M · ctx 1M</div></div></div><div class="amber-tx">›</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">O</div><div><div class="t-title">GPT-5.5</div><div class="t-sub num">$5 / $30 за 1M · ctx 1M</div></div></div><div class="muted">›</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">G</div><div><div class="t-title">Gemini 3.5 Flash</div><div class="t-sub num">$1.5 / $9 за 1M</div></div></div><div class="muted">›</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">D</div><div><div class="t-title">DeepSeek V4 Pro</div><div class="t-sub num">$0.44 / $0.87 за 1M</div></div></div><div class="muted">›</div></div></div>
+        </div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t on"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 10 · Маркет — модель -->
+  <figure class="artboard" id="s10">
+    <figcaption class="cap"><b>10 · Маркет — карточка модели</b><span class="tag">Маркет</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Claude Opus 4.8</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="row"><div class="av amber" style="width:44px;height:44px">A</div><div><div class="t-title" style="font-size:16px">Claude Opus 4.8</div><div class="t-sub">Anthropic · флагман</div></div></div>
+        <div class="card"><div class="row between"><div><div class="label">Ввод</div><div class="num">$5<span class="faint">/1M</span></div></div><div><div class="label">Вывод</div><div class="num">$25<span class="faint">/1M</span></div></div><div><div class="label">Контекст</div><div class="num">1M</div></div></div></div>
+        <div class="chips"><span class="chip on">vision</span><span class="chip on">tools</span><span class="chip on">reasoning</span><span class="chip on">code</span></div>
+        <div class="row" style="gap:6px"><span class="route">✓ лучший маршрут · быстрее</span><span class="route" style="color:var(--ink-dim);border-color:var(--line)">uptime 99.9%</span></div>
+        <div class="t-sub">Топ reasoning, код и агентские задачи. Версия 4.8 — текущий флагман линейки.</div>
+        <div class="card"><div class="row between"><span class="metric">★ <b>4.9</b> · 312 отз.</span><span class="metric"><b>62k</b>/нед</span><span class="metric">p50 <b>410мс</b></span></div></div>
+        <div class="sp" style="flex:1"></div>
+        <div class="row" style="gap:8px"><div class="btn ghost" style="flex:1">Калькулятор</div><div class="btn" style="flex:1.4">Создать агента →</div></div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t on"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 11 · Профиль -->
+  <figure class="artboard" id="s11">
+    <figcaption class="cap"><b>11 · Профиль — баланс / ключи</b><span class="tag">Профиль</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="row"><div class="av amber" style="width:44px;height:44px">👤</div><div><div class="t-title">@username</div><div class="t-sub">AIAG · с мая 2026</div></div></div>
+        <div class="card amber"><div class="label">Баланс</div><div class="row between"><div class="balance amber-tx">124 USDT</div><div class="btn sm">Пополнить</div></div><div class="metric faint" style="margin-top:6px">расход ~$6/день · хватит на ~20 дн</div></div>
+        <div class="list">
+          <div class="card"><div class="row between"><div class="row"><div class="av">🔑</div><div class="t-title">API-ключи</div></div><span class="muted num">2 ›</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🔌</div><div class="t-title">Подключённые провайдеры</div></div><span class="muted num">1 ›</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">👛</div><div class="t-title">TON-кошелёк</div></div><span class="muted">подключить ›</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🧾</div><div class="t-title">История / чеки</div></div><span class="muted">›</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">⚙️</div><div class="t-title">Настройки · 152-ФЗ</div></div><span class="muted">›</span></div></div>
+        </div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t on"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 12 · Пополнить (модалка) -->
+  <figure class="artboard" id="s12">
+    <figcaption class="cap"><b>12 · Пополнить баланс (модалка)</b><span class="tag">Профиль · модалка</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen" style="filter:saturate(.6)">
+        <div class="row"><div class="av amber" style="width:44px;height:44px">👤</div><div><div class="t-title">@username</div></div></div>
+        <div class="card amber"><div class="label">Баланс</div><div class="balance amber-tx">124 USDT</div></div>
+      </div>
+      <div class="scrim">
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="t-title" style="font-size:16px">Пополнить баланс</div>
+          <div class="chips"><span class="chip">+10 USDT</span><span class="chip on">+25 USDT</span><span class="chip">+50 USDT</span><span class="chip">Другое</span></div>
+          <div class="field"><div class="label">Способ</div>
+            <div class="list">
+              <div class="card amber"><div class="row between"><div class="row"><div class="av amber">⚡</div><div class="t-title">TON · мгновенно (TON Connect)</div></div><span class="amber-tx">●</span></div></div>
+              <div class="card"><div class="row between"><div class="row"><div class="av">💳</div><div class="t-title">USDT (TON / Telegram Wallet)</div></div><span class="muted">○</span></div></div>
+            </div>
+          </div>
+          <div class="btn">Оплатить 25 USDT</div>
+        </div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t on"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 13 · Онбординг -->
+  <figure class="artboard" id="s13">
+    <figcaption class="cap"><b>13 · Онбординг (первый вход)</b><span class="tag">онбординг</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen" style="justify-content:center;text-align:center;align-items:center;gap:14px">
+        <div class="av amber" style="width:62px;height:62px;font-size:27px">◆</div>
+        <h2>Запусти своего<br>AI-агента в Telegram.</h2>
+        <p class="muted" style="font-size:12px;max-width:235px">Витрина AI-агентов: запусти готового или собери своего за 2 клика.</p>
+        <div class="row" style="gap:6px"><span class="chip on" style="padding:2px 6px"></span><span class="chip" style="padding:2px 6px"></span><span class="chip" style="padding:2px 6px"></span></div>
+        <div class="btn" style="width:100%">Начать</div>
+        <div class="metric faint">уже есть код? набери его в манифесте</div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 14 · TON Connect -->
+  <figure class="artboard" id="s14">
+    <figcaption class="cap"><b>14 · TON Connect — кошелёк (модалка)</b><span class="tag">NFT · модалка</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen" style="filter:saturate(.6)">
+        <div class="ph"><span class="kicker">NFT</span><h2>Коллекции</h2></div>
+      </div>
+      <div class="scrim">
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="t-title" style="font-size:16px">Подключить кошелёк</div>
+          <div class="t-sub">Нужен для минта NFT и приёма наград на TON.</div>
+          <div class="list">
+            <div class="card amber"><div class="row between"><div class="row"><div class="av amber">💎</div><div class="t-title">Wallet в Telegram</div></div><span class="amber-tx">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🔵</div><div class="t-title">Tonkeeper</div></div><span class="muted">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🟣</div><div class="t-title">MyTonWallet</div></div><span class="muted">›</span></div></div>
+          </div>
+          <div class="metric faint">TON Connect 2 · ключи не покидают кошелёк</div>
+        </div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t on"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 15 · NFT — минт -->
+  <figure class="artboard" id="s15">
+    <figcaption class="cap"><b>15 · NFT — деталь / минт (Startonus)</b><span class="tag">NFT</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Знаки Первых</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="card amber" style="height:150px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%, rgba(245,158,11,.18), transparent 70%)"><div class="av amber" style="width:64px;height:64px;font-size:30px">◆</div></div>
+        <div><div class="t-title" style="font-size:16px">Знак Первого Строителя</div><div class="t-sub">Коллекция «Знаки Первых» · Startonus · TON</div></div>
+        <div class="card"><div class="row between"><div><div class="label">Цена</div><div class="num">1.5 TON</div></div><div><div class="label">Выпущено</div><div class="num">217 / 1000</div></div><div><div class="label">Сеть</div><div class="num">TON</div></div></div></div>
+        <div class="t-sub">Метка ранних. Не даёт прав — помнит. Каждый знак уникален по сид-генерации.</div>
+        <div class="sp" style="flex:1"></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av amber">👛</div><div class="t-sub">UQ…7f3a (подключён)</div></div><span class="chip on">✓</span></div></div>
+        <div class="btn">Минт за 1.5 TON</div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t on"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 16 · API-ключи -->
+  <figure class="artboard" id="s16">
+    <figcaption class="cap"><b>16 · API-ключи</b><span class="tag">Профиль</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">API-ключи</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Ключи</h2><p>OpenAI-совместимый API. Подставь base_url в свой SDK.</p></div>
+        <div class="card"><div class="label">base_url</div><div class="num" style="font-size:11px">api.ai-aggregator.ru/v1</div></div>
+        <div class="list">
+          <div class="card"><div class="row between"><div><div class="t-title">prod</div><div class="t-sub num">sk_aiag_live_····7f3a</div></div><div class="row" style="gap:8px"><span class="metric"><b>12k</b></span><span class="muted">⧉</span></div></div></div>
+          <div class="card"><div class="row between"><div><div class="t-title">dev</div><div class="t-sub num">sk_aiag_live_····91kp</div></div><div class="row" style="gap:8px"><span class="metric"><b>0.4k</b></span><span class="muted">⧉</span></div></div></div>
+        </div>
+        <div class="btn ghost">＋ Новый ключ</div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t on"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 17 · Подключённые провайдеры -->
+  <figure class="artboard" id="s17">
+    <figcaption class="cap"><b>17 · Подключённые провайдеры (BYOK)</b><span class="tag">Профиль · P0</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Провайдеры</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Провайдеры</h2><p>AIAG-шлюз — по умолчанию. Можно добавить свои ключи и сети.</p></div>
+        <div class="list">
+          <div class="card amber"><div class="row between"><div class="row"><div class="av amber">A</div><div><div class="t-title">AIAG-шлюз</div><div class="t-sub">managed · по умолчанию</div></div></div><span class="chip on">● актив</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">O</div><div><div class="t-title">OpenAI <span class="faint">(BYOK)</span></div><div class="t-sub num">sk-····abcd</div></div></div><span class="chip on">✓</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av amber">G</div><div><div class="t-title">Gonka <span class="chip" style="padding:0 5px">бета</span></div><div class="t-sub">децентрализ. сеть · GNK</div></div></div><span class="muted">кошелёк ›</span></div></div>
+        </div>
+        <div class="empty">Custom URL: подключи любой OpenAI-совместимый эндпоинт.</div>
+        <div class="btn ghost">＋ Подключить провайдера</div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t on"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 18 · Агент — настройки -->
+  <figure class="artboard" id="s18">
+    <figcaption class="cap"><b>18 · Агент — настройки</b><span class="tag">Агенты</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">🔥 Контент-маг</span><span class="sp"></span><span class="ic">⋮</span></div>
+      <div class="screen" style="gap:10px">
+        <div class="seg"><div class="s">Чат</div><div class="s">Раны</div><div class="s on">Настройки</div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">⚙️</div><div><div class="t-title">Модель</div><div class="t-sub">GPT-5.5</div></div></div><span class="muted">сменить ›</span></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">◎</div><div><div class="t-title">Бюджет/день</div><div class="t-sub num">$2/день</div></div></div><span class="muted">›</span></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">✎</div><div class="t-title">Системный промпт</div></div><span class="muted">›</span></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">🔌</div><div class="t-title">Провайдер</div></div><span class="muted">AIAG ›</span></div></div>
+        <div class="sp" style="flex:1"></div>
+        <div class="row" style="gap:8px"><div class="btn ghost" style="flex:1">⏸ Пауза</div><div class="btn ghost" style="flex:1;color:#e06a6a;border-color:#3a2222">Удалить</div></div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 19 · Модалки: успех / ошибка / удаление -->
+  <figure class="artboard" id="s19">
+    <figcaption class="cap"><b>19 · Модалки — состояния</b><span class="tag">модалки</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen" style="gap:12px;justify-content:center">
+        <div class="card amber"><div class="row"><div class="av amber">✓</div><div><div class="t-title">Провайдер подключён</div><div class="t-sub">OpenAI · ключ проверен (/models · 200)</div></div></div></div>
+        <div class="card" style="border-color:#3a2222"><div class="row"><div class="av" style="border-color:#3a2222;color:#e06a6a">!</div><div><div class="t-title" style="color:#e06a6a">Ключ не принят</div><div class="t-sub">401 от провайдера. Проверь ключ/доступ.</div></div></div></div>
+        <div class="card"><div class="row"><div class="av">🗑</div><div><div class="t-title">Удалить агента?</div><div class="t-sub">«Контент-маг» и его история будут стёрты.</div></div></div><div class="row" style="gap:8px;margin-top:10px"><div class="btn ghost" style="flex:1">Отмена</div><div class="btn" style="flex:1;background:#e06a6a;color:#1a0a0a">Удалить</div></div></div>
+        <div class="card"><div class="row"><div class="av amber">⚡</div><div><div class="t-title">Оплата прошла</div><div class="t-sub num">+25 USDT · баланс 149 USDT</div></div></div></div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 20 · Маркетплейс агентов -->
+  <figure class="artboard" id="s20">
+    <figcaption class="cap"><b>20 · Маркетплейс агентов</b><span class="tag">Агенты · NEW</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen" style="gap:10px">
+        <div class="seg"><div class="s">Мои</div><div class="s on">Каталог</div></div>
+        <div class="input">🔎 Найти агента…</div>
+        <div class="metric faint">🔥 В тренде за неделю</div>
+        <div class="hrow">
+          <div class="mini amber"><div class="av amber" style="margin-bottom:6px">✍️</div><div class="t-title" style="font-size:12px">Постовик</div><div class="author">@ainews</div><div class="runs"><b>48k</b> прогонов</div></div>
+          <div class="mini"><div class="av" style="margin-bottom:6px">🎬</div><div class="t-title" style="font-size:12px">Сценарист</div><div class="author">@kino</div><div class="runs"><b>31k</b></div></div>
+          <div class="mini"><div class="av" style="margin-bottom:6px">📑</div><div class="t-title" style="font-size:12px">Резюмер</div><div class="author">@docs</div><div class="runs"><b>27k</b></div></div>
+        </div>
+        <div class="chips"><span class="chip on">Все</span><span class="chip">Контент</span><span class="chip">Код</span><span class="chip">SMM</span><span class="chip">Данные</span></div>
+        <div class="list">
+          <div class="card"><div class="row between"><div class="row"><div class="av amber">✍️</div><div><div class="t-title">Постовик</div><div class="author">от <b>@ainews</b> · GPT-5.5</div></div></div><div class="runs"><b>48k</b></div></div><div style="margin-top:8px"><span class="starter">Пост про запуск →</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🧮</div><div><div class="t-title">Юнит-экономика</div><div class="author">от <b>@finbot</b> · Claude 4.8</div></div></div><div class="runs"><b>19k</b></div></div></div>
+        </div>
+      </div>
+      <div class="fab">＋ Создать</div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 21 · Агент — карточка + RUN -->
+  <figure class="artboard" id="s21">
+    <figcaption class="cap"><b>21 · Агент — публичная карточка + RUN</b><span class="tag">Агенты · NEW</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Постовик</span><span class="sp"></span><span class="ic">⤴</span></div>
+      <div class="screen" style="gap:10px">
+        <div class="row between"><div class="row"><div class="av amber" style="width:42px;height:42px">✍️</div><div><div class="t-title" style="font-size:15px">Постовик</div><div class="author">от <b>@ainews</b> · GPT-5.5</div></div></div><div class="runs"><b>48k</b> · ★ 4.9</div></div>
+        <div class="t-sub">Пишет посты для Telegram-каналов: хук, тело, CTA. 3 варианта.</div>
+        <div class="label">быстрый старт</div>
+        <div class="chips"><span class="starter on">Пост про запуск</span><span class="starter">Анонс эфира</span><span class="starter">Дайджест недели</span></div>
+        <div class="field"><div class="label">тема поста</div><div class="input">запуск нашего ИИ-маркета</div></div>
+        <div class="btn">▶ Запустить · 1-й прогон бесплатно</div>
+        <div class="out muted">1) «Мы убрали VPN из формулы…»<br>2) «Готовый агент — за 2 клика…»<br>3) «Пока ты читаешь — агент уже…»</div>
+        <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">⎘ Клонировать в мои</div><div class="btn sm" style="flex:1">Сохранить</div></div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 22 · Создать — словами (conversational) -->
+  <figure class="artboard" id="s22">
+    <figcaption class="cap"><b>22 · Создать агента — словами (AI-билдер)</b><span class="tag">Агенты · NEW</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Новый агент</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen" style="gap:8px">
+        <div class="seg"><div class="s on">Словами</div><div class="s">Форма</div></div>
+        <div class="bubble them">Опиши, какого агента хочешь — я соберу.</div>
+        <div class="bubble me">агент, который пишет посты в мой TG-канал, дерзко и коротко</div>
+        <div class="bubble them">Собрал черновик ↓ Поправить что-то?</div>
+        <div class="card amber">
+          <div class="row between"><div class="row"><div class="av amber">✍️</div><div class="t-title">Дерзкий постовик</div></div><span class="faint">✎</span></div>
+          <div class="t-sub" style="margin-top:8px">Модель: <b>GPT-5.5</b> · Тон: дерзкий, кратко · Вывод: 3 варианта</div>
+        </div>
+        <div class="sp" style="flex:1"></div>
+        <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">Настроить</div><div class="btn" style="flex:1.4">Создать ✓</div></div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 23 · Маркет — фильтр (bottom-sheet) -->
+  <figure class="artboard" id="s23">
+    <figcaption class="cap"><b>23 · Маркет — фильтр + сортировка (лист)</b><span class="tag">Маркет · NEW</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen" style="filter:saturate(.6)"><div class="ph"><span class="kicker">МАРКЕТ</span><h2>Модели · от провайдеров</h2></div></div>
+      <div class="scrim">
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="row between"><div class="t-title" style="font-size:15px">Фильтр</div><span class="faint">сброс</span></div>
+          <div class="field"><div class="label">Сортировка</div><div class="chips"><span class="chip on">🔥 популярное</span><span class="chip">дешевле</span><span class="chip">быстрее</span><span class="chip">новые</span></div></div>
+          <div class="field"><div class="label">Модальность</div><div class="chips"><span class="chip on">LLM</span><span class="chip">Изобр.</span><span class="chip">Видео</span><span class="chip">Аудио</span></div></div>
+          <div class="field"><div class="label">Контекст ≥ <span class="num">128k</span></div><div class="slider"></div></div>
+          <div class="field"><div class="label">Возможности</div><div class="chips"><span class="chip on">tools</span><span class="chip on">vision</span><span class="chip">reasoning</span><span class="chip">RU-резидент</span></div></div>
+          <div class="btn">Показать 41 модель</div>
+        </div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t on"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 24 · Агент — TON-лимит / расход -->
+  <figure class="artboard" id="s24">
+    <figcaption class="cap"><b>24 · Агент — TON-лимит расхода</b><span class="tag">Агенты · крипто</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">🔥 Контент-маг</span><span class="sp"></span><span class="ic">⋮</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Лимит расхода</h2><p>Агент тратит только из выделенного лимита. Основной кошелёк остаётся у тебя.</p></div>
+        <div class="card amber">
+          <div class="row between"><div class="label">Сегодня</div><div class="num muted">$1.20 / $5.00</div></div>
+          <div class="meter" style="margin-top:8px"><i style="width:24%"></i></div>
+          <div class="metric faint" style="margin-top:8px">сброс в 00:00 · хватит на ~4 дня при текущем темпе</div>
+        </div>
+        <div class="card"><div class="row between"><div class="row"><div class="av amber">💎</div><div><div class="t-title">Кошелёк агента</div><div class="t-sub num">8.40 USDT</div></div></div><div class="btn sm">Пополнить</div></div></div>
+        <div class="card"><div class="row"><div class="av">🔒</div><div class="t-sub">Лимит на день <b>$5</b> · авто-стоп при превышении. Ключи и основной баланс не трогаются.</div></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">🎁</div><div class="t-title">Первый прогон — бесплатно</div></div><span class="chip on">✓</span></div></div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 25 · Создать Шаг 1 «Кто» -->
+  <figure class="artboard" id="s25">
+    <figcaption class="cap"><b>25 · Создать · Шаг 1 «Кто»</b><span class="tag">визард · NEW</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Новый агент</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="steps"><span class="dot on">1</span><span class="lbl on">Кто</span><span class="ln"></span><span class="dot">2</span><span>Где</span><span class="ln"></span><span class="dot">3</span><span>Что</span></div>
+        <div class="ph"><h2>Кто это будет?</h2><p>Опиши словами — соберу сам. Или возьми готовый шаблон.</p></div>
+        <div class="card amber"><div class="row"><div class="av amber">⌨</div><div><div class="t-title">Опиши словами</div><div class="t-sub">«агент, который пишет посты в мой канал» — AI соберёт</div></div></div></div>
+        <div class="card"><div class="row"><div class="av">⚡</div><div><div class="t-title">Из каталога шаблонов</div><div class="t-sub">Готовая роль + модель + тулзы. 2 клика.</div></div></div></div>
+        <div class="card"><div class="row"><div class="av">✎</div><div><div class="t-title">С нуля</div><div class="t-sub">Полный контроль: модель, промпт, тулзы.</div></div></div></div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 26 · Создать Шаг 2 «Где» -->
+  <figure class="artboard" id="s26">
+    <figcaption class="cap"><b>26 · Создать · Шаг 2 «Где работает»</b><span class="tag">визард · Telegram</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Новый агент</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="steps"><span class="dot done">✓</span><span>Кто</span><span class="ln"></span><span class="dot on">2</span><span class="lbl on">Где</span><span class="ln"></span><span class="dot">3</span><span>Что</span></div>
+        <div class="ph"><h2>Где работает?</h2><p>Агент действует через твоего бота. Официально, без бан-рисков.</p></div>
+        <div class="field"><div class="label">1 · Твой бот</div><div class="card amber"><div class="row between"><div class="row"><div class="av amber">🤖</div><div><div class="t-title">@your_bot</div><div class="t-sub num">подключён · токен ····4f2a</div></div></div><span class="chip on">✓</span></div></div></div>
+        <div class="field"><div class="label">2 · Где действует</div>
+          <div class="list">
+            <div class="card amber"><div class="row between"><div class="row"><div class="av">📢</div><div><div class="t-title">Канал @your_channel</div><div class="t-sub">постит, отвечает в комментах</div></div></div><span class="chip on">●</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">👥</div><div><div class="t-title">Группа</div><div class="t-sub">модерация, Q&A</div></div></div><span class="muted">○</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">✉️</div><div><div class="t-title">Личка · Telegram Business</div><div class="t-sub">бот отвечает за тебя</div></div></div><span class="muted">○</span></div></div>
+          </div>
+        </div>
+        <div class="btn">Далее → задачи</div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 27 · Создать Шаг 3 «Что делает» -->
+  <figure class="artboard" id="s27">
+    <figcaption class="cap"><b>27 · Создать · Шаг 3 «Что делает»</b><span class="tag">визард · задачи</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Новый агент</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="steps"><span class="dot done">✓</span><span>Кто</span><span class="ln"></span><span class="dot done">✓</span><span>Где</span><span class="ln"></span><span class="dot on">3</span><span class="lbl on">Что</span></div>
+        <div class="ph"><h2>Что делает?</h2><p>Когда агент срабатывает. Можно несколько триггеров.</p></div>
+        <div class="card amber"><div class="row between"><div class="row"><div class="av amber">⏰</div><div><div class="t-title">По расписанию</div><div class="t-sub num">каждый день · 09:00</div></div></div><span class="chip on">✓</span></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">🔑</div><div><div class="t-title">По ключевым словам</div><div class="t-sub">в комментах: «цена», «как купить»</div></div></div><span class="muted">＋</span></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">💬</div><div><div class="t-title">По запросу</div><div class="t-sub">когда пишут боту</div></div></div><span class="muted">＋</span></div></div>
+        <div class="sp" style="flex:1"></div>
+        <div class="btn">▶ Запустить · 1-й прогон бесплатно</div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 28 · Telegram-деплой деталь -->
+  <figure class="artboard" id="s28">
+    <figcaption class="cap"><b>28 · Telegram-деплой агента (деталь)</b><span class="tag">Telegram</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">🔥 Постовик · деплой</span><span class="sp"></span><span class="ic">⋮</span></div>
+      <div class="screen">
+        <div class="card amber"><div class="row between"><div class="row"><div class="av amber">🤖</div><div><div class="t-title">@your_bot</div><div class="t-sub">подключён · admin в @your_channel</div></div></div><span class="chip on">● live</span></div></div>
+        <div class="label">работает в</div>
+        <div class="list">
+          <div class="card"><div class="row between"><div class="row"><div class="av">📢</div><div class="t-title">Канал @your_channel</div></div><span class="chip on">постит ✓</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">✉️</div><div class="t-title">Личка · Business</div></div><span class="chip on">отвечает ✓</span></div></div>
+        </div>
+        <div class="label">права</div>
+        <div class="chips"><span class="chip on">постить</span><span class="chip on">читать комменты</span><span class="chip on">отвечать</span><span class="chip">закреплять</span></div>
+        <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">Тест-сообщение</div><div class="btn ghost sm" style="flex:1;color:#e06a6a;border-color:#3a2222">Отключить</div></div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 29 · Канбан — задачи агента -->
+  <figure class="artboard" id="s29">
+    <figcaption class="cap"><b>29 · Канбан — задачи агента</b><span class="tag">Агенты · NEW</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">🔥 Постовик</span><span class="sp"></span><span class="ic">⋮</span></div>
+      <div class="screen" style="gap:10px">
+        <div class="seg"><div class="s">Чат</div><div class="s">Раны</div><div class="s on">Задачи</div></div>
+        <div class="kanban">
+          <div class="col"><h4>Очередь <span class="num">2</span></h4>
+            <div class="tk amber">Пост: анонс эфира<div class="m">⏰ завтра 09:00</div></div>
+            <div class="tk">Дайджест недели<div class="m">⏰ вс 18:00</div></div>
+          </div>
+          <div class="col"><h4>В работе <span class="num">1</span></h4>
+            <div class="tk">Ответы в комментах<div class="m">🔑 «цена» · 3 шт</div></div>
+          </div>
+          <div class="col done"><h4>Готово <span class="num">5</span></h4>
+            <div class="tk">Утренний пост<div class="m">✓ 09:00 · $0.01</div></div>
+            <div class="tk">Ответ @user<div class="m">✓ 08:42</div></div>
+          </div>
+        </div>
+        <div class="card"><div class="row between"><span class="metric"><b>128</b> задач/нед</span><span class="metric"><b>99%</b> ok</span><span class="metric"><b>$8</b>/нед</span></div></div>
+      </div>
+      <div class="fab">＋ Задача</div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 30 · Маркет тулзов -->
+  <figure class="artboard" id="s30">
+    <figcaption class="cap"><b>30 · Маркет тулзов</b><span class="tag">Тулзы · NEW</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Тулзы</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Тулзы</h2><p>Чем агент умеет действовать. Встроенные + свои (API/MCP).</p></div>
+        <div class="input">🔎 Найти тулзу…</div>
+        <div class="chips"><span class="chip on">Все</span><span class="chip">Встроенные</span><span class="chip">Telegram</span><span class="chip">Кастом/MCP</span></div>
+        <div class="list">
+          <div class="card amber"><div class="row between"><div class="row"><div class="av amber">🔎</div><div><div class="t-title">Веб-поиск</div><div class="t-sub num">встроенная · 28k агентов</div></div></div><span class="toggle on"></span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🖼</div><div><div class="t-title">Генерация картинок</div><div class="t-sub num">встроенная</div></div></div><span class="toggle on"></span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">📨</div><div><div class="t-title">Постинг в Telegram</div><div class="t-sub num">Telegram</div></div></div><span class="toggle on"></span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">📊</div><div><div class="t-title">Google Sheets</div><div class="t-sub num">кастом</div></div></div><span class="toggle"></span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🔗</div><div><div class="t-title">Свой API / MCP-сервер</div><div class="t-sub">подключить эндпоинт</div></div></div><span class="muted">＋</span></div></div>
+        </div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 31 · Агент — оснастить тулзами -->
+  <figure class="artboard" id="s31">
+    <figcaption class="cap"><b>31 · Агент — оснастить тулзами</b><span class="tag">Агенты</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">🔥 Постовик · тулзы</span><span class="sp"></span><span class="ic">⋮</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Тулзы агента</h2><p>Что этот агент может делать сверх текста.</p></div>
+        <div class="list">
+          <div class="card"><div class="row between"><div class="row"><div class="av">🔎</div><div class="t-title">Веб-поиск</div></div><span class="toggle on"></span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🖼</div><div class="t-title">Картинки к постам</div></div><span class="toggle on"></span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">📨</div><div class="t-title">Постинг в @your_channel</div></div><span class="toggle on"></span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">📊</div><div class="t-title">Google Sheets</div></div><span class="toggle"></span></div></div>
+        </div>
+        <div class="btn ghost">＋ Из маркета тулзов</div>
+        <div class="metric faint">тулзы расходуют бюджет агента · видно в ранах</div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 32 · Подключить свой агент / Hermes -->
+  <figure class="artboard" id="s32">
+    <figcaption class="cap"><b>32 · Подключить свой агент (Hermes)</b><span class="tag">power-user · LATER</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Свой агент</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Свой агент</h2><p>Навести AIAG на твой эндпоинт (OpenAI-совместимый / Hermes). Работает через него — со своими тулзами и памятью.</p></div>
+        <div class="field"><div class="label">URL эндпоинта</div><div class="input num" style="font-size:11px">https://hermes.твой-tunnel.app/v1</div></div>
+        <div class="field"><div class="label">Bearer-токен</div><div class="input row between"><span class="num muted">····················</span><span class="amber-tx">вставить</span></div></div>
+        <div class="card"><div class="row"><div class="av">🜂</div><div class="t-sub">Распознаём Hermes 0.9+: подтянем его тулзы, cron и суб-агентов. Ключ хранится зашифрованным.</div></div></div>
+        <div class="btn">Проверить и подключить</div>
+        <div class="metric faint">это P0-BYOK, расширенный до «своего агента»</div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 33 · Онбординг — твой облачный Hermes -->
+  <figure class="artboard" id="s33">
+    <figcaption class="cap"><b>33 · Онбординг — твой облачный Hermes</b><span class="tag">v4 · онбординг</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen" style="gap:14px;align-items:center;text-align:center">
+        <div class="av amber" style="width:60px;height:60px;font-size:26px">🜂</div>
+        <h2>Поднимаем твой Hermes</h2>
+        <p class="muted" style="font-size:12px;max-width:240px">Облачный AI-агент — без установки. Уже заряжаем его нашим каталогом.</p>
+        <div class="list" style="width:100%;text-align:left">
+          <div class="card"><div class="row"><div class="av amber">✓</div><div class="t-title">Рантайм Hermes создан</div></div></div>
+          <div class="card amber"><div class="row"><div class="av amber">⟳</div><div class="t-title">Подключаем провайдера моделей</div></div></div>
+          <div class="card"><div class="row"><div class="av">☐</div><div class="t-sub">Тулзы и скиллы по умолчанию</div></div></div>
+        </div>
+        <div class="btn" style="width:100%">Готово → создать агента</div>
+        <div class="metric faint">power-user? <span class="amber-tx">подключи свой Hermes ›</span></div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 34 · Мой Hermes — дашборд -->
+  <figure class="artboard" id="s34">
+    <figcaption class="cap"><b>34 · Мой Hermes — рантайм-панель</b><span class="tag">v4 · Hermes · R&D</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="row between"><div class="row"><div class="av amber">🜂</div><div><div class="t-title">Мой Hermes</div><div class="t-sub num">управляемый рантайм · в разработке</div></div></div><span class="chip">● R&D</span></div>
+        <div class="card" style="border-color:#3a2f22"><div class="row"><div class="av">🧪</div><div class="t-sub">Hermes-рантайм (свой Hermes · cron · суб-агенты) — в разработке. Пока агенты работают на нашем шлюзе.</div></div></div>
+        <div class="card amber"><div class="row between"><div class="row"><div class="av amber">🔌</div><div class="t-title">Провайдеры</div></div><span class="metric"><b>AIAG</b> · OpenAI · Gonka <span class="faint">· 2 подкл.</span></span></div></div>
+        <div class="list">
+          <div class="card"><div class="row between"><div class="row"><div class="av">🧩</div><div class="t-title">Установлено: модели · скиллы · тулзы</div></div><span class="muted">›</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">⏰</div><div class="t-title">Cron-задачи <span class="faint">(скоро)</span></div></div><span class="muted">›</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🤖</div><div class="t-title">Суб-агенты · Swarm <span class="faint">(скоро)</span></div></div><span class="muted">›</span></div></div>
+        </div>
+        <div class="btn ghost">＋ Подключить свой Hermes (power · бета)</div>
+      </div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 35 · Маркет — Скиллы -->
+  <figure class="artboard" id="s35">
+    <figcaption class="cap"><b>35 · Маркет — Скиллы (SKILL.md)</b><span class="tag">v4 · Маркет</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="seg"><div class="s">Модели</div><div class="s on">Скиллы</div><div class="s">Тулзы</div></div>
+        <div class="input">🔎 Найти скилл…</div>
+        <div class="chips"><span class="chip on">Все</span><span class="chip">Контент</span><span class="chip">Код</span><span class="chip">Крипто</span><span class="chip">SMM</span></div>
+        <div class="list">
+          <div class="card amber"><div class="row between"><div class="row"><div class="av amber">📝</div><div><div class="t-title">tg-suite</div><div class="t-sub">Telegram-маркетинг: посты, серии, аутрич</div></div></div><span class="toggle on"></span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🎨</div><div><div class="t-title">canvas-design</div><div class="t-sub">визуал-промпты под Kie</div></div></div><div class="btn sm ghost">Поставить</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">📈</div><div><div class="t-title">vk-ads-playbook</div><div class="t-sub">запуск/оптимизация кампаний</div></div></div><div class="btn sm ghost">Поставить</div></div></div>
+        </div>
+        <div class="metric faint">формат SKILL.md · тот же, что у Hermes и Claude</div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t on"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 36 · Маркет — MCP-серверы -->
+  <figure class="artboard" id="s36">
+    <figcaption class="cap"><b>36 · Маркет — MCP-серверы</b><span class="tag">v4 · Маркет</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="seg"><div class="s">Модели</div><div class="s">Скиллы</div><div class="s on">Тулзы</div></div>
+        <div class="chips"><span class="chip on">Все</span><span class="chip">MCP</span><span class="chip">x402</span><span class="chip">Telegram</span><span class="chip">Данные</span></div>
+        <div class="list">
+          <div class="card amber"><div class="row between"><div class="row"><div class="av amber">🔗</div><div><div class="t-title">firecrawl</div><div class="t-sub num">MCP · 6 тулзов · http</div></div></div><div class="route">$0.002/вызов</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">📊</div><div><div class="t-title">coingecko</div><div class="t-sub num">x402 · данные · 1.2M вызовов</div></div></div><div class="route">$0.01/вызов</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🔎</div><div><div class="t-title">exa-search</div><div class="t-sub num">MCP · поиск</div></div></div><div class="route">$0.005/вызов</div></div></div>
+          <div class="card"><div class="row"><div class="av">＋</div><div class="t-sub">Свой MCP-сервер / x402-эндпоинт — само-индексация после первого вызова</div></div></div>
+        </div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t on"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 37 · Тулза — деталь (pay-per-call) -->
+  <figure class="artboard" id="s37">
+    <figcaption class="cap"><b>37 · Тулза — деталь (pay-per-call / x402)</b><span class="tag">v4 · Тулзы</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">firecrawl</span><span class="sp"></span><span class="ic">⤴</span></div>
+      <div class="screen">
+        <div class="row"><div class="av amber" style="width:44px;height:44px">🔗</div><div><div class="t-title" style="font-size:15px">firecrawl</div><div class="author">MCP-сервер · 6 тулзов</div></div></div>
+        <div class="card amber"><div class="row between"><div><div class="label">Цена</div><div class="num">$0.002 <span class="faint">/ вызов</span></div></div><div><div class="label">Вызовов</div><div class="num">1.2M</div></div><div><div class="label">Платящих</div><div class="num">480</div></div></div></div>
+        <div class="chips"><span class="route">x402 · USDC/Base</span><span class="chip on">scrape</span><span class="chip on">crawl</span><span class="chip on">search</span></div>
+        <div class="t-sub">Скрейп и обход сайтов в markdown. Подключается в твой Hermes как MCP-сервер; агент зовёт через tools/call.</div>
+        <div class="card"><div class="row"><div class="av">💎</div><div class="t-sub">Списывается из твоего TON/USDT-баланса за каждый вызов. Без API-ключей.</div></div></div>
+        <div class="sp" style="flex:1"></div>
+        <div class="btn">Поставить в моего Hermes</div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t on"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 38 · Агенты — ДОМ = каталог (агенты-маркет как home) -->
+  <figure class="artboard" id="s38">
+    <figcaption class="cap"><b>38 · Агенты — ДОМ = каталог (discovery-first)</b><span class="tag">v5 · home ★</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen" style="gap:10px">
+        <div class="ph"><h2>Агенты</h2><p>Запусти готового или собери своего. AI-агенты, которые работают в твоём Telegram.</p></div>
+        <div class="seg"><div class="s">Мои · 0</div><div class="s on">Каталог</div></div>
+        <div class="input">🔎 Найти агента под задачу…</div>
+        <div class="metric faint">🔥 В тренде</div>
+        <div class="hrow">
+          <div class="mini amber"><div class="av amber" style="margin-bottom:6px">✍️</div><div class="t-title" style="font-size:12px">Постовик</div><div class="author">@ainews</div><div class="runs"><b>48k</b> · <span class="route">$0.01/прогон</span></div></div>
+          <div class="mini"><div class="av" style="margin-bottom:6px">🎧</div><div class="t-title" style="font-size:12px">Саппорт</div><div class="author">@desk</div><div class="runs"><b>31k</b></div></div>
+          <div class="mini"><div class="av" style="margin-bottom:6px">📊</div><div class="t-title" style="font-size:12px">Аналитик</div><div class="author">@data</div><div class="runs"><b>27k</b></div></div>
+        </div>
+        <div class="chips"><span class="chip on">Все</span><span class="chip">SMM</span><span class="chip">Саппорт</span><span class="chip">Код</span><span class="chip">Данные</span></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av amber">✍️</div><div><div class="t-title">Постовик</div><div class="author">от <b>@ainews</b> · ~$0.01/прогон</div></div></div><div class="runs"><b>48k</b></div></div></div>
+        <div class="empty">У тебя пока нет своих — запусти из каталога или <span class="amber-tx">собери своего ›</span></div>
+      </div>
+      <div class="fab">＋ Создать</div>
+      <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 39 · Провайдеры (AIAG = один из) -->
+  <figure class="artboard" id="s39">
+    <figcaption class="cap"><b>39 · Провайдеры (AIAG — один из многих)</b><span class="tag">v5 · провайдеры ★</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Провайдеры</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Провайдеры</h2><p>Откуда агент берёт модели и компьют. AIAG-шлюз — по умолчанию; добавь свои.</p></div>
+        <div class="list">
+          <div class="card amber"><div class="row between"><div class="row"><div class="av amber">A</div><div><div class="t-title">AIAG-шлюз</div><div class="t-sub">73 модели · managed · оплата TON/USDT</div></div></div><span class="chip on">● по умолч.</span></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">O</div><div><div class="t-title">OpenAI</div><div class="t-sub">свой ключ (BYOK)</div></div></div><div class="btn sm ghost">Подключить</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">An</div><div><div class="t-title">Anthropic</div><div class="t-sub">свой ключ (BYOK)</div></div></div><div class="btn sm ghost">Подключить</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av amber">G</div><div><div class="t-title">Gonka <span class="chip" style="padding:0 5px">бета</span></div><div class="t-sub">децентрализ. сеть · кошелёк GNK</div></div></div><div class="btn sm ghost">Кошелёк</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🜂</div><div><div class="t-title">Свой Hermes <span class="chip" style="padding:0 5px">R&D</span></div><div class="t-sub">URL + bearer</div></div></div><span class="muted">скоро</span></div></div>
+        </div>
+        <div class="metric faint">модель агента выбирается из подключённых провайдеров</div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t on"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 40 · Подключить Gonka-кошелёк -->
+  <figure class="artboard" id="s40">
+    <figcaption class="cap"><b>40 · Подключить Gonka (провайдер + кошелёк)</b><span class="tag">v5 · Gonka · бета</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="ic">‹</span><span class="dom">Gonka</span><span class="sp"></span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Gonka <span class="chip" style="padding:0 6px">бета</span></h2><p>Децентрализованная AI-сеть (Cosmos). Инференс оплачивается в GNK с твоего кошелька.</p></div>
+        <div class="card amber"><div class="row between"><div class="row"><div class="av amber">👛</div><div><div class="t-title">Gonka-кошелёк</div><div class="t-sub num">gonka1q…7f3a</div></div></div><span class="chip on">✓</span></div><div class="row between" style="margin-top:8px"><span class="metric">баланс <b class="num">42 GNK</b></span><span class="amber-tx">faucet</span></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">⚙️</div><div class="t-title">Считать инференс через Gonka</div></div><span class="toggle on"></span></div></div>
+        <div class="card"><div class="row between"><span class="metric">узлов <b>1 240</b></span><span class="metric">p50 <b>~2.1с</b></span><span class="metric">GNK/1k <b>~0.3</b></span></div></div>
+        <div class="card" style="border-color:#3a2f22"><div class="row"><div class="av">🧪</div><div class="t-sub">Спайк в работе: OpenAI-совместимость (GonkaGate), латентность, как сводится с TON/USDT-балансом. Пока — для крипто-нативных.</div></div></div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t on"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+  <!-- 41 · Кошелёк (TON/USDT · x402) -->
+  <figure class="artboard" id="s41">
+    <figcaption class="cap"><b>41 · Кошелёк (TON/USDT · per-call · x402)</b><span class="tag">v5 · кошелёк ★</span></figcaption>
+    <div class="phone">
+      <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
+      <div class="screen">
+        <div class="ph"><h2>Кошелёк</h2></div>
+        <div class="card amber"><div class="label">Баланс (кредиты)</div><div class="row between"><div class="balance amber-tx">124 USDT</div><div class="btn sm">Пополнить</div></div><div class="metric faint" style="margin-top:6px">+ 8.4 USDT в Gonka (GNK) · расход ~$6/день</div></div>
+        <div class="card" style="border-color:#3a2222"><div class="row"><div class="av" style="border-color:#3a2222;color:#e06a6a">!</div><div class="t-sub">Низкий баланс &lt; $10 — агенты остановятся. <span class="amber-tx">авто-пополнение ›</span></div></div></div>
+        <div class="label">расход по вызовам (x402)</div>
+        <div class="list">
+          <div class="card"><div class="row between"><div><div class="t-title">firecrawl · scrape</div><div class="t-sub num">14:02 · tx 0x9f…a1</div></div><span class="num amber-tx">−$0.002</span></div></div>
+          <div class="card"><div class="row between"><div><div class="t-title">GPT-5.5 · 1.2k tok</div><div class="t-sub num">13:58 · AIAG-шлюз</div></div><span class="num amber-tx">−$0.01</span></div></div>
+          <div class="card"><div class="row between"><div><div class="t-title">Пополнение · TON Connect</div><div class="t-sub num">09:00 · tx 7a…3c</div></div><span class="num" style="color:var(--good)">+25 USDT</span></div></div>
+        </div>
+        <div class="metric faint">TON/USDT — кредиты; x402(USDC/Base) — мост для внешних агентов</div>
+      </div>
+      <div class="tabbar"><div class="t"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>NFT</div><div class="t"><div class="g"></div>Маркет</div><div class="t on"><div class="g"></div>Профиль</div></div>
+    </div>
+  </figure>
+
+</main>
+</body>
+</html>
