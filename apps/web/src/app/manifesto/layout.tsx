@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import StarField from './StarField';
 import Reveal from './Reveal';
 import LivingText from './LivingText';
 import './manifesto.css';
@@ -31,7 +30,6 @@ export default function ManifestoLayout({
 }) {
   return (
     <div className="manifesto-root dark">
-      <StarField />
       <div className="manifesto-grain" aria-hidden="true" />
       <div className="manifesto-content">{children}</div>
       <Reveal />

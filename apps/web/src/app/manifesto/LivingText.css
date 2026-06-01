@@ -110,6 +110,13 @@
     0 0 30px rgba(245, 158, 11, 0.32);
 }
 
+/* ── .lt-q — a QUESTION: larger + bold so it clearly reads as a question ─ */
+.manifesto-root .lt-q {
+  font-size: 1.5em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
 /* ── .lt-fade — the inscription dissolving before the words return ─────── */
 .manifesto-root .lt-fade {
   transition: opacity 300ms ease, text-shadow 300ms ease;

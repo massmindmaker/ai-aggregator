@@ -47,7 +47,7 @@ const ROLL_GLYPHS = 'АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ'
 const SLOT_STAGGER = 65; // ms between consecutive letters starting to roll
 const ROLL_TICK = 45; // ms per glyph flip while a letter rolls
 const ROLL_TICKS = 7; // glyphs a letter rolls through before it settles
-const HOLD_MS = 1500; // ms the assembled word burns before the text restores
+const HOLD_MS = 2200; // ms a reply burns before it dissolves (questions persist)
 const ANSWER_GAP = 6; // characters skipped between consecutive answers
 const WAVE_PERIOD = 110000; // ms for the ambient wave to cross the viewport once
 const WAVE_BAND = 30; // px — vertical thickness of the drifting wave
@@ -216,6 +216,8 @@ export default function LivingText() {
     let wakeBuffer = '';
     let speaking = false;
     const pendingRolls = new Set<number>(); // live roll intervals (cleared on unmount)
+    // The active question stays "burning" in the text until the reader answers.
+    let persistedTouched: { el: HTMLElement; orig: string }[] | null = null;
 
     const charOf = (i: number) =>
       (spans[i]!.textContent ?? '').toLowerCase().replace(/ё/g, 'е');
@@ -291,21 +293,22 @@ export default function LivingText() {
     const wake = () => {
       phase = 'questing';
       questIndex = 0;
-      void speak(WAKE_REPLY, () => askCurrentQuestion());
+      void speak(WAKE_REPLY, { after: () => askCurrentQuestion() });
     };
 
     const askCurrentQuestion = () => {
       const q = QUESTIONS[questIndex];
       if (!q) return;
-      void speak(q.ask);
+      void speak(q.ask, { question: true });
     };
 
     const answerCorrect = () => {
+      restorePersisted(); // the answered question dissolves
       questIndex++;
       if (questIndex >= QUESTIONS.length) {
-        void speak(FINAL_REPLY, () => climax());
+        void speak(FINAL_REPLY, { after: () => climax() });
       } else {
-        void speak(QUESTIONS[questIndex]!.ask);
+        void speak(QUESTIONS[questIndex]!.ask, { question: true });
       }
     };
 
@@ -374,12 +377,29 @@ export default function LivingText() {
         }, delay);
       });
 
+    // Restore a frozen question's glyphs back to the original prose.
+    const restorePersisted = () => {
+      if (!persistedTouched) return;
+      for (const { el, orig } of persistedTouched) {
+        el.classList.remove('lt-spin', 'lt-land', 'lt-on', 'lt-fade', 'lt-q');
+        el.style.removeProperty('--g');
+        el.textContent = orig;
+      }
+      persistedTouched = null;
+      geomDirty = true;
+    };
+
     /* ── 8b. The presence speaks THROUGH the body text ──────────────────
      * Rewrite a contiguous run of real characters into `line`: each rolls into
      * place (a space becomes a letter where the word needs one; the answer's own
-     * spaces stay gaps, so spelling reads true), the word burns, dissolves, and
-     * every character restores. Anchored where the reader just typed. */
-    const speak = async (line: string, after?: () => void) => {
+     * spaces stay gaps). A REPLY then burns, dissolves and restores. A QUESTION
+     * is rendered larger (.lt-q) with a trailing «?» and FREEZES in the text —
+     * it stays until the reader answers. Anchored where the reader just typed. */
+    const speak = async (
+      line: string,
+      opts: { after?: () => void; question?: boolean } = {},
+    ) => {
+      const { after, question = false } = opts;
       speaking = true;
       setRibbon('');
 
@@ -395,20 +415,28 @@ export default function LivingText() {
       }
       clearSelection();
 
+      const text = question ? `${line}?` : line;
       const touched: { el: HTMLElement; orig: string }[] = [];
       const rolls: Promise<void>[] = [];
       let firstEl: HTMLElement | null = null;
       let slot = 0;
 
-      for (const g of Array.from(line)) {
+      for (const g of Array.from(text)) {
         if (slotsSeq.length === 0) break;
         if (speakCursor >= slotsSeq.length) speakCursor = 0; // wrap around
         const el = slotsSeq[speakCursor++]!;
         touched.push({ el, orig: el.textContent ?? '' });
         if (!firstEl) firstEl = el;
+        if (question) el.classList.add('lt-q');
         if (g === ' ') {
           el.classList.remove('lt-spin', 'lt-land', 'lt-on', 'lt-fade');
           el.textContent = ' '; // a real gap between the answer's words
+          continue;
+        }
+        if (!/[a-zа-я0-9]/i.test(g)) {
+          // punctuation (e.g. the «?») — place it directly, no roll
+          el.textContent = g;
+          el.classList.add('lt-on', 'lt-land');
           continue;
         }
         rolls.push(rollSpan(el, g.toUpperCase(), slot * SLOT_STAGGER));
@@ -423,6 +451,16 @@ export default function LivingText() {
       }
 
       await Promise.all(rolls);
+      speakCursor = Math.min(speakCursor + ANSWER_GAP, slotsSeq.length);
+
+      if (question) {
+        // freeze the question — it stays in the text until the reader answers
+        persistedTouched = touched;
+        speaking = false;
+        after?.();
+        return;
+      }
+
       await sleep(HOLD_MS);
 
       // dissolve: the burning inscription fades, then the words return
@@ -431,14 +469,11 @@ export default function LivingText() {
         await sleep(320);
       }
       for (const { el, orig } of touched) {
-        el.classList.remove('lt-spin', 'lt-land', 'lt-on', 'lt-fade');
+        el.classList.remove('lt-spin', 'lt-land', 'lt-on', 'lt-fade', 'lt-q');
         el.style.removeProperty('--g');
         el.textContent = orig;
       }
       geomDirty = true;
-
-      // flow the next reply into the following lines
-      speakCursor = Math.min(speakCursor + ANSWER_GAP, slotsSeq.length);
 
       speaking = false;
       after?.();
