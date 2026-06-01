@@ -165,7 +165,7 @@ export default function BusinessPage() {
             />
             <FeatureCard
               title="Безопасность"
-              text="NDA, 152-ФЗ. Логи на нашей стороне. On-premise gateway по запросу с проксированием в OpenRouter/Kie."
+              text="NDA, 152-ФЗ. Логи на нашей стороне. On-premise gateway по запросу с проксированием к провайдерам моделей."
             />
             <FeatureCard
               title="Выделенные ключи"
