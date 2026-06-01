@@ -44,9 +44,19 @@ export interface Znak {
   shortHash: string;
   /** Full struck-relic code line, e.g. "ЗНАК · No 04217 · 7F3A9C". */
   code: string;
+  /** The personal pass-cipher, grouped for reading, e.g. "ЖВКР · ТАНЛ · ОПЫС".
+   *  Pure (deterministic) Cyrillic letters — every glyph exists in the manifesto
+   *  body, so the visitor can RE-ENTER by spelling it back into the text. */
+  passcode: string;
+  /** The same cipher normalised (no spaces/dots), for click-spelling match. */
+  passKey: string;
   /** 0..1 deterministic values to skew the rendered sigil's geometry/glow. */
   facets: { hue: number; tilt: number; spread: number; pulse: number };
 }
+
+/** Clean Cyrillic alphabet for the pass-cipher — all common in the prose,
+ *  skips look-alike / hard-to-spot glyphs (Й, Ъ, Ы, Ь, Ё). */
+const CODE_ALPHABET = 'АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЭЮЯ';
 
 /**
  * Create a fresh, hard-to-guess seed. Uses crypto when available, falling back
@@ -83,6 +93,14 @@ export function deriveZnak(seed: string): Znak {
 
   const code = `ЗНАК · No ${number} · ${shortHash}`;
 
+  // Personal pass-cipher: 12 Cyrillic letters in 3 groups of 4, deterministic.
+  const letters: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    letters.push(CODE_ALPHABET[Math.floor(rnd() * CODE_ALPHABET.length)]!);
+  }
+  const passKey = letters.join('');
+  const passcode = `${passKey.slice(0, 4)} · ${passKey.slice(4, 8)} · ${passKey.slice(8, 12)}`;
+
   const facets = {
     hue: rnd(), // small amber-temperature shift
     tilt: rnd(), // sigil rotation
@@ -90,7 +108,7 @@ export function deriveZnak(seed: string): Znak {
     pulse: rnd(), // glow breathing offset
   };
 
-  return { seed, number, shortHash, code, facets };
+  return { seed, number, shortHash, code, passcode, passKey, facets };
 }
 
 /**

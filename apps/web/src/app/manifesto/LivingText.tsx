@@ -28,7 +28,7 @@
  */
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { deriveZnak, ZNAK_STORAGE_KEY } from './glubina/znak';
 import {
   DEFLECTIONS,
   FINAL_REPLY,
@@ -52,12 +52,8 @@ const ANSWER_GAP = 6; // characters skipped between consecutive answers
 const WAVE_PERIOD = 110000; // ms for the ambient wave to cross the viewport once
 const WAVE_BAND = 30; // px — vertical thickness of the drifting wave
 const WAVE_MAX = 0.5; // peak ambient glow contributed by the wave (0..1)
-const CHAMBER_ROUTE = '/manifesto/glubina'; // the secret chamber
-const WARP_TO_NAV_MS = 1600; // let the warp play before navigating
 
 export default function LivingText() {
-  const router = useRouter();
-
   useEffect(() => {
     const root = document.querySelector<HTMLElement>('.manifesto-root');
     if (!root) return;
@@ -219,6 +215,34 @@ export default function LivingText() {
     // The active question stays "burning" in the text until the reader answers.
     let persistedTouched: { el: HTMLElement; orig: string }[] | null = null;
 
+    // Re-entry: a returning visitor re-opens the door by spelling their saved
+    // CODE back into the text (the code is pure Cyrillic — all of its letters
+    // exist in the prose). The presence modal is the single door.
+    let reentryBuf = '';
+    let reentryKey = '';
+    const refreshReentryKey = () => {
+      try {
+        const s = window.localStorage.getItem(ZNAK_STORAGE_KEY);
+        reentryKey = s ? deriveZnak(s).passKey.toLowerCase() : '';
+      } catch {
+        reentryKey = '';
+      }
+    };
+    refreshReentryKey();
+    const enter = () => {
+      triggerWarp(); // legacy warp event (harmless if nothing listens)
+      try {
+        sessionStorage.setItem('manifesto:awoke', '1');
+      } catch {
+        /* storage blocked — fine */
+      }
+      try {
+        window.dispatchEvent(new CustomEvent('manifesto:enter'));
+      } catch {
+        /* ignore */
+      }
+    };
+
     const charOf = (i: number) =>
       (spans[i]!.textContent ?? '').toLowerCase().replace(/ё/g, 'е');
 
@@ -246,7 +270,7 @@ export default function LivingText() {
     };
 
     const onPointerDown = (e: PointerEvent) => {
-      if (speaking || phase === 'done') return;
+      if (speaking) return;
       const target = e.target as HTMLElement | null;
       if (!target) return;
       const span = target.closest<HTMLElement>('[data-ch]');
@@ -269,6 +293,17 @@ export default function LivingText() {
         void span.offsetWidth; // restart ignite animation
         span.classList.add('lit');
         spelledIdx.push(i);
+      }
+
+      // Re-entry: spelling the saved code anywhere re-opens the presence modal.
+      if (reentryKey) {
+        reentryBuf = normalizeSpelled(reentryBuf + ch).slice(-24);
+        if (reentryBuf.endsWith(reentryKey)) {
+          reentryBuf = '';
+          clearSelection();
+          enter();
+          return;
+        }
       }
 
       if (phase === 'sleeping') {
@@ -330,19 +365,8 @@ export default function LivingText() {
     /* ── 7. Climax → warp + navigate to the chamber ────────────────────── */
     const climax = () => {
       phase = 'done';
-      try {
-        sessionStorage.setItem('manifesto:awoke', '1');
-      } catch {
-        /* storage unavailable — proceed anyway */
-      }
-      triggerWarp();
-      window.setTimeout(() => {
-        try {
-          router.push(CHAMBER_ROUTE);
-        } catch {
-          window.location.href = CHAMBER_ROUTE;
-        }
-      }, WARP_TO_NAV_MS);
+      enter(); // flash + open the cooperative-intelligence modal (Presence.tsx)
+      refreshReentryKey(); // the code now exists → re-entry armed this session too
     };
 
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -608,7 +632,7 @@ export default function LivingText() {
       root.classList.remove('lt-awake');
       ribbon?.remove();
     };
-  }, [router]);
+  }, []);
 
   return null;
 }
