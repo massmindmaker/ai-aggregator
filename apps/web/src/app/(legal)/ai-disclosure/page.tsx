@@ -19,7 +19,7 @@ export default function AiDisclosurePage() {
           AI-Aggregator — агрегатор генеративных AI-моделей, собранных через единый API
           и единый интерфейс. Мы не обучаем модели — мы маршрутизируем ваши запросы
           к моделям провайдеров, включая российских (Yandex, Сбер) и зарубежных (OpenAI,
-          Anthropic, Fal, Together).
+          Anthropic, Google).
         </p>
 
         <h2>Какие модели доступны</h2>
@@ -29,7 +29,7 @@ export default function AiDisclosurePage() {
             Запросы не покидают территорию РФ.
           </li>
           <li>
-            <strong>Зарубежные:</strong> OpenAI, Anthropic, Fal, Together, Kie, OpenRouter.
+            <strong>Зарубежные:</strong> OpenAI, Anthropic, Google.
             Требуют отдельного согласия на трансграничную передачу ПДн.
           </li>
         </ul>
