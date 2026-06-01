@@ -54,5 +54,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     RETURNING id::text, status, created_at
   `) as unknown as Array<{ id: string; status: string; created_at: string }>;
 
-  return NextResponse.json({ run_id: ins[0]?.id, status: ins[0]?.status }, { status: 202 });
+  const runId = ins[0]?.id;
+
+  // Enqueue BullMQ job for agent-worker to consume.
+  if (runId) {
+    try {
+      const { Queue } = await import('bullmq');
+      const IORedisMod = await import('ioredis');
+      const IORedis = IORedisMod.default;
+      const connection = new IORedis(process.env.REDIS_URL ?? 'redis://127.0.0.1:6379', {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+      });
+      const queue = new Queue('agent-run', { connection: connection as never });
+      await queue.add('run', { runId }, { removeOnComplete: 100, removeOnFail: 100 });
+      await queue.close();
+      await connection.quit();
+    } catch (e) {
+      console.error('[agents/run] failed to enqueue', e);
+    }
+  }
+
+  return NextResponse.json({ run_id: runId, status: ins[0]?.status }, { status: 202 });
 }
