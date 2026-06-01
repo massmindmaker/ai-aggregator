@@ -218,6 +218,41 @@ function deterministicStats(slug: string, modelType: ModelType) {
 }
 
 // ---------------------------------------------------------------------------
+// Strip upstream provider mentions from description text.
+// Removes routing-layer names (OpenRouter, Kie.ai, Together, Replicate, Fal,
+// HF Inference, TG-bridge) while preserving model brand names.
+// Patterns handled:
+//   "— через Kie.ai"  "через Kie.ai-обёртку"  "Через Replicate."
+//   "Доступно через OpenRouter."  "via Fal.ai"  "через TG-bridge: …"
+//   "через HF Inference"  "через Together"
+// ---------------------------------------------------------------------------
+const UPSTREAM_RE =
+  /(?:(?:—\s*)?(?:доступно\s+)?(?:через|available\s+via|via)\s+(?:openrouter|kie(?:\.ai)?(?:-обёртку)?|together(?:\.ai)?|replicate|fal(?:\.ai)?|hf(?:\s+inference)?|hugging\s*face|tg[- ]?bridge)[^.\n]*\.?)/gi;
+
+// Also remove bare standalone "Через Upstream." or "Via Upstream." sentences that
+// start a clause (capitalised, preceded by ". " or start-of-string).
+const UPSTREAM_CLAUSE_RE =
+  /(?:^|(?<=\.\s))(?:Через|Via)\s+(?:Replicate|OpenRouter|Kie(?:\.ai)?|Together(?:\.ai)?|Fal(?:\.ai)?|HF(?:\s+Inference)?|Hugging\s*Face|TG[- ]?bridge)[^.]*\./gi;
+
+function stripUpstream(text: string | null): string | null {
+  if (!text) return text;
+  let result = text;
+  // First pass: remove standalone upstream clauses like "Через Replicate."
+  result = result.replace(UPSTREAM_CLAUSE_RE, '');
+  // Second pass: remove inline upstream mentions like "через Kie.ai-обёртку"
+  result = result.replace(UPSTREAM_RE, '');
+  // Clean up artifacts:
+  // 1. Collapse multiple spaces
+  result = result.replace(/\s{2,}/g, ' ');
+  // 2. Remove orphan leading dashes/commas
+  result = result.replace(/^\s*[—–-]\s*/, '');
+  // 3. Remove orphan trailing dashes/commas
+  result = result.replace(/\s*[—–,]\s*$/, '');
+  result = result.trim();
+  return result || null;
+}
+
+// ---------------------------------------------------------------------------
 // Short description: first sentence, capped at 90 chars
 // ---------------------------------------------------------------------------
 function shortDesc(description: string | null): string {
@@ -329,14 +364,16 @@ function rowToCatalogModel(row: DbRow): CatalogModel {
 
   const stats = deterministicStats(slug, modelType);
 
+  const cleanedDescription = stripUpstream(row.description);
+
   const model: CatalogModel = {
     slug,
     orgSlug,
     orgName,
     modelSlug,
     name: row.display_name ?? slug,
-    shortDescription: shortDesc(row.description),
-    description: row.description ?? '',
+    shortDescription: shortDesc(cleanedDescription),
+    description: cleanedDescription ?? '',
     type: modelType,
     hostingRegion,
     tags: metaTags,
