@@ -37,7 +37,7 @@ export async function GET() {
     `);
     // node-postgres / neon both return a QueryResult with `.rows`; fall back to
     // the value itself if a driver ever returns the array directly.
-    const rows = ((result as { rows?: ProviderRow[] }).rows ??
+    const rows = ((result as unknown as { rows?: ProviderRow[] }).rows ??
       (result as unknown as ProviderRow[])) as ProviderRow[];
 
     const providers = rows.map((r) => ({
