@@ -103,40 +103,75 @@
   }
 }
 
+/* A round portal — the «orb» of the cooperative mind. Content is centred into
+ * the inscribed area; the chat thread scrolls. A slow amber arc rotates the rim. */
 .pm-modal {
   position: relative;
-  width: min(560px, 100%);
-  max-height: 90vh;
+  width: min(92vmin, 600px);
+  height: min(92vmin, 600px);
+  aspect-ratio: 1 / 1;
   display: flex;
   flex-direction: column;
-  padding: 30px 26px 22px;
-  border-radius: 18px;
+  align-items: center;
+  text-align: center;
+  padding: clamp(30px, 7vmin, 52px) clamp(42px, 13vmin, 86px);
+  border-radius: 50%;
   color: var(--m-ink, #e9e4da);
-  background: linear-gradient(
-    180deg,
-    rgba(24, 19, 13, 0.96),
-    rgba(12, 10, 8, 0.98)
+  background: radial-gradient(
+    circle at 50% 36%,
+    rgba(30, 23, 15, 0.97),
+    rgba(10, 8, 6, 0.99) 72%
   );
-  border: 1px solid rgba(245, 158, 11, 0.28);
+  border: 1px solid rgba(245, 158, 11, 0.3);
   box-shadow:
     0 0 0 1px rgba(245, 158, 11, 0.06),
-    0 30px 80px rgba(0, 0, 0, 0.6),
-    0 0 60px rgba(245, 158, 11, 0.1);
-  animation: pm-rise 420ms cubic-bezier(0.16, 1, 0.3, 1);
+    0 30px 90px rgba(0, 0, 0, 0.66),
+    0 0 90px rgba(245, 158, 11, 0.14),
+    inset 0 0 70px rgba(245, 158, 11, 0.05);
+  overflow: hidden;
+  animation: pm-rise 460ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* rotating glow arc on the rim */
+.pm-modal::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  padding: 2px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(245, 158, 11, 0) 0deg,
+    rgba(245, 158, 11, 0.55) 70deg,
+    rgba(245, 158, 11, 0) 150deg,
+    rgba(245, 158, 11, 0) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: pm-ring 9s linear infinite;
+  pointer-events: none;
+}
+@keyframes pm-ring {
+  to {
+    transform: rotate(360deg);
+  }
 }
 @keyframes pm-rise {
   from {
-    transform: translateY(18px) scale(0.97);
+    transform: scale(0.9);
     opacity: 0;
   }
 }
 
 .pm-close {
   position: absolute;
-  top: 12px;
-  right: 14px;
+  top: clamp(18px, 7%, 44px);
+  right: clamp(40px, 14%, 84px);
   width: 30px;
   height: 30px;
+  z-index: 2;
   border: none;
   background: transparent;
   color: var(--m-ink-dim, #8a8276);
@@ -152,7 +187,9 @@
 
 .pm-head {
   text-align: center;
-  margin-bottom: 16px;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto 12px;
 }
 .pm-modal-sigil {
   width: 56px;
@@ -188,8 +225,10 @@
   flex-direction: column;
   gap: 10px;
   padding: 6px 2px;
-  margin: 6px 0 14px;
-  min-height: 120px;
+  margin: 4px auto 12px;
+  width: 100%;
+  max-width: 348px;
+  min-height: 70px;
   scrollbar-width: thin;
   scrollbar-color: rgba(245, 158, 11, 0.3) transparent;
 }
@@ -269,6 +308,9 @@
 .pm-input {
   display: flex;
   gap: 8px;
+  width: 100%;
+  max-width: 348px;
+  margin: 0 auto;
 }
 .pm-input input {
   flex: 1;
@@ -308,13 +350,16 @@
 
 /* ── the code + lore footnote ──────────────────────────────────────────── */
 .pm-code {
-  margin-top: 14px;
-  padding: 10px 14px;
+  margin: 12px auto 0;
+  width: 100%;
+  max-width: 300px;
+  padding: 8px 14px;
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.32);
   border: 1px dashed rgba(245, 158, 11, 0.35);
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   flex-wrap: wrap;
 }
@@ -331,13 +376,9 @@
   color: var(--m-amber, #f59e0b);
   text-shadow: 0 0 14px rgba(245, 158, 11, 0.4);
 }
+/* The lore footnote is folded into the greeting on the round layout. */
 .pm-foot {
-  margin-top: 12px;
-  font-size: 0.74rem;
-  line-height: 1.5;
-  color: var(--m-ink-dim, #8a8276);
-  font-style: italic;
-  text-align: center;
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
