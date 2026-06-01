@@ -25,22 +25,33 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ---------------------------------------------------------------------------
-// DB connection — raw pg Pool, no Drizzle dependency for new columns
+// Row source — either a JSON dump (CATALOG_DUMP_JSON) or the live DB.
+// JSON mode lets the controller dump prod via psql and generate offline,
+// keeping the marketing page free of any runtime DB dependency.
 // ---------------------------------------------------------------------------
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.error('ERROR: DATABASE_URL is not set');
-  process.exit(1);
+async function getRowsFromDb(): Promise<DbRow[]> {
+  const DATABASE_URL = process.env.DATABASE_URL;
+  if (!DATABASE_URL) {
+    console.error('ERROR: DATABASE_URL is not set (and CATALOG_DUMP_JSON unset)');
+    process.exit(1);
+  }
+  const pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: /neon\.tech|vercel-storage\.com/.test(DATABASE_URL)
+      ? { rejectUnauthorized: false }
+      : /localhost|127\.0\.0\.1|\[::1\]/.test(DATABASE_URL)
+      ? false
+      : undefined,
+  });
+  const client = await pool.connect();
+  try {
+    const result = await client.query<DbRow>(QUERY);
+    return result.rows;
+  } finally {
+    client.release();
+    await pool.end();
+  }
 }
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: /neon\.tech|vercel-storage\.com/.test(DATABASE_URL)
-    ? { rejectUnauthorized: false }
-    : /localhost|127\.0\.0\.1|\[::1\]/.test(DATABASE_URL)
-    ? false
-    : undefined,
-});
 
 // ---------------------------------------------------------------------------
 // Query
@@ -381,17 +392,12 @@ function serializeModel(m: CatalogModel): string {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
-  const client = await pool.connect();
-  let rows: DbRow[];
-  try {
-    const result = await client.query<DbRow>(QUERY);
-    rows = result.rows;
-  } finally {
-    client.release();
-    await pool.end();
-  }
+  const dumpPath = process.env.CATALOG_DUMP_JSON;
+  const rows: DbRow[] = dumpPath
+    ? (JSON.parse(fs.readFileSync(dumpPath, 'utf-8')) as DbRow[])
+    : await getRowsFromDb();
 
-  console.log(`Fetched ${rows.length} models from DB.`);
+  console.log(`Loaded ${rows.length} models (${dumpPath ? dumpPath : 'live DB'}).`);
 
   const models = rows.map(rowToCatalogModel);
 
