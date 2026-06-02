@@ -24,6 +24,12 @@ export interface AgentRow {
   external_base_url: string | null;
   external_api_key_encrypted: Buffer | null;
   external_model_slug: string | null;
+  // R0-6: migration 0026 provider-picker columns. provider_id IS NULL ⇒
+  // legacy aiag/external_openai path; NOT NULL ⇒ new provider-catalog path.
+  provider_id: string | null;
+  model_id: string | null;
+  auth_ref: string | null;
+  base_url_override: string | null;
 }
 
 export interface AgentRunRow {
@@ -58,10 +64,69 @@ export async function loadAgent(agentId: string): Promise<AgentRow | null> {
            connection_type,
            external_base_url,
            external_api_key_encrypted,
-           external_model_slug
+           external_model_slug,
+           provider_id,
+           model_id::text          AS model_id,
+           auth_ref::text          AS auth_ref,
+           base_url_override
     FROM agents WHERE id = ${agentId}::uuid LIMIT 1
   `) as unknown as AgentRow[];
   return rows[0] ?? null;
+}
+
+// -- R0-6: provider-picker credential loader (migration 0026) -------------
+
+export interface ProviderCredential {
+  provider_id: string;
+  api_base: string | null;      // providers.api_base (default OpenAI-compatible base)
+  base_url: string | null;      // per-credential override (custom provider)
+  model_id: string | null;
+  enc_key: Buffer;              // AES-256-GCM ciphertext (crypto.ts format)
+  requires_base_url: boolean;
+}
+
+/**
+ * Load + JOIN an agent's BYO provider credential (agent_provider_credentials)
+ * to its provider catalog row (providers). Returns the ciphertext as a Buffer
+ * — does NOT decrypt here so crypto stays in one place (resolveUpstream calls
+ * decryptSecret).
+ *
+ * enc_key encoding: the column is TEXT (migration 0026) holding the same
+ * AES-256-GCM blob crypto.ts produces, base64-encoded. The BYOK write route
+ * MUST store `encryptSecret(key).toString('base64')` to match this decode.
+ */
+export async function loadProviderCredential(
+  authRef: string,
+): Promise<ProviderCredential | null> {
+  const rows = (await sql`
+    SELECT c.provider_id,
+           p.api_base,
+           c.base_url,
+           c.model_id,
+           c.enc_key,
+           p.requires_base_url
+    FROM agent_provider_credentials c
+    JOIN providers p ON p.id = c.provider_id
+    WHERE c.id = ${authRef}::uuid
+    LIMIT 1
+  `) as unknown as Array<{
+    provider_id: string;
+    api_base: string | null;
+    base_url: string | null;
+    model_id: string | null;
+    enc_key: string;
+    requires_base_url: boolean;
+  }>;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    provider_id: r.provider_id,
+    api_base: r.api_base,
+    base_url: r.base_url,
+    model_id: r.model_id,
+    enc_key: Buffer.from(r.enc_key, 'base64'),
+    requires_base_url: r.requires_base_url,
+  };
 }
 
 /**
