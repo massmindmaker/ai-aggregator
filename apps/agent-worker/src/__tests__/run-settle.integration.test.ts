@@ -70,11 +70,14 @@ describe.skipIf(!TEST_DB_URL)(
 
       seed = { agentId, runId, tgUserId };
 
-      // Insert agent with minimal NOT NULL columns.
+      // Insert agent with the full set of NOT-NULL-without-default columns.
+      // The live `agents` schema requires template_kind (varchar(40), NOT NULL,
+      // no default) in addition to tg_user_id/name/system_prompt — verified
+      // against the prod schema during the VPS green run.
       // spent_today_date must be today so the day bucket is current.
       await testSql`
         INSERT INTO agents (
-          id, tg_user_id, name, system_prompt,
+          id, tg_user_id, name, system_prompt, template_kind,
           budget_rub_monthly, daily_budget_rub,
           spent_today_rub, spent_today_date,
           status, connection_type
@@ -83,6 +86,7 @@ describe.skipIf(!TEST_DB_URL)(
           ${tgUserId}::bigint,
           'test-agent',
           'You are a test agent.',
+          'custom',
           1000,
           100,
           0,
@@ -205,7 +209,9 @@ describe.skipIf(!TEST_DB_URL)(
         FROM agent_runs WHERE id = ${runId}::uuid
       `;
       expect(runRows[0].status).toBe('queued');
-      expect(runRows[0].cost_rub).toBeNull();
+      // cost_rub stays at its seeded default (0) — the rollback proves the
+      // attempted cost was NEVER recorded (agent_runs.cost_rub DEFAULT 0, not NULL).
+      expect(Number(runRows[0].cost_rub)).toBe(0);
     });
 
     // -----------------------------------------------------------------------
@@ -257,7 +263,9 @@ describe.skipIf(!TEST_DB_URL)(
         FROM agent_runs WHERE id = ${runId}::uuid
       `;
       expect(runRows[0].status).toBe('queued');
-      expect(runRows[0].cost_rub).toBeNull();
+      // cost_rub stays at its seeded default (0) — the rollback proves the
+      // attempted cost was NEVER recorded (agent_runs.cost_rub DEFAULT 0, not NULL).
+      expect(Number(runRows[0].cost_rub)).toBe(0);
     });
 
     // -----------------------------------------------------------------------
