@@ -260,6 +260,19 @@ Plans:
 
 ---
 
+### Phase 15: Telegram Mini App ◆ SHIPPED (with critical debt)
+
+**Goal:** Standalone Telegram Mini App = AI agents marketplace (`apps/tg-miniapp` + `apps/agent-worker`) — discover/run/create agents that work in Telegram, with TON/NFT monetization.
+**Depends on:** Phase 4 (gateway), Phase 5 (upstreams)
+**Status:** ◆ Shipped (commit 88f5eab). Built: HMAC initData→JWT auth (middleware verify); agents CRUD + 6 templates; streaming tool-loop execution + history + daily budget; image_gen via Fal; NFT marketplace via Startonus + TON Connect; agent-worker (BullMQ + ioredis + postgres); Telegram DM notifications; nginx vhost (`/tg`, pm2 `tma`). Migrations 0016–0022 + 0026 (provider catalog).
+**Critical debt (see `docs/specs/2026-06-02-tma-tech-stack-108-eval.md`, score 50/108):** agent runs bypass the `:4000` gateway → no markup + `tg_user_balances` never debited (free inference); CVE-2025-29927 (Next 14.2.15) auth-bypass; jUSDT 1000× overpay risk; migration 0026 unwired in worker; zero tests/observability on the money path. → **remediated in Phase 15.1 (R0)**.
+**Source:** `docs/superpowers/specs/2026-05-08-phase15-tg-miniapp-design.md`
+
+Plans:
+- [x] 15-01..08: scaffold · verify-init+JWT · agents CRUD · agent-worker · TON Connect · marketplace-mini · deploy+notifications · NFT-Startonus (see `.planning/phases/15-tg-miniapp/`)
+
+---
+
 ## Progress
 
 **Execution Order:** Phases run in numeric order in principle. Currently 4/5/6/7 are running in parallel worktree-branches (Phase 8 blocked until they finish). Phase 2 must complete before Phase 8 deploy can succeed.
@@ -292,3 +305,15 @@ Phase 3 (Design) ──────────┘                              
 | 9. Foreign Entity | v2.0 | 0/1 | Deferred | — |
 
 **Overall MVP completion:** 2 of 8 phases shipped. ~37% of code complete weighted by tasks across in-flight branches.
+
+### Phase 15.1: R0: TMA billing + identity truth (emergency fixes from the 108-eval) — gateway routing for aiag runs + per-run balance debit/gate, atomic daily-spend, CVE-2025-29927 patch + JWT hardening, wire migration 0026 in worker. SOT: docs/specs/2026-06-02-tma-tech-remediation-roadmap.md (INSERTED)
+
+**Goal:** Make the shipped TMA safe to put traffic on — aiag agent runs route through the :4000 gateway (markup + white-label), every run debits the prepaid balance atomically and is gated on funds, the daily budget holds under concurrency, the CVE-2025-29927 auth-bypass is patched with hardened JWT verification, and the 0026 provider picker actually routes. Verified on the VPS.
+**Requirements**: R0-1, R0-2, R0-3, R0-4, R0-5, R0-6 (from docs/specs/2026-06-02-tma-tech-remediation-roadmap.md)
+**Depends on:** Phase 15
+**Plans:** 3 plans
+
+Plans:
+- [ ] 15.1-01-PLAN.md — Worker money path: route aiag→:4000 gateway (R0-1), per-run balance debit+gate (R0-2), atomic daily-spend (R0-3), wire 0026 provider columns (R0-6) + unit tests [wave 1]
+- [ ] 15.1-02-PLAN.md — TMA auth hardening: Next≥14.2.33 + nginx strip for CVE-2025-29927 + HS256-pinned jwtVerify + JWT denylist (R0-4), fail-hard TMA_JWT_SECRET (R0-5) [wave 1]
+- [ ] 15.1-03-PLAN.md — Integration test of enqueue→worker→settle→balance-debit atomicity (R0-1/2/3) [wave 2, depends 15.1-01]
