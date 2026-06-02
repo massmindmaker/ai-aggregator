@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: MVP
 status: executing
 stopped_at: production stable, all 10 surveyed routes return 200 OK with zero console errors. Hero CA animation live.
-last_updated: "2026-05-08T10:40:51.863Z"
+last_updated: "2026-06-02T09:35:47.575Z"
 last_activity: 2026-05-08 -- Phase --phase execution started
 progress:
-  total_phases: 14
-  completed_phases: 0
-  total_plans: 7
-  completed_plans: 0
-  percent: 0
+  total_phases: 16
+  completed_phases: 1
+  total_plans: 10
+  completed_plans: 7
+  percent: 70
 ---
 
 # Project State
@@ -72,6 +72,11 @@ Recent decisions affecting current work (all 2026-04-24):
 - **D#12** Drop Supabase → Timeweb managed PG + NextAuth + S3 (152-ФЗ + RAM economy)
 - **D#13** Drop Docker entirely → bare-metal apt + systemd
 - **D#14** Drop Dokploy → pm2 + nginx + GitHub Actions SSH rsync (Capistrano-style releases)
+
+### Roadmap Evolution
+
+- 2026-06-02: Phase 15 (Telegram Mini App) added to ROADMAP.md — was shipped (commit 88f5eab) but never documented in the roadmap.
+- 2026-06-02: Phase **15.1** inserted after Phase 15: **R0 — TMA billing + identity truth** (emergency fixes from the 50/108 tech-stack eval) — **URGENT**. SOT: `docs/specs/2026-06-02-tma-tech-remediation-roadmap.md`.
 
 ### Pending Todos
 
@@ -136,3 +141,5 @@ Resume file: `brain/Projects/AIAG/RESUME-HERE.md`
 - `C:\Users\боб\projects\aggregator-plan-08` — `exec/plan-08-launch`
 
 **VPS production:** `5.129.200.99` (Timeweb ru-1, Ubuntu 24.04, 2GB RAM). SSH `aiag-vps`. PG 16.13 + Redis 7 + Nginx + certbot + Node 24 + Bun + pm2. БД `aiag` (26 tables applied). HTTPS active on apex `ai-aggregator.ru`.
+
+**Planned Phase:** 15.1 (R0: TMA billing + identity truth) — 3 plans — 2026-06-02T09:35:47.541Z
