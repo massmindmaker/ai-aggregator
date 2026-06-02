@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: MVP
 status: executing
-stopped_at: Completed 15.1-01-PLAN.md (worker money path — R0-1/2/3/6). VPS verification deferred.
-last_updated: "2026-06-02T09:58:33Z"
-last_activity: 2026-06-02 -- Phase 15.1 plan 01 executed (worker billing path)
+stopped_at: Completed 15.1-02-PLAN.md (CVE-2025-29927 + JWT hardening — R0-4/5). VPS verification deferred.
+last_updated: "2026-06-02T10:12:00Z"
+last_activity: 2026-06-02 -- Phase 15.1 plan 02 executed (auth hardening: CVE patch, HS256 pin, fail-hard secret, nginx directive)
 progress:
   total_phases: 16
   completed_phases: 1
@@ -26,11 +26,11 @@ See: `.planning/PROJECT.md` (updated 2026-04-26)
 ## Current Position
 
 Phase: 15.1 (R0: TMA billing + identity truth) — EXECUTING
-Plan: 2 of 3 (15.1-01 complete; next: 15.1-02 auth hardening)
+Plan: 3 of 3 (15.1-01 + 15.1-02 complete; next: 15.1-03 integration test)
 Status: Executing Phase 15.1
-Last activity: 2026-06-02 -- 15.1-01 worker money path complete (R0-1/2/3/6)
+Last activity: 2026-06-02 -- 15.1-02 auth hardening complete (CVE-2025-29927 + JWT hardening R0-4/5)
 
-Progress: [███████░░░] ~80% (plan-weighted) — Phase 15.1 worker money path closed: aiag→:4000 gateway routing, atomic per-run balance debit + run-start gate, atomic daily-spend guard, 0026 provider columns wired. Code static-verified (tsc clean); VPS verification (zero-balance reject / paid-run gateway_transactions + balance debit / 4-run concurrency / picker route) deferred per no-local-runtime. Next: 15.1-02 (CVE-2025-29927 + JWT hardening).
+Progress: [████████░░] ~85% (plan-weighted) — Phase 15.1 auth hardening closed: Next.js 14.2.33 (CVE-2025-29927), HS256-pinned jwtVerify with iss/aud, fail-hard TMA_JWT_SECRET on both auth surfaces, x-tma-user-id + x-middleware-subrequest strip in middleware, iss/aud/jti on token issuance, JWT denylist wiring (T-15.1-10 deferred), nginx snippet. Code static-verified (tsc clean); VPS deploy + nginx apply + curl tests deferred per no-local-runtime. Next: 15.1-03 (integration test suite).
 
 ## Why Phase 8 Next
 
@@ -60,7 +60,7 @@ Alternative: `/gsd:execute-phase 2` to finish bare-metal infrastructure (10% rem
 | 7. Supply | partial | n/a | Merged — submission UI exists, eval-runner sandbox still TODO |
 | 8. Launch | 1/1 | n/a | Complete — pm2 + nginx + GitHub Actions SSH rsync deploy, ai-aggregator.ru live |
 | 14. Contest→Marketplace Admin | 7/7 code, 6/7 deployed | n/a | ◆ Admin half on master, migration 0014 applied on VPS; web/gateway/worker deploy blocked on CI pipeline debt — see `.planning/phases/14-contest-marketplace-admin/14-07-SUMMARY.md` |
-| 15.1. R0 TMA billing+identity | 1/3 | unit suites added (tsc-clean; vitest run deferred to VPS) | ◐ In Progress — 15.1-01 worker money path complete (aiag→:4000 gateway, atomic balance debit+gate, atomic daily-spend, 0026 wired). VPS verification + 15.1-02 (CVE/JWT) + 15.1-03 (integration test) pending |
+| 15.1. R0 TMA billing+identity | 2/3 | unit suites added (tsc-clean; vitest run deferred to VPS) | ◐ In Progress — 15.1-01 worker money path + 15.1-02 auth hardening complete. VPS verification + 15.1-03 (integration test) pending |
 
 ## Accumulated Context
 
@@ -80,6 +80,9 @@ Phase 15.1 (2026-06-02):
 - **15.1-01b** Debit `tg_user_balances` (the live spendable table credited by topup-check + migration 0019), NOT `tg_users`. MIN_RUN_COST = 1₽ run-start floor.
 - **15.1-01c** `agent_provider_credentials.enc_key` (TEXT) decoded as base64 — the BYOK write route (future plan) MUST store `encryptSecret(key).toString('base64')`. No write route exists yet; this sets the contract.
 - **15.1-01d** aiag runs route through `http://127.0.0.1:4000/v1/chat/completions` with `AIAG_GATEWAY_KEY`; OpenRouter direct stays ONLY as the documented degraded fallback on gateway 404/model_not_found. White-label: error labels never leak "openrouter" on the aiag path.
+- **15.1-02a** `isRevoked` in jwt-denylist.ts uses Upstash REST API over fetch (Edge-safe) when `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` are set; stubs false otherwise. R0 non-blocking — alg-pin + CVE patch + fail-hard secret are the blocking layer.
+- **15.1-02b** JWT fail-hard guard is a module-level throw (not route-level) so the process refuses to serve ANY route when `TMA_JWT_SECRET` is missing or < 32 chars — not just the auth route.
+- **15.1-02c** isRevoked fails-open on Upstash errors (returns false) to avoid locking out all users on transient Redis blips; stricter fail-closed policy deferred to T-15.1-10.
 
 ### Roadmap Evolution
 
@@ -129,9 +132,9 @@ Recently fixed (2026-04-27):
 
 ## Session Continuity
 
-Last session: 2026-06-02 (executed 15.1-01 — worker money path; branch `plan/15.1-r0-billing-identity`)
-Stopped at: Completed 15.1-01-PLAN.md (R0-1/2/3/6). 5 task commits (dc33c5a, 8546872, 564e5f5, 272cc7e, 68740d9) + SUMMARY. tsc clean; VPS verification deferred (no-local-runtime).
-Resume file: None — next is `/gsd:execute-phase 15.1` for 15.1-02 (CVE-2025-29927 + JWT hardening)
+Last session: 2026-06-02 (executed 15.1-02 — auth hardening; branch `plan/15.1-r0-billing-identity`)
+Stopped at: Completed 15.1-02-PLAN.md (R0-4/5). 5 task commits (b37fe0e, dd5b17c, 1c8f4a8, c463f1c, 8e78b35) + SUMMARY. tsc clean; VPS deploy + nginx apply + curl tests deferred (no-local-runtime).
+Resume file: None — next is `/gsd:execute-phase 15.1` for 15.1-03 (integration test suite)
 
 **Next milestone candidates** (pick one to focus):
 
