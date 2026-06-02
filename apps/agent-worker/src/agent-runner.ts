@@ -72,14 +72,26 @@ export async function resolveUpstream(agent: AgentRow): Promise<Upstream> {
     return { url, apiKey, model, isExternal: true };
   }
 
-  // R0-1: aiag path → the :4000 gateway (OpenAI-compatible). The gateway
-  // applies markup, writes the gateway_transactions audit row, and resolves /
-  // falls back to OpenRouter internally when it lacks the model. Do NOT post
-  // directly to OpenRouter here — that bypasses revenue + white-label.
+  // R0-1: aiag path → the :4000 gateway (OpenAI-compatible) when AIAG_GATEWAY_KEY
+  // is provisioned. The gateway applies markup, writes the gateway_transactions
+  // audit row, and keeps the upstream white-labelled.
+  //
+  // Graceful fallback (deploy-safety): until AIAG_GATEWAY_KEY is set on the host,
+  // fall back to OpenRouter directly so runs keep working — the R0-2 balance debit
+  // and the auth fixes still apply; only the gateway routing/markup/white-label is
+  // OFF. Logged loudly so the missing-key state is visible in the worker logs.
   const model = agent.model_slug?.trim() || DEFAULT_MODEL;
-  const key = process.env.AIAG_GATEWAY_KEY;
-  if (!key) throw new Error('AIAG_GATEWAY_KEY not set');
-  return { url: AIAG_GATEWAY_URL, apiKey: key, model, isExternal: false };
+  const gwKey = process.env.AIAG_GATEWAY_KEY;
+  if (gwKey) {
+    return { url: AIAG_GATEWAY_URL, apiKey: gwKey, model, isExternal: false };
+  }
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (!orKey) throw new Error('neither AIAG_GATEWAY_KEY nor OPENROUTER_API_KEY set');
+  console.warn(
+    '[agent-worker] AIAG_GATEWAY_KEY not set — aiag run falling back to direct OpenRouter ' +
+      '(gateway routing/markup/white-label OFF until the key is provisioned)',
+  );
+  return { url: OPENROUTER_URL, apiKey: orKey, model, isExternal: false };
 }
 
 // OpenRouter approximate pricing per model (USD per 1M tokens).
