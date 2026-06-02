@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
+import { jwtVerify, errors } from 'jose';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.TMA_JWT_SECRET ?? 'dev-only-change-in-prod',
-);
+// R0-5: fail hard at module load if TMA_JWT_SECRET is missing or too short.
+// Throwing here causes Next to refuse to serve protected routes rather than
+// silently accepting tokens forged with the dev-only fallback.
+const RAW_SECRET = process.env.TMA_JWT_SECRET;
+if (!RAW_SECRET || RAW_SECRET.length < 32) {
+  throw new Error('TMA_JWT_SECRET unset or shorter than 32 chars — refusing to start');
+}
+const JWT_SECRET = new TextEncoder().encode(RAW_SECRET);
 
 export const config = {
   matcher: ['/api/tma/:path*'],
@@ -29,11 +34,28 @@ export async function middleware(req: NextRequest) {
   if (!token) return NextResponse.json({ error: 'no_token' }, { status: 401 });
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    // R0-4: pin algorithm to HS256 (blocks alg-confusion / alg:none attacks),
+    // and bind issuer + audience to match what auth/verify issues.
+    const { payload } = await jwtVerify(token, JWT_SECRET, {
+      algorithms: ['HS256'],
+      issuer: 'aiag-tma',
+      audience: 'aiag-gateway',
+    });
+
     const reqHeaders = new Headers(req.headers);
+    // R0-4 defense-in-depth: strip any inbound spoofed x-tma-user-id and the
+    // CVE-2025-29927 bypass header before re-setting with the verified value.
+    reqHeaders.delete('x-tma-user-id');
+    reqHeaders.delete('x-middleware-subrequest');
     reqHeaders.set('x-tma-user-id', String(payload.sub ?? ''));
+
     return NextResponse.next({ request: { headers: reqHeaders } });
-  } catch {
+  } catch (err) {
+    // Typed error handling — do NOT leak error message bodies to the client.
+    if (err instanceof errors.JWTExpired) {
+      return NextResponse.json({ error: 'token_expired' }, { status: 401 });
+    }
+    // Covers JOSEAlgNotAllowed, JWSSignatureVerificationFailed, JWTClaimValidationFailed, etc.
     return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
   }
 }
