@@ -3,11 +3,13 @@ import {
   loadAgent,
   sumMonthlySpend,
   getOrResetDailyBucket,
-  incrementDailySpend,
   loadHistory,
   markStarted,
-  markCompleted,
   markFailed,
+  getBalance,
+  settleRun,
+  loadProviderCredential,
+  InsufficientBalanceError,
   type AgentRow,
 } from './db.js';
 import { pickToolDefs, executeTool, type ToolDef } from './tools.js';
@@ -18,10 +20,17 @@ import {
 } from './bot-api.js';
 import { decryptSecret } from './crypto.js';
 
+// R0-1: aiag runs route through the :4000 gateway (revenue + white-label).
+// OPENROUTER_URL stays ONLY as the documented degraded fallback when the
+// gateway lacks the requested model (404 / model_not_found).
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const AIAG_GATEWAY_URL = 'http://127.0.0.1:4000/v1/chat/completions';
 const DEFAULT_MODEL = 'nousresearch/hermes-4-405b';
 const MAX_ITERATIONS = 12;
 const USD_TO_RUB = 90;
+// R0-2 run-start gate: minimum spendable balance (₽) required to begin a
+// billable run. 1₽ floor (Claude's discretion per CONTEXT).
+const MIN_RUN_COST = 1;
 
 interface Upstream {
   url: string;          // full chat-completions URL
@@ -30,7 +39,24 @@ interface Upstream {
   isExternal: boolean;  // external = user-supplied; cost stays 0
 }
 
-export function resolveUpstream(agent: AgentRow): Upstream {
+export async function resolveUpstream(agent: AgentRow): Promise<Upstream> {
+  // R0-6: provider-picker path (most specific first). provider_id NOT NULL ⇒
+  // the agent was created via the new catalog; route to its chosen provider's
+  // decrypted credential. It IS billable through us (isExternal=false).
+  if (agent.provider_id) {
+    const cred = await loadProviderCredential(agent.auth_ref!);
+    if (!cred) throw new Error('provider_credential_missing');
+    const base = (agent.base_url_override ?? cred.base_url ?? cred.api_base)?.replace(/\/+$/, '');
+    if (!base) throw new Error('provider_base_url_missing');
+    const url = /\/chat\/completions$/.test(base) ? base : `${base}/chat/completions`;
+    return {
+      url,
+      apiKey: decryptSecret(cred.enc_key),
+      model: agent.model_id ?? cred.model_id ?? DEFAULT_MODEL,
+      isExternal: false,
+    };
+  }
+
   if (agent.connection_type === 'external_openai') {
     if (!agent.external_base_url) throw new Error('external_base_url missing');
     if (!agent.external_api_key_encrypted) throw new Error('external_api_key missing');
@@ -45,10 +71,15 @@ export function resolveUpstream(agent: AgentRow): Upstream {
       DEFAULT_MODEL;
     return { url, apiKey, model, isExternal: true };
   }
+
+  // R0-1: aiag path → the :4000 gateway (OpenAI-compatible). The gateway
+  // applies markup, writes the gateway_transactions audit row, and resolves /
+  // falls back to OpenRouter internally when it lacks the model. Do NOT post
+  // directly to OpenRouter here — that bypasses revenue + white-label.
   const model = agent.model_slug?.trim() || DEFAULT_MODEL;
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
-  return { url: OPENROUTER_URL, apiKey, model, isExternal: false };
+  const key = process.env.AIAG_GATEWAY_KEY;
+  if (!key) throw new Error('AIAG_GATEWAY_KEY not set');
+  return { url: AIAG_GATEWAY_URL, apiKey: key, model, isExternal: false };
 }
 
 // OpenRouter approximate pricing per model (USD per 1M tokens).
@@ -91,11 +122,11 @@ interface ModelResponse {
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 }
 
-async function callModel(
+function buildBody(
   upstream: Upstream,
   messages: Message[],
   tools: ToolDef[],
-): Promise<ModelResponse> {
+): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: upstream.model,
     messages,
@@ -105,26 +136,76 @@ async function callModel(
     body.tools = tools;
     body.tool_choice = 'auto';
   }
+  return body;
+}
+
+/** Single POST to a chat-completions URL. Throws on !res.ok with a sliced body. */
+async function postChat(
+  url: string,
+  apiKey: string,
+  body: Record<string, unknown>,
+  attribution: boolean,
+  label: string,
+): Promise<Response> {
   const headers: Record<string, string> = {
-    authorization: `Bearer ${upstream.apiKey}`,
+    authorization: `Bearer ${apiKey}`,
     'content-type': 'application/json',
   };
-  // OpenRouter wants these for routing/attribution; harmless on other servers.
-  if (!upstream.isExternal) {
+  // Routing/attribution headers — harmless on the gateway + OpenRouter, skip
+  // for user-supplied external upstreams. Do NOT log the URL/provider (white-label).
+  if (attribution) {
     headers['HTTP-Referer'] = 'https://ai-aggregator.ru';
     headers['X-Title'] = 'AIAG TMA';
   }
-  const res = await fetch(upstream.url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    const label = upstream.isExternal ? 'external' : 'openrouter';
-    throw new Error(`${label} ${res.status}: ${text.slice(0, 300)}`);
+  return fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+}
+
+/** True when a gateway response means "I don't have this model" → fall back. */
+function isModelNotFound(status: number, text: string): boolean {
+  return status === 404 || /model_not_found|model not found|no such model/i.test(text);
+}
+
+/**
+ * R0-1: issue the chat request, with the documented degraded fallback.
+ *
+ * aiag (gateway) path: POST to the :4000 gateway. If the gateway returns
+ * 404 / model_not_found, re-issue the SAME request directly to OpenRouter
+ * with OPENROUTER_API_KEY (the documented fallback — still wired, not removed).
+ * The happy path does NOT make a second client-side OpenRouter call.
+ *
+ * Exported so the gateway→OpenRouter fallback is unit-testable (Task 5).
+ */
+export async function callWithFallback(
+  upstream: Upstream,
+  body: Record<string, unknown>,
+): Promise<ModelResponse> {
+  const label = upstream.isExternal ? 'external' : 'upstream';
+  const res = await postChat(upstream.url, upstream.apiKey, body, !upstream.isExternal, label);
+  if (res.ok) return (await res.json()) as ModelResponse;
+
+  const text = await res.text();
+
+  // Degraded fallback: ONLY for the aiag gateway path, ONLY on model-not-found.
+  const isGateway = upstream.url === AIAG_GATEWAY_URL;
+  if (isGateway && isModelNotFound(res.status, text)) {
+    const orKey = process.env.OPENROUTER_API_KEY;
+    if (orKey) {
+      const fb = await postChat(OPENROUTER_URL, orKey, body, true, 'openrouter');
+      if (fb.ok) return (await fb.json()) as ModelResponse;
+      const fbText = await fb.text();
+      throw new Error(`upstream ${fb.status}: ${fbText.slice(0, 300)}`);
+    }
   }
-  return (await res.json()) as ModelResponse;
+
+  throw new Error(`${label} ${res.status}: ${text.slice(0, 300)}`);
+}
+
+async function callModel(
+  upstream: Upstream,
+  messages: Message[],
+  tools: ToolDef[],
+): Promise<ModelResponse> {
+  return callWithFallback(upstream, buildBody(upstream, messages, tools));
 }
 
 export function estimateCostRub(modelSlug: string, tokensIn: number, tokensOut: number): number {
@@ -183,6 +264,29 @@ export async function runAgent(runId: string): Promise<void> {
     return;
   }
 
+  // ---- upstream resolution (provider_id / aiag-gateway / external) ----
+  // Resolve BEFORE the balance gate so external (user-paid) runs skip it.
+  let upstream: Upstream;
+  try {
+    upstream = await resolveUpstream(agent);
+  } catch (e) {
+    const msg = `upstream_misconfigured: ${(e as Error).message.slice(0, 160)}`;
+    await markFailed(runId, msg);
+    await notifyFailed(agent.tg_user_id, agent.name, agent.id, msg);
+    return;
+  }
+
+  // ---- R0-2 run-start balance gate (billable runs only) ----
+  // A zero/low-balance user can no longer run a billable agent for free.
+  if (!upstream.isExternal) {
+    const bal = await getBalance(agent.tg_user_id);
+    if (bal < MIN_RUN_COST) {
+      await markFailed(runId, 'insufficient_balance');
+      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'insufficient_balance');
+      return;
+    }
+  }
+
   await markStarted(runId);
 
   // ---- conversation history ----
@@ -194,16 +298,6 @@ export async function runAgent(runId: string): Promise<void> {
   }
   messages.push({ role: 'user', content: run.input });
 
-  // ---- upstream resolution (aiag vs external) + tools ----
-  let upstream: Upstream;
-  try {
-    upstream = resolveUpstream(agent);
-  } catch (e) {
-    const msg = `upstream_misconfigured: ${(e as Error).message.slice(0, 160)}`;
-    await markFailed(runId, msg);
-    await notifyFailed(agent.tg_user_id, agent.name, agent.id, msg);
-    return;
-  }
   const tools = pickToolDefs(agent.tools);
 
   let tokensIn = 0;
@@ -215,7 +309,7 @@ export async function runAgent(runId: string): Promise<void> {
     try {
       resp = await callModel(upstream, messages, tools);
     } catch (e) {
-      const msg = `openrouter_error: ${(e as Error).message.slice(0, 200)}`;
+      const msg = `upstream_error: ${(e as Error).message.slice(0, 200)}`;
       await markFailed(runId, msg);
       await notifyFailed(agent.tg_user_id, agent.name, agent.id, msg);
       return;
@@ -251,8 +345,31 @@ export async function runAgent(runId: string): Promise<void> {
     const toolCalls = choice.message.tool_calls;
     if (!toolCalls || toolCalls.length === 0) {
       const output = choice.message.content ?? '';
-      await markCompleted(runId, output, totalCostRub, tokensIn, tokensOut);
-      await incrementDailySpend(agent.id, totalCostRub);
+      // R0-2 + R0-3: mark completed + atomic daily-spend guard + balance debit
+      // in ONE transaction. A failed guard/debit rolls back the completion too,
+      // so the run never lands 'completed' without being paid for.
+      try {
+        await settleRun({
+          runId,
+          tgUserId: agent.tg_user_id,
+          agentId: agent.id,
+          output,
+          costRub: totalCostRub,
+          tokensIn,
+          tokensOut,
+          isExternal: upstream.isExternal,
+        });
+      } catch (e) {
+        const reason =
+          e instanceof InsufficientBalanceError
+            ? 'insufficient_balance_settle'
+            : (e as Error).message === 'budget_exceeded_daily_settle'
+              ? 'budget_exceeded_daily_settle'
+              : `settle_failed: ${(e as Error).message.slice(0, 120)}`;
+        await markFailed(runId, reason);
+        await notifyFailed(agent.tg_user_id, agent.name, agent.id, reason);
+        return;
+      }
       await notifyCompleted(agent.tg_user_id, agent.name, agent.id, totalCostRub, output);
       return;
     }
