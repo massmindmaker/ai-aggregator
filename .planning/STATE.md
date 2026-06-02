@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: MVP
 status: executing
-stopped_at: production stable, all 10 surveyed routes return 200 OK with zero console errors. Hero CA animation live.
-last_updated: "2026-06-02T09:35:47.575Z"
-last_activity: 2026-05-08 -- Phase --phase execution started
+stopped_at: Completed 15.1-01-PLAN.md (worker money path — R0-1/2/3/6). VPS verification deferred.
+last_updated: "2026-06-02T09:58:33Z"
+last_activity: 2026-06-02 -- Phase 15.1 plan 01 executed (worker billing path)
 progress:
   total_phases: 16
   completed_phases: 1
   total_plans: 10
-  completed_plans: 7
-  percent: 70
+  completed_plans: 8
+  percent: 80
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-04-26)
 
 **Core value:** Any AI model. One API. Payment in ₽.
-**Current focus:** Phase --phase — 14
+**Current focus:** Phase 15.1 — R0 TMA billing + identity truth
 
 ## Current Position
 
-Phase: --phase (14) — EXECUTING
-Plan: 1 of --name
-Status: Executing Phase --phase
-Last activity: 2026-05-08 -- Phase --phase execution started
+Phase: 15.1 (R0: TMA billing + identity truth) — EXECUTING
+Plan: 2 of 3 (15.1-01 complete; next: 15.1-02 auth hardening)
+Status: Executing Phase 15.1
+Last activity: 2026-06-02 -- 15.1-01 worker money path complete (R0-1/2/3/6)
 
-Progress: [██████░░░░] ~60% — Phases 1–3 + Phase 8 deployment shipped; Phases 4–7 merged into master via `v0.5.0-mvp-integration` and partially live (web + gateway). Still missing: real upstream API keys, payment integration test, S3 bucket, eval-runner sandbox.
+Progress: [███████░░░] ~80% (plan-weighted) — Phase 15.1 worker money path closed: aiag→:4000 gateway routing, atomic per-run balance debit + run-start gate, atomic daily-spend guard, 0026 provider columns wired. Code static-verified (tsc clean); VPS verification (zero-balance reject / paid-run gateway_transactions + balance debit / 4-run concurrency / picker route) deferred per no-local-runtime. Next: 15.1-02 (CVE-2025-29927 + JWT hardening).
 
 ## Why Phase 8 Next
 
@@ -60,6 +60,7 @@ Alternative: `/gsd:execute-phase 2` to finish bare-metal infrastructure (10% rem
 | 7. Supply | partial | n/a | Merged — submission UI exists, eval-runner sandbox still TODO |
 | 8. Launch | 1/1 | n/a | Complete — pm2 + nginx + GitHub Actions SSH rsync deploy, ai-aggregator.ru live |
 | 14. Contest→Marketplace Admin | 7/7 code, 6/7 deployed | n/a | ◆ Admin half on master, migration 0014 applied on VPS; web/gateway/worker deploy blocked on CI pipeline debt — see `.planning/phases/14-contest-marketplace-admin/14-07-SUMMARY.md` |
+| 15.1. R0 TMA billing+identity | 1/3 | unit suites added (tsc-clean; vitest run deferred to VPS) | ◐ In Progress — 15.1-01 worker money path complete (aiag→:4000 gateway, atomic balance debit+gate, atomic daily-spend, 0026 wired). VPS verification + 15.1-02 (CVE/JWT) + 15.1-03 (integration test) pending |
 
 ## Accumulated Context
 
@@ -72,6 +73,13 @@ Recent decisions affecting current work (all 2026-04-24):
 - **D#12** Drop Supabase → Timeweb managed PG + NextAuth + S3 (152-ФЗ + RAM economy)
 - **D#13** Drop Docker entirely → bare-metal apt + systemd
 - **D#14** Drop Dokploy → pm2 + nginx + GitHub Actions SSH rsync (Capistrano-style releases)
+
+Phase 15.1 (2026-06-02):
+
+- **15.1-01a** Worker money path uses READ COMMITTED + guarded `UPDATE … WHERE <guard> RETURNING` (per-row lock + WHERE-guard = double-spend/over-budget safe), NOT SERIALIZABLE and NO 40001 retry loop. settleRun = markCompleted + atomic daily-spend guard + balance debit in one `sql.begin`.
+- **15.1-01b** Debit `tg_user_balances` (the live spendable table credited by topup-check + migration 0019), NOT `tg_users`. MIN_RUN_COST = 1₽ run-start floor.
+- **15.1-01c** `agent_provider_credentials.enc_key` (TEXT) decoded as base64 — the BYOK write route (future plan) MUST store `encryptSecret(key).toString('base64')`. No write route exists yet; this sets the contract.
+- **15.1-01d** aiag runs route through `http://127.0.0.1:4000/v1/chat/completions` with `AIAG_GATEWAY_KEY`; OpenRouter direct stays ONLY as the documented degraded fallback on gateway 404/model_not_found. White-label: error labels never leak "openrouter" on the aiag path.
 
 ### Roadmap Evolution
 
@@ -86,6 +94,8 @@ None captured via GSD yet (workflow just bootstrapped today).
 
 External (waiting on user):
 
+- **AIAG_GATEWAY_KEY (NEW, 15.1-01)** — a gateway api-key (`sk_aiag_live_…`) for the AIAG house org must be added to `/srv/aiag/shared/.env`. Without it aiag agent runs fail with `upstream_misconfigured` (AIAG_GATEWAY_KEY not set). Blocks all aiag run traffic + the 15.1-01 VPS verification.
+- **15.1-01 VPS verification (deferred, no-local-runtime)** — zero-balance reject / paid-run writes gateway_transactions + debits balance / 4-run concurrency budget hold / picker routes. Steps in `.planning/phases/15.1-r0-tma-billing-identity-truth-emergency-fixes-from-the-108-e/15.1-01-SUMMARY.md` (VPS verification section). Run after `pm2 restart agent-worker`.
 - **Real upstream API keys** — OpenAI / YandexGPT / GigaChat / Anthropic. Without them /v1/chat/completions returns mock-or-401. Highest-priority next milestone.
 - **Payment integration end-to-end test** — Tinkoff sandbox keys + a successful test charge against `/api/payments/*`.
 - **S3 bucket** — `aiag-storage` not created in Timeweb. Blocks Phase 5 image storage, Phase 6 uploads, Phase 7 submissions (REQ-INF-011).
@@ -94,6 +104,8 @@ External (waiting on user):
 
 Internal:
 
+- **STATE.md not SDK-parseable** — `gsd-sdk query state.advance-plan` errors with "Cannot parse Current Plan or Total Plans from STATE.md" (the Position block still had `--phase`/`--name` placeholders from a prior interpolation bug). The 15.1-01 close updated STATE.md/ROADMAP.md manually. `roadmap.update-plan-progress 15.1` also returned no-matching-checkbox. Cleanup ticket: normalize the Position block to the format the SDK state handlers expect.
+- **provider_id SSRF (accepted this phase, tracked R1-7)** — the worker provider_id branch fetches a user-controlled `base_url_override`; full SSRF re-validation (IPv6 ULA / DNS-rebind) deferred to R1-7 per threat T-15.1-05.
 - **Eval-runner sandbox** (nsjail) — Phase 7 submission scoring still uses unsanitised exec. SECURITY-TODO before opening contests publicly.
 - **VPS root password** — SECURITY-TODO change/disable (key auth already active).
 - **deploy.sh pm2 process name** — script looks for `web`/`gateway`, actual pm2 names are `aiag-web`/`aiag-gateway`. Manual `ln -sfn` + `pm2 restart aiag-web` required after each deploy. Cleanup ticket.
@@ -117,9 +129,9 @@ Recently fixed (2026-04-27):
 
 ## Session Continuity
 
-Last session: 2026-04-27 (hero animation + bug sweep — see `brain/Projects/AIAG/Sessions/2026-04-27-hero-anim-bugs.md`)
-Stopped at: production stable, all 10 surveyed routes return 200 OK with zero console errors. Hero CA animation live.
-Resume file: `brain/Projects/AIAG/RESUME-HERE.md`
+Last session: 2026-06-02 (executed 15.1-01 — worker money path; branch `plan/15.1-r0-billing-identity`)
+Stopped at: Completed 15.1-01-PLAN.md (R0-1/2/3/6). 5 task commits (dc33c5a, 8546872, 564e5f5, 272cc7e, 68740d9) + SUMMARY. tsc clean; VPS verification deferred (no-local-runtime).
+Resume file: None — next is `/gsd:execute-phase 15.1` for 15.1-02 (CVE-2025-29927 + JWT hardening)
 
 **Next milestone candidates** (pick one to focus):
 
