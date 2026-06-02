@@ -30,7 +30,7 @@ interface Upstream {
   isExternal: boolean;  // external = user-supplied; cost stays 0
 }
 
-function resolveUpstream(agent: AgentRow): Upstream {
+export function resolveUpstream(agent: AgentRow): Upstream {
   if (agent.connection_type === 'external_openai') {
     if (!agent.external_base_url) throw new Error('external_base_url missing');
     if (!agent.external_api_key_encrypted) throw new Error('external_api_key missing');
@@ -127,7 +127,7 @@ async function callModel(
   return (await res.json()) as ModelResponse;
 }
 
-function estimateCostRub(modelSlug: string, tokensIn: number, tokensOut: number): number {
+export function estimateCostRub(modelSlug: string, tokensIn: number, tokensOut: number): number {
   const p = PRICING[modelSlug] ?? FALLBACK_PRICE;
   const usd = (tokensIn * p.in + tokensOut * p.out) / 1_000_000;
   return usd * USD_TO_RUB;
