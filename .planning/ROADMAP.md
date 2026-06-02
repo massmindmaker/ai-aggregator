@@ -311,10 +311,10 @@ Phase 3 (Design) ──────────┘                              
 **Goal:** Make the shipped TMA safe to put traffic on — aiag agent runs route through the :4000 gateway (markup + white-label), every run debits the prepaid balance atomically and is gated on funds, the daily budget holds under concurrency, the CVE-2025-29927 auth-bypass is patched with hardened JWT verification, and the 0026 provider picker actually routes. Verified on the VPS.
 **Requirements**: R0-1, R0-2, R0-3, R0-4, R0-5, R0-6 (from docs/specs/2026-06-02-tma-tech-remediation-roadmap.md)
 **Depends on:** Phase 15
-**Plans:** 3 plans (1/3 complete)
-**Status:** ◐ In Progress — 15.1-01 worker money path complete (2026-06-02), VPS verification pending
+**Plans:** 3 plans (3/3 complete)
+**Status:** ✓ Complete — all 3 plans done (2026-06-02). VPS deploy + green integration run deferred (no-local-runtime). Branch `plan/15.1-r0-billing-identity` ready for merge.
 
 Plans:
 - [x] 15.1-01-PLAN.md — Worker money path: route aiag→:4000 gateway (R0-1), per-run balance debit+gate (R0-2), atomic daily-spend (R0-3), wire 0026 provider columns (R0-6) + unit tests [wave 1] — ✓ 2026-06-02
-- [ ] 15.1-02-PLAN.md — TMA auth hardening: Next≥14.2.33 + nginx strip for CVE-2025-29927 + HS256-pinned jwtVerify + JWT denylist (R0-4), fail-hard TMA_JWT_SECRET (R0-5) [wave 1]
-- [ ] 15.1-03-PLAN.md — Integration test of enqueue→worker→settle→balance-debit atomicity (R0-1/2/3) [wave 2, depends 15.1-01]
+- [x] 15.1-02-PLAN.md — TMA auth hardening: Next≥14.2.33 + nginx strip for CVE-2025-29927 + HS256-pinned jwtVerify + JWT denylist (R0-4), fail-hard TMA_JWT_SECRET (R0-5) [wave 1] — ✓ 2026-06-02
+- [x] 15.1-03-PLAN.md — Integration test of enqueue→worker→settle→balance-debit atomicity (R0-1/2/3) [wave 2, depends 15.1-01] — ✓ 2026-06-02

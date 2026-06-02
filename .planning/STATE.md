@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: MVP
 status: executing
-stopped_at: Completed 15.1-02-PLAN.md (CVE-2025-29927 + JWT hardening — R0-4/5). VPS verification deferred.
-last_updated: "2026-06-02T10:12:00Z"
-last_activity: 2026-06-02 -- Phase 15.1 plan 02 executed (auth hardening: CVE patch, HS256 pin, fail-hard secret, nginx directive)
+stopped_at: Completed 15.1-03-PLAN.md (integration test for settleRun atomicity). 1 task commit (97afe5d) + SUMMARY. tsc clean; vitest skips cleanly without TEST_DATABASE_URL (4 skipped). VPS green run deferred (no-local-runtime). Phase 15.1 COMPLETE.
+last_updated: "2026-06-02T13:51:17Z"
+last_activity: 2026-06-02 -- Phase --phase execution started
 progress:
   total_phases: 16
   completed_phases: 1
   total_plans: 10
-  completed_plans: 8
-  percent: 80
+  completed_plans: 9
+  percent: 90
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-04-26)
 
 **Core value:** Any AI model. One API. Payment in ₽.
-**Current focus:** Phase 15.1 — R0 TMA billing + identity truth
+**Current focus:** Phase --phase — 15.1
 
 ## Current Position
 
-Phase: 15.1 (R0: TMA billing + identity truth) — EXECUTING
-Plan: 3 of 3 (15.1-01 + 15.1-02 complete; next: 15.1-03 integration test)
-Status: Executing Phase 15.1
-Last activity: 2026-06-02 -- 15.1-02 auth hardening complete (CVE-2025-29927 + JWT hardening R0-4/5)
+Phase: --phase (15.1) — EXECUTING
+Plan: 1 of --name
+Status: Executing Phase --phase
+Last activity: 2026-06-02 -- Phase --phase execution started
 
-Progress: [████████░░] ~85% (plan-weighted) — Phase 15.1 auth hardening closed: Next.js 14.2.33 (CVE-2025-29927), HS256-pinned jwtVerify with iss/aud, fail-hard TMA_JWT_SECRET on both auth surfaces, x-tma-user-id + x-middleware-subrequest strip in middleware, iss/aud/jti on token issuance, JWT denylist wiring (T-15.1-10 deferred), nginx snippet. Code static-verified (tsc clean); VPS deploy + nginx apply + curl tests deferred per no-local-runtime. Next: 15.1-03 (integration test suite).
+Progress: [█████████░] ~90% (plan-weighted) — Phase 15.1 COMPLETE: worker money path (R0-1/2/3/6) + auth hardening (R0-4/5) + settleRun integration test (T-15.1-12/13) all closed. tsc clean; vitest unit+integration suites static-verified; VPS deploy + green integration run deferred per no-local-runtime. Branch `plan/15.1-r0-billing-identity` ready for merge to master.
 
 ## Why Phase 8 Next
 
@@ -60,7 +60,7 @@ Alternative: `/gsd:execute-phase 2` to finish bare-metal infrastructure (10% rem
 | 7. Supply | partial | n/a | Merged — submission UI exists, eval-runner sandbox still TODO |
 | 8. Launch | 1/1 | n/a | Complete — pm2 + nginx + GitHub Actions SSH rsync deploy, ai-aggregator.ru live |
 | 14. Contest→Marketplace Admin | 7/7 code, 6/7 deployed | n/a | ◆ Admin half on master, migration 0014 applied on VPS; web/gateway/worker deploy blocked on CI pipeline debt — see `.planning/phases/14-contest-marketplace-admin/14-07-SUMMARY.md` |
-| 15.1. R0 TMA billing+identity | 2/3 | unit suites added (tsc-clean; vitest run deferred to VPS) | ◐ In Progress — 15.1-01 worker money path + 15.1-02 auth hardening complete. VPS verification + 15.1-03 (integration test) pending |
+| 15.1. R0 TMA billing+identity | 3/3 | unit + integration suites (tsc-clean; vitest run deferred to VPS) | ✓ Complete — 15.1-01 worker money path + 15.1-02 auth hardening + 15.1-03 settleRun integration test. VPS verification deferred (no-local-runtime). |
 
 ## Accumulated Context
 
@@ -83,6 +83,8 @@ Phase 15.1 (2026-06-02):
 - **15.1-02a** `isRevoked` in jwt-denylist.ts uses Upstash REST API over fetch (Edge-safe) when `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` are set; stubs false otherwise. R0 non-blocking — alg-pin + CVE patch + fail-hard secret are the blocking layer.
 - **15.1-02b** JWT fail-hard guard is a module-level throw (not route-level) so the process refuses to serve ANY route when `TMA_JWT_SECRET` is missing or < 32 chars — not just the auth route.
 - **15.1-02c** isRevoked fails-open on Upstash errors (returns false) to avoid locking out all users on transient Redis blips; stricter fail-closed policy deferred to T-15.1-10.
+- **15.1-03a** Integration test uses TEST_DATABASE_URL (never DATABASE_URL/prod); gated by `describe.skipIf(!TEST_DATABASE_URL)`; synthetic tg_user_id in 9_000_000_000+ reserved range; afterEach cleanup by generated id. No test logic leaked into db.ts (sql was already exported by Plan 01).
+- **15.1-03b** Dedicated test-local postgres client (postgres(TEST_DATABASE_URL)) for seeding/assertions; settleRun uses module-level sql — operator sets DATABASE_URL=TEST_DATABASE_URL when running integration suite on VPS so both clients target the same test DB.
 
 ### Roadmap Evolution
 
@@ -132,9 +134,9 @@ Recently fixed (2026-04-27):
 
 ## Session Continuity
 
-Last session: 2026-06-02 (executed 15.1-02 — auth hardening; branch `plan/15.1-r0-billing-identity`)
-Stopped at: Completed 15.1-02-PLAN.md (R0-4/5). 5 task commits (b37fe0e, dd5b17c, 1c8f4a8, c463f1c, 8e78b35) + SUMMARY. tsc clean; VPS deploy + nginx apply + curl tests deferred (no-local-runtime).
-Resume file: None — next is `/gsd:execute-phase 15.1` for 15.1-03 (integration test suite)
+Last session: 2026-06-02 (executed 15.1-03 — settleRun integration test; branch `plan/15.1-r0-billing-identity`)
+Stopped at: Phase 15.1 COMPLETE. 15.1-03: 1 task commit (97afe5d) + SUMMARY. tsc clean; vitest skips 4 cleanly. VPS green run deferred.
+Resume file: None — Phase 15.1 complete. Next: merge `plan/15.1-r0-billing-identity` to master, then VPS deploy + integration green run.
 
 **Next milestone candidates** (pick one to focus):
 
