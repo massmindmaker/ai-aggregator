@@ -213,3 +213,99 @@ export async function markFailed(runId: string, error: string): Promise<void> {
     WHERE id = ${runId}::uuid
   `;
 }
+
+// -- R0-2: prepaid balance (tg_user_balances) -----------------------------
+//
+// tg_user_balances.balance_rub IS the live spendable balance: the topup-check
+// route credits it (`INSERT … ON CONFLICT DO UPDATE SET balance_rub = balance
+// + EXCLUDED.balance_rub`, migration 0019) and the wallet route reads it.
+// `tg_users` is NOT the balance table in this repo — debit tg_user_balances.
+
+/**
+ * Live spendable balance (₽) for a tg_user. Returns 0 when no row exists
+ * (no row ⇒ never topped up ⇒ zero balance), never null/throws.
+ */
+export async function getBalance(tgUserId: string): Promise<number> {
+  const rows = (await sql`
+    SELECT COALESCE(balance_rub, 0)::text AS balance_rub
+    FROM tg_user_balances
+    WHERE tg_user_id = ${tgUserId}::bigint
+    LIMIT 1
+  `) as unknown as Array<{ balance_rub: string }>;
+  return Number(rows[0]?.balance_rub ?? 0);
+}
+
+/** Thrown when the guarded balance debit affects 0 rows (insufficient funds). */
+export class InsufficientBalanceError extends Error {
+  constructor(message = 'insufficient_balance') {
+    super(message);
+    this.name = 'InsufficientBalanceError';
+  }
+}
+
+/**
+ * R0-2 + R0-3 + R0-6: settle a completed run in ONE transaction.
+ *
+ * Concurrency model: READ COMMITTED (postgres default — NO isolation argument)
+ * + guarded `UPDATE … WHERE <guard> RETURNING`. Double-spend / over-budget
+ * safety comes from the per-row lock postgres takes on the updated row plus the
+ * WHERE-guard — NOT from a SERIALIZABLE level, so there is intentionally no
+ * 40001 serialization-failure retry loop.
+ *
+ * All-or-nothing: markCompleted + the atomic daily-spend guard + the guarded
+ * balance debit run inside one `sql.begin`. Any throw auto-ROLLBACKs all three,
+ * so cost is never recorded without a debit, and a failed daily-spend guard
+ * rolls the balance debit back too.
+ *
+ * External (user-supplied upstream) runs cost us 0 ₽ → skip the daily-spend
+ * guard and the balance debit (only the run row is marked completed).
+ */
+export async function settleRun(args: {
+  runId: string;
+  tgUserId: string;
+  agentId: string;
+  output: string;
+  costRub: number;
+  tokensIn: number;
+  tokensOut: number;
+  isExternal: boolean;
+}): Promise<void> {
+  const { runId, tgUserId, agentId, output, costRub, tokensIn, tokensOut, isExternal } = args;
+  // Plain sql.begin → READ COMMITTED (the chosen approach). Use the
+  // callback-scoped `sql`, not the module-level one, so queries stay in-tx.
+  await sql.begin(async (sql) => {
+    await sql`
+      UPDATE agent_runs
+      SET status = 'completed',
+          output = ${output},
+          cost_rub = ${costRub},
+          tokens_in = ${tokensIn},
+          tokens_out = ${tokensOut},
+          completed_at = NOW()
+      WHERE id = ${runId}::uuid
+    `;
+
+    if (isExternal) return; // user pays their own provider — nothing to debit
+
+    // R0-3: atomic guarded daily-spend increment (kills the 4× TOCTOU).
+    const daily = (await sql`
+      UPDATE agents
+      SET spent_today_rub = spent_today_rub + ${costRub}
+      WHERE id = ${agentId}::uuid
+        AND spent_today_rub + ${costRub} <= daily_budget_rub
+      RETURNING id::text
+    `) as unknown as Array<{ id: string }>;
+    if (daily.length === 0) throw new Error('budget_exceeded_daily_settle');
+
+    // R0-2: guarded balance debit on the live spendable balance.
+    const debit = (await sql`
+      UPDATE tg_user_balances
+      SET balance_rub = balance_rub - ${costRub},
+          updated_at = NOW()
+      WHERE tg_user_id = ${tgUserId}::bigint
+        AND balance_rub >= ${costRub}
+      RETURNING balance_rub::text
+    `) as unknown as Array<{ balance_rub: string }>;
+    if (debit.length === 0) throw new InsufficientBalanceError();
+  });
+}
