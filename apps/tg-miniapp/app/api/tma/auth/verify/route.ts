@@ -6,9 +6,15 @@ import { verifyInitData } from '@/lib/verify-init-data';
 export const runtime = 'nodejs';
 
 const sql = postgres(process.env.DATABASE_URL ?? '', { prepare: false });
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.TMA_JWT_SECRET ?? 'dev-only-change-in-prod',
-);
+
+// R0-5: fail hard at module load if TMA_JWT_SECRET is missing or too short.
+// Never fall back to a hardcoded dev secret — the process must fail to serve
+// rather than silently accept tokens forged with a known value.
+const RAW_SECRET = process.env.TMA_JWT_SECRET;
+if (!RAW_SECRET || RAW_SECRET.length < 32) {
+  throw new Error('TMA_JWT_SECRET unset or shorter than 32 chars — refusing to start');
+}
+const JWT_SECRET = new TextEncoder().encode(RAW_SECRET);
 
 export async function POST(req: Request) {
   const { initData } = await req.json().catch(() => ({}));
@@ -43,6 +49,10 @@ export async function POST(req: Request) {
       updated_at = NOW()
   `;
 
+  // R0-4: issue token with iss/aud matching the middleware's verify options,
+  // and a jti (UUID) so a future revocation phase can key on it for denylist lookup.
+  // crypto.randomUUID() is available on Node.js (runtime = 'nodejs') and in the
+  // global Web Crypto API — no explicit import required.
   const token = await new SignJWT({
     sub: String(user.id),
     name: user.first_name,
@@ -50,6 +60,9 @@ export async function POST(req: Request) {
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
+    .setIssuer('aiag-tma')
+    .setAudience('aiag-gateway')
+    .setJti(crypto.randomUUID())
     .setExpirationTime('24h')
     .sign(JWT_SECRET);
 
