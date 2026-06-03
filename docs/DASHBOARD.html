@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AIAG — Project Dashboard</title>
+<style>
+  :root{
+    --bg:#0a0a0b;--bg-elev:#111114;--bg-surface:#18181b;--ink:#f4f4f5;--ink-muted:#8b8b94;--ink-faint:#71717a;
+    --accent:#f59e0b;--accent-hover:#d97706;--accent-ink:#000;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);
+    --good:#22c55e;--soon:#7aa2f7;--danger:#ef4444;--radius:8px;
+    --sans:'Inter',-apple-system,'Segoe UI',Roboto,system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    --logo-mask:url('wireframes/assets/logo.png');
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);height:100vh;overflow:hidden;display:flex;-webkit-font-smoothing:antialiased}
+  .sb{width:250px;flex:none;height:100vh;border-right:1px solid var(--line);background:var(--bg-elev);display:flex;flex-direction:column;padding:16px 12px}
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;cursor:pointer}
+  .mark{width:26px;height:26px;flex:none;background:var(--accent);-webkit-mask:var(--logo-mask) center/contain no-repeat;mask:var(--logo-mask) center/contain no-repeat}
+  .brand b{font-size:15px;letter-spacing:-.01em}.brand .sub{font-family:var(--mono);font-size:9px;color:var(--ink-faint);letter-spacing:.14em;text-transform:uppercase}
+  .search{display:flex;align-items:center;gap:8px;margin:0 4px 12px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-surface)}
+  .search input{flex:1;background:none;border:0;color:var(--ink);font:13px var(--sans);outline:none}.search input::placeholder{color:var(--ink-faint)}
+  .search .x{color:var(--ink-faint);cursor:pointer;font-size:14px;display:none}
+  .nav{display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1}
+  .nav button{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:none;border:0;color:var(--ink-muted);font:500 13.5px var(--sans);padding:10px 12px;border-radius:var(--radius);cursor:pointer;position:relative;transition:background .15s,color .15s}
+  .nav button:hover{background:var(--bg-surface);color:var(--ink)}
+  .nav button.on{background:rgba(245,158,11,.12);color:var(--accent)}
+  .nav button.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--accent)}
+  .nav .ic{width:18px;text-align:center;font-size:14px}.nav .ct{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink-faint)}
+  .sbfoot{padding:11px 10px 0;border-top:1px solid var(--line);font-family:var(--mono);font-size:10px;color:var(--ink-faint);line-height:1.7}
+  .sbfoot a{color:var(--ink-muted)} .srv{color:var(--good)} .srv.off{color:var(--ink-faint)}
+
+  .main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  .page{flex:1;overflow-y:auto;padding:28px 32px 60px}
+  .head{margin-bottom:16px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px}
+  h1{font-size:25px;letter-spacing:-.02em}
+  .lead{color:var(--ink-muted);font-size:14px;margin-top:8px;max-width:80ch}
+  .chips{display:flex;gap:8px;margin:14px 0 4px}
+  .chip{font:500 12px var(--sans);color:var(--ink-muted);background:var(--bg-surface);border:1px solid var(--line);border-radius:20px;padding:5px 13px;cursor:pointer}
+  .chip.on{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px;margin-top:12px}
+  .card{border:1px solid var(--line);border-radius:12px;background:var(--bg-surface);padding:15px 16px;cursor:pointer;transition:border-color .2s,transform .2s,box-shadow .2s}
+  .card:hover{border-color:rgba(245,158,11,.45);transform:translateY(-2px);box-shadow:0 10px 30px -16px rgba(245,158,11,.4)}
+  .card.star{border-color:rgba(245,158,11,.4)}
+  .card .t{font-size:14.5px;font-weight:600;display:flex;align-items:center;gap:7px}.card.star .t::after{content:"★";color:var(--accent);font-size:12px}
+  .card .d{font-size:12.5px;color:var(--ink-muted);margin-top:6px;line-height:1.5}
+  .card .meta{display:flex;align-items:center;gap:8px;margin-top:11px}
+  .badge{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:5px;border:1px solid var(--line);color:var(--ink-faint)}
+  .badge.html{color:var(--accent);border-color:rgba(245,158,11,.4)}.badge.md{color:var(--soon);border-color:rgba(122,162,247,.35)}
+  .zone-tag{font-family:var(--mono);font-size:9px;color:var(--ink-faint);margin-left:auto}.open-ext{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-faint)}.card:hover .open-ext{color:var(--accent)}
+
+  .artifact{flex:1;display:flex;flex-direction:column;min-height:0}
+  .abar{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--bg-elev);flex:none}
+  .abar .bk{background:var(--bg-surface);border:1px solid var(--line);color:var(--ink);font:600 12.5px var(--sans);padding:7px 13px;border-radius:8px;cursor:pointer}
+  .abar .bk:hover{border-color:var(--accent);color:var(--accent)}
+  .abar .vt{font-size:14px;font-weight:600}.abar .vp{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}.abar .sp{flex:1}
+  .abar .mini{background:none;border:1px solid var(--line);color:var(--ink-muted);font:500 12px var(--sans);padding:6px 11px;border-radius:7px;cursor:pointer}.abar .mini:hover{color:var(--ink);border-color:var(--accent)}
+  .artifact iframe{flex:1;width:100%;border:0;background:#fff;min-height:0}
+  /* markdown reader (served mode) */
+  .reader{flex:1;overflow-y:auto;padding:34px 40px 80px}
+  .reader .doc{max-width:860px;margin:0 auto;line-height:1.65;color:var(--ink-muted);font-size:15px}
+  .reader h1,.reader h2,.reader h3,.reader h4{color:var(--ink);letter-spacing:-.01em;margin:24px 0 10px;line-height:1.25}
+  .reader h1{font-size:28px}.reader h2{font-size:22px;border-bottom:1px solid var(--line);padding-bottom:6px}.reader h3{font-size:17px}.reader h4{font-size:14px;color:var(--ink-muted)}
+  .reader p{margin:10px 0}.reader strong{color:var(--ink)}.reader em{color:var(--ink)}
+  .reader a{color:var(--accent)}.reader ul,.reader ol{margin:10px 0 10px 22px}.reader li{margin:4px 0}
+  .reader code{font-family:var(--mono);font-size:12.5px;background:var(--bg-surface);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:oklch(.86 .1 75)}
+  .reader pre{background:var(--bg-surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;margin:12px 0}.reader pre code{border:0;background:none;padding:0;color:var(--ink-muted)}
+  .reader blockquote{border-left:3px solid var(--accent);background:var(--bg-surface);border-radius:0 8px 8px 0;padding:10px 16px;margin:12px 0;color:var(--ink-muted)}
+  .reader table{border-collapse:collapse;margin:14px 0;font-size:13.5px;width:100%}.reader th,.reader td{border:1px solid var(--line);padding:7px 11px;text-align:left}.reader th{color:var(--ink);background:var(--bg-surface);font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  .reader hr{border:0;border-top:1px solid var(--line);margin:22px 0}
+
+  .stats{display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 20px}
+  .stat{border:1px solid var(--line);border-radius:12px;background:var(--bg-surface);padding:13px 18px;min-width:124px}
+  .stat .v{font-family:var(--mono);font-size:23px}.stat .v small{font-size:12px;color:var(--ink-faint)}.stat .k{font-size:11px;color:var(--ink-faint);margin-top:3px;text-transform:uppercase;letter-spacing:.08em}
+  .sec{margin:24px 0 10px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);display:flex;align-items:center;gap:10px}.sec::after{content:"";flex:1;height:1px;background:var(--line)}
+  ul.facts{list-style:none;display:flex;flex-direction:column;gap:8px}
+  ul.facts li{padding-left:22px;position:relative;color:var(--ink-muted);font-size:13.5px}
+  ul.facts li::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--accent)}
+  ul.facts.done li::before{background:var(--good);border-color:var(--good)}ul.facts b{color:var(--ink)}
+  .pill{font-family:var(--mono);font-size:9.5px;padding:2px 7px;border-radius:5px;border:1px solid;margin-left:4px}.p-live{color:var(--good);border-color:rgba(34,197,94,.45)}.p-branch{color:var(--soon);border-color:rgba(122,162,247,.45)}
+  /* persisted checklist */
+  .todo{display:flex;flex-direction:column;gap:7px}
+  .todo label{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;color:var(--ink-muted);cursor:pointer;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--bg-surface)}
+  .todo input{margin-top:2px;accent-color:var(--accent);width:15px;height:15px;flex:none}
+  .todo label.done span{color:var(--ink-faint);text-decoration:line-through}
+  .links{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .links a{font:500 12.5px var(--sans);color:var(--ink-muted);background:var(--bg-surface);border:1px solid var(--line);border-radius:8px;padding:7px 12px;text-decoration:none}
+  .links a:hover{color:var(--accent);border-color:var(--accent)}
+  .empty{color:var(--ink-faint);font-size:13px;padding:30px 0}
+  @media(max-width:780px){.sb{width:58px}.brand b,.brand .sub,.nav .lbl,.nav .ct,.sbfoot,.search input,.search .x{display:none}.search{justify-content:center}.nav button{justify-content:center}}
+</style>
+</head>
+<body>
+<aside class="sb">
+  <div class="brand" onclick="go('overview')"><span class="mark"></span><div><b>AI·Aggregator</b><div class="sub">dashboard</div></div></div>
+  <div class="search"><span>🔎</span><input id="q" placeholder="поиск по всему…" autocomplete="off"><span class="x" id="qx">✕</span></div>
+  <nav class="nav" id="nav"></nav>
+  <div class="sbfoot">якоря: <a href="../CLAUDE.md" target="_blank">CLAUDE</a> · <a href="../DESIGN.md" target="_blank">DESIGN</a><br>
+    <span id="srv" class="srv off">file:// — запусти serve.bat для .md</span><br><span id="count"></span></div>
+</aside>
+<main class="main" id="main"></main>
+<script>
+const SERVED = location.protocol==='http:' || location.protocol==='https:';
+const REPO='https://github.com/massmindmaker/aiag-marketplace';
+const TABS=[
+ {id:'overview',ic:'📊',name:'Обзор',overview:true},
+ {id:'tma',ic:'🎴',name:'TMA · агенты',cards:[
+   {t:'Showcase (флагман)',d:'Веб+моб × тёмн+светл, реальные токены, честный по функциям',p:'wireframes/showcase.html',ty:'html',star:1},
+   {t:'Мобильный борд TMA',d:'45 артбордов, dark/amber, экраны+состояния',p:'wireframes/tma/index.html',ty:'html'},
+   {t:'Персонажи (видео-карты)',d:'Голографические карточки: Алиса/Ника/Нова',p:'wireframes/tma/characters-video.html',ty:'html'},
+   {t:'Product definition',d:'3 способа завести агента, спец, биллинг',p:'specs/2026-06-02-tma-product-definition.md',ty:'md'},
+   {t:'Монетизация',d:'Аренда автора (free/цена), AIAG 0% с аренды',p:'specs/2026-06-03-monetization.md',ty:'md'},
+   {t:'User workflows',d:'14 джорни → функция → готовность + 10 расхождений',p:'specs/2026-06-03-user-workflows.md',ty:'md'},
+   {t:'Canon: что строим',d:'Единый источник правды по TMA',p:'specs/2026-06-02-WHAT-WE-ARE-BUILDING.md',ty:'md'},
+   {t:'Hermes explainer',d:'Hermes = рантайм, не модель; платежи',p:'specs/2026-06-02-hermes-core-and-payment-explainer.md',ty:'md'},
+   {t:'Hermes WebUI landscape',d:'Конкуренты-UI, позиционирование',p:'specs/2026-06-02-hermes-webui-landscape-and-tma-positioning.md',ty:'md'},
+ ]},
+ {id:'web',ic:'🌐',name:'Web · модели (₽)',cards:[
+   {t:'Web-борд (светлый)',d:'Studio23-тема, маркет моделей, ₽ — отдельный продукт',p:'wireframes/web/index.html',ty:'html'},
+   {t:'Product coherence map',d:'Где обещания ≠ реальность',p:'specs/2026-06-02-product-coherence-map.md',ty:'md'},
+   {t:'Архитектура (общая)',d:'Сервис-карта, 2 продукта, money-flow',p:'ARCHITECTURE.md',ty:'md'},
+ ]},
+ {id:'design',ic:'🎨',name:'Дизайн',cards:[
+   {t:'DESIGN.md (токены SoT)',d:'Цвета/типографика/компоненты/анимации/логотип',p:'../DESIGN.md',ty:'md',star:1},
+   {t:'Оценка дизайна 108 v2',d:'89/108 — финальная, функция-честная',p:'specs/2026-06-03-design-eval-108-v2.html',ty:'html',star:1},
+   {t:'UX-критика',d:'Разбор по 12 измерениям',p:'specs/2026-06-03-aiag-ux-critique.html',ty:'html'},
+   {t:'VoltAgent reuse',d:'Что переиспользовать (MIT), adopt/adapt/skip',p:'specs/2026-06-03-voltagent-design-reuse.md',ty:'md'},
+   {t:'ANIMATION.md',d:'Моушн-принципы, aiag-* библиотека',p:'ANIMATION.md',ty:'md'},
+ ]},
+ {id:'arch',ic:'🏗️',name:'Архитектура / Research',cards:[
+   {t:'SYNTHESIS (архрешения)',d:'D-0…D-14, порядок билда, founder-гейты, риски',p:'specs/research/SYNTHESIS.html',ty:'html',star:1},
+   {t:'Backend gap',d:'Что не доделано (статус D-0…D-14)',p:'specs/2026-06-03-backend-gap.md',ty:'md'},
+   {t:'ARCHITECTURE.md',d:'Сервис-карта, топология, money-flow',p:'ARCHITECTURE.md',ty:'md'},
+   {t:'SECURITY.md',d:'Auth, секреты, billing-integrity',p:'../SECURITY.md',ty:'md'},
+   {t:'Research backlog',d:'P0→P2 что исследовать',p:'specs/RESEARCH-BACKLOG.html',ty:'html'},
+   {t:'Research R-01…R-12',d:'Полные находки (md, начни с R-01)',p:'specs/research/R-01.md',ty:'md'},
+   {t:'Tech-stack 108 eval',d:'Аудит стека (50/108)',p:'specs/2026-06-02-tma-tech-stack-108-eval.md',ty:'md'},
+   {t:'R1 verified plan',d:'R1-1…R1-8 план',p:'specs/2026-06-02-r1-verified-plan.md',ty:'md'},
+ ]},
+ {id:'deploy',ic:'🚀',name:'Деплой / CI-CD',cards:[
+   {t:'CI/CD план + чек-лист',d:'Build-on-runner, atomic swap, self-heal pm2; что нужно от founder',p:'specs/2026-06-03-cicd-plan.html',ty:'html',star:1},
+   {t:'Deploy/test readiness',d:'GO для Wave-0, runbook, capacity',p:'specs/2026-06-03-deploy-test-readiness.md',ty:'md'},
+ ]},
+ {id:'gonka',ic:'💸',name:'Gonka грант',cards:[
+   {t:'Чек-лист гранта',d:'Сделано / не сделано / нужно для подачи',p:'specs/2026-06-03-gonka-checklist.html',ty:'html',star:1},
+   {t:'Питч под Gonka',d:'10 слайдов: RU-спрос → в Gonka',p:'specs/2026-06-03-gonka-pitch.html',ty:'html'},
+   {t:'Заявка (почти готова)',d:'3 деливерабла, метрики, реквизиты-placeholder',p:'specs/2026-06-03-gonka-grant-application.md',ty:'md'},
+ ]},
+ {id:'pack',ic:'📣',name:'Упаковка',cards:[
+   {t:'One-pager',d:'Что строим + чек-лист упаковки',p:'specs/2026-06-03-aiag-onepager.html',ty:'html'},
+   {t:'Pitch deck',d:'11 слайдов для инвестора/партнёра',p:'specs/2026-06-03-aiag-pitch-deck.html',ty:'html'},
+ ]},
+ {id:'plan',ic:'🗂️',name:'Планирование (GSD)',cards:[
+   {t:'Статус (живой)',d:'Что сделано, оценки, что дальше',p:'specs/STATUS.html',ty:'html',star:1},
+   {t:'ROADMAP',d:'Все фазы + milestone R1',p:'../.planning/ROADMAP.md',ty:'md'},
+   {t:'R1 milestone',d:'Money → providers → managed-Hermes',p:'../.planning/R1-MILESTONE.md',ty:'md'},
+   {t:'STATE',d:'Текущая позиция GSD',p:'../.planning/STATE.md',ty:'md'},
+   {t:'PROJECT',d:'Базовый контекст',p:'../.planning/PROJECT.md',ty:'md'},
+ ]},
+];
+const ALLCARDS=TABS.filter(t=>t.cards).flatMap(t=>t.cards.map(c=>({...c,zone:t.name,zoneId:t.id})));
+const TODOS=[
+ {k:'wfscope',x:'gh workflow scope выдан (gh auth refresh -s workflow)'},
+ {k:'secrets',x:'Подтверждены GitHub-секреты DEPLOY_SSH_KEY/HOST/USER + telegram-alert'},
+ {k:'chown',x:'Разрешён chown agent-worker/tma → aiag (раннер пишет релизы)'},
+ {k:'autodeploy',x:'Решено: авто-деплой на push в master (да/нет) + гейт на тестах'},
+ {k:'gonka',x:'Gonka: GNK-кошелёк + Discord + email + спайк эндпоинта'},
+ {k:'rotate',x:'Перевыпустить токены, вставленные в чат (Timeweb, GitHub PAT)'},
+ {k:'wave0',x:'«Го» на возобновление деплоя Wave-0 (pm2 re-pin на current)'},
+];
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function mdToHtml(md){
+  md=md.replace(/\r\n/g,'\n');
+  const fences=[]; md=md.replace(/```([\s\S]*?)```/g,(m,c)=>{fences.push('<pre><code>'+esc(c.replace(/^\n/,''))+'</code></pre>');return ' F'+(fences.length-1)+' ';});
+  const lines=md.split('\n'); let out=[],i=0;
+  const inline=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/(^|[^*])\*([^*]+)\*/g,'$1<em>$2</em>').replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+  while(i<lines.length){
+    let l=lines[i];
+    if(/^ F\d+ $/.test(l.trim())){out.push(fences[+l.trim().match(/\d+/)[0]]);i++;continue;}
+    if(/^\s*$/.test(l)){i++;continue;}
+    let h=l.match(/^(#{1,4})\s+(.*)/); if(h){out.push('<h'+h[1].length+'>'+inline(h[2])+'</h'+h[1].length+'>');i++;continue;}
+    if(/^\s*([-*_])\1{2,}\s*$/.test(l)){out.push('<hr>');i++;continue;}
+    if(/^>\s?/.test(l)){let b=[];while(i<lines.length&&/^>\s?/.test(lines[i])){b.push(inline(lines[i].replace(/^>\s?/,'')));i++;}out.push('<blockquote>'+b.join('<br>')+'</blockquote>');continue;}
+    if(/^\s*\|.*\|\s*$/.test(l)){let rows=[];while(i<lines.length&&/^\s*\|.*\|\s*$/.test(lines[i])){rows.push(lines[i]);i++;}
+      const cells=r=>r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+      let html='<table>';rows.forEach((r,ri)=>{if(/^\s*\|?[\s:\-|]+\|?\s*$/.test(r))return;const tag=ri===0?'th':'td';html+='<tr>'+cells(r).map(c=>'<'+tag+'>'+inline(c)+'</'+tag+'>').join('')+'</tr>';});out.push(html+'</table>');continue;}
+    if(/^\s*([-*]|\d+\.)\s+/.test(l)){const ol=/^\s*\d+\./.test(l);let items=[];while(i<lines.length&&/^\s*([-*]|\d+\.)\s+/.test(lines[i])){items.push('<li>'+inline(lines[i].replace(/^\s*([-*]|\d+\.)\s+/,''))+'</li>');i++;}out.push((ol?'<ol>':'<ul>')+items.join('')+(ol?'</ol>':'</ul>'));continue;}
+    let para=[];while(i<lines.length&&!/^\s*$/.test(lines[i])&&!/^(#{1,4}\s|>\s?|\s*\||\s*([-*]|\d+\.)\s)/.test(lines[i])&&!/^ F/.test(lines[i].trim())){para.push(inline(lines[i]));i++;}
+    if(para.length)out.push('<p>'+para.join(' ')+'</p>');
+  }
+  return out.join('\n');
+}
+const main=document.getElementById('main'),nav=document.getElementById('nav'),qInput=document.getElementById('q'),qx=document.getElementById('qx');
+let filterTy='all';
+function go(tab,path){location.hash=path?tab+'::'+encodeURIComponent(path):tab;}
+function parseHash(){const raw=location.hash.slice(1);if(!raw)return{tab:'overview',path:null};const i=raw.indexOf('::');if(i<0)return{tab:(TABS.find(t=>t.id===raw)?raw:'overview'),path:null};return{tab:raw.slice(0,i),path:decodeURIComponent(raw.slice(i+2))};}
+function cardEl(c,showZone){const el=document.createElement('div');el.className='card'+(c.star?' star':'');const right=showZone?'<span class="zone-tag">'+c.zone+'</span>':'<span class="open-ext">открыть →</span>';el.innerHTML='<div class="t">'+c.t+'</div><div class="d">'+c.d+'</div><div class="meta"><span class="badge '+c.ty+'">'+c.ty+'</span>'+right+'</div>';el.onclick=()=>go(c.zoneId||parseHash().tab,c.p);return el;}
+function chipsEl(onpick){const ids=[['all','Все'],['html','html'],['md','md']];const w=document.createElement('div');w.className='chips';ids.forEach(([v,l])=>{const b=document.createElement('span');b.className='chip'+(filterTy===v?' on':'');b.textContent=l;b.onclick=()=>{filterTy=v;onpick();};w.appendChild(b);});return w;}
+function applyFilter(cards){return filterTy==='all'?cards:cards.filter(c=>c.ty===filterTy);}
+function renderArtifact(tab,path){
+  const card=ALLCARDS.find(c=>c.p===path)||{t:path.split('/').pop(),ty:path.endsWith('.html')?'html':'md',p:path};
+  main.innerHTML='';const a=document.createElement('div');a.className='artifact';
+  a.innerHTML='<div class="abar"><button class="bk" id="bk">← Назад к «'+((TABS.find(t=>t.id===tab)||{}).name||'зоне')+'»</button><span class="vt">'+card.t+'</span><span class="vp">'+path+'</span><span class="sp"></span><button class="mini" id="ifback">⟲ назад</button><button class="mini" id="ext">↗ вкладка</button></div>';
+  main.appendChild(a);
+  document.getElementById('bk').onclick=()=>go(tab);
+  document.getElementById('ext').onclick=()=>window.open(path,'_blank');
+  if(card.ty==='md'&&SERVED){
+    const r=document.createElement('div');r.className='reader';r.innerHTML='<div class="doc">загрузка…</div>';a.appendChild(r);
+    document.getElementById('ifback').style.display='none';
+    fetch(path).then(x=>x.text()).then(t=>{r.querySelector('.doc').innerHTML=mdToHtml(t);}).catch(e=>{r.querySelector('.doc').innerHTML='<p>не удалось загрузить — открой ↗ вкладка</p>';});
+  } else {
+    const f=document.createElement('iframe');f.id='vframe';f.src=path;a.appendChild(f);
+    document.getElementById('ifback').onclick=()=>{try{f.contentWindow.history.back();}catch(e){}};
+  }
+}
+function overview(){const page=document.createElement('div');page.className='page';
+  page.innerHTML='<div class="head"><div class="eyebrow">AIAG · единый дашборд</div><h1>Обзор проекта</h1><p class="lead">Один вход во всё. Слева — зоны (всегда видны). Клик по карточке открывает артефакт ЗДЕСЬ; «← Назад»/Esc/стрелка браузера возвращают. .md рендерятся красиво при запуске через serve.bat.</p></div>'
+   +'<div class="stats"><div class="stat"><div class="v">50<small>/108</small></div><div class="k">тех-стек</div></div><div class="stat"><div class="v">43<small>/108</small></div><div class="k">функционал</div></div><div class="stat"><div class="v" style="color:var(--accent)">89<small>/108</small></div><div class="k">дизайн v2</div></div></div>'
+   +'<div class="sec">Два продукта</div><ul class="facts"><li><b>Aggregator (Web)</b> — маркет моделей, <b>рубли</b> <span class="pill p-live">live</span></li><li><b>TMA</b> — маркет агентов, <b>крипто-кредиты</b> <span class="pill p-live">Phase 15 + R0 live</span> · фокус</li></ul>'
+   +'<div class="sec">Money-path / бэкенд</div><ul class="facts done"><li>R0 (Phase 15.1) — money-path/gateway/auth — <b>live на проде</b></li><li>Wave-0 (safeFetch+DEFAULT_MODEL+D-0+CHARGE-0)+D-8 — зелёно на VPS <span class="pill p-branch">ветка</span></li><li>CI/CD yaml + ecosystem.config.cjs запушены <span class="pill p-branch">ветка</span></li></ul>'
+   +'<div class="sec">Чек-лист действий (сохраняется)</div><div class="todo" id="todo"></div>'
+   +'<div class="sec">GitHub · ветки</div><div class="links"><a href="'+REPO+'" target="_blank">репо</a><a href="'+REPO+'/tree/feat/wave0-d8-initdata" target="_blank">feat/wave0-d8-initdata</a><a href="'+REPO+'/tree/feat/wave0-d0-margin" target="_blank">feat/wave0-d0-margin</a><a href="'+REPO+'/tree/plan/15.1-r0-billing-identity" target="_blank">plan/15.1-r0</a><a href="https://ai-aggregator.ru" target="_blank">прод ↗</a></div>'
+   +'<div class="sec">Быстрый доступ (флагманы)</div><div class="grid" id="qa"></div>';
+  main.innerHTML='';main.appendChild(page);
+  const td=page.querySelector('#todo');TODOS.forEach(t=>{const done=localStorage.getItem('aiag_chk_'+t.k)==='1';const lb=document.createElement('label');if(done)lb.className='done';lb.innerHTML='<input type="checkbox" '+(done?'checked':'')+'><span>'+t.x+'</span>';lb.querySelector('input').onchange=e=>{localStorage.setItem('aiag_chk_'+t.k,e.target.checked?'1':'0');lb.classList.toggle('done',e.target.checked);};td.appendChild(lb);});
+  const qa=page.querySelector('#qa');ALLCARDS.filter(c=>c.star).forEach(c=>qa.appendChild(cardEl(c,true)));
+}
+function renderPage(tab){const t=TABS.find(x=>x.id===tab)||TABS[0];if(t.overview){overview();return;}
+  const page=document.createElement('div');page.className='page';page.innerHTML='<div class="head"><div class="eyebrow">'+t.ic+' '+t.name+'</div><h1>'+t.name+'</h1></div>';
+  page.appendChild(chipsEl(()=>renderPage(tab)));const g=document.createElement('div');g.className='grid';applyFilter(t.cards).forEach(c=>g.appendChild(cardEl(c,false)));page.appendChild(g);
+  main.innerHTML='';main.appendChild(page);}
+function renderSearch(q){const res=applyFilter(ALLCARDS.filter(c=>(c.t+' '+c.d+' '+c.zone).toLowerCase().includes(q)));
+  const page=document.createElement('div');page.className='page';page.innerHTML='<div class="head"><div class="eyebrow">поиск</div><h1>«'+q+'» — '+res.length+'</h1></div>';
+  page.appendChild(chipsEl(()=>renderSearch(q)));const g=document.createElement('div');g.className='grid';if(!res.length)g.innerHTML='<div class="empty">ничего не найдено</div>';res.forEach(c=>g.appendChild(cardEl(c,true)));page.appendChild(g);
+  main.innerHTML='';main.appendChild(page);}
+function render(){const q=qInput.value.trim().toLowerCase();qx.style.display=q?'inline':'none';const {tab,path}=parseHash();
+  [...nav.children].forEach(b=>b.classList.toggle('on',!q&&b.dataset.tab===tab));
+  if(q){renderSearch(q);return;} if(path)renderArtifact(tab,path);else renderPage(tab);
+  document.getElementById('count').textContent=ALLCARDS.length+' артефактов';}
+TABS.forEach(t=>{const b=document.createElement('button');b.dataset.tab=t.id;b.innerHTML='<span class="ic">'+t.ic+'</span><span class="lbl">'+t.name+'</span>'+(t.cards?'<span class="ct">'+t.cards.length+'</span>':'');b.onclick=()=>{qInput.value='';go(t.id);};nav.appendChild(b);});
+qInput.addEventListener('input',render);qx.onclick=()=>{qInput.value='';render();};
+window.addEventListener('hashchange',render);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(qInput.value){qInput.value='';render();}else{const {tab,path}=parseHash();if(path)go(tab);}}});
+const srv=document.getElementById('srv');if(SERVED){srv.textContent='✓ served — .md рендерятся';srv.className='srv';}
+render();
+</script>
+</body>
+</html>

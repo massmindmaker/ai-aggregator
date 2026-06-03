@@ -56,3 +56,5 @@ docs/wireframes/tma/assets/
 
 # Claude Code ephemeral worktrees
 .claude/worktrees/
+
+docs/wireframes/assets/video-ref/
