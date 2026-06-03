@@ -54,6 +54,9 @@ interface CreateBody {
   external_base_url?: string;
   external_api_key?: string;
   external_model_slug?: string;
+  // Provider picker (catalog BYOK): pick a seeded provider, bring your own key.
+  // Resolves server-side to the external_openai path → ZERO commission.
+  provider_id?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -83,13 +86,53 @@ export async function POST(req: NextRequest) {
       ? body.budget_rub_monthly
       : 1000;
 
-  // ---- "Свой агент" (external OpenAI-compatible upstream) ----
-  const connectionType = body.connection_type === 'external_openai' ? 'external_openai' : 'aiag';
+  // ---- Provider / "Свой агент" (BYOK → external OpenAI-compatible upstream) ----
+  // BOTH the catalog picker (provider_id) and the legacy raw endpoint
+  // (connection_type='external_openai') land on the SAME external_openai path,
+  // which the worker treats as the user's own provider → isExternal=true → ZERO
+  // commission (founder rule: own key/provider = free). We deliberately do NOT
+  // set the agents.provider_id column (that selects the worker's markup branch A);
+  // this slice routes through the proven branch B and touches NO worker code.
+  let connectionType: 'aiag' | 'external_openai' = 'aiag';
   let externalBaseUrl: string | null = null;
   let externalApiKeyEncrypted: Buffer | null = null;
   let externalApiKeyHint: string | null = null;
   let externalModelSlug: string | null = null;
-  if (connectionType === 'external_openai') {
+
+  const providerId = body.provider_id?.trim();
+  if (providerId) {
+    // Catalog BYOK. Resolve the provider's base URL SERVER-SIDE for known
+    // providers (never trust the client to name OpenAI's URL); the user only
+    // supplies a base URL for the 'custom' sentinel (requires_base_url=true),
+    // and that one is SSRF-validated.
+    const prov = (await sql`
+      SELECT id, api_base, requires_base_url
+      FROM providers
+      WHERE id = ${providerId} AND enabled = true
+    `) as unknown as Array<{ id: string; api_base: string | null; requires_base_url: boolean }>;
+    if (prov.length === 0) {
+      return NextResponse.json({ error: 'unknown_provider' }, { status: 400 });
+    }
+    const key = body.external_api_key?.trim() ?? '';
+    if (!key) return NextResponse.json({ error: 'external_api_key_required' }, { status: 400 });
+    let base: string;
+    if (prov[0].requires_base_url) {
+      const url = body.external_base_url?.trim() ?? '';
+      if (!url) return NextResponse.json({ error: 'external_base_url_required' }, { status: 400 });
+      const guard = validateExternalUrl(url);
+      if (!guard.ok) return NextResponse.json({ error: guard.reason }, { status: 400 });
+      base = url.replace(/\/+$/, '');
+    } else {
+      base = (prov[0].api_base ?? '').replace(/\/+$/, '');
+      if (!base) return NextResponse.json({ error: 'provider_misconfigured' }, { status: 400 });
+    }
+    connectionType = 'external_openai';
+    externalBaseUrl = base;
+    externalApiKeyEncrypted = encryptSecret(key);
+    externalApiKeyHint = hintFromSecret(key);
+    externalModelSlug = body.external_model_slug?.trim() || body.model_slug?.trim() || null;
+  } else if (body.connection_type === 'external_openai') {
+    connectionType = 'external_openai';
     const url = body.external_base_url?.trim() ?? '';
     const key = body.external_api_key?.trim() ?? '';
     if (!url) return NextResponse.json({ error: 'external_base_url_required' }, { status: 400 });

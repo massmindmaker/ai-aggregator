@@ -40,6 +40,12 @@ export default function NewAgentPage() {
     | null
   >(null);
 
+  // Provider picker (catalog BYOK) — fetched from /tg/api/tma/providers.
+  const [providers, setProviders] = useState<
+    { id: string; name: string; apiBase: string | null; requiresBaseUrl: boolean }[]
+  >([]);
+  const [providerId, setProviderId] = useState('');
+
   async function handleTest() {
     if (!token) return;
     setTesting(true);
@@ -52,7 +58,10 @@ export default function NewAgentPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          base_url: extBaseUrl.trim(),
+          base_url: (() => {
+            const sel = providers.find((p) => p.id === providerId);
+            return sel?.requiresBaseUrl ? extBaseUrl.trim() : (sel?.apiBase ?? '');
+          })(),
           api_key: extApiKey.trim(),
         }),
       });
@@ -106,6 +115,15 @@ export default function NewAgentPage() {
     }
   }, [pickedKind]);
 
+  // Load the BYOK provider catalog once authenticated.
+  useEffect(() => {
+    if (!token) return;
+    fetch('/tg/api/tma/providers', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : { providers: [] }))
+      .then((j) => setProviders(Array.isArray(j.providers) ? j.providers : []))
+      .catch(() => {});
+  }, [token]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!token || !pickedKind) return;
@@ -125,11 +143,18 @@ export default function NewAgentPage() {
           model_slug: modelSlug.trim() || undefined,
           tools,
           budget_rub_monthly: budget,
-          connection_type: useExternal ? 'external_openai' : 'aiag',
-          external_base_url: useExternal ? extBaseUrl.trim() : undefined,
-          external_api_key: useExternal ? extApiKey.trim() : undefined,
-          external_model_slug:
-            useExternal && extModelSlug.trim() ? extModelSlug.trim() : undefined,
+          // BYOK via the provider catalog → backend routes through external_openai
+          // (worker isExternal=true → 0 commission). No provider chosen → our gateway.
+          ...(useExternal && providerId
+            ? {
+                provider_id: providerId,
+                external_api_key: extApiKey.trim(),
+                external_base_url: providers.find((p) => p.id === providerId)?.requiresBaseUrl
+                  ? extBaseUrl.trim()
+                  : undefined,
+                external_model_slug: extModelSlug.trim() || undefined,
+              }
+            : { connection_type: 'aiag' }),
         }),
       });
       if (!res.ok) {
@@ -145,6 +170,9 @@ export default function NewAgentPage() {
       setSubmitting(false);
     }
   }
+
+  const isCustomProvider =
+    providers.find((p) => p.id === providerId)?.requiresBaseUrl ?? false;
 
   return (
     <>
@@ -333,30 +361,52 @@ export default function NewAgentPage() {
                     }}
                   />
                   <span className="tma-card-text" style={{ fontWeight: 600 }}>
-                    🌐 Свой агент (URL + ключ)
+                    🌐 Свой провайдер / ключ — 0 комиссии
                   </span>
                 </label>
                 <p className="tma-card-text" style={{ fontSize: 12, opacity: 0.75, marginTop: -6 }}>
-                  Любой OpenAI-совместимый endpoint: Ollama, vLLM, LM Studio, твой
-                  Hermes за прокси, OpenRouter с твоим ключом и т.д.
+                  Выбери провайдера и принеси свой ключ (OpenAI, Anthropic, OpenRouter,
+                  DeepSeek… или «Custom» — любой OpenAI-совместимый URL: Ollama, vLLM,
+                  твой Hermes за прокси). Свой ключ — комиссия 0.
                 </p>
 
                 {useExternal && (
                   <>
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <span className="tma-card-text">URL</span>
-                      <input
-                        type="url"
-                        value={extBaseUrl}
+                      <span className="tma-card-text">Провайдер</span>
+                      <select
+                        value={providerId}
                         onChange={(e) => {
-                          setExtBaseUrl(e.target.value);
+                          setProviderId(e.target.value);
                           setTestResult(null);
                         }}
-                        placeholder="https://example.com/v1"
                         style={inputStyle}
                         required={useExternal}
-                      />
+                      >
+                        <option value="">— выбери провайдера —</option>
+                        {providers.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
                     </label>
+                    {isCustomProvider && (
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span className="tma-card-text">URL</span>
+                        <input
+                          type="url"
+                          value={extBaseUrl}
+                          onChange={(e) => {
+                            setExtBaseUrl(e.target.value);
+                            setTestResult(null);
+                          }}
+                          placeholder="https://example.com/v1"
+                          style={inputStyle}
+                          required={isCustomProvider}
+                        />
+                      </label>
+                    )}
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <span className="tma-card-text">API key</span>
                       <input
@@ -385,10 +435,18 @@ export default function NewAgentPage() {
                         Если пусто — используется поле «Модель» выше.
                       </span>
                     </label>
+                    <span className="tma-card-text" style={{ fontSize: 11, color: '#22c55e' }}>
+                      Свой ключ — комиссия 0. Платишь напрямую своему провайдеру.
+                    </span>
                     <button
                       type="button"
                       onClick={handleTest}
-                      disabled={testing || !extBaseUrl.trim() || !extApiKey.trim()}
+                      disabled={
+                        testing ||
+                        !providerId ||
+                        !extApiKey.trim() ||
+                        (isCustomProvider && !extBaseUrl.trim())
+                      }
                       className="tma-btn"
                     >
                       {testing ? 'Проверяю…' : 'Проверить соединение'}
