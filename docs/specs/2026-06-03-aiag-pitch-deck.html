@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIAG — питч-дек · агенты-персонажи в Telegram</title>
+<style>
+  :root{
+    --bg:        oklch(0.16 0.012 70);
+    --bg-2:      oklch(0.20 0.014 70);
+    --bg-3:      oklch(0.24 0.016 70);
+    --line:      oklch(0.31 0.015 70);
+    --line-soft: oklch(0.26 0.014 70);
+    --ink:       oklch(0.95 0.010 80);
+    --ink-dim:   oklch(0.74 0.015 75);
+    --ink-faint: oklch(0.56 0.015 75);
+    --amber:     oklch(0.81 0.15 75);
+    --amber-2:   oklch(0.88 0.13 82);
+    --amber-soft:oklch(0.81 0.15 75 / 0.12);
+    --amber-line:oklch(0.81 0.15 75 / 0.40);
+    --good:      oklch(0.80 0.14 155);
+    --good-line: oklch(0.80 0.14 155 / 0.45);
+    --soon:      oklch(0.78 0.10 245);
+    --soon-line: oklch(0.78 0.10 245 / 0.45);
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --sans: -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+
+  /* ── deck scaffold ───────────────────────────────────────────── */
+  .deck{
+    height:100vh; overflow-y:scroll;
+    scroll-snap-type:y mandatory;
+    scroll-behavior:smooth;
+  }
+  .deck::-webkit-scrollbar{width:0}
+  .slide{
+    position:relative;
+    min-height:100vh; width:100vw;
+    scroll-snap-align:start; scroll-snap-stop:always;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:clamp(40px,7vh,84px) clamp(32px,8vw,128px);
+    overflow:hidden;
+  }
+  .inner{width:100%; max-width:1180px; margin:0 auto}
+
+  /* alternating tint so rhythm varies */
+  .slide:nth-child(even){background:var(--bg-2)}
+  .slide.dark{background:var(--bg)}
+
+  /* subtle ruled baseline at top of each slide */
+  .slide::before{
+    content:""; position:absolute; left:0; right:0; top:0; height:1px;
+    background:var(--line-soft);
+  }
+  .slide:first-child::before{display:none}
+
+  /* ── shared type ─────────────────────────────────────────────── */
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.26em;
+    text-transform:uppercase; color:var(--amber);
+    display:flex; align-items:center; gap:12px; margin-bottom:26px;
+  }
+  .eyebrow::before{content:""; width:26px; height:1px; background:var(--amber)}
+  .eyebrow.muted{color:var(--ink-faint)}
+  .eyebrow.muted::before{background:var(--ink-faint)}
+
+  h1{font-size:clamp(40px,6.6vw,86px); line-height:1.02; letter-spacing:-0.025em; font-weight:680}
+  h2{font-size:clamp(30px,4.4vw,56px); line-height:1.06; letter-spacing:-0.02em; font-weight:660; margin-bottom:28px}
+  .lead{font-size:clamp(17px,1.5vw,22px); color:var(--ink-dim); line-height:1.5; max-width:62ch}
+  .lead strong{color:var(--ink); font-weight:600}
+  .q{color:var(--ink-faint)}
+  .am{color:var(--amber)}
+
+  /* entrance — only the active slide animates its children in */
+  @keyframes rise{from{opacity:0; transform:translateY(22px)} to{opacity:1; transform:none}}
+  .slide.in [data-r]{animation:rise .7s cubic-bezier(.16,1,.3,1) both}
+  .slide.in [data-r="1"]{animation-delay:.05s}
+  .slide.in [data-r="2"]{animation-delay:.14s}
+  .slide.in [data-r="3"]{animation-delay:.23s}
+  .slide.in [data-r="4"]{animation-delay:.32s}
+  .slide.in [data-r="5"]{animation-delay:.41s}
+  .slide.in [data-r="6"]{animation-delay:.50s}
+
+  /* ── chrome: counter + progress + nav hint ───────────────────── */
+  .chrome{position:fixed; z-index:50; pointer-events:none}
+  .progress{top:0; left:0; right:0; height:2px; background:transparent}
+  .progress > i{display:block; height:100%; width:0; background:var(--amber); transition:width .35s cubic-bezier(.16,1,.3,1)}
+  .counter{
+    bottom:26px; right:clamp(28px,5vw,64px);
+    font-family:var(--mono); font-size:12px; color:var(--ink-faint);
+    letter-spacing:.1em;
+  }
+  .counter b{color:var(--amber)}
+  .brandmark{
+    top:24px; left:clamp(28px,5vw,64px);
+    font-family:var(--mono); font-size:12px; letter-spacing:.22em;
+    color:var(--ink-faint); text-transform:uppercase;
+  }
+  .brandmark b{color:var(--ink)}
+  .hint{
+    bottom:26px; left:clamp(28px,5vw,64px);
+    font-family:var(--mono); font-size:11px; color:var(--ink-faint);
+    display:flex; align-items:center; gap:8px;
+  }
+  .hint .k{border:1px solid var(--line); border-radius:5px; padding:1px 6px; color:var(--ink-dim)}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
+  .hint .arr{animation:bob 1.8s ease-in-out infinite}
+
+  /* dot rail (clickable) */
+  .rail{position:fixed; z-index:50; right:clamp(20px,3vw,34px); top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:11px}
+  .rail button{
+    width:8px; height:8px; padding:0; border:1px solid var(--ink-faint);
+    border-radius:50%; background:transparent; cursor:pointer; transition:.3s;
+  }
+  .rail button:hover{border-color:var(--amber)}
+  .rail button.on{background:var(--amber); border-color:var(--amber); transform:scale(1.25)}
+
+  /* ── status pills ────────────────────────────────────────────── */
+  .pills{display:flex; flex-wrap:wrap; gap:10px; margin-top:38px}
+  .pill{font-family:var(--mono); font-size:12px; padding:7px 13px; border:1px solid var(--line); border-radius:999px; color:var(--ink-dim); display:inline-flex; gap:8px; align-items:center}
+  .dot{width:7px; height:7px; border-radius:50%}
+  .d-live{background:var(--good)} .d-soon{background:var(--soon)} .d-rnd{background:var(--ink-faint)}
+
+  /* ── generic layout helpers ──────────────────────────────────── */
+  .split{display:grid; grid-template-columns:1.1fr .9fr; gap:clamp(36px,5vw,84px); align-items:center}
+  .stack-gap{display:flex; flex-direction:column; gap:18px}
+  .num-tag{font-family:var(--mono); font-size:13px; color:var(--amber); letter-spacing:.1em}
+
+  /* problem — three failing states, varied not identical-grid */
+  .fail{display:flex; flex-direction:column; gap:0; border:1px solid var(--line); border-radius:18px; overflow:hidden; background:var(--bg)}
+  .fail .f{display:grid; grid-template-columns:54px 1fr; gap:20px; padding:24px 26px; border-top:1px solid var(--line); align-items:start}
+  .fail .f:first-child{border-top:none}
+  .fail .x{font-family:var(--mono); font-size:22px; color:var(--ink-faint); line-height:1}
+  .fail .ft{font-size:19px; font-weight:600; color:var(--ink); margin-bottom:6px}
+  .fail .fd{font-size:15px; color:var(--ink-dim); line-height:1.5}
+  .verdict{margin-top:26px; font-size:clamp(19px,2vw,26px); line-height:1.4; color:var(--ink); max-width:46ch}
+  .verdict .am{font-weight:600}
+
+  /* product — phone + character cards */
+  .phone{
+    width:240px; height:498px; border:1px solid var(--line); border-radius:30px;
+    background:var(--bg); margin:0 auto; padding:14px 12px; display:flex; flex-direction:column; gap:11px;
+    box-shadow:0 30px 70px oklch(0.10 0.01 70 / .6);
+  }
+  .ph-bar{height:30px; display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:11px; color:var(--ink-dim); border-bottom:1px solid var(--line-soft); padding-bottom:9px}
+  .ph-bar .lamp{width:8px; height:8px; border-radius:50%; background:var(--good)}
+  .ccard{
+    border:1px solid var(--line); border-radius:14px; background:var(--bg-2); padding:11px;
+    display:flex; gap:11px; align-items:center;
+  }
+  .ccard.feat{border-color:var(--amber-line); background:var(--amber-soft)}
+  .face{
+    width:42px; height:42px; flex:none; border-radius:11px;
+    background:var(--bg-3); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:22px;
+  }
+  .ccard.feat .face{border-color:var(--amber-line); background:oklch(0.81 0.15 75 / .16)}
+  .cname{font-size:13.5px; font-weight:650}
+  .crole{font-size:11px; color:var(--ink-dim); margin-top:2px}
+  .cmeta{margin-left:auto; text-align:right; font-family:var(--mono); font-size:10px; color:var(--ink-faint); line-height:1.5}
+  .cmeta b{color:var(--amber)}
+
+  .feat-list{display:flex; flex-direction:column; gap:20px}
+  .feat-list .fi{padding-left:30px; position:relative}
+  .feat-list .fi::before{content:""; position:absolute; left:0; top:8px; width:11px; height:11px; border-radius:50%; border:1.5px solid var(--amber)}
+  .feat-list .fi h3{font-size:21px; font-weight:620; margin-bottom:5px}
+  .feat-list .fi p{font-size:15px; color:var(--ink-dim); line-height:1.5}
+
+  /* how it works — 3 paths, varied widths */
+  .paths{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:8px}
+  .path{border:1px solid var(--line); border-radius:18px; padding:26px 24px; background:var(--bg); position:relative; overflow:hidden}
+  .path .pnum{font-family:var(--mono); font-size:13px; color:var(--ink-faint); letter-spacing:.1em}
+  .path h3{font-size:23px; font-weight:640; margin:14px 0 10px}
+  .path p{font-size:14.5px; color:var(--ink-dim); line-height:1.55}
+  .path .tag{display:inline-block; margin-top:18px; font-family:var(--mono); font-size:11px; padding:4px 10px; border-radius:6px; border:1px solid}
+  .t-live{color:var(--good); border-color:var(--good-line)}
+  .t-rnd{color:var(--ink-faint); border-color:var(--line)}
+  .path.hero{border-color:var(--amber-line); background:var(--amber-soft)}
+  .path.hero .pnum{color:var(--amber)}
+  .pub-note{margin-top:30px; font-size:16px; color:var(--ink-dim); max-width:74ch; line-height:1.55}
+  .pub-note strong{color:var(--ink)}
+
+  /* hook — big collectible card */
+  .hook-card{
+    width:300px; flex:none; border:1px solid var(--amber-line); border-radius:22px;
+    background:linear-gradient(180deg, oklch(0.81 0.15 75 / .10), transparent 60%), var(--bg-2);
+    padding:24px; box-shadow:0 30px 80px oklch(0.10 0.01 70 / .55);
+  }
+  .hook-card .frame{
+    height:188px; border-radius:14px; border:1px solid var(--amber-line);
+    background:radial-gradient(120% 90% at 50% 18%, oklch(0.81 0.15 75 / .22), transparent 62%), var(--bg-3);
+    display:flex; align-items:center; justify-content:center; font-size:72px; margin-bottom:18px;
+  }
+  .hook-card .hname{font-size:24px; font-weight:680; letter-spacing:-0.01em}
+  .hook-card .hsub{font-size:13px; color:var(--ink-dim); margin-top:3px}
+  .hook-card .hstats{display:flex; gap:8px; margin-top:18px; flex-wrap:wrap}
+  .hook-card .hstats .s{font-family:var(--mono); font-size:10.5px; border:1px solid var(--line); border-radius:7px; padding:5px 9px; color:var(--ink-dim)}
+  .hook-card .hstats .s b{color:var(--amber)}
+
+  /* billing — ledger-style rows + budget card */
+  .bill{display:grid; grid-template-columns:1fr 1fr; gap:clamp(28px,4vw,56px); align-items:start}
+  .bill-rows{display:flex; flex-direction:column; gap:0}
+  .bill-rows .br{display:grid; grid-template-columns:34px 1fr; gap:16px; padding:18px 0; border-top:1px solid var(--line); align-items:start}
+  .bill-rows .br:first-child{border-top:none}
+  .bill-rows .bi{font-family:var(--mono); color:var(--amber); font-size:17px; line-height:1.2}
+  .bill-rows .bt{font-size:17px; font-weight:600; margin-bottom:4px}
+  .bill-rows .bd{font-size:14.5px; color:var(--ink-dim); line-height:1.5}
+  .budget{border:1px solid var(--amber-line); border-radius:18px; background:var(--amber-soft); padding:24px}
+  .budget .bh{font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--amber); margin-bottom:16px}
+  .budget .kv{display:flex; justify-content:space-between; gap:14px; padding:11px 0; border-top:1px solid var(--amber-line); font-size:14px}
+  .budget .kv:first-of-type{border-top:none}
+  .budget .kv span:first-child{color:var(--ink-dim)}
+  .budget .kv span:last-child{font-family:var(--mono); color:var(--ink)}
+  .budget .meter{height:8px; border-radius:5px; background:var(--bg-3); border:1px solid var(--amber-line); overflow:hidden; margin-top:16px}
+  .budget .meter > i{display:block; height:100%; width:64%; background:var(--amber)}
+  .budget .mlabel{font-family:var(--mono); font-size:11px; color:var(--ink-dim); margin-top:8px}
+
+  /* hermes — two-track */
+  .tracks{display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:8px}
+  .track{border:1px solid var(--line); border-radius:18px; padding:28px; background:var(--bg)}
+  .track.live{border-color:var(--good-line)}
+  .track .th{display:flex; align-items:center; gap:10px; margin-bottom:14px}
+  .track .th .tag{font-family:var(--mono); font-size:11px; padding:4px 10px; border-radius:6px; border:1px solid}
+  .track h3{font-size:22px; font-weight:640; margin-bottom:10px}
+  .track p{font-size:15px; color:var(--ink-dim); line-height:1.55}
+  .hermes-note{margin-top:26px; font-size:15px; color:var(--ink-faint); max-width:78ch; line-height:1.55}
+
+  /* status — three columns of honesty */
+  .stat{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:8px}
+  .col{border:1px solid var(--line); border-radius:16px; background:var(--bg); padding:22px}
+  .col.live{border-color:var(--good-line)}
+  .col .ch{display:flex; align-items:center; gap:9px; font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:16px}
+  .col.live .ch{color:var(--good)} .col.soon .ch{color:var(--soon)} .col.rnd .ch{color:var(--ink-faint)}
+  .col ul{list-style:none; display:flex; flex-direction:column; gap:11px}
+  .col li{font-size:14px; color:var(--ink-dim); line-height:1.4; padding-left:18px; position:relative}
+  .col li::before{content:""; position:absolute; left:0; top:7px; width:6px; height:6px; border-radius:50%}
+  .col.live li::before{background:var(--good)} .col.soon li::before{background:var(--soon)} .col.rnd li::before{background:var(--ink-faint)}
+  .scores{margin-top:26px; font-family:var(--mono); font-size:13px; color:var(--ink-faint); display:flex; gap:24px; flex-wrap:wrap}
+  .scores b{color:var(--ink)}
+
+  /* gonka — fit mapping */
+  .fit{display:flex; flex-direction:column; gap:0; border:1px solid var(--line); border-radius:18px; overflow:hidden; background:var(--bg); margin-top:6px}
+  .fit .fr{display:grid; grid-template-columns:auto 32px 1fr; gap:20px; padding:20px 26px; border-top:1px solid var(--line); align-items:center}
+  .fit .fr:first-child{border-top:none}
+  .fit .gonka{font-family:var(--mono); font-size:14px; color:var(--soon); min-width:230px}
+  .fit .arr{color:var(--ink-faint); text-align:center; font-size:18px}
+  .fit .ours{font-size:16px; color:var(--ink)}
+  .fit .ours b{color:var(--amber)}
+  .ask-line{margin-top:26px; font-size:18px; color:var(--ink-dim); line-height:1.5; max-width:76ch}
+  .ask-line strong{color:var(--ink)}
+
+  /* roadmap — horizontal timeline */
+  .road{display:grid; grid-template-columns:repeat(4,1fr); gap:0; margin-top:18px; position:relative}
+  .road::before{content:""; position:absolute; left:0; right:0; top:18px; height:1px; background:var(--line)}
+  .rstep{padding-right:20px; position:relative}
+  .rstep .rdot{width:36px; height:36px; border-radius:10px; border:1px solid var(--amber-line); background:var(--amber-soft); color:var(--amber); font-family:var(--mono); font-size:15px; display:flex; align-items:center; justify-content:center; position:relative; z-index:1; margin-bottom:18px}
+  .rstep.now .rdot{background:var(--amber); color:oklch(0.16 0.01 70)}
+  .rstep .rwhen{font-family:var(--mono); font-size:11px; color:var(--amber); letter-spacing:.12em; text-transform:uppercase; margin-bottom:8px}
+  .rstep h3{font-size:18px; font-weight:640; margin-bottom:8px; line-height:1.2}
+  .rstep p{font-size:13.5px; color:var(--ink-dim); line-height:1.5}
+
+  /* ask / contact */
+  .ask-grid{display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:8px}
+  .askbox{border:1px solid var(--line); border-radius:18px; padding:28px; background:var(--bg)}
+  .askbox.amber{border-color:var(--amber-line); background:var(--amber-soft)}
+  .askbox .ah{font-family:var(--mono); font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--amber); margin-bottom:16px}
+  .askbox h3{font-size:25px; font-weight:660; margin-bottom:12px}
+  .askbox p{font-size:15px; color:var(--ink-dim); line-height:1.55}
+  .contact{margin-top:42px; display:flex; gap:14px; flex-wrap:wrap; font-family:var(--mono); font-size:14px}
+  .contact .cc{border:1px solid var(--line); border-radius:10px; padding:12px 18px; color:var(--ink-dim)}
+  .contact .cc b{color:var(--amber); font-weight:600}
+
+  /* cover specifics */
+  .cover-hook{margin-top:34px; font-family:var(--mono); font-size:14px; color:var(--ink-faint); letter-spacing:.04em}
+  .cover-hook .am{color:var(--amber)}
+
+  @media(max-width:920px){
+    .split,.bill,.tracks,.ask-grid{grid-template-columns:1fr; gap:34px}
+    .paths,.stat{grid-template-columns:1fr}
+    .road{grid-template-columns:1fr 1fr; gap:24px}
+    .road::before{display:none}
+    .fit .fr{grid-template-columns:1fr; gap:8px}
+    .fit .arr{display:none}
+    .rail{display:none}
+    .hook-card{margin:0 auto}
+  }
+</style>
+</head>
+<body>
+
+<!-- chrome -->
+<div class="chrome progress"><i id="bar"></i></div>
+<div class="chrome brandmark"><b>AIAG</b> · TMA</div>
+<div class="chrome hint"><span class="k">↓</span><span class="arr">скролл / стрелки</span></div>
+<div class="chrome counter"><b id="cur">01</b> / <span id="tot">11</span></div>
+<nav class="rail" id="rail" aria-label="Слайды"></nav>
+
+<main class="deck" id="deck">
+
+  <!-- 01 — COVER -->
+  <section class="slide dark" data-title="Обложка">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Питч · Telegram Mini App · 2026</div>
+      <h1 data-r="2">Маркетплейс AI-агентов,<br>которые живут в Telegram.<br><span class="q">За крипту. С характером.</span></h1>
+      <p class="lead" data-r="3" style="margin-top:30px">Открой готового агента, склонируй шаблон или собери своего. Каждый агент — персонаж со своим лицом, характером и кошельком. Платишь по факту, в кредитах.</p>
+      <div class="cover-hook" data-r="4">hosted · multi-user · multi-provider · <span class="am">own key = free</span></div>
+      <div class="pills" data-r="5">
+        <span class="pill"><span class="dot d-live"></span> live — работает на проде</span>
+        <span class="pill"><span class="dot d-soon"></span> скоро — ближний билд</span>
+        <span class="pill"><span class="dot d-rnd"></span> R&amp;D — ресёрч</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 — PROBLEM -->
+  <section class="slide" data-title="Проблема">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Проблема</div>
+      <h2 data-r="2">Агентные тулзы сегодня — это софт<br>для одного оператора на своём ПК.</h2>
+      <div class="fail" data-r="3">
+        <div class="f"><div class="x">01</div><div><div class="ft">Однопользовательские десктоп-тулзы</div><div class="fd">Hermes и подобные рантаймы ставишь на свою машину и крутишь сам. Нет хостинга, нет онбординга, нет «зашёл и пользуешься».</div></div></div>
+        <div class="f"><div class="x">02</div><div><div class="ft">Нет маркетплейса с платными моделями и тулзами</div><div class="fd">Никто не даёт каталог готовых агентов, выбор провайдера по каждой модели и рынок тулзов в одном продукте.</div></div></div>
+        <div class="f"><div class="x">03</div><div><div class="ft">Нет крипто-биллинга по факту</div><div class="fd">Подписки и карты, а не оплата за реальное использование. Для агента, который тратит сам, нужен счётчик и лимит, а не тариф.</div></div></div>
+      </div>
+      <p class="verdict" data-r="4">Свободная ниша: <span class="am">хостед, многопользовательский продукт</span> с маркетом шаблонов, выбором платных моделей и рынком тулзов. Этой полосы не занимает никто.</p>
+    </div>
+  </section>
+
+  <!-- 03 — PRODUCT -->
+  <section class="slide dark" data-title="Продукт">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Продукт</div>
+      <h2 data-r="2">Маркетплейс агентов прямо в Telegram.</h2>
+      <div class="split">
+        <div>
+          <div class="feat-list">
+            <div class="fi" data-r="3"><h3>Агент — это композиция, не промпт</h3><p>Персона, модели по ролям, навыки, тулзы, MCP-серверы, память и расписания. Собранная сущность, а не одна строка.</p></div>
+            <div class="fi" data-r="4"><h3>Агенты как персонажи</h3><p>У каждого агента лицо, имя и характер. Каталог — это галерея личностей, а не список функций.</p></div>
+            <div class="fi" data-r="5"><h3>Внутри Telegram, на крипто-кредитах</h3><p>Открываешь Mini App, выбираешь агента, запускаешь. Никаких установок. Платишь за факт использования.</p></div>
+          </div>
+        </div>
+        <div data-r="4">
+          <div class="phone">
+            <div class="ph-bar"><span class="lamp"></span> Агенты · маркет</div>
+            <div class="ccard feat"><div class="face">🦊</div><div><div class="cname">Алиса</div><div class="crole">ресёрч и саммари</div></div><div class="cmeta">1.2k прогонов<br><b>0.4 кр/run</b></div></div>
+            <div class="ccard"><div class="face">🛰️</div><div><div class="cname">Гермес</div><div class="crole">код-ревью</div></div><div class="cmeta">840 прогонов<br><b>0.6 кр/run</b></div></div>
+            <div class="ccard"><div class="face">🎨</div><div><div class="cname">Муза</div><div class="crole">генерация арта</div></div><div class="cmeta">2.0k прогонов<br><b>1.1 кр/run</b></div></div>
+            <div class="ccard"><div class="face">📈</div><div><div class="cname">Финик</div><div class="crole">трейд-сводки</div></div><div class="cmeta">510 прогонов<br><b>0.5 кр/run</b></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 — HOW IT WORKS -->
+  <section class="slide" data-title="Как это работает">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Как это работает</div>
+      <h2 data-r="2">Три способа завести агента.</h2>
+      <div class="paths">
+        <div class="path" data-r="3">
+          <div class="pnum">01</div>
+          <h3>Из шаблона</h3>
+          <p>Два клика. Готовый персонаж плюс модель и тулзы. Запуск сразу, без сборки.</p>
+          <span class="tag t-live">live</span>
+        </div>
+        <div class="path" data-r="4">
+          <div class="pnum">02</div>
+          <h3>Словами</h3>
+          <p>Опиши, кого хочешь, — AI соберёт спецификацию. Можно дорисовать вручную.</p>
+          <span class="tag t-live">live</span>
+        </div>
+        <div class="path hero" data-r="5">
+          <div class="pnum">03</div>
+          <h3>Свой Hermes</h3>
+          <p>Подключаешь свой рантайм по адресу, мы даём модели, скиллы и тулзы поверх. Метрим оплату.</p>
+          <span class="tag t-live">live</span>
+        </div>
+      </div>
+      <p class="pub-note" data-r="6">Своего агента можно <strong>опубликовать как шаблон</strong>: делимся настройкой — персона, модели, скиллы, — но НЕ ключами, памятью и данными. Другие клонируют, автор получает доход.</p>
+    </div>
+  </section>
+
+  <!-- 05 — THE HOOK -->
+  <section class="slide dark" data-title="Хук — персонажи">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Хук</div>
+      <h2 data-r="2">Не безликая функция.<br>Персонаж, которым хочется пользоваться.</h2>
+      <div class="split">
+        <div class="stack-gap" data-r="4">
+          <p class="lead">Карточка агента в каталоге — это <strong>портрет в рамке</strong>, как коллекционная карта. Тап открывает профиль персонажа: лицо, характер, голос, история.</p>
+          <p class="lead">Лицо персонажа становится <strong>референсом для генерации</strong> его собственных изображений. Выбор агента превращается из чтения строк в выбор личности.</p>
+        </div>
+        <div data-r="3" style="display:flex; justify-content:center">
+          <div class="hook-card">
+            <div class="frame">🦊</div>
+            <div class="hname">Алиса</div>
+            <div class="hsub">аналитик-ресёрчер · спокойный тон · ru/en</div>
+            <div class="hstats">
+              <span class="s">уровень <b>12</b></span>
+              <span class="s"><b>1.2k</b> прогонов</span>
+              <span class="s">автор <b>@username</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 — BILLING -->
+  <section class="slide" data-title="Биллинг">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Деньги</div>
+      <h2 data-r="2">Единый кредит. Прозрачно по факту.</h2>
+      <div class="bill">
+        <div class="bill-rows" data-r="3">
+          <div class="br"><div class="bi">◎</div><div><div class="bt">Один понятный юнит — Credits (кр)</div><div class="bd">Под капотом USDT/TON. Пользователь не видит контрактов и газа.</div></div></div>
+          <div class="br"><div class="bi">↑</div><div><div class="bt">Пополнение через TON Connect и HOT Wallet</div><div class="bd">Без Telegram Stars и их 32% комиссии. Крипто-нативно.</div></div></div>
+          <div class="br"><div class="bi">%</div><div><div class="bt">Комиссия только на наших моделях</div><div class="bd">Модель от нас — списываем плюс наценка. Свой ключ или провайдер — ноль комиссии.</div></div></div>
+        </div>
+        <div class="budget" data-r="4">
+          <div class="bh">Бюджет-карта агента · delegated wallet</div>
+          <div class="kv"><span>Дневной лимит</span><span>20.0 кр</span></div>
+          <div class="kv"><span>Лимит на вызов</span><span>2.0 кр</span></div>
+          <div class="kv"><span>Разрешённые тулзы</span><span>search · image</span></div>
+          <div class="kv"><span>Отзыв делегирования</span><span>в один тап</span></div>
+          <div class="meter"><i></i></div>
+          <div class="mlabel">потрачено сегодня 12.8 / 20.0 кр · аудит-лог включён</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 — HERMES -->
+  <section class="slide dark" data-title="Hermes">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Движок</div>
+      <h2 data-r="2">Hermes — открытое ядро.<br>Честно о статусе.</h2>
+      <p class="lead" data-r="3" style="margin-bottom:8px"><strong>Hermes</strong> (NousResearch/hermes-agent) — открытый рантайм-агент, а не модель. Из коробки: память, скиллы, тулзы, cron, под-агенты и мост в ~22 мессенджера, включая Telegram.</p>
+      <div class="tracks">
+        <div class="track live" data-r="4">
+          <div class="th"><span class="tag t-live">live · работает</span></div>
+          <h3>Подключи свой Hermes</h3>
+          <p>Пользователь даёт адрес своего рантайма, мы поверх отдаём модели и тулзы и метрим оплату AIAG-вызовов. Мост в Telegram уже встроен в Hermes — мы его не строим.</p>
+        </div>
+        <div class="track" data-r="5">
+          <div class="th"><span class="tag t-rnd">R&amp;D · ресёрч</span></div>
+          <h3>Managed Hermes</h3>
+          <p>Мы поднимаем рантайм на своей инфре при создании агента. Требует инфра-решения по провижинингу и изоляции. Пока не построено и честно помечено в продукте.</p>
+        </div>
+      </div>
+      <p class="hermes-note" data-r="6">Сегодня рантайм по умолчанию — stateless-цикл через OpenRouter. Connect-your-own-Hermes — это реальная история managed-исполнения, которая работает уже сейчас.</p>
+    </div>
+  </section>
+
+  <!-- 08 — STATUS -->
+  <section class="slide" data-title="Что реально">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Реальность</div>
+      <h2 data-r="2">Что работает, а что в плане. Без пустышек.</h2>
+      <div class="stat">
+        <div class="col live" data-r="3">
+          <div class="ch"><span class="dot d-live"></span> live — работает</div>
+          <ul>
+            <li>Каталог агентов, запуск, чат, история</li>
+            <li>Дневной бюджет, баланс и пополнение</li>
+            <li>Свой Hermes; свой ключ = бесплатно</li>
+            <li>Вход + 152-ФЗ</li>
+            <li>Атомарный money-path (R0)</li>
+          </ul>
+        </div>
+        <div class="col soon" data-r="4">
+          <div class="ch"><span class="dot d-soon"></span> скоро — ближний билд</div>
+          <ul>
+            <li>Полный провайдер-пикер, мульти-модель</li>
+            <li>Run-trace и тул-апрув</li>
+            <li>Бюджет-карта (delegated wallet)</li>
+            <li>Профиль автора + доход, публикация</li>
+            <li>Расписания (cron)</li>
+          </ul>
+        </div>
+        <div class="col rnd" data-r="5">
+          <div class="ch"><span class="dot d-rnd"></span> R&amp;D — ресёрч</div>
+          <ul>
+            <li>Managed-Hermes (provisioning + дашборд)</li>
+            <li>Маркет тулзов (x402)</li>
+            <li>Маркет скиллов, MCP-серверы</li>
+            <li>Канбан / swarm</li>
+          </ul>
+        </div>
+      </div>
+      <div class="scores" data-r="6">
+        <span>стек <b>50</b>/108</span>
+        <span>функционал <b>43</b>/108</span>
+        <span>UX <b>59</b>/108</span>
+        <span class="am">фундамент денег и auth — построен и на проде</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 — GONKA -->
+  <section class="slide dark" data-title="Gonka">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Возможность · Gonka Foundation</div>
+      <h2 data-r="2">Track 2 — почти ровно под нас.</h2>
+      <p class="lead" data-r="3" style="margin-bottom:6px">Gonka — децентрализованная сеть AI-инференса (токен GNK, OpenAI-совместимый API). Их Foundation финансирует команды за реальный инференс-трафик. Их roadmap <strong>Track 2 «Developer &amp; AI agent access»</strong> — буквально наш продукт.</p>
+      <div class="fit" data-r="4">
+        <div class="fr"><div class="gonka">P2 · Adapter для агрегаторов</div><div class="arr">→</div><div class="ours">мы и есть <b>агрегатор</b> с живым OpenAI-совместимым шлюзом</div></div>
+        <div class="fr"><div class="gonka">P3 · Delegated wallets / agent accounts</div><div class="arr">→</div><div class="ours">это наша <b>бюджет-карта агента</b> поверх атомарного леджера</div></div>
+        <div class="fr"><div class="gonka">P1 · Agent-runtime интеграции</div><div class="arr">→</div><div class="ours">наш <b>агент-воркер</b> и путь connect-your-own-Hermes</div></div>
+      </div>
+      <p class="ask-line" data-r="5">Берём Gonka <strong>как провайдера плюс грант, не как зависимость</strong>. Платят в GNK за то, что мы и так генерим — реальный трафик от RU-аудитории. Черновик заявки готов.</p>
+    </div>
+  </section>
+
+  <!-- 10 — ROADMAP -->
+  <section class="slide" data-title="Роадмап">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Дальше</div>
+      <h2 data-r="2">Порядок сборки на ближайшее.</h2>
+      <div class="road">
+        <div class="rstep now" data-r="3">
+          <div class="rdot">●</div>
+          <div class="rwhen">сейчас · R0 на проде</div>
+          <h3>Money-path и auth</h3>
+          <p>Атомарный леджер, дневной бюджет, вход и 152-ФЗ. Фундамент уже работает.</p>
+        </div>
+        <div class="rstep" data-r="4">
+          <div class="rdot">1</div>
+          <div class="rwhen">ближний билд</div>
+          <h3>Провайдер-пикер + Gonka</h3>
+          <p>Выбор провайдера по модели, Gonka как первый класс. Спайк эндпоинта до коммита.</p>
+        </div>
+        <div class="rstep" data-r="5">
+          <div class="rdot">2</div>
+          <div class="rwhen">следом</div>
+          <h3>Бюджет-карта агента</h3>
+          <p>Delegated wallet: лимиты, allowlist тулз, отзыв в тап, аудит. Демо-агент на Gonka.</p>
+        </div>
+        <div class="rstep" data-r="6">
+          <div class="rdot">3</div>
+          <div class="rwhen">маркет</div>
+          <h3>Публикация и доход</h3>
+          <p>Профиль автора, публикация шаблонов, рейтинги по реальному usage, трекшн-дашборд.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 — ASK / CONTACT -->
+  <section class="slide dark" data-title="Запрос и контакт">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Запрос</div>
+      <h2 data-r="2">Чего мы хотим.</h2>
+      <div class="ask-grid">
+        <div class="askbox amber" data-r="3">
+          <div class="ah">Грант</div>
+          <h3>Grant в GNK</h3>
+          <p>Финансирование по Track 2 под три деливерабла: Gonka-провайдер, делегированные кошельки агентов, агент-рантайм с публичным демо. Привязка к реальной метрике инференса.</p>
+        </div>
+        <div class="askbox" data-r="4">
+          <div class="ah">Партнёрство</div>
+          <h3>Gonka как провайдер</h3>
+          <p>Подключаем Gonka в шлюз и пикер, гоним реальный трафик от RU-аудитории. Совместная dev-активация и техтуториал на русском.</p>
+        </div>
+      </div>
+      <div class="contact" data-r="5">
+        <span class="cc">telegram · <b>@username</b></span>
+        <span class="cc">GNK-кошелёк · <b>gonka1…</b></span>
+        <span class="cc">demo · <b>ai-aggregator.ru</b></span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+  var bar = document.getElementById('bar');
+  var cur = document.getElementById('cur');
+  var rail = document.getElementById('rail');
+  document.getElementById('tot').textContent = String(slides.length).padStart(2,'0');
+
+  // build dot rail
+  slides.forEach(function(s, i){
+    var b = document.createElement('button');
+    b.setAttribute('aria-label', s.dataset.title || ('Слайд ' + (i+1)));
+    b.title = s.dataset.title || '';
+    b.addEventListener('click', function(){ go(i); });
+    rail.appendChild(b);
+  });
+  var dots = Array.prototype.slice.call(rail.children);
+  var active = 0;
+
+  function go(i){
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    slides[i].scrollIntoView({behavior:'smooth'});
+  }
+
+  // IntersectionObserver drives the "active" slide → counter, rail, entrance
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      var idx = slides.indexOf(e.target);
+      if(e.isIntersecting && e.intersectionRatio > 0.55){
+        active = idx;
+        e.target.classList.add('in');
+        cur.textContent = String(idx + 1).padStart(2,'0');
+        bar.style.width = (((idx + 1) / slides.length) * 100) + '%';
+        dots.forEach(function(d, di){ d.classList.toggle('on', di === idx); });
+      }
+    });
+  }, {root: deck, threshold:[0.55]});
+  slides.forEach(function(s){ io.observe(s); });
+
+  // keyboard nav
+  window.addEventListener('keydown', function(ev){
+    if(ev.key === 'ArrowDown' || ev.key === 'ArrowRight' || ev.key === 'PageDown' || ev.key === ' '){
+      ev.preventDefault(); go(active + 1);
+    } else if(ev.key === 'ArrowUp' || ev.key === 'ArrowLeft' || ev.key === 'PageUp'){
+      ev.preventDefault(); go(active - 1);
+    } else if(ev.key === 'Home'){ ev.preventDefault(); go(0); }
+    else if(ev.key === 'End'){ ev.preventDefault(); go(slides.length - 1); }
+  });
+
+  // first slide entrance on load
+  slides[0].classList.add('in');
+  bar.style.width = (100 / slides.length) + '%';
+  dots[0].classList.add('on');
+})();
+</script>
+</body>
+</html>

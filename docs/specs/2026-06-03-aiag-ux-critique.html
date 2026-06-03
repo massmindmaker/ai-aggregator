@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIAG TMA — критический UX-разбор (108)</title>
+<style>
+  /* ═══════════════════════════════════════════════════════════════
+   * AIAG TMA — UX-критика. Dark/amber OKLCH, в тон styles.css.
+   * Никаких gradient-text, glass, цветных боковых полос >1px, модалок.
+   * Motion: только transform/opacity, ease-out.
+   * ═══════════════════════════════════════════════════════════════ */
+  :root{
+    --bg:        oklch(0.155 0.011 70);
+    --bg-deep:   oklch(0.125 0.010 70);
+    --surface:   oklch(0.205 0.013 70);
+    --surface-2: oklch(0.245 0.014 70);
+    --line:      oklch(0.32 0.014 70);
+    --line-soft: oklch(0.27 0.012 70);
+    --ink:       oklch(0.95 0.010 80);
+    --ink-dim:   oklch(0.74 0.015 75);
+    --ink-faint: oklch(0.56 0.014 75);
+    --amber:     oklch(0.81 0.15 75);
+    --amber-deep:oklch(0.62 0.14 65);
+    --amber-soft:oklch(0.81 0.15 75 / 0.12);
+    --amber-line:oklch(0.81 0.15 75 / 0.42);
+    --good:      oklch(0.80 0.14 155);
+    --warn:      oklch(0.80 0.13 60);
+    --bad:       oklch(0.68 0.16 25);
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --sans: -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--sans); color:var(--ink); line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(115% 75% at 16% -8%, oklch(0.25 0.045 70 / 0.5), transparent 60%),
+      var(--bg-deep);
+    background-attachment:fixed;
+    padding:0 22px 110px;
+  }
+  .wrap{max-width:1000px;margin:0 auto}
+  a{color:var(--amber);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  @keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+  header,section{animation:rise .6s cubic-bezier(.16,1,.3,1) both}
+
+  /* ── masthead ── */
+  header{padding:70px 0 30px;border-bottom:1px solid var(--line)}
+  .kick{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--amber);margin-bottom:18px}
+  h1{font-size:clamp(28px,4.6vw,44px);line-height:1.06;letter-spacing:-0.02em;font-weight:680;margin-bottom:16px;max-width:20ch}
+  h1 .q{color:var(--ink-faint)}
+  .lead{font-size:16px;color:var(--ink-dim);max-width:66ch}
+  .lead b{color:var(--ink)}
+
+  /* ── verdict band ── */
+  .verdict{
+    display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:center;
+    margin-top:30px;padding:20px 22px;border:1px solid var(--amber-line);
+    border-radius:16px;background:var(--amber-soft);
+  }
+  .bigscore{font-family:var(--mono);line-height:1;text-align:center}
+  .bigscore .n{font-size:52px;color:var(--amber);font-weight:700}
+  .bigscore .d{font-size:14px;color:var(--ink-faint);margin-top:4px}
+  .verdict p{font-size:15px;color:var(--ink-dim);margin:0}
+  .verdict p b{color:var(--ink)}
+
+  section{padding:48px 0;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:12px}
+  h2{font-size:25px;letter-spacing:-0.015em;margin-bottom:8px;font-weight:640}
+  .sub{color:var(--ink-dim);font-size:14px;margin-bottom:22px;max-width:70ch}
+  h3{font-size:16px;margin:0 0 6px;font-weight:620}
+  p{color:var(--ink-dim);font-size:14.5px}
+  .num{font-family:var(--mono)}
+  .scr{color:var(--ink);font-weight:600}
+
+  /* ── dimension scorecards ── */
+  .dims{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+  .dim{
+    border:1px solid var(--line);border-radius:13px;background:var(--surface);
+    padding:14px 16px;transition:border-color .35s ease,transform .35s cubic-bezier(.16,1,.3,1);
+  }
+  .dim:hover{border-color:var(--amber-line);transform:translateX(3px)}
+  .dim .top{display:flex;align-items:baseline;justify-content:space-between;gap:14px}
+  .dim .nm{font-size:15px;font-weight:620;color:var(--ink)}
+  .dim .nm .ix{font-family:var(--mono);font-size:11px;color:var(--ink-faint);margin-right:8px}
+  .dim .pts{font-family:var(--mono);font-size:13px;color:var(--ink-faint);white-space:nowrap}
+  .dim .pts b{font-size:17px}
+  .bar{height:7px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden;margin:11px 0 12px}
+  .bar > i{display:block;height:100%;border-radius:5px}
+  .g9 b{color:var(--good)} .g9 > i{background:var(--good)}
+  .g7 b{color:var(--amber)} .g7 > i{background:var(--amber)}
+  .g5 b{color:var(--warn)} .g5 > i{background:var(--warn)}
+  .g3 b{color:var(--bad)} .g3 > i{background:var(--bad)}
+  .dim .why{font-size:13.5px;color:var(--ink-dim);margin-bottom:9px;line-height:1.5}
+  .dim .fix{font-size:13px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;line-height:1.5}
+  .dim .fix b{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);display:block;margin-bottom:3px}
+
+  /* ── walkthroughs ── */
+  .flow{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:18px 20px;margin-top:14px}
+  .flow > h3{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+  .flow > h3 .verd{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid;margin-left:auto}
+  .verd.ok{color:var(--good);border-color:oklch(0.80 0.14 155 / .5)}
+  .verd.mid{color:var(--amber);border-color:var(--amber-line)}
+  .verd.bad{color:var(--bad);border-color:oklch(0.68 0.16 25 / .5)}
+  .step{display:grid;grid-template-columns:26px 1fr;gap:13px;padding:11px 0;border-top:1px solid var(--line-soft)}
+  .step:first-of-type{border-top:none}
+  .step .ix{font-family:var(--mono);font-size:13px;color:var(--amber);padding-top:1px}
+  .step .scn{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint)}
+  .step .ttl{font-size:14px;color:var(--ink);font-weight:580;margin:2px 0 7px}
+  .ff{font-size:13px;line-height:1.5;display:flex;gap:9px;margin-top:5px;color:var(--ink-dim)}
+  .ff .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:5px;border:1px solid;height:fit-content;white-space:nowrap;margin-top:2px}
+  .ff.good .lbl{color:var(--good);border-color:oklch(0.80 0.14 155 / .45)}
+  .ff.conf .lbl{color:var(--warn);border-color:oklch(0.80 0.13 60 / .45)}
+  .ff.miss .lbl{color:var(--bad);border-color:oklch(0.68 0.16 25 / .45)}
+
+  /* ── top-10 ── */
+  .imp{border:1px solid var(--line);border-radius:13px;background:var(--surface);padding:15px 17px;margin-top:11px}
+  .imp .hd{display:flex;align-items:baseline;gap:11px;margin-bottom:8px}
+  .imp .rk{font-family:var(--mono);font-size:20px;color:var(--amber);font-weight:700;min-width:30px}
+  .imp .hd h3{flex:1}
+  .imp .badge{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:6px;border:1px solid;white-space:nowrap}
+  .badge.qw{color:var(--good);border-color:oklch(0.80 0.14 155 / .5)}
+  .badge.bb{color:var(--amber);border-color:var(--amber-line)}
+  .imp .body{display:grid;grid-template-columns:1fr;gap:7px;padding-left:41px}
+  .imp .ln{font-size:13.5px;line-height:1.5;color:var(--ink-dim)}
+  .imp .ln b{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);display:inline-block;min-width:62px}
+  .imp .ln.fix b{color:var(--amber)}
+
+  /* ── character note ── */
+  .col2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px}
+  .pane{border:1px solid var(--line);border-radius:13px;padding:18px;background:var(--surface)}
+  .pane.win{border-color:oklch(0.80 0.14 155 / .35)}
+  .pane.risk{border-color:oklch(0.68 0.16 25 / .35)}
+  .pane h3{margin-bottom:11px}
+  .pane h3 .t{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+  .pane.win h3 .t{color:var(--good)} .pane.risk h3 .t{color:var(--bad)}
+  .pane ul{list-style:none;display:flex;flex-direction:column;gap:11px}
+  .pane li{padding-left:18px;position:relative;font-size:13.5px;color:var(--ink-dim);line-height:1.5}
+  .pane li::before{content:"";position:absolute;left:0;top:7px;width:7px;height:7px;border-radius:2px;background:var(--ink-faint)}
+  .pane.win li::before{background:var(--good)} .pane.risk li::before{background:var(--bad)}
+  .pane li b{color:var(--ink)}
+
+  footer{padding:40px 0 0;color:var(--ink-faint);font-size:12.5px;font-family:var(--mono);line-height:1.7}
+  footer b{color:var(--ink-dim);font-weight:500}
+  @media(max-width:700px){.col2{grid-template-columns:1fr}.verdict{grid-template-columns:1fr;text-align:center}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kick">AIAG · TMA · критический UX-разбор</div>
+    <h1>39 экранов, один продукт. <span class="q">Карта красивая. Маршрут — нет.</span></h1>
+    <p class="lead">Разбор борда (index.html, 39 артбордов), карточек-персонажей (characters.html) и токенов (styles.css) глазами придирчивого продуктового дизайнера. Цель — не похвалить, а найти, где пользователь спотыкается, где интерфейс врёт о готовности и где визуальный язык красив, но нечитаем. <b>Оценка по шкале 108 = 12 измерений × 9.</b></p>
+
+    <div class="verdict">
+      <div class="bigscore"><div class="n">61</div><div class="d">/ 108</div></div>
+      <p><b>Вердикт:</b> сильная визуальная ДНК и честная маркировка статусов держат борд выше среднего, но happy-path тонет в шуме «скоро/R&D», ключевые экраны (баланс, провайдер-пикер, бюджет) перегружены метриками без иерархии, а два визуальных языка (lo-fi борд и hi-fi карточки) ещё не сшиты в один продукт.</p>
+    </div>
+  </header>
+
+  <!-- ════════ 1 · SCORECARD ════════ -->
+  <section>
+    <div class="eyebrow">Часть 1 · Оценка по 12 измерениям</div>
+    <h2>Скоркарта</h2>
+    <p class="sub">Каждое измерение /9: обоснование в 1–2 строки + единственный фикс с наибольшим рычагом. Сумма внизу.</p>
+
+    <div class="dims">
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">01</span>Визуальная иерархия</div><div class="pts g5"><b>5</b>/9</div></div>
+        <div class="bar g5"><i style="width:55.5%"></i></div>
+        <div class="why">На «дом» (03) и «баланс» (31) всё кричит одинаково: ленты, метрики, чипы и кнопки в один вес. Amber-акцент размазан по 4–5 элементам на экране, поэтому глаз не находит главное действие. На карточке агента (05) RUN конкурирует с «клонировать/сохранить» одного размера.</div>
+        <div class="fix"><b>Фикс</b>На каждом экране ровно один amber-CTA в полный вес; вторичное — ghost/текст. На 03 убрать дубль «в тренде» + «рекомендуем» в один блок.</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">02</span>Информационная архитектура</div><div class="pts g5"><b>5</b>/9</div></div>
+        <div class="bar g5"><i style="width:55.5%"></i></div>
+        <div class="why">39 экранов на 4 таба — перегруз. «Маркет» смешивает модели (06), тулзы (27), скиллы (29), MCP (30) — четыре разных ментальных модели под одним табом. Создание агента разбито на 7 экранов (12–18), хотя 4 из них помечены «скоро». Сегменты (seg) и табы (tabbar) дублируют навигацию.</div>
+        <div class="fix"><b>Фикс</b>Свернуть «Маркет» в один экран с под-табами; спрятать «скоро/R&D» экраны за фиче-флагом, а не показывать в основном флоу.</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">03</span>Навигация / флоу</div><div class="pts g5"><b>5</b>/9</div></div>
+        <div class="bar g5"><i style="width:55.5%"></i></div>
+        <div class="why">Happy-path (03→05→08) читается. Но «создать» (12) даёт 4 равных пути без рекомендации новичку, а провайдер-пикер (17) и мульти-модель (16) — «скоро», то есть выбор пути ведёт в тупик. На 39 таб «NFT» внезапно заменяет «Агенты» в tabbar — навигация ломается.</div>
+        <div class="fix"><b>Фикс</b>В «12» выделить «Из шаблона — 2 клика» как дефолт (визуально крупнее), остальные — мельче. Зафиксировать 4 таба навсегда, NFT — не в tabbar.</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">04</span>Консистентность</div><div class="pts g3"><b>4</b>/9</div></div>
+        <div class="bar g3"><i style="width:44.4%"></i></div>
+        <div class="why">Два визуальных мира. Борд — lo-fi hex-цвета (#0b0d10), карточки — hi-fi OKLCH с per-hue, тирами, 3D-тилтом. Эмодзи-аватары (✍️🎬🧮) на борде против сгенерированных портретов в карточках. Цена то «~12 кр/прогон», то «12 кр», то «~6кр». Модели: «GPT-5.5» на борде, «GPT-4o» в карточках — рассинхрон.</div>
+        <div class="fix"><b>Фикс</b>Один источник токенов (OKLCH из characters.html) на оба файла; единый формат цены «~N кр / прогон»; единый реестр моделей.</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">05</span>Типографика</div><div class="pts g7"><b>6</b>/9</div></div>
+        <div class="bar g7"><i style="width:66.6%"></i></div>
+        <div class="why">Mono для чисел + sans для текста — хорошее, осмысленное разделение. Но на телефоне 320px шрифты 9–10.5px (metric, author, label) уже на грани читаемости, а их много. Заголовки экранов (.ph h2 21px) и тело конкурируют слабо — мало контраста размеров.</div>
+        <div class="fix"><b>Фикс</b>Поднять минимальный размер тела до 12px, метрики — до 11px; увеличить разрыв заголовок/тело (h2 → 22–24px, sub → 12px).</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">06</span>Цвет / контраст / доступность</div><div class="pts g5"><b>5</b>/9</div></div>
+        <div class="bar g5"><i style="width:55.5%"></i></div>
+        <div class="why">--ink-faint (oklch 0.56) на --surface — это ~3:1, ниже WCAG AA для мелкого текста, а именно им набраны метрики и подписи. Amber-текст (.amber-tx) на тёмном — ок, но amber как фон кнопки с тёмным текстом #1a1206 — единственная по-настоящему контрастная пара. Статус-цвет «retry» (⚠) серый, не отличим от обычного.</div>
+        <div class="fix"><b>Фикс</b>Поднять --ink-faint до ≥0.62 L для текста ≤12px; ошибки/ретраи — отдельный warn-hue, не серый.</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">07</span>Motion / микро-взаимодействия</div><div class="pts g5"><b>5</b>/9</div></div>
+        <div class="bar g5"><i style="width:55.5%"></i></div>
+        <div class="why">Карточки (characters.html) — образцовый motion: rise-stagger, sheen, 3D-тилт, reduced-motion учтён. Но борд статичен (по задаче — ок), и нигде нет состояний загрузки/прогона: чат (08) показывает курсор ▍, но нет skeleton, нет «агент думает», нет streaming-индикатора. Provisioning (21) — единственный прогресс.</div>
+        <div class="fix"><b>Фикс</b>Спроектировать loading/streaming-состояние для чата (08) и RUN (05): пульс аватара + поэтапный трейс — это и снижает тревогу при списании кредитов.</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">08</span>Аффорданс / обратная связь</div><div class="pts g5"><b>5</b>/9</div></div>
+        <div class="bar g5"><i style="width:55.5%"></i></div>
+        <div class="why">Тоглы, чипы, сегменты — узнаваемы. Но многие «card» с ›-стрелкой выглядят как ссылки и как контент одновременно (15, 23). «composer-chip» (08) «~12 кр · сменить ›» — отличный паттерн. Поля ввода (.input) неотличимы от заполненных значений — placeholder и value один цвет (--ink-dim).</div>
+        <div class="fix"><b>Фикс</b>Развести placeholder (faint) и введённое значение (ink); кликабельные card-строки — дать единый visual (стрелка + hover), отделить от информационных карточек.</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">09</span>UX-копирайтинг</div><div class="pts g7"><b>6</b>/9</div></div>
+        <div class="bar g7"><i style="width:66.6%"></i></div>
+        <div class="why">Тон живой и честный: «контроль за тобой» (09), «свой ключ → 0 комиссии» (17), «спит когда не нужен» (21). Но жаргон протекает к пользователю: «control-plane» (23), «инъекция конфига», «swarm-стейт» (26), «x402», «key-broker», «Base URL (OpenAI-совм.)». Для RU-массовой аудитории это стена терминов.</div>
+        <div class="fix"><b>Фикс</b>Вынести технотермины в подсказки/тултипы; на поверхности — польза («меняем настройку и перезапускаем» вместо «инъекция конфига + рестарт рантайма»).</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">10</span>Онбординг / пустые состояния</div><div class="pts g5"><b>5</b>/9</div></div>
+        <div class="bar g5"><i style="width:55.5%"></i></div>
+        <div class="why">Онбординг (01–02) короткий и понятный, «1-й прогон бесплатно» (05) — сильный крючок. Но это единственный онбординг: после входа новичок попадает на «дом» (03), уже забитый чужими агентами и метриками 48k — нет состояния «у тебя пока 0 агентов, начни отсюда». Пустое состояние только одно — в памяти (24).</div>
+        <div class="fix"><b>Фикс</b>Добавить first-run «дом» с одним крупным CTA «Запусти первого за 2 клика» поверх ленты; перенести «1-й прогон бесплатно» в онбординг как обещание.</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">11</span>Ошибки / краевые состояния</div><div class="pts g3"><b>4</b>/9</div></div>
+        <div class="bar g3"><i style="width:44.4%"></i></div>
+        <div class="why">Экран модалок (38) собирает 4 статуса (подключён / ключ не принят / низкий баланс / оплата) — это хорошо. Но почти нет: что при нуле баланса в момент RUN? что если /models таймаут (19)? что при превышении бюджета агента — «авто-стоп» (33) показан, но без экрана «агент остановлен, пополни». «retry» в истории (10) без объяснения причины.</div>
+        <div class="fix"><b>Фикс</b>Спроектировать blocking-состояние «недостаточно кредитов» прямо в RUN/чате с inline-пополнением, не уводя в кошелёк; на каждой ошибке — причина + 1 действие.</div>
+      </div>
+
+      <div class="dim">
+        <div class="top"><div class="nm"><span class="ix">12</span>Mobile / Telegram-native</div><div class="pts g7"><b>7</b>/9</div></div>
+        <div class="bar g7"><i style="width:77.7%"></i></div>
+        <div class="why">Сильная сторона. Фрейм 320px, TG top-bar, bottom-sheet для пополнения (32), TON Connect + HOT Wallet — нативно для TG-аудитории. Но: 4 таба + seg + chips + fab одновременно (03) съедают вертикаль на маленьком экране; fab перекрывает контент; нет учёта Telegram MainButton/BackButton как нативных элементов вместо кастомных кнопок.</div>
+        <div class="fix"><b>Фикс</b>Использовать нативную Telegram MainButton для главного CTA (RUN, Оплатить) вместо своей .btn — это и место экономит, и ощущается родным.</div>
+      </div>
+
+    </div>
+
+    <div class="verdict" style="margin-top:26px">
+      <div class="bigscore"><div class="n">61</div><div class="d">/ 108</div></div>
+      <p>Сумма: 5+5+5+4+6+5+5+5+6+5+4+7. <b>Сильно:</b> Telegram-нативность, копирайтинг, типо-разделение mono/sans. <b>Слабо:</b> консистентность двух языков, краевые состояния, иерархия. Это крепкий каркас, который проигрывает на «последней миле» внимания пользователя.</p>
+    </div>
+  </section>
+
+  <!-- ════════ 2 · WALKTHROUGHS ════════ -->
+  <section>
+    <div class="eyebrow">Часть 2 · Прогон по сценариям</div>
+    <h2>4 user-story с флагами трения</h2>
+    <p class="sub">Пошагово: что работает · что путает · чего не хватает. Ссылки на номера экранов борда.</p>
+
+    <!-- A -->
+    <div class="flow">
+      <h3>A · Первый вход → запустить агента <span class="verd ok">проходимо</span></h3>
+      <div class="step"><div class="ix">1</div><div><div class="scn">экран 01–02 · онбординг + вход</div><div class="ttl">Вход через Telegram, согласия 152-ФЗ</div>
+        <div class="ff good"><span class="lbl">работает</span><div>«Ключи не нужны», 2 галочки уже отмечены, маркетинг — опционально. Минимум трения.</div></div>
+        <div class="ff conf"><span class="lbl">путает</span><div>«уже есть свой Hermes? подключи →» на самом первом экране — новичок не знает, что такое Hermes, ссылка отвлекает.</div></div>
+      </div></div>
+      <div class="step"><div class="ix">2</div><div><div class="scn">экран 03 · дом «Для тебя»</div><div class="ttl">Лента чужих агентов с метриками 48k</div>
+        <div class="ff conf"><span class="lbl">путает</span><div>Две почти одинаковые секции («в тренде» + «рекомендуем»), seg с «Мои · 3» — но у новичка 0. Откуда «3»?</div></div>
+        <div class="ff miss"><span class="lbl">нет</span><div>First-run состояния. Нет явного «начни с этого» — новичок сам должен догадаться тапнуть карточку.</div></div>
+      </div></div>
+      <div class="step"><div class="ix">3</div><div><div class="scn">экран 05 · карточка + RUN</div><div class="ttl">Постовик, «1-й прогон бесплатно»</div>
+        <div class="ff good"><span class="lbl">работает</span><div>Starter-чипы («Пост про запуск»), предзаполненная тема, «1-й прогон бесплатно» — сильнейший момент во всём флоу.</div></div>
+        <div class="ff conf"><span class="lbl">путает</span><div>3 кнопки (RUN / клонировать / сохранить) почти равновесны; «~12 кр/прогон» рядом с «бесплатно» — кажущееся противоречие.</div></div>
+      </div></div>
+      <div class="step"><div class="ix">4</div><div><div class="scn">экран 08 · чат</div><div class="ttl">Ответ агента, composer-chip с ценой</div>
+        <div class="ff good"><span class="lbl">работает</span><div>«Opus 4.8 · AIAG · ~12 кр · сменить ›» — прозрачно, где деньги и как сменить модель прямо в чате.</div></div>
+        <div class="ff miss"><span class="lbl">нет</span><div>Состояния «агент думает»/streaming. После отправки — тишина, а это первый платный момент, тревожный без обратной связи.</div></div>
+      </div></div>
+    </div>
+
+    <!-- B -->
+    <div class="flow">
+      <h3>B · Создать из шаблона <span class="verd mid">с трением</span></h3>
+      <div class="step"><div class="ix">1</div><div><div class="scn">экран 12 · выбор пути</div><div class="ttl">4 равных карточки путей</div>
+        <div class="ff conf"><span class="lbl">путает</span><div>«Словами» подсвечен amber как дефолт, но в копи декларируется «из шаблона — 2 клика» как самый быстрый. Сигнал и текст спорят.</div></div>
+      </div></div>
+      <div class="step"><div class="ix">2</div><div><div class="scn">экран 14 · галерея шаблонов</div><div class="ttl">Копирайтер · GPT-5.5 · ~12 кр/прогон</div>
+        <div class="ff good"><span class="lbl">работает</span><div>Кнопка «2 клика →» прямо на карточке — обещание выполняется визуально. Цена видна сразу.</div></div>
+        <div class="ff miss"><span class="lbl">нет</span><div>Превью результата шаблона. Что именно он напишет? Нет примера вывода до клонирования — слепой выбор.</div></div>
+      </div></div>
+      <div class="step"><div class="ix">3</div><div><div class="scn">экран 15 · Configure</div><div class="ttl">Имя, SOUL, модели, провайдер, тулзы, бюджет</div>
+        <div class="ff conf"><span class="lbl">путает</span><div>«2 клика» приводит к экрану с 6 настраиваемыми строками. Это уже не 2 клика — обещание онбординга нарушено для тех, кто хотел быстро.</div></div>
+        <div class="ff miss"><span class="lbl">нет</span><div>Разделения «готово к запуску» и «хочу донастроить». Должен быть путь «Создать как есть» сразу, минуя Configure.</div></div>
+      </div></div>
+      <div class="step"><div class="ix">4</div><div><div class="scn">экран 17 · провайдер-пикер</div><div class="ttl">AIAG / OpenRouter / BYOK / Gonka / Custom</div>
+        <div class="ff miss"><span class="lbl">нет</span><div>Экран помечен «скоро» — то есть в флоу «из шаблона» строка «Провайдер: AIAG ›» ведёт в нерабочий экран. Тупик в happy-path.</div></div>
+      </div></div>
+    </div>
+
+    <!-- C -->
+    <div class="flow">
+      <h3>C · Подключить свой Hermes <span class="verd bad">для технарей</span></h3>
+      <div class="step"><div class="ix">1</div><div><div class="scn">экран 19 · подключить Hermes</div><div class="ttl">Base URL :8642/v1 + API-ключ</div>
+        <div class="ff good"><span class="lbl">работает</span><div>«Проверим запросом к /models», тогл «использовать наши тулзы» — точная модель для того, кто знает, что делает.</div></div>
+        <div class="ff conf"><span class="lbl">путает</span><div>«Base URL (OpenAI-совм. / Hermes :8642)» — три термина в лейбле поля. Не-инженер сдаётся здесь.</div></div>
+        <div class="ff miss"><span class="lbl">нет</span><div>«А где взять этот URL?» — нет ссылки на инструкцию/доку как поднять Hermes. Экран предполагает, что рантайм уже запущен.</div></div>
+      </div></div>
+      <div class="step"><div class="ix">2</div><div><div class="scn">экран 38 · модалки</div><div class="ttl">«Провайдер подключён» / «Ключ не принят 401»</div>
+        <div class="ff good"><span class="lbl">работает</span><div>Оба исхода (200/401) показаны — пользователь поймёт, успешно ли. Честно про код ошибки.</div></div>
+        <div class="ff miss"><span class="lbl">нет</span><div>Состояния «URL недостижим / таймаут / CORS» — самая частая реальная ошибка при своём эндпоинте, её нет.</div></div>
+      </div></div>
+      <div class="step"><div class="ix">3</div><div><div class="scn">общий</div><div class="ttl">Позиционирование «live»-пути</div>
+        <div class="ff conf"><span class="lbl">путает</span><div>Канон: это ГЛАВНЫЙ живой путь к Hermes. Но в UI он спрятан 4-м пунктом в «12» и сноской на онбординге — для аудитории, которой он адресован (разработчики), его трудно найти.</div></div>
+      </div></div>
+    </div>
+
+    <!-- D -->
+    <div class="flow">
+      <h3>D · Пополнить баланс + настроить бюджет агента <span class="verd mid">с трением</span></h3>
+      <div class="step"><div class="ix">1</div><div><div class="scn">экран 31 · баланс</div><div class="ttl">1 250 кр ≈ 12.5 USDT · «хватит на ~36 дн»</div>
+        <div class="ff good"><span class="lbl">работает</span><div>«≈ USDT» + «хватит на ~36 дн» — отличная конверсия абстрактных кредитов в понятную ценность.</div></div>
+        <div class="ff conf"><span class="lbl">путает</span><div>На карточке баланса сразу 4 числа (1250 кр / 12.5 USDT / 34 кр/день / 36 дн) + кнопка — плотность выше, чем нужно для главного экрана кошелька.</div></div>
+      </div></div>
+      <div class="step"><div class="ix">2</div><div><div class="scn">экран 32 · пополнить (sheet)</div><div class="ttl">+1000 кр · TON Connect / HOT Wallet</div>
+        <div class="ff good"><span class="lbl">работает</span><div>Bottom-sheet, пресеты сумм, «1000 кр ≈ 10 USDT», выбор кошелька — нативно и понятно.</div></div>
+        <div class="ff miss"><span class="lbl">нет</span><div>Состояния «ожидаем подтверждение транзакции в сети» — крипто-платёж не мгновенный, а экрана ожидания/pending нет.</div></div>
+      </div></div>
+      <div class="step"><div class="ix">3</div><div><div class="scn">экран 33 · бюджет агента</div><div class="ttl">12/50 кр · лимит/день · лимит/вызов · авто-стоп</div>
+        <div class="ff good"><span class="lbl">работает</span><div>Концепт «карта агента» с дневным лимитом, авто-стопом и «отзыв в 1 тап» — сильная, доверие-строящая идея.</div></div>
+        <div class="ff conf"><span class="lbl">путает</span><div>Помечен «скоро». При создании (15) строка «Бюджет: 50 кр/день ›» обещает работающую настройку, ведущую в нерабочий экран.</div></div>
+        <div class="ff miss"><span class="lbl">нет</span><div>Связи «бюджет агента ↔ общий баланс»: если у агента лимит 50/день, а на балансе 40 — что произойдёт? Не объяснено.</div></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ════════ 3 · TOP 10 ════════ -->
+  <section>
+    <div class="eyebrow">Часть 3 · Топ-10 улучшений</div>
+    <h2>Ранжировано по impact × (1 / effort)</h2>
+    <p class="sub">Каждое: проблема → конкретный фикс → почему. Метка quick-win (быстро) или bigger bet (стратегически).</p>
+
+    <div class="imp">
+      <div class="hd"><span class="rk">01</span><h3>Один CTA на экран</h3><span class="badge qw">quick-win</span></div>
+      <div class="body">
+        <div class="ln"><b>проблема</b>На 03/05/31 несколько amber-элементов конкурируют; глаз не находит главное действие.</div>
+        <div class="ln fix"><b>фикс</b>Ровно один amber-CTA в полный вес на экран; «клонировать/сохранить» (05) → ghost; вторичное — текст-ссылка.</div>
+        <div class="ln"><b>почему</b>Иерархия — самый дешёвый рычаг к конверсии RUN; ноль нового кода в проде, только веса.</div>
+      </div>
+    </div>
+
+    <div class="imp">
+      <div class="hd"><span class="rk">02</span><h3>Спрятать «скоро/R&D» из happy-path</h3><span class="badge qw">quick-win</span></div>
+      <div class="body">
+        <div class="ln"><b>проблема</b>Из живого флоу (15) строки ведут в «скоро»-экраны (17 провайдер, 33 бюджет, 16 модели) — тупики.</div>
+        <div class="ln fix"><b>фикс</b>Фиче-флаг: неготовые строки скрыть или дать честный disabled-вид «скоро» прямо на месте, не уводя на пустой экран.</div>
+        <div class="ln"><b>почему</b>Канон требует «UI = реальность». Тупик в платном флоу — прямой удар по доверию.</div>
+      </div>
+    </div>
+
+    <div class="imp">
+      <div class="hd"><span class="rk">03</span><h3>First-run состояние «дома»</h3><span class="badge qw">quick-win</span></div>
+      <div class="body">
+        <div class="ln"><b>проблема</b>После входа новичок (0 агентов) видит ленту чужих 48k и seg «Мои · 3» — дезориентация.</div>
+        <div class="ln fix"><b>фикс</b>Если агентов 0 — поверх ленты один крупный блок «Запусти первого за 2 клика» + 1 рекомендованный шаблон.</div>
+        <div class="ln"><b>почему</b>Первая минута решает retention; сейчас она отдана чужим метрикам, а не действию пользователя.</div>
+      </div>
+    </div>
+
+    <div class="imp">
+      <div class="hd"><span class="rk">04</span><h3>Streaming/«агент думает» в RUN и чате</h3><span class="badge bb">bigger bet</span></div>
+      <div class="body">
+        <div class="ln"><b>проблема</b>После отправки (08) и RUN (05) нет обратной связи; это первый платный момент без индикации.</div>
+        <div class="ln fix"><b>фикс</b>Пульс аватара + поэтапный live-трейс (как 11, но inline): «думает → вызывает Firecrawl −3 кр → пишет».</div>
+        <div class="ln"><b>почему</b>Снижает тревогу при списании, превращает ожидание в доказательство работы — и переиспользует уже спроектированный трейс.</div>
+      </div>
+    </div>
+
+    <div class="imp">
+      <div class="hd"><span class="rk">05</span><h3>Сшить два визуальных языка</h3><span class="badge bb">bigger bet</span></div>
+      <div class="body">
+        <div class="ln"><b>проблема</b>Борд — lo-fi hex + эмодзи-аватары; карточки — hi-fi OKLCH + портреты, тиры, 3D. Это два продукта.</div>
+        <div class="ln fix"><b>фикс</b>Перенести токены и карточку-персонажа из characters.html в основной борд: каталог (03/04) = галерея портретов, не эмодзи-строки.</div>
+        <div class="ln"><b>почему</b>«Агенты-персонажи» — сигнатурная идея и весь маркетинг; сейчас она живёт только в отдельном файле, а не в продукте.</div>
+      </div>
+    </div>
+
+    <div class="imp">
+      <div class="hd"><span class="rk">06</span><h3>Blocking-состояние «мало кредитов»</h3><span class="badge bb">bigger bet</span></div>
+      <div class="body">
+        <div class="ln"><b>проблема</b>Нет экрана «недостаточно кредитов» в момент RUN/чата; «низкий баланс» (38) — пассивный тост.</div>
+        <div class="ln fix"><b>фикс</b>Inline-блок в чате: «не хватает 8 кр» + кнопка пополнения в том же контексте, без ухода в кошелёк.</div>
+        <div class="ln"><b>почему</b>Самый частый платный краевой случай; потеря пользователя именно здесь = потеря выручки.</div>
+      </div>
+    </div>
+
+    <div class="imp">
+      <div class="hd"><span class="rk">07</span><h3>Telegram MainButton для главного действия</h3><span class="badge qw">quick-win</span></div>
+      <div class="body">
+        <div class="ln"><b>проблема</b>Кастомные .btn (RUN, Оплатить) дублируют нативную панель Telegram, съедая вертикаль на 320px.</div>
+        <div class="ln fix"><b>фикс</b>Главный CTA каждого экрана — нативная Telegram MainButton; кастомные кнопки только для вторичного.</div>
+        <div class="ln"><b>почему</b>Освобождает экран, ощущается родным для TG, повышает доверие; стандартный приём TMA.</div>
+      </div>
+    </div>
+
+    <div class="imp">
+      <div class="hd"><span class="rk">08</span><h3>Разнести placeholder и значение</h3><span class="badge qw">quick-win</span></div>
+      <div class="body">
+        <div class="ln"><b>проблема</b>.input: подсказка и введённое значение одного цвета (--ink-dim) — поля кажутся уже заполненными (15, 19, 20).</div>
+        <div class="ln fix"><b>фикс</b>placeholder = --ink-faint, value = --ink; для обязательных полей — явный фокус-стейт amber-line.</div>
+        <div class="ln"><b>почему</b>Базовый аффорданс форм; путаница «заполнено/пусто» ведёт к ошибочным сабмитам в платном контексте.</div>
+      </div>
+    </div>
+
+    <div class="imp">
+      <div class="hd"><span class="rk">09</span><h3>Деjargonизация поверхности</h3><span class="badge qw">quick-win</span></div>
+      <div class="body">
+        <div class="ln"><b>проблема</b>«control-plane», «инъекция конфига», «swarm-стейт», «key-broker», «x402» торчат в копи для массовой RU-аудитории.</div>
+        <div class="ln fix"><b>фикс</b>На поверхности — польза человеческим языком; термины — в тултип/«подробнее». R&D-экраны вообще убрать из основного флоу.</div>
+        <div class="ln"><b>почему</b>Копирайтинг — уже сильная сторона; пара замен поднимает доступность без редизайна.</div>
+      </div>
+    </div>
+
+    <div class="imp">
+      <div class="hd"><span class="rk">10</span><h3>Превью результата шаблона</h3><span class="badge bb">bigger bet</span></div>
+      <div class="body">
+        <div class="ln"><b>проблема</b>В галерее (14) выбор шаблона слепой — не видно, что агент реально напишет/сделает.</div>
+        <div class="ln fix"><b>фикс</b>На карточке шаблона/агента — 1 пример вывода (свёрнутый), как в анкете персонажа (characters.html «попробовать на»).</div>
+        <div class="ln"><b>почему</b>Снимает главный барьер «а что я получу»; повышает осознанность клонирования и качество ожиданий.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 4 · CHARACTER DIRECTION ════════ -->
+  <section style="border-bottom:none">
+    <div class="eyebrow">Часть 4 · Направление «карточки-персонажи»</div>
+    <h2>Что делает хорошо и где рискует</h2>
+    <p class="sub">Сигнатурное направление продукта (characters.html). Самое сильное и самое опасное место одновременно.</p>
+
+    <div class="col2">
+      <div class="pane win">
+        <h3><span class="t">Сильно</span></h3>
+        <ul>
+          <li><b>Превращает список строк в выбор личности.</b> «Алиса, дерзкая, режет воду» запоминается лучше, чем «копирайтер на GPT-4o». Это эмоциональный, а не функциональный выбор — редко для B2B-инструмента.</li>
+          <li><b>Тир + статы + рейтинг</b> дают мгновенную оценку качества и создают коллекционную тягу («хочу legendary»). Хорошо ложится на двусторонний рынок шаблонов.</li>
+          <li><b>Per-hue идентичность</b> (portrait, ring, акценты от одного --ch) — дисциплинированная система, а не случайные цвета. Технически чистый OKLCH-подход.</li>
+          <li><b>Motion и анкета персонажа</b> (голос, био, «попробовать на») — лучшее место всего продукта по проработке: сразу понятно, кто это и зачем.</li>
+        </ul>
+      </div>
+      <div class="pane risk">
+        <h3><span class="t">Рискует</span></h3>
+        <ul>
+          <li><b>Лиц пока нет — только монограммы (А, М, Н).</b> Вся идея держится на сгенерированных портретах (Kie/nano-banana), а в файле — буквы в рамке. «Faces-later» = риск, что коллекционность так и не материализуется и останется буквенный плейсхолдер.</li>
+          <li><b>Коллекционность vs полезность.</b> Тиры/rarity намекают на дефицит и геймификацию, но агент — рабочий инструмент. Если «legendary» дороже не за качество, а за «редкость» — это подрывает доверие к ценообразованию.</li>
+          <li><b>Стоимость контента.</b> 6 персонажей с уникальными лицами, голосами, био — это дорогой ручной арт-дирекшн. На сотнях пользовательских шаблонов система либо обезличится (тот же буквенный fallback), либо упрётся в производство портретов.</li>
+          <li><b>Рассинхрон с бордом.</b> На борде агенты — эмодзи-строки (✍️🎬), в карточках — персонажи. Пользователь увидит две разные продуктовые обещания. Пока язык не сшит, сигнатура не работает как сигнатура.</li>
+        </ul>
+      </div>
+    </div>
+    <p style="margin-top:18px">Итог по направлению: <b style="color:var(--ink)">идея правильная и дифференцирующая, но сейчас это демо в вакууме.</b> Приоритет — не новые персонажи, а (1) реальные лица хотя бы для 6 стартовых, (2) перенос карточки в основной каталог, (3) ясная развязка «тир = качество, не дефицит», чтобы коллекционность не воевала с доверием к цене.</p>
+  </section>
+
+  <footer>
+    AIAG · TMA · критический UX-разбор · 2026-06-03<br>
+    Источники: <b>docs/wireframes/tma/index.html</b> (39 артбордов) · <b>characters.html</b> · <b>styles.css</b> · <b>2026-06-03-aiag-onepager.html</b> · <b>CLAUDE.md</b><br>
+    Итог: <b>61 / 108</b>. Ручки и каналы — нейтральные плейсхолдеры (@username). Оценки экранов демонстрационные.
+  </footer>
+
+</div>
+</body>
+</html>

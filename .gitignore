@@ -50,3 +50,9 @@ packages/api-gateway/package.production.json
 .deploy/
 playwright-report/
 test-results/
+
+# Local wireframe media (character reference videos — not for repo)
+docs/wireframes/tma/assets/
+
+# Claude Code ephemeral worktrees
+.claude/worktrees/

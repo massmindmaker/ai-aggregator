@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AIAG — research backlog</title>
+<style>
+  :root{
+    --bg:oklch(0.17 0.012 70);--bg2:oklch(0.21 0.014 70);--line:oklch(0.32 0.015 70);
+    --ink:oklch(0.94 0.01 80);--dim:oklch(0.72 0.015 75);--faint:oklch(0.56 0.015 75);
+    --amber:oklch(0.80 0.15 75);--p0:oklch(0.70 0.17 25);--p1:oklch(0.80 0.10 245);--p2:oklch(0.72 0.04 75);
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;--sans:-apple-system,'Segoe UI',Roboto,system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;padding:0 24px 100px}
+  .wrap{max-width:900px;margin:0 auto}
+  a{color:var(--amber);text-decoration:none}a:hover{text-decoration:underline}
+  header{padding:56px 0 28px;border-bottom:1px solid var(--line)}
+  .kick{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);margin-bottom:14px}
+  h1{font-size:34px;letter-spacing:-.02em;margin-bottom:12px}
+  .lead{color:var(--dim);max-width:70ch}
+  .tier{padding:34px 0 8px;border-bottom:1px solid var(--line)}
+  .tierhead{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+  .tierhead h2{font-size:21px}
+  .tlabel{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:6px;border:1px solid}
+  .t0{color:var(--p0);border-color:oklch(0.70 0.17 25 / .5)}
+  .t1{color:var(--p1);border-color:oklch(0.80 0.10 245 / .5)}
+  .t2{color:var(--p2);border-color:var(--line)}
+  .tdesc{color:var(--faint);font-size:13px;margin-bottom:14px}
+  .item{border:1px solid var(--line);border-radius:12px;padding:16px 18px;background:var(--bg2);margin-bottom:10px}
+  .item .top{display:flex;gap:10px;align-items:baseline;margin-bottom:6px}
+  .id{font-family:var(--mono);font-size:12px;color:var(--amber);flex:none}
+  .q{font-weight:600;font-size:15.5px}
+  .dom{font-family:var(--mono);font-size:10px;color:var(--faint);border:1px solid var(--line);border-radius:5px;padding:1px 6px;margin-left:auto;flex:none}
+  .why{color:var(--dim);font-size:13.5px;margin-bottom:5px}
+  .why b{color:var(--ink)}
+  .method{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  footer{padding:32px 0 0;color:var(--faint);font-size:13px}
+</style>
+</head>
+<body><div class="wrap">
+
+<header>
+  <div class="kick">AIAG · research backlog (driver-составленный)</div>
+  <h1>Что мне нужно исследовать,<br>чтобы построить продукт целиком</h1>
+  <p class="lead">Мой рабочий список. P0 — блокирует ядро продукта или грант Gonka, веду первым. P1 — нужно для ближнего билда. P2 — углубление/позже. Каждый пункт: вопрос, зачем, метод. Обновляю по мере прохождения; результаты складываю в docs/specs.</p>
+</header>
+
+<!-- P0 -->
+<section class="tier">
+  <div class="tierhead"><span class="tlabel t0">P0</span><h2>Блокирует ядро / грант</h2></div>
+  <p class="tdesc">Без этого «создал агента → он работает как обещано» и заявка Gonka не закрываются.</p>
+
+  <div class="item"><div class="top"><span class="id">R-01</span><span class="q">Инфра для managed-Hermes: sandbox-облако vs k3s</span><span class="dom">Hermes</span></div>
+    <div class="why">Daytona / Modal / E2B (по запросу, $/агент) против VPS+k3s+hibernation (kube-green). <b>Блокирует</b> главное обещание «создал → Hermes поднялся». Сейчас VPS 2GB не тянет.</div>
+    <div class="method">метод: Firecrawl-доки + прайсинг + cost-модель + спайк изоляции/cold-start/секретов</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-02</span><span class="q">Control-plane для Hermes (у него нет remote-API)</span><span class="dom">Hermes</span></div>
+    <div class="why">Как программно менять конфиг (модели/скиллы/MCP) и рестартить: инъекция файлов + restart, или форк/расширение Hermes своим API. Работает ли <code>hermes backup/import</code> как формат шаблона. <b>Блокирует</b> managed-агентов + publish/clone.</div>
+    <div class="method">метод: чтение исходников Hermes + спайк инъекции конфига</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-03</span><span class="q">Gonka-спайк: эндпоинт через наш шлюз</span><span class="dom">Gonka</span></div>
+    <div class="why">Доступность / латентность / модели Qwen3-Kimi через наш :4000; SDK <code>gonkalabs/opengnk</code>; делегированные GNK-кошельки. <b>Блокирует</b> deliverable #1 гранта.</div>
+    <div class="method">метод: код-спайк + Firecrawl по opengnk/GonkaGate</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-04</span><span class="q">Архитектура крипто-кредита и кошелька</span><span class="dom">Billing</span></div>
+    <div class="why">Единый ledger-авторитет (gateway vs tg_user_balances); привязка кредита к фиат-якорю + FX-фид; <b>надёжный депозит-вотчер</b> (чиним баг «закрыл апп → потерял средства»), реконсилятор-крон; HOT Wallet; jetton USDT-on-TON.</div>
+    <div class="method">метод: Firecrawl (TON/HOT/jetton) + аудит нашего кода депозитов</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-05</span><span class="q">Юр/комплаенс крипты (founder-level)</span><span class="dom">Legal</span></div>
+    <div class="why">Зарубежное юрлицо + x402/USDC; РФ-сплит; реальность политики Apple/Google по Telegram Stars (мы выбрали TON-only — нужен честный risk-ответ); 259/161-ФЗ; налоги.</div>
+    <div class="method">метод: Firecrawl + скилл legal; решения выношу тебе</div></div>
+</section>
+
+<!-- P1 -->
+<section class="tier">
+  <div class="tierhead"><span class="tlabel t1">P1</span><h2>Нужно для ближнего билда</h2></div>
+  <p class="tdesc">Превращает «скоро»-экраны борда в работающие.</p>
+
+  <div class="item"><div class="top"><span class="id">R-06</span><span class="q">Провайдер-пикер: данные + адаптеры</span><span class="dom">Gateway</span></div>
+    <div class="why">Синк каталога models.dev (миграция 0023); адаптеры native Anthropic/Google vs OpenAI-compat; маппинг цены; fallback/маршрутизация; SSRF-хардеринг user base_url (R1-7).</div>
+    <div class="method">метод: Firecrawl models.dev + аудит resolveUpstream</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-07</span><span class="q">Настоящий рантайм агента (не stateless-цикл)</span><span class="dom">Runtime</span></div>
+    <div class="why">Слой Mastra (multi-step+память); pgvector-память; реальный стриминг (vercel/ai) вместо refresh; run-trace/observability (Helicone/OTel→SigNoz).</div>
+    <div class="method">метод: Firecrawl доки Mastra/AI-SDK + спайк</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-08</span><span class="q">Тул-брокер + x402 наружу</span><span class="dom">Tools</span></div>
+    <div class="why">Firecrawl-метеринг (атомарный deduct+refund); x402-rs фасилитатор (USDC/Base); каталог agentic.market / x402 Bazaar.</div>
+    <div class="method">метод: Firecrawl x402-доки + спайк брокер-эндпоинта</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-09</span><span class="q">MCP-шлюз (OAuth 2.1)</span><span class="dom">MCP</span></div>
+    <div class="why">OAuth 2.1 + PKCE + RFC 8707 для third-party (Notion/Sheets); first-party MCP (Streamable-HTTP, per-agent bearer); стек typescript-sdk + mcp-context-forge.</div>
+    <div class="method">метод: Firecrawl MCP-spec + context7</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-10</span><span class="q">Доставка в Telegram + хардеринг TMA</span><span class="dom">Telegram</span></div>
+    <div class="why">grammY (Bot API + Business, только официально, без MTProto) — агент действует через бота юзера; telegram-apps SDK; initData constant-time + replay-window (R1-3).</div>
+    <div class="method">метод: Firecrawl grammY/telegram-apps + аудит initData</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-11</span><span class="q">Экономика двустороннего рынка</span><span class="dom">Market</span></div>
+    <div class="why">Payout авторам (модель Poe); publish/clone/remix + lineage; рейтинги; анти-абьюз; ранжирование по реальному usage.</div>
+    <div class="method">метод: Firecrawl Poe/Coze payout-доки</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-12</span><span class="q">Пайплайн лиц/голоса персонажей</span><span class="dom">Characters</span></div>
+    <div class="why">Reference-консистентная генерация портретов (Kie nano-banana по референсу — лицо стабильно между генерациями); голос (TTS) на персонажа; дизайн-система персон. <b>Ждёт твои референсы.</b></div>
+    <div class="method">метод: Kie API спайк (консистентность по reference image) + скилл kie-generate</div></div>
+</section>
+
+<!-- P2 -->
+<section class="tier" style="border-bottom:none">
+  <div class="tierhead"><span class="tlabel t2">P2</span><h2>Углубление / позже</h2></div>
+  <p class="tdesc">Важно, но не на критическом пути сейчас.</p>
+
+  <div class="item"><div class="top"><span class="id">R-13</span><span class="q">Решение по NFT (оставить/убрать) + Startonus</span><span class="dom">Product</span></div>
+    <div class="why">Канон предлагает убрать, код P15 — живой. Если оставляем — механика Startonus/TON-минт; если убираем — чистый вынос. Founder-решение.</div>
+    <div class="method">метод: краткий ресёрч + твоё решение</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-14</span><span class="q">Sandbox для eval-раннера (nsjail)</span><span class="dom">Security</span></div>
+    <div class="why">Сабмишены конкурсов сейчас исполняются без изоляции. SECURITY-TODO до публичных конкурсов.</div>
+    <div class="method">метод: Firecrawl nsjail/gVisor + спайк</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-15</span><span class="q">Skills hub: формат и шеринг</span><span class="dom">Skills</span></div>
+    <div class="why">SKILL.md / стандарт agentskills.io; шеринг/ревью скиллов; как ложится в наш publish-флоу.</div>
+    <div class="method">метод: Firecrawl agentskills.io + Hermes skills</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-16</span><span class="q">Observability + масштабирование managed-Hermes</span><span class="dom">Infra</span></div>
+    <div class="why">Метрики/трейсы per-instance, бэкапы, авто-сон/пробуждение, сайзинг под рост.</div>
+    <div class="method">метод: следует из R-01</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-17</span><span class="q">Мониторинг рынка (постоянный)</span><span class="dom">Market</span></div>
+    <div class="why">Дельты фич Poe/Coze/Character.ai/Olas/Virtuals; новые DeAI-сети; x402-экосистема.</div>
+    <div class="method">метод: периодический Firecrawl-свип</div></div>
+
+  <div class="item"><div class="top"><span class="id">R-18</span><span class="q">Экономика кредита и ценообразование</span><span class="dom">Billing</span></div>
+    <div class="why">Стратегия наценки; бесплатный-кредит-луп для активации; модель юнит-косты; что показывать как «цена/прогон».</div>
+    <div class="method">метод: модель + бенчмарк цен конкурентов</div></div>
+</section>
+
+<footer>
+  <a href="STATUS.html">← статус проекта</a> · <a href="2026-06-03-aiag-onepager.html">one-pager</a>
+  <div style="font-family:var(--mono);font-size:11px;margin-top:8px">AIAG · research backlog · 2026-06-03 · веду сверху вниз</div>
+</footer>
+
+</div></body></html>

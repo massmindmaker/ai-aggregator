@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIAG × Gonka — RU inference demand, delivered</title>
+<style>
+  :root{
+    --bg:#0a0a0b;
+    --bg2:#101012;
+    --panel:#141417;
+    --line:#26262b;
+    --line2:#33333a;
+    --txt:#f4f4f5;
+    --mut:#9a9aa3;
+    --dim:#6c6c75;
+    --amber:#f59e0b;
+    --amber-soft:rgba(245,158,11,.12);
+    --amber-line:rgba(245,158,11,.32);
+    --green:#34d399;
+    --red:#f87171;
+    --blue:#60a5fa;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);
+    color:var(--txt);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
+
+  .deck{
+    height:100vh;
+    overflow-y:scroll;
+    scroll-snap-type:y mandatory;
+    scroll-behavior:smooth;
+  }
+  .slide{
+    height:100vh;
+    width:100%;
+    scroll-snap-align:start;
+    scroll-snap-stop:always;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    padding:72px clamp(28px,7vw,140px);
+    position:relative;
+    border-bottom:1px solid var(--line);
+    overflow:hidden;
+  }
+  .slide::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:
+      radial-gradient(900px 500px at 85% -10%, var(--amber-soft), transparent 60%),
+      radial-gradient(700px 500px at -5% 110%, rgba(96,165,250,.06), transparent 55%);
+    pointer-events:none;
+  }
+  .slide > *{position:relative;z-index:1}
+
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    color:var(--amber);
+    margin-bottom:22px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--amber)}
+
+  h1{font-size:clamp(34px,5.4vw,68px);line-height:1.04;letter-spacing:-.02em;font-weight:800;}
+  h2{font-size:clamp(28px,3.9vw,46px);line-height:1.08;letter-spacing:-.018em;font-weight:760;margin-bottom:8px;}
+  .lede{font-size:clamp(16px,1.7vw,21px);color:var(--mut);max-width:60ch;margin-top:22px;font-weight:420;}
+  .amber{color:var(--amber)}
+  .strike{color:var(--dim);text-decoration:line-through;text-decoration-color:var(--red)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:34px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:34px}
+  @media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--bg2));
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:24px 24px 22px;
+    position:relative;
+  }
+  .card.hl{border-color:var(--amber-line);background:linear-gradient(180deg,rgba(245,158,11,.08),var(--bg2))}
+  .card h3{font-size:17px;font-weight:680;margin-bottom:8px;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+  .card p{font-size:14.5px;color:var(--mut);line-height:1.55}
+  .card .tag{
+    position:absolute;top:18px;right:18px;
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;
+    color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-line);
+    padding:3px 9px;border-radius:99px;text-transform:uppercase;
+  }
+  .ico{
+    width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+    background:var(--amber-soft);border:1px solid var(--amber-line);
+    font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--amber);flex:none;
+  }
+
+  ul.clean{list-style:none;margin-top:26px;display:flex;flex-direction:column;gap:14px;max-width:62ch}
+  ul.clean li{font-size:clamp(15px,1.6vw,19px);color:var(--txt);padding-left:30px;position:relative;font-weight:440}
+  ul.clean li::before{content:"→";position:absolute;left:0;color:var(--amber);font-family:'JetBrains Mono',monospace}
+  ul.clean li span{color:var(--mut)}
+
+  .stat-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:36px}
+  .stat{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 22px;min-width:160px;flex:1;
+  }
+  .stat .n{font-family:'JetBrains Mono',monospace;font-size:clamp(22px,2.6vw,30px);font-weight:600;color:var(--amber);letter-spacing:-.01em}
+  .stat .l{font-size:12.5px;color:var(--mut);margin-top:6px;line-height:1.4}
+
+  .flow{display:flex;align-items:center;gap:14px;margin-top:38px;flex-wrap:wrap}
+  .node{
+    background:var(--panel);border:1px solid var(--line2);border-radius:12px;
+    padding:14px 18px;font-size:14px;font-weight:560;min-width:120px;text-align:center;
+  }
+  .node small{display:block;color:var(--dim);font-weight:420;font-size:11px;margin-top:3px;font-family:'JetBrains Mono',monospace}
+  .node.acc{border-color:var(--amber-line);background:var(--amber-soft);color:var(--amber)}
+  .arrow{color:var(--dim);font-family:'JetBrains Mono',monospace;font-size:18px}
+
+  .pill{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.04em;
+    background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);color:var(--green);
+    padding:5px 12px;border-radius:99px;
+  }
+  .pill.warn{background:rgba(245,158,11,.1);border-color:var(--amber-line);color:var(--amber)}
+  .pill.dim{background:var(--panel);border-color:var(--line2);color:var(--mut)}
+
+  .check{color:var(--green);font-family:'JetBrains Mono',monospace}
+  .plan{color:var(--amber);font-family:'JetBrains Mono',monospace}
+
+  .map3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:36px}
+  @media(max-width:820px){.map3{grid-template-columns:1fr}}
+  .map3 .card .pmap{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+  .map3 .card .pmap b{color:var(--amber)}
+
+  .footer-note{
+    position:absolute;bottom:26px;left:clamp(28px,7vw,140px);right:clamp(28px,7vw,140px);
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);
+    letter-spacing:.05em;
+  }
+  .footer-note .dots{display:flex;gap:6px}
+  .footer-note .dots i{width:6px;height:6px;border-radius:99px;background:var(--line2);display:block}
+
+  /* fixed chrome */
+  .nav{
+    position:fixed;right:22px;top:50%;transform:translateY(-50%);
+    z-index:50;display:flex;flex-direction:column;gap:11px;
+  }
+  .nav a{width:9px;height:9px;border-radius:99px;background:var(--line2);transition:.2s;display:block;border:1px solid transparent}
+  .nav a:hover{background:var(--mut)}
+  .nav a.on{background:var(--amber);box-shadow:0 0 0 4px var(--amber-soft)}
+
+  .brandbar{
+    position:fixed;top:20px;left:clamp(28px,7vw,140px);z-index:50;
+    font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.16em;color:var(--mut);
+    display:flex;align-items:center;gap:10px;text-transform:uppercase;
+  }
+  .brandbar b{color:var(--txt)}
+  .brandbar .x{color:var(--amber)}
+
+  .hint{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:50;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);letter-spacing:.1em;
+    display:flex;gap:14px;align-items:center;
+    background:rgba(10,10,11,.7);backdrop-filter:blur(6px);
+    padding:7px 16px;border:1px solid var(--line);border-radius:99px;
+  }
+  kbd{font-family:'JetBrains Mono',monospace;background:var(--panel);border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:1px 6px;font-size:11px;color:var(--txt)}
+
+  .big-num{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--amber);font-weight:600}
+
+  .askgrid{display:grid;grid-template-columns:1.3fr 1fr;gap:22px;margin-top:34px;align-items:start}
+  @media(max-width:820px){.askgrid{grid-template-columns:1fr}}
+  .usegrid{display:flex;flex-direction:column;gap:11px;margin-top:6px}
+  .usegrid .row{display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed var(--line);padding:9px 0;font-size:14.5px}
+  .usegrid .row span{color:var(--mut)}
+  .usegrid .row b{font-family:'JetBrains Mono',monospace;color:var(--amber);font-weight:600}
+
+  .contactcard{
+    background:linear-gradient(180deg,rgba(245,158,11,.08),var(--bg2));
+    border:1px solid var(--amber-line);border-radius:18px;padding:26px;
+    display:flex;flex-direction:column;gap:14px;
+  }
+  .contactcard .row{display:flex;align-items:center;gap:12px;font-size:15px}
+  .contactcard .row .k{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);width:84px;text-transform:uppercase;letter-spacing:.08em}
+  .contactcard .row .v{color:var(--txt);font-weight:520}
+  .contactcard .row .v.mono{font-family:'JetBrains Mono',monospace;color:var(--amber)}
+
+  @media(max-width:560px){
+    .slide{padding:64px 24px}
+    .footer-note{left:24px;right:24px}
+    .nav{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="brandbar"><b>AIAG</b><span class="x">×</span>GONKA</div>
+
+<nav class="nav" id="nav"></nav>
+
+<div class="hint">
+  <span><kbd>↓</kbd><kbd>↑</kbd> navigate</span>
+  <span>scroll · arrows · space</span>
+</div>
+
+<main class="deck" id="deck">
+
+  <!-- 1 — COVER -->
+  <section class="slide" id="s1">
+    <div class="eyebrow">Grant pitch · Track 2 · 2026-06-03</div>
+    <h1>RU inference demand,<br><span class="amber">delivered into Gonka.</span></h1>
+    <p class="lede">
+      Gonka has the compute. We have the users, the agents, and a live billing rail.
+      AIAG is a Telegram agents marketplace that turns a Russian-speaking builder base
+      into <b style="color:var(--txt)">real, metered inference</b> on the Gonka network.
+    </p>
+    <div class="stat-row">
+      <div class="stat"><div class="n">OpenAI-compat</div><div class="l">our gateway already speaks it — Gonka drops in</div></div>
+      <div class="stat"><div class="n">Telegram</div><div class="l">distribution + RU audience baked in</div></div>
+      <div class="stat"><div class="n">live in prod</div><div class="l">money-path, gateway & marketplace shipped</div></div>
+    </div>
+    <div class="footer-note">
+      <span>AIAG — AI-Aggregator / Agents (Telegram Mini App)</span>
+      <span class="dots"><i style="background:var(--amber)"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
+  </section>
+
+  <!-- 2 — THE GAP -->
+  <section class="slide" id="s2">
+    <div class="eyebrow">The gap</div>
+    <h2>Decentralized compute is solved.<br><span class="amber">Demand and developers are not.</span></h2>
+    <p class="lede">A network of GPUs only earns its keep when real workloads flow through it. Gonka's own roadmap puts <b style="color:var(--txt)">developer & AI-agent access</b> as a priority track — because activation, not hardware, is the bottleneck.</p>
+    <div class="grid3">
+      <div class="card">
+        <h3><span class="ico">▦</span>Supply is ready</h3>
+        <p>Mainnet live, OpenAI-compatible API, Qwen3-235B serving real inference, hosts earning GNK. The hard part — verifiable distributed compute — exists.</p>
+      </div>
+      <div class="card hl">
+        <span class="tag">the gap</span>
+        <h3><span class="ico">◇</span>Demand is thin</h3>
+        <p>Compute with no workload is idle GPUs. The network needs sustained, paying inference traffic — and a reason for builders to point their apps here instead of OpenAI.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">⚇</span>Devs are scattered</h3>
+        <p>"Use a community broker, sign requests with a wallet" is a high-friction first step. RU-speaking builders especially have no on-ramp into a Telegram-native funnel.</p>
+      </div>
+    </div>
+    <div class="footer-note">
+      <span>Gonka roadmap — Track 2 exists for a reason</span>
+      <span class="dots"><i></i><i style="background:var(--amber)"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
+  </section>
+
+  <!-- 3 — OUR PRODUCT -->
+  <section class="slide" id="s3">
+    <div class="eyebrow">Our product</div>
+    <h2>A marketplace of <span class="amber">personified AI agents</span><br>that live inside Telegram.</h2>
+    <p class="lede">Each agent is a character with a face and a voice, not a chat window. Users discover one, run it, or build their own — three ways: connect your own runtime, clone a public template, or start from scratch.</p>
+    <div class="grid3">
+      <div class="card">
+        <h3><span class="ico">◐</span>Discover</h3>
+        <p>A browsable marketplace of personified agents — finance helper, research scout, ops bot. Pick one and it works for you in your Telegram.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">▶</span>Run &amp; pay</h3>
+        <p>Per-call crypto-credit billing, atomic ledger, daily-budget guard. The user funds a balance; every run debits real money — already live.</p>
+      </div>
+      <div class="card hl">
+        <span class="tag">the hook</span>
+        <h3><span class="ico">⚙</span>Each agent picks a provider</h3>
+        <p>An agent = a spec: persona + models + skills + tools. Every model carries a <b style="color:var(--txt)">provider</b>. <span class="amber">Gonka is one of them.</span></p>
+      </div>
+    </div>
+    <p class="lede" style="margin-top:26px;font-size:15px;">
+      <span class="pill dim">spec, not a prompt</span>&nbsp;&nbsp;
+      <span class="pill dim">persona · models · skills · tools</span>&nbsp;&nbsp;
+      <span class="pill dim">templates are published, not sold</span>
+    </p>
+    <div class="footer-note">
+      <span>apps/tg-miniapp · apps/agent-worker — shipped &amp; live</span>
+      <span class="dots"><i></i><i></i><i style="background:var(--amber)"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
+  </section>
+
+  <!-- 4 — TRACK-2 FIT -->
+  <section class="slide" id="s4">
+    <div class="eyebrow">Track-2 fit</div>
+    <h2>Your roadmap is <span class="amber">already our product.</span></h2>
+    <p class="lede">Track 2 — developer & AI-agent access — has three pillars. We are not proposing to build scaffolding; we map onto all three with code already in production.</p>
+    <div class="map3">
+      <div class="card">
+        <h3><span class="ico">P1</span>Agent-runtime</h3>
+        <p>We run agents today: a worker loop that drives models through our gateway. Real agents, real loops — ready to point at Gonka.</p>
+        <div class="pmap">our side → <b>agent-worker loop</b></div>
+      </div>
+      <div class="card hl">
+        <span class="tag">core fit</span>
+        <h3><span class="ico">P2</span>Aggregator adapter</h3>
+        <p>We <b style="color:var(--txt)">ARE an aggregator.</b> One OpenAI-compatible endpoint fronts many upstreams with metering + markup + white-label. Adding Gonka is one adapter.</p>
+        <div class="pmap">our side → <b>packages/api-gateway</b></div>
+      </div>
+      <div class="card">
+        <h3><span class="ico">P3</span>Delegated wallets</h3>
+        <p>Our "agent budget card": per-agent spend policy — daily cap, per-call cap, tool allowlist — with one-tap revoke + audit. Backs the Gonka-routed spend.</p>
+        <div class="pmap">our side → <b>R0 atomic ledger</b></div>
+      </div>
+    </div>
+    <div class="footer-note">
+      <span>P1 runtime · P2 aggregator adapter · P3 delegated wallets — 3 for 3</span>
+      <span class="dots"><i></i><i></i><i></i><i style="background:var(--amber)"></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
+  </section>
+
+  <!-- 5 — HOW IT PLUGS IN -->
+  <section class="slide" id="s5">
+    <div class="eyebrow">How it plugs in</div>
+    <h2>One adapter. <span class="amber">~95% a copy</span> of what we already run.</h2>
+    <p class="lede">Gonka is OpenAI-compatible, so it slots into our existing upstream pattern. Today every agent run already flows through our metered gateway — Gonka becomes one more provider behind it.</p>
+    <div class="flow">
+      <div class="node">Telegram user<small>picks an agent</small></div>
+      <span class="arrow">→</span>
+      <div class="node">Agent run<small>provider = gonka</small></div>
+      <span class="arrow">→</span>
+      <div class="node acc">AIAG gateway<small>:4000 · meter + markup</small></div>
+      <span class="arrow">→</span>
+      <div class="node">gonka.ts adapter<small>OpenAI-compat</small></div>
+      <span class="arrow">→</span>
+      <div class="node acc">Gonka network<small>Qwen3-235B · real inference</small></div>
+    </div>
+    <div class="grid3" style="margin-top:30px">
+      <div class="card">
+        <h3>White-label preserved</h3>
+        <p>Same brand-stripping our gateway already applies — Gonka shows up as a clean OpenAI-shaped provider in the picker.</p>
+      </div>
+      <div class="card">
+        <h3>Models discovered at runtime</h3>
+        <p>We never hardcode the model list — <span class="mono amber">GET /v1/models</span> at runtime, so Kimi / MiniMax appear as the network governs them in.</p>
+      </div>
+      <div class="card">
+        <h3>Fallback by design</h3>
+        <p>A second upstream row per slug means a Gonka instability window degrades gracefully — it never hard-fails a user's agent.</p>
+      </div>
+    </div>
+    <div class="footer-note">
+      <span>copy openrouter.ts → gonka.ts · register provider · seed model_upstreams</span>
+      <span class="dots"><i></i><i></i><i></i><i></i><i style="background:var(--amber)"></i><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
+  </section>
+
+  <!-- 6 — WHAT WE DELIVER -->
+  <section class="slide" id="s6">
+    <div class="eyebrow">What we deliver · 3 months</div>
+    <h2>Three deliverables, each tied to <span class="amber">real network usage.</span></h2>
+    <div class="grid3">
+      <div class="card hl">
+        <span class="tag">month 1</span>
+        <h3><span class="ico">①</span>Gonka in the picker</h3>
+        <p>Gonka selectable in the TMA provider-picker and our OpenAI-compatible gateway. A user/agent picks Gonka and runs real inference end-to-end through us.</p>
+        <div class="pmap" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);margin-top:13px;padding-top:12px;border-top:1px solid var(--line)">metric → <b class="amber">daily Gonka tokens via AIAG</b></div>
+      </div>
+      <div class="card hl">
+        <span class="tag">month 2</span>
+        <h3><span class="ico">②</span>Live demo agent</h3>
+        <p>A public, personified demo agent running on Gonka inside Telegram — the visible proof that RU users can run a Gonka-backed agent in two taps. RU tutorial published.</p>
+        <div class="pmap" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);margin-top:13px;padding-top:12px;border-top:1px solid var(--line)">metric → <b class="amber"># active agents on Gonka</b></div>
+      </div>
+      <div class="card hl">
+        <span class="tag">month 3</span>
+        <h3><span class="ico">③</span>Delegated wallets</h3>
+        <p>Agent budget-card: an agent buys Gonka compute continuously within a delegated limit; owner revokes + audits. Track-2 P3, built on our atomic ledger.</p>
+        <div class="pmap" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);margin-top:13px;padding-top:12px;border-top:1px solid var(--line)">metric → <b class="amber">retained inference after credits</b></div>
+      </div>
+    </div>
+    <p class="lede" style="margin-top:24px;font-size:14.5px;">Every milestone reports against <b style="color:var(--txt)">Gonka's own primary metric</b>: real inference + developer activation + sustained network usage from the RU community.</p>
+    <div class="footer-note">
+      <span>provider in picker → live demo agent → delegated wallets</span>
+      <span class="dots"><i></i><i></i><i></i><i></i><i></i><i style="background:var(--amber)"></i><i></i><i></i><i></i><i></i></span>
+    </div>
+  </section>
+
+  <!-- 7 — TRACTION / WHAT'S BUILT -->
+  <section class="slide" id="s7">
+    <div class="eyebrow">Traction · what's already built</div>
+    <h2>We are not starting from a slide.<br><span class="amber">The rails are live.</span></h2>
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="check">✓</span>&nbsp;OpenAI-compatible gateway</h3>
+        <p>Hono/Bun gateway on <span class="mono">:4000</span> — proxies multiple upstreams behind one endpoint with per-call metering, markup, and white-label routing. Running in production.</p>
+      </div>
+      <div class="card">
+        <h3><span class="check">✓</span>&nbsp;Money-path (D-0)</h3>
+        <p>Gateway returns realized margin per request; worker bills off it. Atomic deduct ledger, daily-budget guards, run-start gating — shipped on branch + live (Phase 15.1 / R0).</p>
+      </div>
+      <div class="card">
+        <h3><span class="check">✓</span>&nbsp;Telegram agents marketplace</h3>
+        <p>Discover / run / create personified agents. Agent CRUD, conversation history, crypto-credit balance + top-up — live on <span class="mono">ai-aggregator.ru</span>.</p>
+      </div>
+      <div class="card">
+        <h3><span class="check">✓</span>&nbsp;Security hardening + safeFetch</h3>
+        <p>Auth hardening (Next 14.2.33 CVE, HS256 pin, nginx strip), settleRun atomicity tests green, egress guard <span class="mono">safeFetch</span> done.</p>
+      </div>
+    </div>
+    <div class="stat-row" style="margin-top:22px">
+      <div class="stat"><div class="n">D-0 done</div><div class="l">margin authority — the change every money feature depends on</div></div>
+      <div class="stat"><div class="n">41 screens</div><div class="l">wireframed: provider-picker, agent budget, top-up flows</div></div>
+      <div class="stat"><div class="n">Gonka adapter</div><div class="l"><span class="plan">planned</span> — copy openrouter.ts → gonka.ts (the grant funds this)</div></div>
+    </div>
+    <div class="footer-note">
+      <span>green = shipped &amp; live · amber = the grant turns it on</span>
+      <span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i style="background:var(--amber)"></i><i></i><i></i><i></i></span>
+    </div>
+  </section>
+
+  <!-- 8 — WHY US / FIT -->
+  <section class="slide" id="s8">
+    <div class="eyebrow">Why us</div>
+    <h2>The lowest-friction path to <span class="amber">RU inference demand.</span></h2>
+    <ul class="clean">
+      <li>We are <b>an aggregator already</b> — Track-2 P2 is our day job, not a new build. <span>Gonka adds optionality, never becomes a dependency.</span></li>
+      <li>We bring <b>distribution</b>: a Telegram-native funnel into a RU-speaking agent-builder + user base. <span>Where OpenAI-compat alone leaves builders, we hand them a two-tap on-ramp.</span></li>
+      <li>Our billing is <b>metered to the call</b>. <span>Grants/credits tied to measurable usage — Gonka's stated model — map directly onto our ledger.</span></li>
+      <li>We honor <b>BYO-wallet = zero commission</b>. <span>A user paying Gonka in GNK from their own wallet pays us nothing — pure demand to your network.</span></li>
+    </ul>
+    <p class="lede" style="margin-top:30px;font-size:15px;color:var(--dim)">Honest scope: Gonka is one optional provider plus a grant. We keep our other paths primary — which is exactly why the demand we route to Gonka is real, durable, and not propped up by a single dependency.</p>
+    <div class="footer-note">
+      <span>aggregator + Telegram distribution + metered billing = real demand</span>
+      <span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i style="background:var(--amber)"></i><i></i><i></i></span>
+    </div>
+  </section>
+
+  <!-- 9 — THE ASK -->
+  <section class="slide" id="s9">
+    <div class="eyebrow">The ask</div>
+    <h2>An ecosystem grant in <span class="amber">GNK</span>, tied to usage.</h2>
+    <p class="lede">A usage-tied grant to fund the 3-month integration and seed real Gonka inference from the RU market. Sized against milestones, paid against metrics.</p>
+    <div class="askgrid">
+      <div class="card">
+        <h3 style="margin-bottom:14px">Use of grant</h3>
+        <div class="usegrid">
+          <div class="row"><span>① Gonka adapter + picker integration</span><b>M1</b></div>
+          <div class="row"><span>② Live demo agent + RU tutorial</span><b>M2</b></div>
+          <div class="row"><span>③ Delegated agent wallets (budget-card)</span><b>M3</b></div>
+          <div class="row"><span>Inference credits to seed RU demand</span><b>usage</b></div>
+        </div>
+        <p style="margin-top:16px;font-size:13.5px;color:var(--dim)">Structure flexible — milestone disbursement or usage-tied credits, whichever fits the Foundation's model. We report on Gonka's primary metric each milestone.</p>
+      </div>
+      <div class="card hl" style="display:flex;flex-direction:column;justify-content:center;gap:18px">
+        <div>
+          <div class="big-num" style="font-size:11px;letter-spacing:.12em">PAID IN</div>
+          <div style="font-size:34px;font-weight:780;letter-spacing:-.02em;margin-top:4px">GNK <span class="amber">⟨amount⟩</span></div>
+        </div>
+        <div style="border-top:1px solid var(--amber-line);padding-top:16px;display:flex;flex-direction:column;gap:11px">
+          <div class="pill">✓ tied to real inference processed</div>
+          <div class="pill">✓ tied to # active agents on Gonka</div>
+          <div class="pill warn">→ 3 milestones, 3 months</div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-note">
+      <span>amount + disbursement to align with the Foundation</span>
+      <span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i style="background:var(--amber)"></i><i></i></span>
+    </div>
+  </section>
+
+  <!-- 10 — CONTACT -->
+  <section class="slide" id="s10">
+    <div class="eyebrow">Let's drive demand</div>
+    <h2>Gonka has the compute.<br><span class="amber">We bring the users.</span></h2>
+    <p class="lede">We can have Gonka selectable in the picker within weeks of a green light, and a live RU demo agent shortly after. Let's talk scope, metrics, and grant structure.</p>
+    <div class="askgrid" style="margin-top:30px">
+      <div class="contactcard">
+        <div class="row"><span class="k">Team</span><span class="v">AIAG — AI-Aggregator / Agents (TMA)</span></div>
+        <div class="row"><span class="k">Telegram</span><span class="v mono">@username</span></div>
+        <div class="row"><span class="k">Email</span><span class="v mono">⟨founder to provide⟩</span></div>
+        <div class="row"><span class="k">Discord</span><span class="v mono">⟨founder to provide⟩</span></div>
+        <div class="row"><span class="k">GNK addr</span><span class="v mono">gonka1… ⟨to provide⟩</span></div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;justify-content:center;gap:13px">
+        <h3 style="font-size:15px">Next step</h3>
+        <p>A 30-minute call: confirm deliverable-#1 demo path, agree milestone metrics, and finalize the GNK grant amount + disbursement schedule.</p>
+        <div style="margin-top:8px"><span class="pill">ready to integrate</span></div>
+      </div>
+    </div>
+    <div class="footer-note">
+      <span>AIAG × Gonka — Track 2 · developer &amp; AI-agent access · 2026</span>
+      <span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i style="background:var(--amber)"></i></span>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  const deck = document.getElementById('deck');
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const nav = document.getElementById('nav');
+
+  // build nav dots
+  slides.forEach((s,i)=>{
+    const a = document.createElement('a');
+    a.href = '#'+s.id;
+    a.dataset.i = i;
+    a.addEventListener('click',(e)=>{e.preventDefault(); slides[i].scrollIntoView({behavior:'smooth'});});
+    nav.appendChild(a);
+  });
+  const dots = Array.from(nav.children);
+
+  // active dot via observer
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(en=>{
+      if(en.isIntersecting){
+        const i = slides.indexOf(en.target);
+        dots.forEach(d=>d.classList.remove('on'));
+        if(dots[i]) dots[i].classList.add('on');
+      }
+    });
+  },{threshold:.55});
+  slides.forEach(s=>io.observe(s));
+
+  // keyboard nav
+  function current(){
+    const top = deck.scrollTop;
+    return Math.round(top / window.innerHeight);
+  }
+  function go(n){
+    const i = Math.max(0, Math.min(slides.length-1, n));
+    slides[i].scrollIntoView({behavior:'smooth'});
+  }
+  window.addEventListener('keydown',(e)=>{
+    if(['ArrowDown','PageDown',' '].includes(e.key)){ e.preventDefault(); go(current()+1); }
+    else if(['ArrowUp','PageUp'].includes(e.key)){ e.preventDefault(); go(current()-1); }
+    else if(e.key==='Home'){ e.preventDefault(); go(0); }
+    else if(e.key==='End'){ e.preventDefault(); go(slides.length-1); }
+  });
+</script>
+</body>
+</html>

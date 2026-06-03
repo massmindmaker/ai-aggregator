@@ -1,0 +1,1124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIAG — коллекция агентов-персонажей</title>
+<style>
+  /* ═══════════════════════════════════════════════════════════════════════
+   * AIAG TMA — hi-fi design exploration, v2.
+   * Agents as a collectible CHARACTER SYSTEM, not a settings grid.
+   * Two modes (Открыть / Моя коллекция), card STATES (owned / running /
+   * preview-locked), rarity that means curation+usage, and an inline
+   * character sheet that reveals with a scan+flip.
+   * Dark + amber brand DNA, OKLCH throughout, JetBrains Mono for numbers.
+   * Per-character hue carries through portrait, rarity ring and accents.
+   * Vanilla JS only, transform/opacity motion, ease-out-expo.
+   * ═══════════════════════════════════════════════════════════════════════ */
+  :root {
+    /* neutrals tinted toward the brand hue (~70) — never pure black/white */
+    --bg:        oklch(0.155 0.011 70);
+    --bg-deep:   oklch(0.125 0.010 70);
+    --surface:   oklch(0.205 0.013 70);
+    --surface-2: oklch(0.245 0.014 70);
+    --line:      oklch(0.32 0.014 70);
+    --line-soft: oklch(0.27 0.012 70);
+    --ink:       oklch(0.95 0.010 80);
+    --ink-dim:   oklch(0.74 0.015 75);
+    --ink-faint: oklch(0.56 0.014 75);
+    --amber:     oklch(0.81 0.15 75);
+    --amber-deep:oklch(0.62 0.14 65);
+    --amber-soft:oklch(0.81 0.15 75 / 0.13);
+    --amber-line:oklch(0.81 0.15 75 / 0.42);
+    --good:      oklch(0.80 0.14 155);
+    --good-soft: oklch(0.80 0.14 155 / 0.14);
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --sans: -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
+    --exp: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    /* immersive evening backdrop — radial amber bloom over deep neutral */
+    background:
+      radial-gradient(120% 80% at 18% -10%, oklch(0.26 0.05 70 / 0.55), transparent 60%),
+      radial-gradient(90% 60% at 92% 4%, oklch(0.30 0.07 60 / 0.30), transparent 55%),
+      var(--bg-deep);
+    background-attachment: fixed;
+    min-height: 100vh;
+    padding: 0 20px 96px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  /* ── Motion: ease-out-expo, transform/opacity only ─────────────────────── */
+  @keyframes rise { from { opacity: 0; transform: translateY(22px) scale(0.985); } to { opacity: 1; transform: none; } }
+  @keyframes sheen { from { transform: translateX(-130%) skewX(-18deg); } to { transform: translateX(230%) skewX(-18deg); } }
+  /* live "running" breathing — opacity only, slow, calm */
+  @keyframes pulse { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
+  @keyframes ring { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(2.4); opacity: 0; } }
+  /* reveal scan line sweeping the opened sheet portrait */
+  @keyframes scan { from { transform: translateY(-110%); } to { transform: translateY(820%); } }
+  @keyframes flipIn { from { opacity: 0; transform: perspective(1400px) rotateY(-14deg) translateY(14px); } to { opacity: 1; transform: none; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+
+  /* ── Masthead ──────────────────────────────────────────────────────────── */
+  header {
+    padding: 60px 0 26px;
+    animation: rise 0.7s var(--exp) both;
+  }
+  .kick {
+    font-family: var(--mono);
+    font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 18px;
+  }
+  h1 {
+    font-size: clamp(30px, 5vw, 50px);
+    line-height: 1.04; letter-spacing: -0.02em; font-weight: 680;
+    max-width: 18ch; margin-bottom: 18px;
+  }
+  h1 .q { color: var(--ink-faint); }
+  .lead { font-size: 17px; color: var(--ink-dim); max-width: 64ch; }
+
+  /* ── Mode switch (Открыть / Моя коллекция) + collection meter ──────────── */
+  .topbar {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    margin: 30px 0 6px;
+    animation: rise 0.7s var(--exp) 0.06s both;
+  }
+  .switch {
+    display: inline-flex; padding: 4px; border-radius: 13px;
+    background: oklch(0.18 0.012 70); border: 1px solid var(--line);
+    position: relative;
+  }
+  .switch button {
+    position: relative; z-index: 2;
+    font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+    color: var(--ink-dim); background: none; border: none; cursor: pointer;
+    padding: 9px 18px; border-radius: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: color 0.4s var(--exp);
+  }
+  .switch button .cnt {
+    font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint);
+    border: 1px solid var(--line); border-radius: 20px; padding: 1px 7px;
+    transition: color 0.4s var(--exp), border-color 0.4s var(--exp);
+  }
+  .switch button.on { color: oklch(0.20 0.04 60); }
+  .switch button.on .cnt { color: oklch(0.26 0.05 60); border-color: oklch(0.40 0.06 60); }
+  .switch .knob {
+    position: absolute; z-index: 1; top: 4px; bottom: 4px; left: 4px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, oklch(0.85 0.15 75), oklch(0.74 0.15 70));
+    box-shadow: 0 6px 18px -8px oklch(0.78 0.15 70 / 0.7);
+    transition: transform 0.5s var(--exp), width 0.5s var(--exp);
+  }
+  .progress {
+    flex: 1; min-width: 220px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .progress .bar { flex: 1; height: 6px; border-radius: 4px; background: oklch(0.22 0.012 70); border: 1px solid var(--line-soft); overflow: hidden; }
+  .progress .bar > i {
+    display: block; height: 100%;
+    background: linear-gradient(90deg, var(--amber-deep), var(--amber));
+    width: 33%;
+    border-radius: 4px;
+    transition: width 0.8s var(--exp);
+  }
+  .progress .lbl { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
+  .progress .lbl b { color: var(--ink-dim); font-weight: 500; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 22px; animation: rise 0.7s var(--exp) 0.12s both; }
+  .legend span {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-faint);
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .legend .rule { color: var(--ink-faint); }
+  .legend .rule b { color: var(--ink-dim); font-weight: 500; }
+
+  .section-label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--ink-faint);
+    margin: 30px 0 18px; display: flex; align-items: center; gap: 12px;
+  }
+  .section-label::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+  .section-label .accent { color: oklch(0.84 0.10 75); }
+
+  /* ── Card gallery ──────────────────────────────────────────────────────── */
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+    gap: 20px;
+    perspective: 1400px;
+  }
+  /* mode filtering — owned-only view hides preview cards */
+  body[data-mode="mine"] .card[data-state="preview"] { display: none; }
+
+  /* a card carries its identity via --hue / --chroma + tier + state */
+  .card {
+    position: relative;
+    border-radius: 18px;
+    background:
+      linear-gradient(180deg, oklch(0.23 0.014 70) 0%, oklch(0.18 0.013 70) 100%);
+    border: 1px solid var(--line);
+    padding: 14px 14px 16px;
+    overflow: hidden;
+    cursor: pointer;
+    transform-style: preserve-3d;
+    transition:
+      transform 0.5s var(--exp),
+      border-color 0.4s ease,
+      box-shadow 0.5s var(--exp),
+      opacity 0.5s var(--exp);
+    animation: rise 0.7s var(--exp) both;
+  }
+  /* staggered entrance */
+  .card:nth-child(1) { animation-delay: 0.02s; }
+  .card:nth-child(2) { animation-delay: 0.09s; }
+  .card:nth-child(3) { animation-delay: 0.16s; }
+  .card:nth-child(4) { animation-delay: 0.23s; }
+  .card:nth-child(5) { animation-delay: 0.30s; }
+  .card:nth-child(6) { animation-delay: 0.37s; }
+
+  .card:hover {
+    transform: translateY(-6px) rotateX(4deg) rotateY(-4deg);
+    border-color: oklch(var(--cl) var(--cc) var(--ch) / 0.55);
+    box-shadow:
+      0 24px 48px -18px oklch(var(--cl) var(--cc) var(--ch) / 0.45),
+      0 2px 0 0 oklch(var(--cl) var(--cc) var(--ch) / 0.18) inset;
+  }
+  .card.is-open { border-color: oklch(var(--cl) var(--cc) var(--ch) / 0.7); }
+
+  /* legendary cards get a faint corner foil — earned, not casino */
+  .card[data-tier="legendary"]::after {
+    content: ""; position: absolute; top: 0; right: 0; width: 80px; height: 80px;
+    background: radial-gradient(120% 120% at 100% 0%, oklch(0.85 0.13 90 / 0.22), transparent 62%);
+    pointer-events: none; z-index: 1;
+  }
+
+  /* light sheen sweep on hover */
+  .card .gloss {
+    position: absolute; top: 0; left: 0; width: 45%; height: 100%;
+    background: linear-gradient(100deg, transparent, oklch(0.98 0.02 80 / 0.10), transparent);
+    transform: translateX(-130%) skewX(-18deg);
+    pointer-events: none; z-index: 5;
+  }
+  .card:hover .gloss { animation: sheen 0.9s var(--exp) 0.05s; }
+
+  /* portrait — duotone OKLCH per character, distinct hue */
+  .portrait {
+    position: relative;
+    aspect-ratio: 4 / 5;
+    border-radius: 13px;
+    overflow: hidden;
+    border: 1px solid oklch(var(--cl) var(--cc) var(--ch) / 0.35);
+    margin-bottom: 13px;
+    background:
+      radial-gradient(85% 70% at 50% 18%, oklch(var(--cl) var(--cc) var(--ch) / 0.55), transparent 70%),
+      linear-gradient(165deg, oklch(0.30 0.05 var(--ch)) 0%, oklch(0.16 0.03 var(--ch)) 100%);
+  }
+  /* generated-noise / aura layer */
+  .portrait::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, oklch(0.95 0.02 80 / 0.30), transparent),
+      radial-gradient(1px 1px at 70% 60%, oklch(0.95 0.02 80 / 0.22), transparent),
+      radial-gradient(1.5px 1.5px at 45% 80%, oklch(0.95 0.02 80 / 0.18), transparent),
+      radial-gradient(1px 1px at 85% 25%, oklch(0.95 0.02 80 / 0.25), transparent);
+    opacity: 0.7; mix-blend-mode: screen;
+  }
+  /* monogram glyph — the "face" stand-in */
+  .portrait .glyph {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 700;
+    font-size: 84px; letter-spacing: -0.04em;
+    color: oklch(0.97 0.02 var(--ch) / 0.92);
+    text-shadow: 0 4px 30px oklch(var(--cl) var(--cc) var(--ch) / 0.6);
+  }
+  /* subtle iris/visor SVG silhouette gives each a "presence" */
+  .portrait .silh { position: absolute; inset: 0; z-index: 2; opacity: 0.85; }
+
+  /* locked/preview state — desaturated, soft veil + lock affordance */
+  .card[data-state="preview"] { }
+  .card[data-state="preview"] .portrait { filter: saturate(0.5) brightness(0.82); }
+  .card[data-state="preview"] .portrait .veil {
+    position: absolute; inset: 0; z-index: 4;
+    background: oklch(0.13 0.01 70 / 0.42);
+    display: flex; align-items: flex-end; justify-content: center; padding-bottom: 12px;
+  }
+  .card[data-state="preview"] .portrait .veil .lock {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+    color: var(--ink); background: oklch(0.12 0.01 70 / 0.78);
+    border: 1px solid var(--line); border-radius: 7px; padding: 4px 9px;
+    display: inline-flex; align-items: center; gap: 6px; backdrop-filter: blur(3px);
+  }
+  .card:not([data-state="preview"]) .veil { display: none; }
+
+  .tier {
+    position: absolute; top: 9px; left: 9px; z-index: 3;
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px; border-radius: 6px;
+    border: 1px solid oklch(var(--cl) var(--cc) var(--ch) / 0.5);
+    color: oklch(0.96 0.04 var(--ch));
+    background: oklch(0.16 0.03 var(--ch) / 0.7);
+    backdrop-filter: blur(3px);
+  }
+  /* state badge top-right (owned / running) — model moves into the sheet */
+  .state-badge {
+    position: absolute; top: 9px; right: 9px; z-index: 3;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.04em;
+    padding: 3px 8px; border-radius: 6px;
+    display: inline-flex; align-items: center; gap: 6px;
+    backdrop-filter: blur(3px);
+  }
+  .state-badge.owned {
+    color: var(--ink); background: oklch(0.12 0.01 70 / 0.7); border: 1px solid var(--line);
+  }
+  .state-badge.running {
+    color: var(--good); background: var(--good-soft); border: 1px solid oklch(0.80 0.14 155 / 0.5);
+  }
+  .state-badge .live {
+    position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--good);
+    animation: pulse 1.9s ease-in-out infinite;
+  }
+  .state-badge .live::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    border: 1px solid var(--good);
+    animation: ring 1.9s var(--exp) infinite;
+  }
+
+  .card .name { font-size: 18px; font-weight: 660; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+  .card .role { font-size: 12px; color: oklch(0.86 0.10 var(--ch)); margin-top: 1px; }
+  .card .trait {
+    font-size: 12px; color: var(--ink-dim); margin-top: 9px; line-height: 1.45;
+    font-style: italic;
+  }
+  .card .trait::before { content: "\201C"; color: oklch(0.7 0.10 var(--ch)); margin-right: 1px; }
+  .card .trait::after { content: "\201D"; color: oklch(0.7 0.10 var(--ch)); }
+
+  .stats {
+    display: flex; gap: 0; margin-top: 13px;
+    border-top: 1px solid var(--line-soft); padding-top: 11px;
+  }
+  .stats .st { flex: 1; }
+  .stats .st + .st { border-left: 1px solid var(--line-soft); padding-left: 11px; }
+  .stats .st .v { font-family: var(--mono); font-size: 14px; color: var(--ink); }
+  .stats .st .v .u { font-size: 10px; color: var(--ink-faint); }
+  .stats .st .k { font-size: 9.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 1px; }
+  .stats .st .v.star { color: oklch(0.86 0.13 90); }
+
+  /* open-hint chevron, animates on hover */
+  .card .open-hint {
+    margin-top: 12px; font-family: var(--mono); font-size: 10.5px;
+    color: var(--ink-faint); display: flex; align-items: center; gap: 6px;
+    transition: color 0.3s ease;
+  }
+  .card .open-hint .ch { transition: transform 0.4s var(--exp); }
+  .card:hover .open-hint { color: oklch(0.84 0.08 var(--ch)); }
+  .card:hover .open-hint .ch { transform: translateX(3px); }
+  .card.is-open .open-hint .ch { transform: rotate(90deg); }
+  .card[data-state="preview"] .open-hint { color: var(--ink-faint); }
+
+  /* ── Inline character sheet (reveals below gallery on open) ────────────── */
+  #sheet-mount { margin-top: 8px; }
+  .sheet-label { margin-top: 44px; }
+  .sheet-label .accent { color: oklch(0.84 0.10 var(--sheet-ch, 28)); }
+
+  .sheet {
+    position: relative;
+    border-radius: 22px;
+    border: 1px solid oklch(var(--cl) var(--cc) var(--ch) / 0.4);
+    background:
+      radial-gradient(60% 90% at 100% 0%, oklch(var(--cl) var(--cc) var(--ch) / 0.16), transparent 60%),
+      linear-gradient(180deg, oklch(0.21 0.014 70), oklch(0.165 0.012 70));
+    overflow: hidden;
+    animation: flipIn 0.62s var(--exp) both;
+  }
+  .sheet-grid { display: grid; grid-template-columns: 312px 1fr; gap: 0; }
+
+  .sheet-portrait {
+    position: relative;
+    border-right: 1px solid var(--line-soft);
+    padding: 26px;
+    display: flex; flex-direction: column;
+  }
+  .sheet-portrait .big {
+    position: relative;
+    aspect-ratio: 3 / 4; border-radius: 16px; overflow: hidden;
+    border: 1px solid oklch(var(--cl) var(--cc) var(--ch) / 0.45);
+    background:
+      radial-gradient(80% 65% at 50% 16%, oklch(var(--cl) var(--cc) var(--ch) / 0.6), transparent 70%),
+      linear-gradient(165deg, oklch(0.32 0.06 var(--ch)), oklch(0.15 0.03 var(--ch)));
+  }
+  .sheet-portrait .big::before {
+    content: ""; position: absolute; inset: 0; mix-blend-mode: screen; opacity: 0.7;
+    background-image:
+      radial-gradient(1.5px 1.5px at 25% 30%, oklch(0.95 0.02 80 / 0.3), transparent),
+      radial-gradient(1px 1px at 65% 55%, oklch(0.95 0.02 80 / 0.25), transparent),
+      radial-gradient(2px 2px at 50% 78%, oklch(0.95 0.02 80 / 0.2), transparent),
+      radial-gradient(1px 1px at 82% 35%, oklch(0.95 0.02 80 / 0.28), transparent);
+  }
+  .sheet-portrait .big .glyph {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 700; font-size: 130px; letter-spacing: -0.04em;
+    color: oklch(0.97 0.03 var(--ch) / 0.94);
+    text-shadow: 0 6px 44px oklch(var(--cl) var(--cc) var(--ch) / 0.65);
+  }
+  /* one memorable touch: a single scan line reveals the portrait */
+  .sheet-portrait .big .scanline {
+    position: absolute; left: 0; right: 0; top: 0; height: 26%; z-index: 3;
+    background: linear-gradient(180deg, transparent, oklch(0.97 0.05 var(--ch) / 0.28), transparent);
+    animation: scan 1.1s var(--exp) 0.12s 1 both;
+    pointer-events: none;
+  }
+  /* owned/running pill under portrait */
+  .owner-row {
+    display: flex; align-items: center; gap: 8px; margin-top: 14px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-faint);
+  }
+  .owner-row .pill-state {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 7px; padding: 3px 9px;
+  }
+  .owner-row .pill-state.owned { color: var(--ink-dim); border: 1px solid var(--line); }
+  .owner-row .pill-state.running { color: var(--good); border: 1px solid oklch(0.80 0.14 155 / 0.5); background: var(--good-soft); }
+  .owner-row .pill-state.running .live { width: 6px; height: 6px; border-radius: 50%; background: var(--good); animation: pulse 1.9s ease-in-out infinite; }
+
+  .ref-note {
+    margin-top: 14px; font-size: 11px; color: var(--ink-faint); line-height: 1.5;
+    font-family: var(--mono);
+  }
+  .ref-note b { color: oklch(0.86 0.10 var(--ch)); font-weight: 500; }
+
+  .sheet-body { padding: 28px 30px; }
+  .sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .sheet-tier {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: oklch(0.88 0.12 var(--ch));
+    border: 1px solid oklch(var(--cl) var(--cc) var(--ch) / 0.5);
+    border-radius: 6px; padding: 3px 9px; display: inline-block; margin-bottom: 12px;
+  }
+  .sheet-close {
+    flex: none; width: 34px; height: 34px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink-dim);
+    font-size: 16px; cursor: pointer; line-height: 1;
+    transition: border-color 0.3s ease, color 0.3s ease, transform 0.3s var(--exp);
+  }
+  .sheet-close:hover { color: var(--ink); border-color: var(--amber-line); transform: rotate(90deg); }
+  .sheet-body h2 { font-size: 36px; letter-spacing: -0.02em; font-weight: 700; line-height: 1; }
+  .sheet-body .h2-role { font-size: 14px; color: oklch(0.86 0.10 var(--ch)); margin-top: 6px; }
+  .bio { font-size: 15px; color: var(--ink-dim); max-width: 60ch; margin-top: 16px; }
+  .bio b { color: var(--ink); font-weight: 600; }
+
+  /* personality dimensions — small scale + labeled strength bars */
+  .persona { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; max-width: 64ch; }
+  @media (max-width: 540px) { .persona { grid-template-columns: 1fr; } }
+  .dim .dim-head { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); margin-bottom: 7px; }
+  /* bipolar scale (tone): дерзкий ↔ деловой */
+  .scale { position: relative; height: 6px; border-radius: 4px; background: oklch(0.24 0.012 70); border: 1px solid var(--line-soft); }
+  .scale > .knob {
+    position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: oklch(0.92 0.06 var(--ch)); border: 2px solid oklch(0.16 0.03 var(--ch));
+    box-shadow: 0 0 0 3px oklch(var(--cl) var(--cc) var(--ch) / 0.2);
+    transition: left 0.7s var(--exp);
+  }
+  /* unipolar strength bar */
+  .strength { position: relative; height: 6px; border-radius: 4px; background: oklch(0.24 0.012 70); border: 1px solid var(--line-soft); overflow: hidden; }
+  .strength > i {
+    display: block; height: 100%; border-radius: 4px; width: 0;
+    background: linear-gradient(90deg, oklch(0.55 0.10 var(--ch)), oklch(0.82 0.13 var(--ch)));
+    transition: width 0.8s var(--exp);
+  }
+  .dim .val { font-family: var(--mono); color: oklch(0.86 0.10 var(--ch)); }
+
+  /* voice / sample output block */
+  .voice {
+    margin-top: 22px; padding: 14px 16px; border-radius: 12px;
+    background: oklch(var(--cl) var(--cc) var(--ch) / 0.08);
+    border: 1px solid oklch(var(--cl) var(--cc) var(--ch) / 0.3);
+    border-left-width: 3px;
+    font-size: 14px; color: var(--ink); line-height: 1.55;
+  }
+  .voice .vk { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(0.84 0.10 var(--ch)); display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+  .voice .vk .src { color: var(--ink-faint); }
+  .voice .said { font-style: normal; }
+  .voice .prompt-echo { font-size: 12px; color: var(--ink-faint); font-style: italic; margin-bottom: 8px; }
+
+  /* composable spec — varied row layout, the character ankета */
+  .spec { margin-top: 24px; }
+  .spec-head { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+  .spec-row {
+    display: grid; grid-template-columns: 104px 1fr; gap: 14px;
+    padding: 11px 0; border-top: 1px solid var(--line-soft); align-items: baseline;
+  }
+  .spec-row:first-of-type { border-top: none; }
+  .spec-row .label { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em; }
+  .spec-row .vals { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag {
+    font-family: var(--mono); font-size: 11px;
+    padding: 3px 9px; border-radius: 7px;
+    border: 1px solid var(--line); color: var(--ink-dim);
+    background: var(--surface);
+  }
+  .tag.lead {
+    color: oklch(0.92 0.05 var(--ch));
+    border-color: oklch(var(--cl) var(--cc) var(--ch) / 0.45);
+    background: oklch(var(--cl) var(--cc) var(--ch) / 0.10);
+  }
+  .tag.off { color: var(--ink-faint); }
+
+  /* lineage row — forked-from / remixes */
+  .lineage {
+    margin-top: 22px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 13px 15px; border-radius: 12px; border: 1px dashed var(--line);
+    font-size: 13px; color: var(--ink-dim);
+  }
+  .lineage .gl {
+    width: 28px; height: 28px; flex: none; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 700; font-size: 14px;
+    color: oklch(0.95 0.04 var(--lh, 75)); border: 1px solid oklch(0.7 0.10 var(--lh, 75) / 0.5);
+    background: oklch(0.20 0.04 var(--lh, 75));
+  }
+  .lineage b { color: var(--ink); font-weight: 600; }
+  .lineage .arrow { color: var(--ink-faint); font-family: var(--mono); }
+  .lineage .remixes { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
+  .lineage .remixes b { color: oklch(0.86 0.10 var(--ch)); }
+
+  .sheet-stats { display: flex; gap: 26px; margin-top: 22px; flex-wrap: wrap; }
+  .sheet-stats .st .v { font-family: var(--mono); font-size: 22px; color: var(--ink); }
+  .sheet-stats .st .v.star { color: oklch(0.86 0.13 90); }
+  .sheet-stats .st .v .u { font-size: 12px; color: var(--ink-faint); }
+  .sheet-stats .st .k { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+
+  .prompts-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); margin: 24px 0 10px; }
+  .prompt-chips { display: flex; flex-direction: column; gap: 8px; max-width: 60ch; }
+  .pchip {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 13px; border-radius: 11px;
+    border: 1px solid var(--line); background: var(--surface);
+    font-size: 13px; color: var(--ink-dim); cursor: pointer;
+    transition: border-color 0.3s ease, transform 0.3s var(--exp), color 0.3s ease;
+  }
+  .pchip:hover {
+    border-color: oklch(var(--cl) var(--cc) var(--ch) / 0.5);
+    color: var(--ink); transform: translateX(3px);
+  }
+  .pchip .arrow { font-family: var(--mono); color: oklch(0.82 0.10 var(--ch)); margin-left: auto; }
+
+  .sheet-cta { display: flex; align-items: center; gap: 12px; margin-top: 26px; flex-wrap: wrap; }
+  .run {
+    display: inline-flex; align-items: center; gap: 9px;
+    height: 50px; padding: 0 26px; border-radius: 13px;
+    font-size: 15px; font-weight: 680; border: none; cursor: pointer;
+    color: oklch(0.20 0.04 60);
+    background: linear-gradient(180deg, oklch(0.85 0.15 75), oklch(0.74 0.15 70));
+    box-shadow: 0 10px 28px -10px oklch(0.78 0.15 70 / 0.6);
+    transition: transform 0.3s var(--exp), box-shadow 0.3s ease;
+  }
+  .run:hover { transform: translateY(-2px); box-shadow: 0 16px 34px -10px oklch(0.78 0.15 70 / 0.7); }
+  .run .dot { width: 8px; height: 8px; border-radius: 50%; background: oklch(0.30 0.06 150); }
+  .clone {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 50px; padding: 0 20px; border-radius: 13px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line);
+    transition: border-color 0.3s ease, transform 0.3s var(--exp);
+  }
+  .clone:hover { border-color: oklch(var(--cl) var(--cc) var(--ch) / 0.55); transform: translateY(-2px); }
+  .run-meta { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
+  .run-meta b { color: var(--ink-dim); }
+  /* preview state CTA differs: add to collection */
+  .add {
+    display: inline-flex; align-items: center; gap: 9px;
+    height: 50px; padding: 0 26px; border-radius: 13px;
+    font-size: 15px; font-weight: 680; border: 1px solid oklch(var(--cl) var(--cc) var(--ch) / 0.55); cursor: pointer;
+    color: oklch(0.92 0.06 var(--ch)); background: oklch(var(--cl) var(--cc) var(--ch) / 0.12);
+    transition: transform 0.3s var(--exp), background 0.3s ease;
+  }
+  .add:hover { transform: translateY(-2px); background: oklch(var(--cl) var(--cc) var(--ch) / 0.18); }
+
+  footer {
+    margin-top: 56px; padding-top: 26px; border-top: 1px solid var(--line-soft);
+    font-family: var(--mono); font-size: 11px; color: var(--ink-faint); line-height: 1.7;
+  }
+  footer b { color: var(--ink-dim); font-weight: 500; }
+
+  @media (max-width: 720px) {
+    .sheet-grid { grid-template-columns: 1fr; }
+    .sheet-portrait { border-right: none; border-bottom: 1px solid var(--line-soft); }
+    .card:hover { transform: translateY(-5px); } /* drop 3D tilt on touch */
+  }
+  /* touch devices: no 3D tilt regardless of width */
+  @media (hover: none) {
+    .card:hover { transform: translateY(-4px); }
+  }
+</style>
+</head>
+<body data-mode="open">
+<div class="wrap">
+
+  <header>
+    <div class="kick">AIAG · коллекция агентов</div>
+    <h1>Агент не функция. <span class="q">Это персонаж с лицом, именем и характером.</span></h1>
+    <p class="lead">Каждый агент это коллекционная карточка: портрет в рамке, тир, статы. Открывай каталог, собирай своих, запускай вживую. Тап раскрывает анкету персонажа: кто он, как говорит, в чём силён, и кнопку запуска.</p>
+
+    <div class="topbar">
+      <div class="switch" id="switch" role="tablist">
+        <span class="knob" id="knob"></span>
+        <button class="on" data-mode="open" role="tab">Открыть <span class="cnt">6</span></button>
+        <button data-mode="mine" role="tab">Моя коллекция <span class="cnt">4</span></button>
+      </div>
+      <div class="progress" title="собрано персонажей из каталога">
+        <div class="bar"><i id="progbar"></i></div>
+        <div class="lbl"><b id="progtxt">4 / 12</b> собрано</div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><i style="background:oklch(0.72 0.16 28)"></i> common</span>
+      <span><i style="background:oklch(0.74 0.15 200)"></i> rare</span>
+      <span><i style="background:oklch(0.74 0.16 290)"></i> epic</span>
+      <span><i style="background:oklch(0.84 0.13 90)"></i> legendary</span>
+      <span class="rule">тир это <b>курация + рейтинг + наработка</b>, не украшение</span>
+    </div>
+  </header>
+
+  <div class="section-label" id="gallery-label"><span class="accent">Каталог</span> · 6 персонажей, 4 у тебя</div>
+
+  <div class="gallery" id="gallery">
+
+    <!-- Алиса — coral/amber, legendary, RUNNING now -->
+    <article class="card" data-id="alisa" data-tier="legendary" data-state="running"
+             style="--ch:28; --cl:0.72; --cc:0.16;">
+      <span class="gloss"></span>
+      <div class="portrait">
+        <span class="tier">legendary</span>
+        <span class="state-badge running"><span class="live"></span>в работе</span>
+        <span class="glyph">А</span>
+        <span class="veil"><span class="lock">▣ превью</span></span>
+        <svg class="silh" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <circle cx="50" cy="40" r="26" fill="none" stroke="oklch(0.95 0.04 28 / 0.25)" stroke-width="0.8"/>
+          <circle cx="50" cy="40" r="3" fill="oklch(0.95 0.06 28 / 0.5)"/>
+        </svg>
+      </div>
+      <div class="name">Алиса</div>
+      <div class="role">Контент-редактор</div>
+      <div class="trait">Дерзкая, режет воду без жалости.</div>
+      <div class="stats">
+        <div class="st"><div class="v">12.4<span class="u">k</span></div><div class="k">запусков</div></div>
+        <div class="st"><div class="v star">4.9</div><div class="k">★ рейтинг</div></div>
+        <div class="st"><div class="v">~6<span class="u">кр</span></div><div class="k">за прогон</div></div>
+      </div>
+      <div class="open-hint">раскрыть анкету <span class="ch">›</span></div>
+    </article>
+
+    <!-- Макс — cool blue, rare, OWNED -->
+    <article class="card" data-id="max" data-tier="rare" data-state="owned"
+             style="--ch:235; --cl:0.70; --cc:0.14;">
+      <span class="gloss"></span>
+      <div class="portrait">
+        <span class="tier">rare</span>
+        <span class="state-badge owned">в коллекции</span>
+        <span class="glyph">М</span>
+        <span class="veil"><span class="lock">▣ превью</span></span>
+        <svg class="silh" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <rect x="30" y="22" width="40" height="36" rx="4" fill="none" stroke="oklch(0.9 0.05 235 / 0.22)" stroke-width="0.8"/>
+          <path d="M40 36 L46 40 L40 44 M54 36 L60 40 L54 44" fill="none" stroke="oklch(0.92 0.07 235 / 0.4)" stroke-width="1"/>
+        </svg>
+      </div>
+      <div class="name">Макс</div>
+      <div class="role">Код-ревьюер</div>
+      <div class="trait">Педантичный. Найдёт баг, о котором ты забыл.</div>
+      <div class="stats">
+        <div class="st"><div class="v">8.7<span class="u">k</span></div><div class="k">запусков</div></div>
+        <div class="st"><div class="v star">4.8</div><div class="k">★ рейтинг</div></div>
+        <div class="st"><div class="v">~11<span class="u">кр</span></div><div class="k">за прогон</div></div>
+      </div>
+      <div class="open-hint">раскрыть анкету <span class="ch">›</span></div>
+    </article>
+
+    <!-- Ника — magenta/pink, epic, OWNED -->
+    <article class="card" data-id="nika" data-tier="epic" data-state="owned"
+             style="--ch:340; --cl:0.72; --cc:0.16;">
+      <span class="gloss"></span>
+      <div class="portrait">
+        <span class="tier">epic</span>
+        <span class="state-badge owned">в коллекции</span>
+        <span class="glyph">Н</span>
+        <span class="veil"><span class="lock">▣ превью</span></span>
+        <svg class="silh" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <path d="M32 50 Q50 18 68 50" fill="none" stroke="oklch(0.92 0.06 340 / 0.28)" stroke-width="0.9"/>
+          <circle cx="68" cy="32" r="4" fill="oklch(0.92 0.08 340 / 0.5)"/>
+        </svg>
+      </div>
+      <div class="name">Ника</div>
+      <div class="role">SMM, тренды</div>
+      <div class="trait">Чует вирусное за день до всех.</div>
+      <div class="stats">
+        <div class="st"><div class="v">15.1<span class="u">k</span></div><div class="k">запусков</div></div>
+        <div class="st"><div class="v star">4.7</div><div class="k">★ рейтинг</div></div>
+        <div class="st"><div class="v">~5<span class="u">кр</span></div><div class="k">за прогон</div></div>
+      </div>
+      <div class="open-hint">раскрыть анкету <span class="ch">›</span></div>
+    </article>
+
+    <!-- Гриша — teal/green, rare, OWNED -->
+    <article class="card" data-id="grisha" data-tier="rare" data-state="owned"
+             style="--ch:165; --cl:0.70; --cc:0.13;">
+      <span class="gloss"></span>
+      <div class="portrait">
+        <span class="tier">rare</span>
+        <span class="state-badge owned">в коллекции</span>
+        <span class="glyph">Г</span>
+        <span class="veil"><span class="lock">▣ превью</span></span>
+        <svg class="silh" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <path d="M30 58 L42 44 L52 50 L70 30" fill="none" stroke="oklch(0.9 0.06 165 / 0.3)" stroke-width="1"/>
+          <circle cx="70" cy="30" r="2.5" fill="oklch(0.9 0.08 165 / 0.5)"/>
+        </svg>
+      </div>
+      <div class="name">Гриша</div>
+      <div class="role">Аналитик данных</div>
+      <div class="trait">Сухой. Говорит цифрами, не эмоциями.</div>
+      <div class="stats">
+        <div class="st"><div class="v">6.2<span class="u">k</span></div><div class="k">запусков</div></div>
+        <div class="st"><div class="v star">4.9</div><div class="k">★ рейтинг</div></div>
+        <div class="st"><div class="v">~9<span class="u">кр</span></div><div class="k">за прогон</div></div>
+      </div>
+      <div class="open-hint">раскрыть анкету <span class="ch">›</span></div>
+    </article>
+
+    <!-- Лея — warm gold/peach, common, PREVIEW (not owned) -->
+    <article class="card" data-id="leya" data-tier="common" data-state="preview"
+             style="--ch:60; --cl:0.74; --cc:0.13;">
+      <span class="gloss"></span>
+      <div class="portrait">
+        <span class="tier">common</span>
+        <span class="glyph">Л</span>
+        <span class="veil"><span class="lock">▣ превью · не добавлен</span></span>
+        <svg class="silh" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <path d="M36 44 Q50 60 64 44" fill="none" stroke="oklch(0.92 0.06 60 / 0.3)" stroke-width="1"/>
+          <circle cx="42" cy="36" r="2" fill="oklch(0.92 0.08 60 / 0.5)"/>
+          <circle cx="58" cy="36" r="2" fill="oklch(0.92 0.08 60 / 0.5)"/>
+        </svg>
+      </div>
+      <div class="name">Лея</div>
+      <div class="role">Поддержка</div>
+      <div class="trait">Тёплая. С ней клиент не сорвётся.</div>
+      <div class="stats">
+        <div class="st"><div class="v">21.8<span class="u">k</span></div><div class="k">запусков</div></div>
+        <div class="st"><div class="v star">4.6</div><div class="k">★ рейтинг</div></div>
+        <div class="st"><div class="v">~3<span class="u">кр</span></div><div class="k">за прогон</div></div>
+      </div>
+      <div class="open-hint">смотреть и добавить <span class="ch">›</span></div>
+    </article>
+
+    <!-- Орион — violet/indigo, epic, PREVIEW (not owned) -->
+    <article class="card" data-id="orion" data-tier="epic" data-state="preview"
+             style="--ch:290; --cl:0.70; --cc:0.16;">
+      <span class="gloss"></span>
+      <div class="portrait">
+        <span class="tier">epic</span>
+        <span class="glyph">О</span>
+        <span class="veil"><span class="lock">▣ превью · не добавлен</span></span>
+        <svg class="silh" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <circle cx="50" cy="40" r="22" fill="none" stroke="oklch(0.9 0.06 290 / 0.26)" stroke-width="0.8"/>
+          <circle cx="50" cy="40" r="11" fill="none" stroke="oklch(0.9 0.06 290 / 0.4)" stroke-width="0.8"/>
+          <circle cx="50" cy="40" r="2" fill="oklch(0.92 0.08 290 / 0.6)"/>
+        </svg>
+      </div>
+      <div class="name">Орион</div>
+      <div class="role">Ресёрчер</div>
+      <div class="trait">Дотошный. Проверит каждый источник дважды.</div>
+      <div class="stats">
+        <div class="st"><div class="v">4.3<span class="u">k</span></div><div class="k">запусков</div></div>
+        <div class="st"><div class="v star">5.0</div><div class="k">★ рейтинг</div></div>
+        <div class="st"><div class="v">~14<span class="u">кр</span></div><div class="k">за прогон</div></div>
+      </div>
+      <div class="open-hint">смотреть и добавить <span class="ch">›</span></div>
+    </article>
+
+  </div>
+
+  <!-- character sheet renders here on open -->
+  <div id="sheet-mount"></div>
+
+  <footer>
+    AIAG TMA · дизайн-исследование «агенты как персонажи», v2.<br>
+    Портреты, баланс, статы и наработка <b>демонстрационные</b>. Финальные лица генерируются через Kie и привязываются к персонажу как референс. Ручки и каналы в копи это нейтральные плейсхолдеры (@username).
+  </footer>
+
+</div>
+
+<script>
+  /* ───────────────────────────────────────────────────────────────────────
+   * Vanilla JS only. Two responsibilities:
+   *  1) mode switch (Открыть / Моя коллекция) — toggles body[data-mode],
+   *     slides the knob, re-counts the visible roster.
+   *  2) opening a card → render its character sheet inline with a scan/flip
+   *     reveal, animate the personality scales/bars in, scroll into view.
+   * No frameworks, no external requests. Data lives in CHARACTERS below.
+   * ───────────────────────────────────────────────────────────────────── */
+
+  const CHARACTERS = {
+    alisa: {
+      name: "Алиса", role: "Контент-редактор, тон дерзкий и быстрый",
+      tier: "legendary · контент", glyph: "А", state: "running",
+      hue: { ch: 28, cl: 0.72, cc: 0.16 },
+      bio: "Алиса берёт сырой текст и возвращает его подтянутым: режет воду, выпрямляет логику, ставит крючок в первую строку. <b>Не подлизывается, не льёт комплименты.</b> Если идея слабая, скажет прямо и предложит сильнее.",
+      tone: { left: "дерзкий", right: "деловой", pos: 26 },
+      strengths: [
+        { k: "редактура", v: 95 }, { k: "крючки и заголовки", v: 88 }, { k: "структура", v: 72 }
+      ],
+      voice: {
+        prompt: "сократи этот абзац вдвое",
+        said: "Лишнее вырезала. Осталась суть и один глагол, который тянет всю фразу. Хочешь жёстче? Скажи."
+      },
+      spec: [
+        { l: "Душа", v: [["persona: дерзкий редактор", 1], ["temp 0.7", 0]] },
+        { l: "Модели", v: [["chat: GPT-4o", 1], ["image: nano-banana", 0], ["voice: off", -1]] },
+        { l: "Навыки", v: [["рерайт", 0], ["заголовки", 0], ["структура", 0], ["тон-чек", 0]] },
+        { l: "Тулзы", v: [["web.search", 0], ["readability", 0]] },
+        { l: "MCP", v: [["notion", 0], ["telegram", 0]] },
+        { l: "Память", v: [["гайд по тону бренда", 0]] },
+        { l: "Расписания", v: [["cron: off", -1]] }
+      ],
+      lineage: { from: "Базовый редактор", fromGlyph: "Б", fromHue: 75, remixes: 38 },
+      stats: [["12.4", "k", "запусков"], ["4.9", "", "★ рейтинг (3.1k)", "star"], ["~6", "кр", "за прогон"], ["2.1", "с", "медиана ответа"]],
+      prompts: [
+        "Сократи этот пост вдвое, оставь только суть",
+        "Придумай 5 заголовков с крючком для лендинга",
+        "Перепиши строже, убери воду и штампы"
+      ]
+    },
+    max: {
+      name: "Макс", role: "Код-ревьюер, тон спокойный и точный",
+      tier: "rare · разработка", glyph: "М", state: "owned",
+      hue: { ch: 235, cl: 0.70, cc: 0.14 },
+      bio: "Макс читает диффы как детектив улики: ищет утечки, гонки, забытые edge-case. <b>Объясняет почему, а не только что.</b> Не переписывает за тебя без спроса, оставляет решение автору.",
+      tone: { left: "дерзкий", right: "деловой", pos: 80 },
+      strengths: [
+        { k: "поиск багов", v: 92 }, { k: "безопасность", v: 78 }, { k: "стиль кода", v: 64 }
+      ],
+      voice: {
+        prompt: "глянь этот хэндлер",
+        said: "Строка 14: ответ уходит до await на запись. При нагрузке клиент получит стейл. Предлагаю вынести запись выше или ждать оба промиса."
+      },
+      spec: [
+        { l: "Душа", v: [["persona: дотошный ревьюер", 1], ["temp 0.3", 0]] },
+        { l: "Модели", v: [["chat: Claude", 1], ["image: off", -1], ["voice: off", -1]] },
+        { l: "Навыки", v: [["ревью диффа", 0], ["security-чек", 0], ["рефактор-подсказки", 0]] },
+        { l: "Тулзы", v: [["git.diff", 0], ["lint", 0], ["test.run", 0]] },
+        { l: "MCP", v: [["github", 0], ["sentry", 0]] },
+        { l: "Память", v: [["конвенции репо", 0]] },
+        { l: "Расписания", v: [["при каждом PR", 1]] }
+      ],
+      lineage: { from: "С нуля", fromGlyph: "+", fromHue: 235, remixes: 12 },
+      stats: [["8.7", "k", "запусков"], ["4.8", "", "★ рейтинг (2.0k)", "star"], ["~11", "кр", "за прогон"], ["3.4", "с", "медиана ответа"]],
+      prompts: [
+        "Ревью этого PR, сначала про безопасность",
+        "Найди гонки и утечки в этом файле",
+        "Предложи рефактор без смены поведения"
+      ]
+    },
+    nika: {
+      name: "Ника", role: "SMM и тренды, тон лёгкий и быстрый",
+      tier: "epic · маркетинг", glyph: "Н", state: "owned",
+      hue: { ch: 340, cl: 0.72, cc: 0.16 },
+      bio: "Ника живёт в ленте: ловит формат раньше, чем он стал шумом, и собирает из него постинг-план. <b>Думает охватами, а не лайками.</b> Подскажет, где зайдёт, а где выгоришь зря.",
+      tone: { left: "дерзкий", right: "деловой", pos: 38 },
+      strengths: [
+        { k: "тренд-чутьё", v: 90 }, { k: "форматы", v: 82 }, { k: "копи под платформу", v: 70 }
+      ],
+      voice: {
+        prompt: "что постить на этой неделе",
+        said: "Берём формат коротких до/после, он сейчас вытягивает охваты. Три поста: вторник, четверг, суббота утром. Пятницу не трогаем, там просадка."
+      },
+      spec: [
+        { l: "Душа", v: [["persona: трендвотчер", 1], ["temp 0.8", 0]] },
+        { l: "Модели", v: [["chat: GPT-4o", 1], ["image: nano-banana", 0], ["voice: off", -1]] },
+        { l: "Навыки", v: [["контент-план", 0], ["хуки", 0], ["адаптация под VK/TG", 0]] },
+        { l: "Тулзы", v: [["web.search", 0], ["trends", 0]] },
+        { l: "MCP", v: [["telegram", 0], ["vk-ads", 0]] },
+        { l: "Память", v: [["тон бренда", 0], ["прошлые победители", 0]] },
+        { l: "Расписания", v: [["план по понедельникам", 1]] }
+      ],
+      lineage: { from: "Алиса", fromGlyph: "А", fromHue: 28, remixes: 21 },
+      stats: [["15.1", "k", "запусков"], ["4.7", "", "★ рейтинг (4.4k)", "star"], ["~5", "кр", "за прогон"], ["1.8", "с", "медиана ответа"]],
+      prompts: [
+        "Контент-план на неделю под Telegram",
+        "Разбери, почему этот пост зашёл",
+        "10 хуков на тему запуска продукта"
+      ]
+    },
+    grisha: {
+      name: "Гриша", role: "Аналитик данных, тон сухой и предметный",
+      tier: "rare · аналитика", glyph: "Г", state: "owned",
+      hue: { ch: 165, cl: 0.70, cc: 0.13 },
+      bio: "Гриша берёт выгрузку и возвращает вывод, а не красивую картинку. <b>Сначала цифра, потом мнение.</b> Если данных мало для вывода, так и скажет, а не нафантазирует тренд.",
+      tone: { left: "дерзкий", right: "деловой", pos: 88 },
+      strengths: [
+        { k: "когорты и воронки", v: 88 }, { k: "чистка данных", v: 80 }, { k: "выводы", v: 76 }
+      ],
+      voice: {
+        prompt: "почему упала выручка",
+        said: "Выручка минус 14% к прошлому месяцу. Причина одна: отвал на втором шаге оплаты, конверсия там 41 → 28%. Остальные шаги стабильны. Чинить второй шаг."
+      },
+      spec: [
+        { l: "Душа", v: [["persona: сухой аналитик", 1], ["temp 0.2", 0]] },
+        { l: "Модели", v: [["chat: Claude", 1], ["image: off", -1], ["voice: off", -1]] },
+        { l: "Навыки", v: [["когорты", 0], ["воронки", 0], ["SQL", 0], ["сводки", 0]] },
+        { l: "Тулзы", v: [["sql.run", 0], ["sheets", 0]] },
+        { l: "MCP", v: [["postgres", 0], ["metabase", 0]] },
+        { l: "Память", v: [["схема витрин", 0]] },
+        { l: "Расписания", v: [["сводка по утрам", 1]] }
+      ],
+      lineage: { from: "С нуля", fromGlyph: "+", fromHue: 165, remixes: 7 },
+      stats: [["6.2", "k", "запусков"], ["4.9", "", "★ рейтинг (1.5k)", "star"], ["~9", "кр", "за прогон"], ["4.0", "с", "медиана ответа"]],
+      prompts: [
+        "Собери воронку оплаты за месяц",
+        "Сравни когорты по неделе регистрации",
+        "Что в данных объясняет просадку"
+      ]
+    },
+    leya: {
+      name: "Лея", role: "Поддержка, тон тёплый и терпеливый",
+      tier: "common · сервис", glyph: "Л", state: "preview",
+      hue: { ch: 60, cl: 0.74, cc: 0.13 },
+      bio: "Лея держит клиента за руку: отвечает спокойно, по шагам, без раздражения даже на десятый одинаковый вопрос. <b>Сначала снимает напряжение, потом решает.</b> Эскалирует живому человеку, когда чувствует, что пора.",
+      tone: { left: "дерзкий", right: "деловой", pos: 58 },
+      strengths: [
+        { k: "эмпатия", v: 92 }, { k: "решение вопросов", v: 74 }, { k: "знание базы", v: 68 }
+      ],
+      voice: {
+        prompt: "у меня не приходит код",
+        said: "Понимаю, неприятно застрять на входе. Давайте по шагам: проверьте папку спам и подождите минуту. Если кода нет, я тут же отправлю новый, ничего не потеряется."
+      },
+      spec: [
+        { l: "Душа", v: [["persona: тёплая поддержка", 1], ["temp 0.5", 0]] },
+        { l: "Модели", v: [["chat: GPT-4o-mini", 1], ["image: off", -1], ["voice: off", -1]] },
+        { l: "Навыки", v: [["ответы по базе", 0], ["деэскалация", 0], ["эскалация людям", 0]] },
+        { l: "Тулзы", v: [["kb.search", 0], ["ticket.create", 0]] },
+        { l: "MCP", v: [["telegram", 0], ["helpdesk", 0]] },
+        { l: "Память", v: [["база знаний продукта", 0]] },
+        { l: "Расписания", v: [["дежурство 24/7", 1]] }
+      ],
+      lineage: { from: "Базовый ассистент", fromGlyph: "Б", fromHue: 75, remixes: 54 },
+      stats: [["21.8", "k", "запусков"], ["4.6", "", "★ рейтинг (6.7k)", "star"], ["~3", "кр", "за прогон"], ["1.5", "с", "медиана ответа"]],
+      prompts: [
+        "Ответь клиенту, который не получил код",
+        "Смягчи этот ответ, клиент злится",
+        "Собери частые вопросы в короткий FAQ"
+      ]
+    },
+    orion: {
+      name: "Орион", role: "Ресёрчер, тон обстоятельный и осторожный",
+      tier: "epic · ресёрч", glyph: "О", state: "preview",
+      hue: { ch: 290, cl: 0.70, cc: 0.16 },
+      bio: "Орион не верит первой ссылке. Собирает источники, сверяет факты, помечает, где данные шаткие. <b>Отдаёт вывод со ссылками, а не пересказ.</b> Если источники спорят, покажет обе стороны.",
+      tone: { left: "дерзкий", right: "деловой", pos: 72 },
+      strengths: [
+        { k: "поиск источников", v: 90 }, { k: "фактчек", v: 86 }, { k: "синтез", v: 80 }
+      ],
+      voice: {
+        prompt: "правда ли что рынок вырос вдвое",
+        said: "Два независимых отчёта дают рост 1.7–1.9x за год, третий ниже, он считает другой сегмент. Сходятся на «почти вдвое». Ссылки приложил, четвёртый источник отбросил, там пресс-релиз без данных."
+      },
+      spec: [
+        { l: "Душа", v: [["persona: дотошный ресёрчер", 1], ["temp 0.4", 0]] },
+        { l: "Модели", v: [["chat: Claude", 1], ["web: вкл", 0], ["voice: off", -1]] },
+        { l: "Навыки", v: [["сбор источников", 0], ["фактчек", 0], ["синтез", 0], ["цитирование", 0]] },
+        { l: "Тулзы", v: [["web.search", 0], ["fetch", 0], ["pdf.read", 0]] },
+        { l: "MCP", v: [["firecrawl", 0], ["notion", 0]] },
+        { l: "Память", v: [["проверенные источники", 0]] },
+        { l: "Расписания", v: [["дайджест по пятницам", 1]] }
+      ],
+      lineage: { from: "С нуля", fromGlyph: "+", fromHue: 290, remixes: 16 },
+      stats: [["4.3", "k", "запусков"], ["5.0", "", "★ рейтинг (0.9k)", "star"], ["~14", "кр", "за прогон"], ["6.2", "с", "медиана ответа"]],
+      prompts: [
+        "Собери обзор рынка со ссылками",
+        "Проверь это утверждение по источникам",
+        "Сведи 5 статей в один вывод"
+      ]
+    }
+  };
+
+  // ── mode switch ─────────────────────────────────────────────────────────
+  const body = document.body;
+  const sw = document.getElementById('switch');
+  const knob = document.getElementById('knob');
+  const btns = [...sw.querySelectorAll('button')];
+  const galleryLabel = document.getElementById('gallery-label');
+
+  function sizeKnob() {
+    const active = sw.querySelector('button.on');
+    knob.style.width = active.offsetWidth + 'px';
+    knob.style.transform = `translateX(${active.offsetLeft - 4}px)`;
+  }
+  function setMode(mode) {
+    body.dataset.mode = mode;
+    btns.forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    sizeKnob();
+    if (mode === 'mine') {
+      galleryLabel.innerHTML = '<span class="accent">Моя коллекция</span> · 4 персонажа, 1 в работе';
+    } else {
+      galleryLabel.innerHTML = '<span class="accent">Каталог</span> · 6 персонажей, 4 у тебя';
+    }
+  }
+  btns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  window.addEventListener('resize', sizeKnob);
+  requestAnimationFrame(() => {
+    sizeKnob();
+    // animate the collection progress bar on load
+    document.getElementById('progbar').style.width = '33%';
+  });
+
+  // ── tag value rendering: 1 = lead, 0 = normal, -1 = off ──────────────────
+  function tagClass(flag) { return flag === 1 ? 'tag lead' : flag === -1 ? 'tag off' : 'tag'; }
+
+  // ── render the character sheet inline ────────────────────────────────────
+  const mount = document.getElementById('sheet-mount');
+  let openId = null;
+
+  function stateChip(state) {
+    if (state === 'running') return '<span class="pill-state running"><span class="live"></span>агент в работе сейчас</span>';
+    if (state === 'owned') return '<span class="pill-state owned">в твоей коллекции</span>';
+    return '<span class="pill-state owned">превью · ещё не добавлен</span>';
+  }
+
+  function ctaFor(state, c) {
+    if (state === 'preview') {
+      return `<button class="add">＋ Добавить в коллекцию</button>
+              <button class="clone">⎘ Клонировать</button>
+              <span class="run-meta">после добавления, <b>${c.stats[2][0]} ${c.stats[2][1]}</b> за прогон</span>`;
+    }
+    const verb = state === 'running' ? 'Открыть прогон' : `Запустить ${c.name}`;
+    return `<button class="run"><span class="dot"></span> ${verb}</button>
+            <button class="clone">⎘ Клонировать</button>
+            <span class="run-meta">списываем по факту, <b>${c.stats[2][0]} ${c.stats[2][1]}</b> за прогон</span>`;
+  }
+
+  function renderSheet(id) {
+    const c = CHARACTERS[id];
+    const { ch, cl, cc } = c.hue;
+    const specRows = c.spec.map(r =>
+      `<div class="spec-row"><span class="label">${r.l}</span><div class="vals">` +
+      r.v.map(([t, f]) => `<span class="${tagClass(f)}">${t}</span>`).join('') +
+      `</div></div>`).join('');
+    const strengthRows = c.strengths.map(s =>
+      `<div class="dim"><div class="dim-head"><span>${s.k}</span><span class="val">${s.v}</span></div>
+       <div class="strength"><i data-w="${s.v}%"></i></div></div>`).join('');
+    const statCells = c.stats.map(s =>
+      `<div class="st"><div class="v ${s[3]||''}">${s[0]}<span class="u">${s[1]}</span></div><div class="k">${s[2]}</div></div>`).join('');
+    const promptChips = c.prompts.map(p =>
+      `<div class="pchip">${p} <span class="arrow">→</span></div>`).join('');
+
+    const html = `
+    <div class="section-label sheet-label" style="--sheet-ch:${ch}"><span class="accent">Анкета персонажа</span> · ${c.name}</div>
+    <section class="sheet" style="--ch:${ch}; --cl:${cl}; --cc:${cc};">
+      <span class="gloss"></span>
+      <div class="sheet-grid">
+        <div class="sheet-portrait">
+          <div class="big">
+            <span class="glyph">${c.glyph}</span>
+            <span class="scanline"></span>
+          </div>
+          <div class="owner-row">${stateChip(c.state)}</div>
+          <p class="ref-note">Здесь <b>сгенерированный портрет</b> (Kie / nano-banana). Он же референс: ${c.name} генерит свои картинки в собственном лице и стиле.</p>
+        </div>
+        <div class="sheet-body">
+          <div class="sheet-head">
+            <div>
+              <span class="sheet-tier">${c.tier}</span>
+              <h2>${c.name}</h2>
+              <div class="h2-role">${c.role}</div>
+            </div>
+            <button class="sheet-close" title="Свернуть анкету" aria-label="Свернуть">×</button>
+          </div>
+
+          <p class="bio">${c.bio}</p>
+
+          <div class="persona">
+            <div class="dim">
+              <div class="dim-head"><span>тон</span><span class="val">${c.tone.left} ↔ ${c.tone.right}</span></div>
+              <div class="scale"><span class="knob" data-pos="${c.tone.pos}%"></span></div>
+            </div>
+            ${strengthRows}
+          </div>
+
+          <div class="voice">
+            <span class="vk"><span>Как говорит</span><span class="src">пример вывода</span></span>
+            <div class="prompt-echo">ты: ${c.voice.prompt}</div>
+            <div class="said">${c.name}: ${c.voice.said}</div>
+          </div>
+
+          <div class="spec">
+            <div class="spec-head">Из чего собран</div>
+            ${specRows}
+          </div>
+
+          <div class="lineage" style="--lh:${c.lineage.fromHue}">
+            <span class="gl">${c.lineage.fromGlyph}</span>
+            <span>форк от <b>${c.lineage.from}</b></span>
+            <span class="arrow">→</span>
+            <span><b>${c.name}</b></span>
+            <span class="remixes">ремиксов от него: <b>${c.lineage.remixes}</b></span>
+          </div>
+
+          <div class="sheet-stats">${statCells}</div>
+
+          <div class="prompts-label">Попробовать на</div>
+          <div class="prompt-chips">${promptChips}</div>
+
+          <div class="sheet-cta">${ctaFor(c.state, c)}</div>
+        </div>
+      </div>
+    </section>`;
+
+    mount.innerHTML = html;
+    openId = id;
+
+    // animate scales/bars after the flip settles (next frame)
+    requestAnimationFrame(() => {
+      mount.querySelectorAll('.strength > i').forEach(i => { i.style.width = i.dataset.w; });
+      const k = mount.querySelector('.scale > .knob');
+      if (k) k.style.left = k.dataset.pos;
+    });
+
+    // wire the close button
+    mount.querySelector('.sheet-close').addEventListener('click', closeSheet);
+
+    // mark which card is open
+    document.querySelectorAll('.card').forEach(el => el.classList.toggle('is-open', el.dataset.id === id));
+
+    // bring the sheet into view (respect reduced-motion via scroll-behavior)
+    mount.querySelector('.sheet').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function closeSheet() {
+    mount.innerHTML = '';
+    openId = null;
+    document.querySelectorAll('.card').forEach(el => el.classList.remove('is-open'));
+  }
+
+  document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = card.dataset.id;
+      if (id === openId) { closeSheet(); return; }
+      renderSheet(id);
+    });
+  });
+</script>
+</body>
+</html>

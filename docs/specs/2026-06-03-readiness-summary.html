@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIAG — Readiness Summary (Wave-0 + D-8)</title>
+<style>
+  :root{
+    --bg:#0a0a0b; --bg2:#121214; --card:#161618; --line:#26262a;
+    --amber:#f59e0b; --amber-dim:#7a5410; --text:#f5f5f4; --muted:#a1a1aa;
+    --green:#22c55e; --red:#ef4444; --yellow:#eab308; --blue:#60a5fa;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; padding:0 0 80px;
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding:0 24px}
+  header{
+    border-bottom:1px solid var(--line); padding:40px 0 28px; margin-bottom:8px;
+    background:linear-gradient(180deg, rgba(245,158,11,.06), transparent);
+  }
+  .kicker{color:var(--amber); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:30px; margin:10px 0 6px; letter-spacing:-.02em}
+  .sub{color:var(--muted); font-size:14px; max-width:760px}
+  .date{color:var(--muted); font-size:12px; margin-top:10px}
+  section{margin-top:40px}
+  h2{
+    font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--amber);
+    border-left:3px solid var(--amber); padding-left:12px; margin:0 0 18px;
+  }
+  h3{font-size:16px; margin:22px 0 10px}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:22px 24px; margin-bottom:16px;
+  }
+  /* verdict */
+  .verdict{
+    display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap;
+    background:linear-gradient(135deg, rgba(34,197,94,.10), rgba(245,158,11,.05));
+    border:1px solid var(--amber-dim);
+  }
+  .go-badge{
+    flex:0 0 auto; font-size:34px; font-weight:800; letter-spacing:-.02em;
+    color:var(--green); background:rgba(34,197,94,.10);
+    border:1px solid rgba(34,197,94,.45); border-radius:14px;
+    padding:18px 28px; line-height:1; white-space:nowrap;
+  }
+  .go-badge small{display:block; font-size:12px; font-weight:600; color:var(--muted); margin-top:8px; letter-spacing:.05em}
+  .verdict-body{flex:1 1 360px; min-width:300px}
+  .verdict-body p{margin:0 0 10px}
+  .pill{display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px; letter-spacing:.04em; vertical-align:middle}
+  .p-green{background:rgba(34,197,94,.14); color:var(--green); border:1px solid rgba(34,197,94,.4)}
+  .p-yellow{background:rgba(234,179,8,.14); color:var(--yellow); border:1px solid rgba(234,179,8,.4)}
+  .p-red{background:rgba(239,68,68,.14); color:var(--red); border:1px solid rgba(239,68,68,.4)}
+  .p-amber{background:rgba(245,158,11,.14); color:var(--amber); border:1px solid rgba(245,158,11,.4)}
+  .p-blue{background:rgba(96,165,250,.14); color:var(--blue); border:1px solid rgba(96,165,250,.4)}
+  ul{margin:8px 0; padding-left:22px}
+  li{margin:6px 0}
+  code,kbd{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px;
+    background:#000; color:#fbbf24; padding:1px 6px; border-radius:5px; border:1px solid var(--line);
+  }
+  /* runbook steps */
+  ol.steps{list-style:none; counter-reset:s; margin:0; padding:0}
+  ol.steps>li{
+    counter-increment:s; position:relative; padding:16px 16px 16px 60px;
+    border:1px solid var(--line); border-radius:10px; margin-bottom:12px; background:var(--bg2);
+  }
+  ol.steps>li::before{
+    content:counter(s); position:absolute; left:16px; top:14px;
+    width:30px; height:30px; border-radius:8px; background:var(--amber); color:#0a0a0b;
+    font-weight:800; display:flex; align-items:center; justify-content:center; font-size:15px;
+  }
+  ol.steps b{color:var(--text)}
+  ol.steps .meta{color:var(--muted); font-size:13px; display:block; margin-top:4px}
+  /* tables */
+  table{width:100%; border-collapse:collapse; margin:4px 0; font-size:13.5px}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.07em}
+  tr:last-child td{border-bottom:none}
+  td.rank{color:var(--amber); font-weight:800; font-size:18px; width:30px; text-align:center}
+  /* next-task list */
+  ol.tasks{counter-reset:t; list-style:none; margin:0; padding:0}
+  ol.tasks>li{
+    counter-increment:t; position:relative; padding:18px 18px 18px 64px;
+    border:1px solid var(--line); border-left:3px solid var(--amber); border-radius:10px;
+    margin-bottom:12px; background:var(--card);
+  }
+  ol.tasks>li::before{
+    content:"T"counter(t); position:absolute; left:14px; top:16px;
+    color:var(--amber); font-weight:800; font-size:16px; font-family:ui-monospace,monospace;
+  }
+  ol.tasks .tag{font-family:ui-monospace,monospace; font-size:11px; color:var(--muted)}
+  ol.tasks h4{margin:0 0 6px; font-size:15px}
+  ol.tasks p{margin:0; color:var(--muted); font-size:13.5px}
+  .why{color:var(--amber); font-style:italic; font-size:13px}
+  .notdone-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media(max-width:720px){.notdone-grid{grid-template-columns:1fr}}
+  .nd-block h4{margin:0 0 8px; font-size:13px; color:var(--amber); letter-spacing:.05em; text-transform:uppercase}
+  .nd-block ul{margin:0; padding-left:18px}
+  .nd-block li{font-size:13.5px; color:var(--muted)}
+  .foot{margin-top:48px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:12px}
+  .legend{font-size:12px; color:var(--muted); margin-top:6px}
+  .legend .pill{margin-right:6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="kicker">AI-Aggregator · Tech Lead Readiness Brief</div>
+    <h1>Wave-0 + D-8 — Deploy Readiness Summary</h1>
+    <p class="sub">Synthesis of three specs (deploy/test readiness, user-workflow→function map, backend gap analysis). Verdict for shipping the Wave-0 stack now, the design-vs-capability mismatches to fix, the prioritized next-5 backend tasks, and what remains undone overall.</p>
+    <div class="date">2026-06-03 · sources: <code>2026-06-03-deploy-test-readiness.md</code> · <code>2026-06-03-user-workflows.md</code> · <code>2026-06-03-backend-gap.md</code></div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ========================= 1. GO / NO-GO ========================= -->
+  <section>
+    <h2>1 · GO / NO-GO — deploy Wave-0 + D-8 now</h2>
+    <div class="card verdict">
+      <div class="go-badge">GO<small>conditional</small></div>
+      <div class="verdict-body">
+        <p><b>Ship it.</b> The three branches form a clean linear stack (6 commits, +1036/-41, 16 files). <span class="pill p-green">runtime RAM delta ≈ 0</span> <span class="pill p-green">no migrations</span> <span class="pill p-green">no new runtime deps / processes</span></p>
+        <p>The billed worker call is non-streaming, so the "stream → settles at ₽0" risk does <b>not</b> apply. The change is forward/back compatible — a revert just drops billing back to the local estimate; no data corruption.</p>
+        <p><b>The one real risk is build-time, not runtime:</b> <span class="pill p-yellow">tma <code>next build</code> OOM on the 2 GB box</span>. Fully mitigable. Gate conditions below.</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3>GO conditions (must all hold)</h3>
+      <ul>
+        <li><span class="pill p-green">①</span> Run the Pattern-A test gate green first — disposable <code>aiag_test</code> DB + vitest, <b>no prod write</b>.</li>
+        <li><span class="pill p-green">②</span> Build <b>gateway (+worker) via CI</b> (no VPS OOM). Build <b>tma + agent-worker on the VPS with the OOM guard</b> (swap on + <code>--max-old-space-size=1536</code> + <code>pm2 stop web</code> during the tma build) — or run the tma build in CI too.</li>
+        <li><span class="pill p-green">③</span> No migration step — none exist in the stack.</li>
+        <li><span class="pill p-green">④</span> Post-deploy smoke passes: D-8 replay → 401, D-0 margin logged + balance debited, DEFAULT_MODEL no longer 400s, safeFetch blocks private IPs.</li>
+        <li><span class="pill p-amber">⑤</span> Finish D-8 before calling it "secure": the Redis one-shot nonce (<code>SET hash 1 NX EX 600</code>) is <b>not yet wired</b> in the verify route — the hash is surfaced but replay defense is still absent until it lands.</li>
+        <li><span class="pill p-red">⚠</span> Strip <code>X-AIAG-Charged-Rub</code> / <code>X-AIAG-Upstream-Cost-Rub</code> at nginx — white-label leak if exposed.</li>
+      </ul>
+      <p class="legend"><b>Standing recommendation (not a blocker):</b> upgrade prod <span class="pill p-amber">2 GB → 4 GB</span> before real TMA traffic — removes the build-OOM friction permanently.</p>
+    </div>
+
+    <h3>Test runbook — 5 steps</h3>
+    <ol class="steps">
+      <li><b>Pre-flight (local)</b>
+        <span class="meta"><code>git fetch --all</code>; confirm the stack is still linear with two <code>git merge-base --is-ancestor</code> checks (both exit 0). Then <code>bun install --frozen-lockfile</code>, run agent-worker vitest (unit; integration auto-skips without <code>TEST_DATABASE_URL</code>), and <code>tsc --noEmit</code> on agent-worker / api-gateway / tg-miniapp.</span>
+      </li>
+      <li><b>Merge the cumulative tip onto R0</b>
+        <span class="meta"><code>git checkout plan/15.1-r0-billing-identity</code> → <code>git merge --no-ff feat/wave0-d8-initdata</code>. This brings all 6 commits (clean linear stack). No master decision needed now — keep shipping from the R0 branch as today.</span>
+      </li>
+      <li><b>TEST gate — Pattern A (disposable DB, no prod write)</b>
+        <span class="meta">Create <code>aiag_test</code> schema-copied from prod, add a temp <code>pg_hba.conf</code> line, run the integration suite against <code>TEST_DATABASE_URL</code>. Must be green: settleRun 4/4, D-0 bills off <code>X-AIAG-Charged-Rub</code> (not the estimate), CHARGE-0 floor settles at 1₽ (never 0; external/BYOK stays 0), DEFAULT_MODEL resolves to <code>openai/gpt-4o-mini</code> with no 400. Then <code>dropdb aiag_test</code> + revert pg_hba.</span>
+      </li>
+      <li><b>Deploy</b>
+        <span class="meta">Gateway+worker via CI: <code>gh workflow run deploy-production.yml -f ref=plan/15.1-r0-billing-identity -f apps=gateway,worker</code> (builds on the runner, atomic symlink swap, /health auto-rollback). agent-worker + tma manually on the VPS: build <code>packages/shared</code> first, then agent-worker (light), then the OOM-guarded tma build; <code>pm2 restart agent-worker tma</code> + <code>pm2 save</code>. Confirm pm2 names with <code>pm2 ls</code> first (web/gateway vs aiag-web/aiag-gateway quirk).</span>
+      </li>
+      <li><b>Smoke + rollback ready</b>
+        <span class="meta">Health: gateway <code>:4000/health</code>, tma <code>/tg/health</code>, all 5 pm2 online no restart loop. D-8: fresh initData logs in; replayed → 401 <code>reason=replayed</code>; &gt;600s → 401 <code>reason=expired</code>. D-0: one funded run logs <code>charged / upstreamCost / margin</code> + debits balance. safeFetch: gateway proxy to a private IP → 502 "not permitted". Rollback = symlink to prev release (CI) or prev-SHA rebuild (manual); no DB rollback needed.</span>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ========================= 2. MISMATCHES ========================= -->
+  <section>
+    <h2>2 · Top design-vs-capability mismatches to fix</h2>
+    <p class="legend">Wireframes imply functions the backend / Hermes cannot do. Ranked by how badly the screen over-promises vs. code reality. Fix = redraw the design, not the backend.</p>
+    <div class="card" style="padding:0; overflow:hidden">
+      <table>
+        <thead><tr><th>#</th><th>Screen / promise</th><th>Code reality</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="rank">1</td>
+            <td><b>Streaming "агент думает" + live tool-cost trace + stop</b> <span class="pill p-red">big</span> (s08b)</td>
+            <td>Run is async-enqueue (202) → worker does a non-streaming loop → DMs a card. No SSE, no live trace, no cancel. Firecrawl isn't a built tool (web_search = free DuckDuckGo scrape). Billed call <b>must not</b> stream (LiteLLM → <code>usage:null</code> → ₽0).</td>
+            <td>Redraw as "agent is working → notify on done". Reserve streaming for a separate display pass.</td>
+          </tr>
+          <tr>
+            <td class="rank">2</td>
+            <td><b>"Multi-crypto" top-up</b> — USDT-jetton / TRC-20 / ERC-20 / USDC / HOT <span class="pill p-red">big</span> (s32)</td>
+            <td><code>topup/init</code> emits ONLY a native-TON transfer. Jetton needs the <code>0x0f8a7ea5</code> shape + <code>forward_ton_amount ≥ 0.05</code> + master allowlist. None of it exists.</td>
+            <td>Show TON only (USDT-on-TON next), not a multi-chain menu.</td>
+          </tr>
+          <tr>
+            <td class="rank">3</td>
+            <td><b>"Зачислим в фоне, можно закрыть"</b> top-up confirmation (s32b)</td>
+            <td>Only watcher is a client poll (last-20-tx, 10-min). No server reconciler → closing the app can strand funds (loss-mode 1).</td>
+            <td>Build the reconciler cron <b>before</b> promising background crediting.</td>
+          </tr>
+          <tr>
+            <td class="rank">4</td>
+            <td><b>The entire two-sided creator market</b> — publish/rent/earn/withdraw, clone-others, remix/lineage, "Для тебя"/Каталог of other authors' agents (s03–05, s34–36)</td>
+            <td><code>marketplace/route.ts</code> returns <b>models only</b>. No templates/author/earnings/lineage/ratings tables anywhere. Author rent blocked on D-0.</td>
+            <td>Wireframe-only. Honest scope today = "Мои агенты" + local in-code templates.</td>
+          </tr>
+          <tr>
+            <td class="rank">5</td>
+            <td><b>Managed-Hermes "спит когда не нужен / 512 МБ"</b> + status/config/sleep (s21–23) <span class="pill p-blue">R&amp;D</span></td>
+            <td>No provisioner; 2 GB VPS can't host pods; resident <code>hermes gateway</code> pins ~300–600 MB and does <b>not</b> hibernate. Hermes has NO remote config API — file-write + restart via a sidecar we haven't built.</td>
+            <td>Keep on Board B (R&amp;D). The s23 line "нет remote-API" is the one honest claim.</td>
+          </tr>
+          <tr>
+            <td class="rank">6</td>
+            <td><b>"Свой Hermes → use our tools/skills" toggle</b> (s19, s12)</td>
+            <td>When the agent runs on the user's OWN Hermes, our worker isn't in the loop — we can't inject our tools/skills/memory there.</td>
+            <td>Scope to "your models via your <code>/v1</code> endpoint, billed 0". Drop or redefine the toggle.</td>
+          </tr>
+          <tr>
+            <td class="rank">7</td>
+            <td><b>Per-model provider picker + multi-model slots</b> + "лучший маршрут / p50 410мс / uptime 99.9%" (s07, s16, s17)</td>
+            <td>BYO-provider schema exists (0026) but resolve+UI not wired (BRANCH). Multi-model + routing-health NOT-BUILT. Native BYO Anthropic/Google keys 404 unless routed through the gateway.</td>
+            <td>Ship single-model + AIAG/external first; chip the rest «скоро».</td>
+          </tr>
+          <tr>
+            <td class="rank">8</td>
+            <td><b>"Первый прогон бесплатно"</b> (s03b, s05)</td>
+            <td>No free-run grant in code; every run settles real cost (or fails free).</td>
+            <td>Implement a one-time free-run credit, or drop the promise.</td>
+          </tr>
+          <tr>
+            <td class="rank">9</td>
+            <td><b>Tool-approve "1 раз / Сессию / Всегда"</b> + run-trace ledger + per-call cap + delegated wallet/audit-log (s09, s11, s33)</td>
+            <td>No per-call approval, no trace persistence, no per-call cap, no delegated wallet. Daily/monthly budget IS enforced atomically.</td>
+            <td>Reframe s33 as "daily/monthly spend cap"; keep s09/s11 on the roadmap (already «скоро»).</td>
+          </tr>
+          <tr>
+            <td class="rank">10</td>
+            <td><b>initData "live + secure"</b> (s02)</td>
+            <td>Live <code>verifyInitData</code> used non-constant-time <code>!==</code> + 24h replay window (R1-3). D-8 fixes the compare + 600s; <b>Redis nonce still pending</b>.</td>
+            <td>Land the timingSafeEqual + 600s + Redis-nonce patch fully. No UI change.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ========================= 3. NEXT-5 TASKS ========================= -->
+  <section>
+    <h2>3 · Prioritized next-5 backend tasks (dependency order)</h2>
+    <ol class="tasks">
+      <li>
+        <h4>Merge + deploy Wave-0 &amp; finish D-0/D-8 <span class="tag">[D-0 · D-7 · D-8]</span></h4>
+        <p>Merge the three Wave-0 branches, deploy, and <b>strip the two <code>X-AIAG-*</code> billing headers at nginx</b>. Finish D-8 by wiring the <b>Redis one-shot nonce</b> in the verify route (hash already surfaced). <b>Persist realized margin to a column</b> (not just a log line) so D-9/D-12 can read it.</p>
+        <p class="why">Unblocks the entire money path; closes the two shipped security fixes.</p>
+      </li>
+      <li>
+        <h4>D-9 tool broker (reserve → settle/refund) <span class="tag">[D-9]</span></h4>
+        <p>Add <code>tools</code> catalog + <code>tool_calls</code> ledger tables; reserve→execute→settle/refund; a <b>per-call guarded <code>spent_today_rub += price</code></b> increment. Closes the confirmed unbilled-tool leak (paid <code>image_gen</code> in a later-failed run is silently free) + the daily-budget bypass. No crypto. Depends on (1).</p>
+        <p class="why">Stops real money leaking on every failed-after-tool run.</p>
+      </li>
+      <li>
+        <h4>Deposit reconciler — the #1 user-facing hole <span class="tag">[R-04]</span></h4>
+        <p>Add a <b>server-side <code>lt</code>-watermark cron</b> in <code>apps/worker</code> as the authoritative crediter (TonCenter/TonAPI), demote the client poll to UX, and add <b>per-user deposit memo/address</b> mapping to kill loss-mode-2. Correct under any FD-1 structure — build now, no founder decision needed.</p>
+        <p class="why">Fixes the biggest product hole: a user who closes the app before the poll succeeds can pay and not be credited.</p>
+      </li>
+      <li>
+        <h4>D-6 catalog-sync + native adapters + BYOK unification <span class="tag">[D-6]</span></h4>
+        <p>Daily <code>models.dev</code> BullMQ sync into gateway <code>models</code>/<code>model_upstreams</code> with <b><code>/1M→/1k</code> conversion + CI assertion</b> (the 1000× bug is currently unguarded); a native <b>Anthropic</b> adapter (then Google-via-OAI-compat) behind <code>UpstreamAdapter</code>; route BYO native keys through the gateway's <code>x-upstream-key</code> seam; add the <b>TMA BYOK write route</b> so migration-0026 credentials actually save. Depends on (1).</p>
+        <p class="why">Makes "connect a non-OpenAI provider key" real end-to-end instead of 404.</p>
+      </li>
+      <li>
+        <h4>D-1 ledger + USD anchor (highest blast radius) <span class="tag">[D-1]</span></h4>
+        <p>Introduce <code>tg_ledger_entries</code> double-entry + projection, switch the credit unit to integer micro-USD, <b>delete <code>USD_TO_RUB=90</code></b> (both copies), and run the dry-run-first, freeze-window, SUM-invariant live-balance migration. Do <b>last</b> in this batch — after D-0 margin is trusted in prod.</p>
+        <p class="why">Removes the hardcoded FX scalar and the single-mutable-balance risk — but it's the most dangerous migration, so it goes after everything above is green.</p>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ========================= 4. NOT DONE ========================= -->
+  <section>
+    <h2>4 · What is NOT done overall</h2>
+    <div class="card">
+      <p style="margin-top:0">Wave-0 (money-correctness + cheap-security) is <b>done on branches, not merged to master</b>. Waves 1–3 are almost entirely unbuilt. The largest hole: <b>there is no reliable money-in path</b> — deposit is native-TON-coin + text-comment + client-poll only.</p>
+      <div class="notdone-grid">
+        <div class="nd-block">
+          <h4>User-facing features with no working backend</h4>
+          <ul>
+            <li><b>Topping up reliably</b> — client-poll of TON coin matched by a text comment; no server reconciler, no USDT jetton. <span class="pill p-red">#1 hole</span></li>
+            <li><b>Non-OpenAI provider keys</b> (Anthropic/Google) — schema + reader only; no write route, no native adapter → would 404</li>
+            <li><b>Live/streamed agent replies</b> — runs are async BullMQ; run route is a 202 stub; no SSE</li>
+            <li><b>Agent semantic memory</b> — flat key-value TEXT only; no pgvector recall</li>
+            <li><b>Telegram delivery</b> — raw <code>fetch /sendMessage</code> DM card; labels cost in "₽"; no grammY, no Business, no per-user bot</li>
+            <li><b>Creator earning from templates</b> — no publish/clone/lineage/payout tables; blocked on D-0 storing margin</li>
+            <li><b>Per-call tool billing safety</b> — paid tool in a failed run is silently free; tool spend can exceed daily budget</li>
+          </ul>
+        </div>
+        <div class="nd-block">
+          <h4>Whole subsystems NOT built (R&amp;D / later waves)</h4>
+          <ul>
+            <li><b>D-2/D-3 Managed Hermes</b> — no Daytona/Modal, no provisioning, no control-plane sidecar; <span class="pill p-amber">infra-blocked on 2 GB</span> + HERMES-CANNOT remotely</li>
+            <li><b>D-4 Gonka provider</b> — no adapter, no upstream seed</li>
+            <li><b>D-5 real runtime</b> — no AI-SDK swap, no pgvector, no OTel, no SSE</li>
+            <li><b>D-10 x402 outbound</b> — deferred to real demand</li>
+            <li><b>D-11 MCP</b> — no SDK, no <code>/mcp</code> mount; prereq <code>agent_tokens</code> table doesn't exist (one shared <code>AIAG_GATEWAY_KEY</code> today)</li>
+            <li><b>D-12 creator economy</b> — blocked on D-0; web <code>aiag_settle_charge</code> accrues on <b>gross</b>, not margin (latent over-payment to NOT copy verbatim)</li>
+            <li><b>D-13 Telegram Business delivery</b> — no <code>apps/tg-bot</code>, no business_connection passthrough</li>
+            <li><b>D-14 character pipeline</b> — Kie transport exists; three input-shape gaps unaddressed (voice-tuning knobs dropped)</li>
+            <li><b>Jetton (USDT-on-TON)</b> — no <code>0x0f8a7ea5</code> parsing, no master allowlist; "1000× jUSDT" item confirmed phantom</li>
+          </ul>
+        </div>
+      </div>
+      <p class="legend" style="margin-top:18px"><b>Honest shippable surface today:</b> Journeys 1, 2 (minus streaming/tool-approve/trace), 3 (local templates), 4, 5 (basics), 6 (external endpoint only), 9 (TON only), 10 (enforcement), 14.1 (DM card). Journeys 7, 8, 11, 12, 13 are BRANCH or NOT-BUILT → Board B (R&amp;D).</p>
+    </div>
+  </section>
+
+  <div class="foot">
+    AIAG tech-lead readiness brief · 2026-06-03 · prod VPS <code>5.129.200.99</code> (Timeweb ru-1, 2 GB) · branch <code>plan/15.1-r0-billing-identity</code> · synthesized from deploy-test-readiness + user-workflows + backend-gap specs.
+  </div>
+</div>
+</body>
+</html>

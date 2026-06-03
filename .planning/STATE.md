@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: MVP
 status: executing
-stopped_at: Completed 15.1-03-PLAN.md (integration test for settleRun atomicity). 1 task commit (97afe5d) + SUMMARY. tsc clean; vitest skips cleanly without TEST_DATABASE_URL (4 skipped). VPS green run deferred (no-local-runtime). Phase 15.1 COMPLETE.
-last_updated: "2026-06-02T13:51:17Z"
-last_activity: 2026-06-02 -- Phase --phase execution started
+stopped_at: "R0 (Phase 15.1) COMPLETE on branch plan/15.1-r0-billing-identity. Re-cut the R1 milestone into ROADMAP.md from SYNTHESIS.md (Waves 0-3, D-0..D-14, FD-1..FD-8) + monetization.md. Current focus = R1.0 money-correctness foundation (D-0 in progress on branch; D-7/D-8/DEFAULT_MODEL done on branch)."
+last_updated: "2026-06-03T00:00:00Z"
+last_activity: 2026-06-03 -- R1 milestone re-cut from research SYNTHESIS; focus set to R1.0
 progress:
   total_phases: 16
   completed_phases: 1
@@ -21,16 +21,23 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-04-26)
 
 **Core value:** Any AI model. One API. Payment in ₽.
-**Current focus:** Phase --phase — 15.1
+**Current focus:** R1.0 — Money-correctness foundation (D-0 gateway-returns-margin)
 
 ## Current Position
 
-Phase: --phase (15.1) — EXECUTING
-Plan: 1 of --name
-Status: Executing Phase --phase
-Last activity: 2026-06-02 -- Phase --phase execution started
+Milestone: R1 — Money-correct foundation + providers + managed-Hermes test (re-cut 2026-06-03 from `docs/specs/research/SYNTHESIS.md`)
+Phase: R1.0 — Money-correctness foundation — IN PROGRESS (on branch)
+Status: R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identity`
+Last activity: 2026-06-03 -- R1 milestone re-cut from research SYNTHESIS; focus set to R1.0
 
-Progress: [█████████░] ~90% (plan-weighted) — Phase 15.1 COMPLETE: worker money path (R0-1/2/3/6) + auth hardening (R0-4/5) + settleRun integration test (T-15.1-12/13) all closed. tsc clean; vitest unit+integration suites static-verified; VPS deploy + green integration run deferred per no-local-runtime. Branch `plan/15.1-r0-billing-identity` ready for merge to master.
+**R1.0 item status:**
+- ✓ **D-7 `safeFetch` egress guard** — done on branch (shipped with R0).
+- ✓ **D-8 initData hardening** (timingSafeEqual + 600s expiry + Redis nonce) — done on branch.
+- ✓ **DEFAULT_MODEL registry fix** — done.
+- ◆ **D-0 single billing authority + gateway-returns-margin** — IN PROGRESS on branch. The keystone; unblocks D-5/D-6/D-8-9/D-11/D-12.
+- 📋 **D-1 USD micro-credit + `tg_ledger_entries`** — planned (kill `USD_TO_RUB = 90`, both copies; freeze-window migration of live `tg_user_balances`).
+
+Progress: [█████████░] ~90% (plan-weighted, MVP phases) — R0/Phase 15.1 COMPLETE (worker money path R0-1/2/3/6 + auth hardening R0-4/5 + settleRun integration test). R1 milestone now defines the path forward; R1.0 in progress.
 
 ## Why Phase 8 Next
 
@@ -90,6 +97,14 @@ Phase 15.1 (2026-06-02):
 
 - 2026-06-02: Phase 15 (Telegram Mini App) added to ROADMAP.md — was shipped (commit 88f5eab) but never documented in the roadmap.
 - 2026-06-02: Phase **15.1** inserted after Phase 15: **R0 — TMA billing + identity truth** (emergency fixes from the 50/108 tech-stack eval) — **URGENT**. SOT: `docs/specs/2026-06-02-tma-tech-remediation-roadmap.md`.
+- 2026-06-03: **Milestone R1 re-cut** into ROADMAP.md from `docs/specs/research/SYNTHESIS.md` (lead-architect synthesis of R-01..R-12 + adversarial reviews, build order Waves 0-3, decisions D-0..D-14, founder gates FD-1..FD-8) + `docs/specs/2026-06-03-monetization.md`. R0 (Phase 15.1) marked the completed predecessor. Phases R1.0 (money foundation) → R1.1 (deposits + tool money) → R1.2 (jetton + runtime + delivery) → R1.3 (managed-Hermes test + creator economy). Brief: `.planning/R1-MILESTONE.md`.
+
+R1 (2026-06-03):
+
+- **R1-thesis (SYNTHESIS §0)** The money path is the product. Build money-correctness (D-0 margin authority, D-1 USD ledger) BEFORE anything that pays anyone (D-5/6/8/9/11/12 are blocked on D-0). Build crypto deposit *plumbing* (ledger/reconciler/jetton) now (correct under both Stars and crypto); keep the *surface/currency* founder-gated (FD-1).
+- **R1-FD-1** Stars-vs-crypto: resolved direction = **multi-crypto now (TON + others), Stars deferred** (founder 2026-06-03). Gates deposit UX surface (R1.2), not the plumbing.
+- **R1-FD-2** Withdrawable credits: **OPEN**. Gates author/user cash-out (R1.3 withdraw leg); author-rent accrual ships regardless (fixed author-set sum is deterministic, not margin-derived).
+- **R1-monetization** Author rent = pass-through, **NO % cut** (founder 2026-06-03, `docs/specs/2026-06-03-monetization.md`): renter pays the exact author-set sum, author receives it in spendable credits; AIAG revenue = model markup + tools + deploy only.
 
 ### Pending Todos
 

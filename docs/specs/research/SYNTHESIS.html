@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AIAG — синтез ресёрча (архитектурные решения)</title>
+<style>
+  :root{--bg:oklch(0.17 0.012 70);--bg2:oklch(0.21 0.014 70);--line:oklch(0.32 0.015 70);
+    --ink:oklch(0.94 0.01 80);--dim:oklch(0.72 0.015 75);--faint:oklch(0.56 0.015 75);
+    --amber:oklch(0.80 0.15 75);--good:oklch(0.80 0.14 155);--warn:oklch(0.72 0.17 25);--blue:oklch(0.78 0.10 245);
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;--sans:-apple-system,'Segoe UI',Roboto,system-ui,sans-serif;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;padding:0 22px 110px}
+  .wrap{max-width:900px;margin:0 auto}
+  a{color:var(--amber);text-decoration:none}a:hover{text-decoration:underline}
+  header{padding:56px 0 26px;border-bottom:1px solid var(--line)}
+  .kick{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);margin-bottom:14px}
+  h1{font-size:34px;letter-spacing:-.02em;line-height:1.08}
+  .frame-para{margin-top:16px;color:var(--dim);font-size:15px;border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:0 12px 12px 0;padding:16px 18px;background:var(--bg2)}
+  .frame-para b{color:var(--ink)}
+  section{padding:34px 0;border-bottom:1px solid var(--line)}
+  h2{font-size:21px;margin-bottom:8px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:14px}
+  p{color:var(--dim);margin-bottom:10px}
+  .d{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--bg2);margin-bottom:10px}
+  .d .top{display:flex;gap:10px;align-items:baseline;margin-bottom:5px}
+  .id{font-family:var(--mono);font-size:12px;color:var(--amber);flex:none}
+  .t{font-weight:600;font-size:15px}
+  .conf{margin-left:auto;font-family:var(--mono);font-size:10px;padding:1px 7px;border-radius:5px;border:1px solid;flex:none}
+  .hi{color:var(--good);border-color:oklch(0.8 0.14 155/.5)}.me{color:var(--blue);border-color:oklch(0.78 0.10 245/.5)}.fo{color:var(--warn);border-color:oklch(0.72 0.17 25/.5)}
+  .d p{font-size:13.5px;margin:0;color:var(--dim)}.d p b{color:var(--ink)}
+  ol.wave{list-style:none;counter-reset:w;display:flex;flex-direction:column;gap:8px;margin-top:6px}
+  ol.wave li{counter-increment:w;padding-left:30px;position:relative;color:var(--dim);font-size:14px}
+  ol.wave li::before{content:counter(w);position:absolute;left:0;top:0;width:21px;height:21px;border-radius:6px;background:oklch(0.8 0.15 75/.15);border:1px solid var(--amber);color:var(--amber);font-family:var(--mono);font-size:11px;display:flex;align-items:center;justify-content:center}
+  ol.wave li b{color:var(--ink)}
+  .wlabel{font-family:var(--mono);font-size:11px;color:var(--amber);letter-spacing:.1em;text-transform:uppercase;margin:18px 0 8px}
+  ul{list-style:none;display:flex;flex-direction:column;gap:9px;margin-top:6px}
+  li.risk,li.fd{padding-left:24px;position:relative;color:var(--dim);font-size:14px}
+  li.risk::before{content:"";position:absolute;left:0;top:8px;width:8px;height:8px;border-radius:50%;background:var(--warn)}
+  li.fd::before{content:"";position:absolute;left:0;top:8px;width:8px;height:8px;border-radius:2px;background:var(--amber)}
+  li b{color:var(--ink)}
+  .big-gate{border:1px solid var(--warn);border-radius:14px;padding:18px 20px;background:oklch(0.72 0.17 25/.08);margin-top:8px}
+  .big-gate .eyebrow{color:var(--warn)}
+  footer{padding:30px 0 0;color:var(--faint);font-size:12px;font-family:var(--mono)}
+</style>
+</head>
+<body><div class="wrap">
+
+<header>
+  <div class="kick">AIAG · синтез ресёрча · 12 пунктов · 2026-06-03</div>
+  <h1>Архитектурные решения, порядок билда, риски, развилки для основателя</h1>
+  <div class="frame-para">Главный вывод: <b>денежный путь — это и есть продукт</b>, почти каждый пункт ресёрча — про корректность денег. Два хребта: (1) <b>починить единый биллинг-авторитет</b> и заставить шлюз возвращать реальную маржу — прежде чем строить что-либо, что кому-то платит; (2) <b>разрешить развилку Stars-vs-крипта</b> — потому что продажа AI-кредитов за крипту внутри мобильного Telegram нарушает ToS и приводит к тихому делистингу. Адверсариальные ревью оказались сильными и поймали реальные дыры (маржа, стриминг с ₽0, обход дневного лимита, ложная изоляция, юр-инверсия).</div>
+</header>
+
+<section>
+  <div class="eyebrow">Ключевые решения (D-0…D-14)</div>
+  <div class="d"><div class="top"><span class="id">D-0</span><span class="t">Единый биллинг-авторитет + шлюз возвращает маржу</span><span class="conf hi">high</span></div>
+    <p>Ключевое. Сейчас воркер сам выдумывает цену (хардкод × USD_TO_RUB=90) и выбрасывает реальную стоимость шлюза → <b>маржи как числа не существует</b>. Без этого тул-брокер и выплаты авторам теряют деньги на каждом прогоне. `tg_user_balances` = единственный леджер TMA; шлюз = white-label upstream + счётчик себестоимости.</p></div>
+  <div class="d"><div class="top"><span class="id">D-1</span><span class="t">Кредит = USD (микро-USD integer); убить USD_TO_RUB=90</span><span class="conf hi">high</span></div><p>1 кредит = 1 USD; ₽ только для отображения. FX-риск переезжает в маржу (COGS в ₽ по ЦБ, выручка в USDT) — закладываем в наценку/реконсиляцию.</p></div>
+  <div class="d"><div class="top"><span class="id">D-2</span><span class="t">Managed-Hermes: Daytona-first, но экономику пересчитать</span><span class="conf me">medium</span></div><p>Daytona-сэндбоксы (kube-green отвергнут). НО ревью разнесло экономику: песочница изолирует только тулзы, а сам `hermes gateway` <b>висит резидентно 300-600МБ на нашем хосте</b> — «idle≈free» неверно. Реальный вопрос Phase-0: мультиплексит ли один gateway много юзеров. Daytona = shared-kernel, для публичных шаблонов нужен microVM.</p></div>
+  <div class="d"><div class="top"><span class="id">D-3</span><span class="t">Control-plane Hermes: co-located sidecar + запись файлов, без форка</span><span class="conf hi">high</span></div><p>Дашборд Hermes = писабельный FastAPI (~50 эндпоинтов) на loopback БЕЗ токена. Sidecar дёргает его напрямую. SOUL.md — запись файла. Sanitizing-экспортёр (стрип ключей/памяти) для публичных шаблонов. `--insecure` — это footgun, не использовать.</p></div>
+  <div class="d"><div class="top"><span class="id">D-4</span><span class="t">Gonka: GO, но как ОДИН опциональный провайдер</span><span class="conf hi">high</span></div><p>Копия openrouter.ts→gonka.ts. GonkaGate комиссия 5%+10% (стакается на 1.25 → ~1.375). opengnk-прокси НЕ на прод-VPS (OOM убьёт money-path). Track 2b (хранить ключи юзеров) — вне скоупа без KMS.</p></div>
+  <div class="d"><div class="top"><span class="id">D-5</span><span class="t">Реальный рантайм: AI SDK + pgvector + OTel, НЕ стримить биллинг-вызов</span><span class="conf me">medium</span></div><p>Слой поверх существующего цикла (не выкидывать). Критично: OpenAI-стриминг возвращает usage:null → стрим биллинг-вызова рискует закрыть прогон в <b>₽0</b>. Биллинг-вызов не стримим; фолбэк на оценку (никогда 0).</p></div>
+  <div class="d"><div class="top"><span class="id">D-6</span><span class="t">Провайдер-каталог: один реестр (таблицы шлюза), нативные адаптеры в шлюзе</span><span class="conf me">medium</span></div><p>Синк models.dev. <b>Конверсия /1M→/1k при синке</b> (самый вероятный баг ×1000). Дыра: BYO Anthropic/Google-ключ ломается при «воркер только OpenAI» → роутим ВСЕ нативные ключи через шлюз. Объединить два механизма BYOK.</p></div>
+  <div class="d"><div class="top"><span class="id">D-7</span><span class="t">SSRF egress-guard (safeFetch) — строим ПЕРВЫМ</span><span class="conf hi">high</span></div><p>resolve-then-pin, HTTPS-only, блок ULA/mapped/CGNAT, ре-валидация на редиректах. Воркер фетчит user base_url с расшифрованным ключом без проверки.</p></div>
+  <div class="d"><div class="top"><span class="id">D-8</span><span class="t">initData: ручной timingSafeEqual + 600s + Redis-нонс</span><span class="conf hi">high</span></div><p>Ревью поймало: рекомендованная либа сама использует `!==` (не constant-time) → не чинит таймин-оракул. Чиним вручную + one-shot nonce против replay.</p></div>
+  <div class="d"><div class="top"><span class="id">D-9</span><span class="t">Тул-брокер: reserve→execute→settle/refund сейчас</span><span class="conf hi">high</span></div><p>Чинит реальную дыру: дорогой тул в упавшем прогоне не списывается. + фикс обхода дневного лимита (списание тула тоже инкрементит spent_today). Крипта не нужна.</p></div>
+  <div class="d"><div class="top"><span class="id">D-10…D-14</span><span class="t">x402 (defer), MCP (outbound OAuth showcase), creator-economy (margin-share, blocked на D-0), grammY Business delivery, character pipeline (ambient→voice→talking)</span><span class="conf me">см. док</span></div><p>Детали и коррекции — в SYNTHESIS.md. Creator-economy: доля от МАРЖИ (не gross), выплата в кредитах, анти-казино (без токенов агентов).</p></div>
+</section>
+
+<section>
+  <div class="eyebrow">Порядок билда</div>
+  <div class="wlabel">Wave 0 — фундамент денег + дешёвые security-баги (без founder-гейтов)</div>
+  <ol class="wave">
+    <li><b>D-0</b> единый леджер + шлюз отдаёт маржу <i>(разблокирует D-5/6/9/11/12)</i></li>
+    <li><b>D-1</b> USD-микрокредит + двойная запись; убить ×90</li>
+    <li><b>D-8</b> initData-хардеринг (крошечный, критичный)</li>
+    <li><b>D-7</b> safeFetch SSRF-guard</li>
+    <li>Фикс <b>DEFAULT_MODEL</b> (hermes-4-405b даёт 400)</li>
+  </ol>
+  <div class="wlabel">Wave 1 — депозиты + тул-деньги (без крипто-юр-гейта)</div>
+  <ol class="wave"><li>Gonka Track 1</li><li>тул-брокер (+фикс дневного лимита)</li><li>депозит-реконсилятор (чинит потерю средств)</li><li>каталог-синк + нативные адаптеры + унификация BYOK</li></ol>
+  <div class="wlabel">Wave 2 — jetton + реальный рантайм + доставка · Wave 3 — managed-Hermes (после спайка-замера) + creator-economy</div>
+  <p style="font-size:13px">Полные волны — в SYNTHESIS.md §2.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Развилки для основателя</div>
+  <div class="big-gate">
+    <div class="eyebrow">FD-1 · ГЛАВНЫЙ БЛОКЕР · противоречит прежнему решению</div>
+    <p style="color:var(--ink);font-size:15px;margin-bottom:6px"><b>Telegram ToS запрещает продажу AI-кредитов за крипту внутри мобильного клиента</b> → Mini App тихо делистят. Это против нашего «TON-only, без Stars».</p>
+    <p>Рекомендация ресёрча — <b>Structure C: два рельса</b>, единый невыводимый USD-кредит: <b>Stars на мобиле</b> (топап через desktop/web где комиссия ~3-4%, не 32%; учесть 21-дн холд + флор 1000 Stars), <b>USDT/TON на web/desktop</b>, <b>BYOK = первоклассный compliance-лейн</b> на мобиле (свой ключ = не продаём цифровой товар → Stars не обязателен). «Крипто-нативная мобилка» — НЕ рекомендуется (риск делистинга без маржи казино).</p>
+  </div>
+  <ul style="margin-top:14px">
+    <li class="fd"><b>FD-2</b> — кредиты выводимые или строго невыводимый prepaid-SaaS? (невыводимый = вне VASP/e-money лицензий — самый сильный compliance-рычаг)</li>
+    <li class="fd"><b>FD-3</b> — зарубежная юрисдикция + сплит юрлиц + локализация ПД РФ (152-ФЗ экстерриториален; текущий один зарубежный VPS с данными РФ-юзеров — несоответствие)</li>
+    <li class="fd"><b>FD-4</b> — дефолт author_share (15% маржи — плейсхолдер)</li>
+    <li class="fd"><b>FD-5</b> — кто платит при ответе агента в бизнес-чате клиента (Telegram Business)</li>
+    <li class="fd"><b>FD-6/7/8</b> — комиссия Gonka (впитать/показать); talking vs ambient карта + стоковые vs клон-голоса; x402 self-host vs hosted (defer)</li>
+  </ul>
+</section>
+
+<section style="border-bottom:none">
+  <div class="eyebrow">Сквозные риски</div>
+  <ul>
+    <li class="risk"><b>RK-1</b> 2GB VPS — физический потолок; managed-Hermes-резиденты, pgvector-сборка, self-host observability/forge конкурируют с money-path. «Нужен второй бокс» — честный ответ.</li>
+    <li class="risk"><b>RK-2</b> Маржа-авторитет = единая точка, от которой зависят ВСЕ денежные фичи. D-0 первым, инварианты `margin≥0` и `author_share≤margin` в CI.</li>
+    <li class="risk"><b>RK-3</b> Telegram-ToS-стена против всей крипто-кредит-модели (см. FD-1). Плумбинг (леджер/реконсилятор/jetton) строить можно — он верен при обеих структурах; поверхность и валюта — founder-гейт.</li>
+    <li class="risk"><b>RK-4</b> Двух-юрлицовая граница предполагается кодом, но не enforced (крипта/USDC/$-компьют на зарубеж; ПД РФ на РФ-инфре).</li>
+    <li class="risk"><b>RK-8</b> Прод-миграции ручные/без трекинга; ₽→USD миграция живого баланса — самая опасная (freeze-window, dry-run на дампе).</li>
+  </ul>
+</section>
+
+<footer>Полный синтез: SYNTHESIS.md · per-item: R-01…R-12.md · <a href="../STATUS.html">статус</a> · <a href="../RESEARCH-BACKLOG.html">backlog</a><br>AIAG · 19 агентов · 12 пунктов + адверсариальная верификация + синтез · 2026-06-03</footer>
+
+</div></body></html>

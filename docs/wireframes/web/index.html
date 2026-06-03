@@ -1,0 +1,1170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIAG WEB — Wireframes (светлый борд · Studio23)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand"><div class="logo" aria-hidden="true"></div><h1>AI<b>·</b>Aggregator · <b>WEB</b></h1></div>
+  <div class="meta">Светлый борд · десктоп-first · 2026-06-03</div>
+  <div class="legend">
+    <span class="tag live">live</span>работает сейчас<br>
+    <span class="tag soon">скоро</span>ближний билд<br>
+    <span class="tag rnd">R&D</span>отложено / ресёрч<br>
+    ★ = ядро (happy-path)<br>
+    Валюта: <b>Credits (кр)</b> · мульти-крипто
+  </div>
+
+  <div class="grp">A · Онбординг</div>
+  <a href="#s01"><span class="n">01</span>Онбординг</a>
+  <a href="#s02"><span class="n">02</span>Вход + 152-ФЗ</a>
+
+  <div class="grp">B · Discovery</div>
+  <a href="#s03"><span class="n">03</span>★ Дом — «Для тебя»</a>
+  <a href="#s03b"><span class="n">03b</span>★ Первый вход (0 агентов)</a>
+  <a href="#s04"><span class="n">04</span>Каталог + фильтр</a>
+  <a href="#s05"><span class="n">05</span>★ Карточка агента + RUN</a>
+  <a href="#s06"><span class="n">06</span>Маркет моделей</a>
+  <a href="#s07"><span class="n">07</span>Карточка модели</a>
+
+  <div class="grp">C · Run / чат</div>
+  <a href="#s08"><span class="n">08</span>★ Чат (model-chip)</a>
+  <a href="#s09"><span class="n">09</span>Тул-апрув</a>
+  <a href="#s10"><span class="n">10</span>Раны / история</a>
+  <a href="#s11"><span class="n">11</span>Run-trace (ledger)</a>
+
+  <div class="grp">D · Создание</div>
+  <a href="#s12"><span class="n">12</span>★ Выбор пути</a>
+  <a href="#s13"><span class="n">13</span>Словами (AI-билдер)</a>
+  <a href="#s14"><span class="n">14</span>Из шаблона</a>
+  <a href="#s15"><span class="n">15</span>★ Configure — спец</a>
+  <a href="#s16"><span class="n">16</span>Мульти-модель слоты</a>
+  <a href="#s17"><span class="n">17</span>★ Провайдер-пикер</a>
+  <a href="#s18"><span class="n">18</span>Оснастить тулзами</a>
+
+  <div class="grp">E · Свой Hermes</div>
+  <a href="#s19"><span class="n">19</span>★ Подключить Hermes</a>
+  <a href="#s20"><span class="n">20</span>BYOK (свой ключ = 0)</a>
+
+  <div class="grp">F · Managed Hermes</div>
+  <a href="#s21"><span class="n">21</span>Provisioning</a>
+  <a href="#s22"><span class="n">22</span>Мой Hermes — статус</a>
+  <a href="#s23"><span class="n">23</span>Конфиг</a>
+  <a href="#s24"><span class="n">24</span>Память / знания</a>
+  <a href="#s25"><span class="n">25</span>Расписания / cron</a>
+  <a href="#s26"><span class="n">26</span>Канбан / swarm</a>
+
+  <div class="grp">G · Тулзы / скиллы / MCP</div>
+  <a href="#s27"><span class="n">27</span>Маркет тулзов (x402)</a>
+  <a href="#s28"><span class="n">28</span>Тулза — pay-per-call</a>
+  <a href="#s29"><span class="n">29</span>Маркет скиллов</a>
+  <a href="#s30"><span class="n">30</span>MCP-серверы</a>
+
+  <div class="grp">H · Кошелёк</div>
+  <a href="#s31"><span class="n">31</span>★ Баланс (кредиты)</a>
+  <a href="#s32"><span class="n">32</span>Пополнить (крипто)</a>
+  <a href="#s33"><span class="n">33</span>Бюджет агента</a>
+
+  <div class="grp">I · Рынок</div>
+  <a href="#s34"><span class="n">34</span>Профиль автора + доход</a>
+  <a href="#s35"><span class="n">35</span>Опубликовать (free / цена)</a>
+  <a href="#s36"><span class="n">36</span>Ремикс / lineage</a>
+
+  <div class="grp">J · Аккаунт / модалки</div>
+  <a href="#s37"><span class="n">37</span>Профиль</a>
+  <a href="#s38"><span class="n">38</span>Модалки — состояния</a>
+</aside>
+
+<main class="board">
+
+  <div class="intro">
+    <div class="kick">AIAG · веб-версия · агенты-маркетплейс</div>
+    <h2>Тот же продукт, что в Telegram. <span class="q">Только на большом экране и в светлой студии.</span></h2>
+    <p>Десктоп-зеркало TMA: агенты как персонажи, запуск, создание, свой/managed Hermes, тулзы, кошелёк и двусторонний рынок. Монетизация: автор публикует <b>бесплатно</b> или ставит <b>цену-аренду</b> (X кр/мес) — пользователь платит использование модели + деплой + точную сумму автора, без процентной комиссии.</p>
+  </div>
+
+  <!-- ════════════════════════ A · ОНБОРДИНГ ════════════════════════ -->
+  <div class="grp-head"><span class="gl">A</span> Онбординг · <span class="gd">вход в продукт</span></div>
+  <div class="row-board">
+
+  <figure class="artboard" id="s01">
+    <figcaption class="cap"><b>01 · Онбординг (лендинг входа)</b><span class="tag live">live</span></figcaption>
+    <div class="win lg">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span>
+        <span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/start</span></div>
+      <div class="appshell" style="background:radial-gradient(680px 360px at 80% -10%,var(--sky),transparent 60%),var(--card)">
+        <div class="pmain center" style="gap:18px;padding:46px">
+          <span class="aiag-mark" aria-hidden="true" style="width:56px;height:56px"></span>
+          <div class="ph-h big" style="text-align:center"><h2>Запусти AI-агента<br>за два клика.</h2>
+            <p style="margin:10px auto 0">Витрина живых агентов-персонажей. Запусти готового или собери своего. Платишь по факту — в кредитах. Свой ключ → 0 комиссии.</p></div>
+          <div class="row" style="gap:6px"><span class="chip on sm">●</span><span class="chip sm">○</span><span class="chip sm">○</span></div>
+          <div class="row" style="gap:10px"><div class="btn amber">Начать бесплатно</div><div class="btn ghost">Уже есть свой Hermes →</div></div>
+          <div class="metric faint">первый прогон — бесплатно · без карты</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s02">
+    <figcaption class="cap"><b>02 · Вход + согласия 152-ФЗ</b><span class="tag live">live</span></figcaption>
+    <div class="win md">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span>
+        <span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/auth</span></div>
+      <div class="appshell" style="min-height:430px">
+        <div class="pmain center" style="gap:14px;padding:38px 56px">
+          <span class="aiag-mark" aria-hidden="true" style="width:46px;height:46px"></span>
+          <div class="ph-h" style="text-align:center"><h2>Вход в AI·Aggregator</h2>
+            <p style="margin:6px auto 0">Через Telegram или почту. API-ключи не нужны для старта.</p></div>
+          <div class="list" style="width:100%">
+            <div class="card flat"><div class="row"><span class="chip on sm">✓</span><div class="t-sub" style="margin:0">Согласие на обработку данных (152-ФЗ)</div></div></div>
+            <div class="card flat"><div class="row"><span class="chip on sm">✓</span><div class="t-sub" style="margin:0">Пользовательское соглашение</div></div></div>
+            <div class="card flat"><div class="row"><span class="chip sm">○</span><div class="t-sub" style="margin:0">Маркетинговые уведомления (опционально)</div></div></div>
+          </div>
+          <div class="row" style="gap:10px;width:100%;margin-top:4px"><div class="btn block" style="flex:1">Войти через Telegram</div><div class="btn ghost" style="flex:1">Почта</div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  </div>
+
+  <!-- ════════════════════════ B · DISCOVERY ════════════════════════ -->
+  <div class="grp-head"><span class="gl">B</span> Discovery · <span class="gd">дом-лента, каталог, агент, модели</span></div>
+  <div class="row-board">
+
+  <figure class="artboard" id="s03">
+    <figcaption class="cap"><b>03 · Дом — лента «Для тебя» ★</b><span class="tag live">live</span></figcaption>
+    <div class="win lg">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/home</span></div>
+      <div class="appshell tall">
+        <nav class="pside">
+          <div class="ph-brand"><span class="lg" aria-hidden="true"></span><span class="nm">AI<b>·</b>Aggregator</span></div>
+          <div class="pnav on"><span class="ic"></span>Агенты</div>
+          <div class="pnav"><span class="ic"></span>Маркет</div>
+          <div class="pnav"><span class="ic"></span>Тулзы</div>
+          <div class="pnav"><span class="ic"></span>Кошелёк</div>
+          <div class="pnav"><span class="ic"></span>Профиль</div>
+          <div class="ps-spacer"></div>
+          <div class="ps-wallet"><div class="lab">Баланс</div><div class="bal">1 250 <span class="u">кр</span></div></div>
+        </nav>
+        <div class="pmain">
+          <div class="ptop"><div class="search">🔎 Найти агента, модель, тулзу…</div><div class="btn sm amber">＋ Создать</div><div class="ub">👤</div></div>
+          <div class="seg" style="max-width:380px"><div class="s on">Для тебя</div><div class="s">Каталог</div><div class="s">Мои · 3</div></div>
+          <div class="metric faint">Рекомендуем · персонажи под твои задачи</div>
+          <div class="gallery">
+            <div class="gcard feature" style="--ch:28" data-id="alisa">
+              <div class="ccard">
+                <div class="pf lg"><span class="tdot"></span><span class="plive pulse"></span><span class="gly">А</span></div>
+                <div class="cbody">
+                  <div class="cname">Алиса <span class="mbadge">GPT-5.5</span></div>
+                  <div class="crole">Контент-редактор · от <b style="color:var(--ink-dim)">@ainews</b></div>
+                  <div class="ctrait">Дерзкая, режет воду без жалости.</div>
+                  <div class="cstats">
+                    <div class="cs"><div class="cv">48<span class="u">k</span></div><div class="ck">запусков</div></div>
+                    <div class="cs"><div class="cv star">★ 4.9</div><div class="ck">312 отз.</div></div>
+                    <div class="cs"><div class="cv good-tx" style="font-size:11px">бесплатно</div><div class="ck">аренда автора</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="gcard" style="--ch:165">
+              <div class="pf" style="--ch:165"><span class="tdot"></span><span class="gly">Г</span></div>
+              <div class="cname" style="margin-top:9px">Гриша <span class="mbadge" style="--ch:165">Claude 4.8</span></div>
+              <div class="crole" style="--ch:165">Аналитик · @finbot</div>
+              <div class="ctrait" style="--ch:165">Говорит цифрами.</div>
+              <div class="price" style="margin-top:8px">9 кр/прогон</div>
+            </div>
+            <div class="gcard" style="--ch:340">
+              <div class="pf" style="--ch:340"><span class="tdot"></span><span class="gly">Н</span></div>
+              <div class="cname" style="margin-top:9px">Ника <span class="mbadge" style="--ch:340">GPT-5.5</span></div>
+              <div class="crole" style="--ch:340">SMM, тренды · @smm</div>
+              <div class="ctrait" style="--ch:340">Чует вирусное.</div>
+              <div class="price" style="margin-top:8px">200 кр/мес</div>
+            </div>
+            <div class="gcard" style="--ch:235">
+              <div class="pf" style="--ch:235"><span class="tdot"></span><span class="gly">М</span></div>
+              <div class="cname" style="margin-top:9px">Макс <span class="mbadge" style="--ch:235">Opus 4.8</span></div>
+              <div class="crole" style="--ch:235">Код-ревьюер · @dev</div>
+              <div class="ctrait" style="--ch:235">Найдёт забытый баг.</div>
+              <div class="price free" style="margin-top:8px">бесплатно</div>
+            </div>
+            <div class="gcard" style="--ch:60">
+              <div class="pf" style="--ch:60"><span class="tdot"></span><span class="gly">Л</span></div>
+              <div class="cname" style="margin-top:9px">Лея <span class="mbadge" style="--ch:60">Gemini 3.5</span></div>
+              <div class="crole" style="--ch:60">Саппорт 24/7 · @cs</div>
+              <div class="ctrait" style="--ch:60">Клиент не сорвётся.</div>
+              <div class="price" style="margin-top:8px">150 кр/мес</div>
+            </div>
+            <div class="gcard" style="--ch:300">
+              <div class="pf" style="--ch:300"><span class="tdot"></span><span class="gly">Н</span></div>
+              <div class="cname" style="margin-top:9px">Нова <span class="mbadge" style="--ch:300">Opus 4.8</span></div>
+              <div class="crole" style="--ch:300">Трейдер · с нуля</div>
+              <div class="ctrait" style="--ch:300">Считает риск, не иксы.</div>
+              <div class="price" style="margin-top:8px">12 кр/прогон</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s03b">
+    <figcaption class="cap"><b>03b · Первый вход — 0 агентов ★</b><span class="tag live">live</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/home</span></div>
+      <div class="appshell">
+        <nav class="pside">
+          <div class="ph-brand"><span class="lg" aria-hidden="true"></span><span class="nm">AI<b>·</b>Aggregator</span></div>
+          <div class="pnav on"><span class="ic"></span>Агенты</div>
+          <div class="pnav"><span class="ic"></span>Маркет</div>
+          <div class="pnav"><span class="ic"></span>Кошелёк</div>
+          <div class="pnav"><span class="ic"></span>Профиль</div>
+          <div class="ps-spacer"></div>
+          <div class="ps-wallet"><div class="lab">Баланс</div><div class="bal">50 <span class="u">кр старт</span></div></div>
+        </nav>
+        <div class="pmain">
+          <div class="ph-h"><span class="kicker">Добро пожаловать</span><h2>Начни отсюда</h2><p>Выбери персонажа и запусти за два клика. Первый прогон — бесплатно.</p></div>
+          <div class="metric faint">Подобрали для старта</div>
+          <div class="grid3">
+            <div class="card" style="--ch:28"><div class="pf"><span class="tdot"></span><span class="gly">А</span></div>
+              <div class="cname" style="margin-top:9px">Алиса</div><div class="crole" style="--ch:28">Контент-редактор</div>
+              <div class="price free" style="margin-top:7px">бесплатно</div></div>
+            <div class="card" style="--ch:60"><div class="pf" style="--ch:60"><span class="tdot"></span><span class="gly">Л</span></div>
+              <div class="cname" style="margin-top:9px">Лея</div><div class="crole" style="--ch:60">Поддержка</div>
+              <div class="price" style="margin-top:7px">150 кр/мес</div></div>
+            <div class="card" style="--ch:165"><div class="pf" style="--ch:165"><span class="tdot"></span><span class="gly">Г</span></div>
+              <div class="cname" style="margin-top:9px">Гриша</div><div class="crole" style="--ch:165">Аналитик</div>
+              <div class="price" style="margin-top:7px">9 кр/прогон</div></div>
+          </div>
+          <div class="sp"></div>
+          <div class="row" style="gap:10px"><div class="btn amber">Запусти первого · бесплатно</div><div class="btn ghost">Собрать своего →</div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s04">
+    <figcaption class="cap"><b>04 · Каталог + фильтр</b><span class="tag live">live</span></figcaption>
+    <div class="win lg">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/catalog</span></div>
+      <div class="appshell">
+        <nav class="pside">
+          <div class="ph-brand"><span class="lg" aria-hidden="true"></span><span class="nm">AI<b>·</b>Aggregator</span></div>
+          <div class="pnav on"><span class="ic"></span>Агенты</div>
+          <div class="pnav"><span class="ic"></span>Маркет</div>
+          <div class="pnav"><span class="ic"></span>Тулзы</div>
+          <div class="pnav"><span class="ic"></span>Кошелёк</div>
+          <div class="label" style="margin:14px 0 8px;padding-left:8px">Фильтры</div>
+          <div class="pnav"><span class="ic"></span>Контент</div>
+          <div class="pnav"><span class="ic"></span>Код</div>
+          <div class="pnav"><span class="ic"></span>Данные · SMM</div>
+        </nav>
+        <div class="pmain">
+          <div class="ptop"><div class="search">🔎 Найти агента…</div><div class="ub">⇅</div></div>
+          <div class="chips"><span class="chip on">Все</span><span class="chip">Контент</span><span class="chip">Код</span><span class="chip">SMM</span><span class="chip">Данные</span><span class="chip free">бесплатные</span><span class="chip">⇅ популярные</span></div>
+          <div class="list">
+            <div class="card" style="--ch:28"><div class="ccard">
+              <div class="pf"><span class="tdot"></span><span class="gly">А</span></div>
+              <div class="cbody"><div class="row between"><div><div class="cname">Алиса <span class="mbadge">GPT-5.5</span></div><div class="crole">Контент-редактор · @ainews</div><div class="ctrait">Дерзкая, режет воду.</div></div>
+                <div style="text-align:right"><div class="runs"><b>48k</b> прогонов</div><div class="price free" style="margin-top:6px">бесплатно</div></div></div></div>
+            </div></div>
+            <div class="card" style="--ch:235"><div class="ccard">
+              <div class="pf"><span class="tdot"></span><span class="gly">М</span></div>
+              <div class="cbody"><div class="row between"><div><div class="cname">Макс <span class="mbadge">Opus 4.8</span></div><div class="crole">Код-ревьюер · @dev</div><div class="ctrait">Найдёт забытый баг.</div></div>
+                <div style="text-align:right"><div class="runs"><b>22k</b></div><div class="price free" style="margin-top:6px">бесплатно</div></div></div></div>
+            </div></div>
+            <div class="card" style="--ch:60"><div class="ccard">
+              <div class="pf"><span class="tdot"></span><span class="gly">Л</span></div>
+              <div class="cbody"><div class="row between"><div><div class="cname">Лея <span class="mbadge">Gemini 3.5</span></div><div class="crole">Саппорт 24/7 · @cs</div><div class="ctrait">Клиент не сорвётся.</div></div>
+                <div style="text-align:right"><div class="runs"><b>15k</b></div><div class="price" style="margin-top:6px">150 кр/мес</div></div></div></div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s05">
+    <figcaption class="cap"><b>05 · Карточка агента + RUN ★</b><span class="tag live">live</span> <span class="faint">— кликни персонажа в #03 или старт-чип ниже</span></figcaption>
+    <div class="win lg">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/agent/alisa</span></div>
+      <div class="appshell tall">
+        <nav class="pside">
+          <div class="ph-brand"><span class="lg" aria-hidden="true"></span><span class="nm">AI<b>·</b>Aggregator</span></div>
+          <div class="pnav on"><span class="ic"></span>Агенты</div>
+          <div class="pnav"><span class="ic"></span>Маркет</div>
+          <div class="pnav"><span class="ic"></span>Кошелёк</div>
+          <div class="ps-spacer"></div>
+          <div class="ps-wallet"><div class="lab">Баланс</div><div class="bal">1 250 <span class="u">кр</span></div></div>
+        </nav>
+        <div class="pmain" id="agent-mount"><!-- character sheet injected by JS --></div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s06">
+    <figcaption class="cap"><b>06 · Маркет моделей</b><span class="tag live">live</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/models</span></div>
+      <div class="appshell">
+        <nav class="pside">
+          <div class="ph-brand"><span class="lg" aria-hidden="true"></span><span class="nm">AI<b>·</b>Aggregator</span></div>
+          <div class="pnav"><span class="ic"></span>Агенты</div>
+          <div class="pnav on"><span class="ic"></span>Маркет</div>
+          <div class="pnav"><span class="ic"></span>Кошелёк</div>
+          <div class="label" style="margin:14px 0 8px;padding-left:8px">Тип</div>
+          <div class="pnav"><span class="ic"></span>LLM</div>
+          <div class="pnav"><span class="ic"></span>Изображения</div>
+          <div class="pnav"><span class="ic"></span>Видео · Gonka</div>
+        </nav>
+        <div class="pmain">
+          <div class="ph-h"><span class="kicker">Маркет</span><h2>Модели</h2><p>AIAG-шлюз + свои провайдеры. Модели — один из источников.</p></div>
+          <div class="ptop"><div class="search">🔎 GPT, Claude, Gemini, Qwen…</div></div>
+          <div class="list">
+            <div class="card amber"><div class="row between"><div class="row"><div class="av amber">A</div><div><div class="t-title">Claude Opus 4.8</div><div class="t-sub num">$5 / $25 за 1M · ctx 1M</div></div></div><span class="amber-tx">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">O</div><div><div class="t-title">GPT-5.5</div><div class="t-sub num">$5 / $30 за 1M</div></div></div><span class="muted">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av sky">Q</div><div><div class="t-title">Qwen3 <span class="chip sky sm">Gonka</span></div><div class="t-sub num">децентрализ. · GNK</div></div></div><span class="muted">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">D</div><div><div class="t-title">DeepSeek V4 Pro</div><div class="t-sub num">$0.44 / $0.87 за 1M</div></div></div><span class="muted">›</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s07">
+    <figcaption class="cap"><b>07 · Карточка модели</b><span class="tag live">live</span></figcaption>
+    <div class="win md">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/models/opus-4.8</span></div>
+      <div class="appshell" style="min-height:440px">
+        <div class="pmain">
+          <div class="row"><div class="av amber" style="width:48px;height:48px;font-size:20px">A</div><div><div class="t-title" style="font-size:18px">Claude Opus 4.8</div><div class="t-sub">флагман · через AIAG-шлюз</div></div></div>
+          <div class="grid3">
+            <div class="card flat"><div class="label">Ввод</div><div class="num" style="font-size:17px">$5<span class="faint" style="font-size:11px">/1M</span></div></div>
+            <div class="card flat"><div class="label">Вывод</div><div class="num" style="font-size:17px">$25<span class="faint" style="font-size:11px">/1M</span></div></div>
+            <div class="card flat"><div class="label">Контекст</div><div class="num" style="font-size:17px">1M</div></div>
+          </div>
+          <div class="chips"><span class="chip on">vision</span><span class="chip on">tools</span><span class="chip on">reasoning</span><span class="chip on">code</span></div>
+          <div class="row" style="gap:8px"><span class="chip good">✓ лучший маршрут</span><span class="chip">uptime 99.9%</span></div>
+          <div class="card flat"><div class="row between"><span class="metric">★ <b>4.9</b></span><span class="metric"><b>62k</b>/нед</span><span class="metric">p50 <b>410мс</b></span></div></div>
+          <div class="sp"></div>
+          <div class="row" style="gap:10px"><div class="btn ghost" style="flex:1">Калькулятор стоимости</div><div class="btn" style="flex:1.3">Создать агента →</div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  </div>
+
+  <!-- ════════════════════════ C · RUN / ЧАТ ════════════════════════ -->
+  <div class="grp-head"><span class="gl">C</span> Run / чат · <span class="gd">диалог, тул-апрув, история, трейс</span></div>
+  <div class="row-board">
+
+  <figure class="artboard" id="s08">
+    <figcaption class="cap"><b>08 · Чат — composer model-chip ★</b><span class="tag live">live</span></figcaption>
+    <div class="win lg">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/chat/postovik</span></div>
+      <div class="appshell tall">
+        <nav class="pside">
+          <div class="ph-brand"><span class="lg" aria-hidden="true"></span><span class="nm">AI<b>·</b>Aggregator</span></div>
+          <div class="label" style="margin:0 0 8px;padding-left:8px">Диалоги</div>
+          <div class="pnav on"><span class="ic"></span>✍️ Постовик</div>
+          <div class="pnav"><span class="ic"></span>Аналитик</div>
+          <div class="pnav"><span class="ic"></span>Саппорт</div>
+          <div class="ps-spacer"></div>
+          <div class="ps-wallet"><div class="lab">Баланс</div><div class="bal">1 250 <span class="u">кр</span></div></div>
+        </nav>
+        <div class="pmain" style="gap:10px">
+          <div class="row between"><div class="row"><div class="pf" style="--ch:28;width:34px;height:42px"><span class="gly" style="font-size:18px">П</span></div><div><div class="t-title">Постовик</div><div class="t-sub" style="margin:0">Контент-редактор · от @ainews</div></div></div>
+            <div class="seg" style="width:260px"><div class="s on">Чат</div><div class="s">Раны</div><div class="s">Настройки</div></div></div>
+          <div class="div"></div>
+          <div class="bubble them">Привет! Я Постовик. Что напишем?</div>
+          <div class="bubble me">Пост в TG про запуск, 3 хука</div>
+          <div class="bubble them">Лови. 1) «Мы убрали VPN из формулы…» 2) «Готовый агент — за два клика…» 3) «Пока ты читаешь — агент уже…» ▍</div>
+          <div class="sp"></div>
+          <div class="rentline"><span class="who">аренда автора <b>@ainews</b></span><span class="amt good-tx">бесплатно</span></div>
+          <div class="card flat" style="padding:9px"><div class="row between"><span class="metric"><span class="sdot"></span> Opus 4.8 · AIAG</span><span class="metric amber-tx">~12 кр / ответ · сменить ›</span></div></div>
+          <div class="input ink"><span class="muted" style="flex:1">Сообщение…</span><span class="amber-tx">↑</span></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s09">
+    <figcaption class="cap"><b>09 · Тул-апрув карточка</b><span class="tag soon">скоро</span></figcaption>
+    <div class="win md">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/chat/postovik</span></div>
+      <div class="appshell" style="min-height:430px">
+        <div class="pmain" style="gap:10px">
+          <div class="bubble me">собери свежие новости по теме</div>
+          <div class="card amber">
+            <div class="row"><div class="av amber">🔥</div><div><div class="t-title">Агент хочет вызвать Firecrawl</div><div class="t-sub">скрейп 3 страниц · <span class="amber-tx">~3 кр</span></div></div></div>
+            <div class="out" style="margin-top:10px">firecrawl_scrape({ url, limit: 3 }) → цена показана ДО вызова</div>
+            <div class="row" style="gap:8px;margin-top:11px"><div class="btn ghost sm" style="flex:1">1 раз</div><div class="btn ghost sm" style="flex:1">На сессию</div><div class="btn sm" style="flex:1">Всегда</div></div>
+            <div class="metric faint" style="margin-top:8px;text-align:center">или отклонить · контроль за тобой</div>
+          </div>
+          <div class="sp"></div>
+          <div class="input ink"><span class="muted" style="flex:1">Сообщение…</span><span class="amber-tx">↑</span></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s10">
+    <figcaption class="cap"><b>10 · Раны / история</b><span class="tag live">live</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/chat/postovik/runs</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="seg" style="max-width:380px"><div class="s">Чат</div><div class="s on">Раны</div><div class="s">Настройки</div></div>
+          <div class="list">
+            <div class="card"><div class="row between"><div><div class="t-title">Пост · 3 хука</div><div class="t-sub num">сегодня 14:02 · 1.2с · 12 кр</div></div><span class="chip good sm">✓ ok</span></div></div>
+            <div class="card"><div class="row between"><div><div class="t-title">Сценарий рилса</div><div class="t-sub num">11:30 · 2.1с · 18 кр</div></div><span class="chip good sm">✓ ok</span></div></div>
+            <div class="card"><div class="row between"><div><div class="t-title">Письмо рассылки</div><div class="t-sub num">вчера · таймаут</div></div><span class="chip sm" style="color:var(--warn-ink);border-color:var(--warn-line);background:var(--warn-soft)">⚠ retry</span></div></div>
+          </div>
+          <div class="card flat"><div class="row between"><span class="metric"><b>128</b> ранов</span><span class="metric"><b>99.2%</b> ok</span><span class="metric amber-tx"><b>340</b> кр/нед</span></div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s11">
+    <figcaption class="cap"><b>11 · Run-trace (ledger)</b><span class="tag soon">скоро</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/runs/4821</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="row between"><div class="t-title" style="font-size:16px">Прогон #4821 · «Пост · 3 хука»</div><span class="chip good sm">✓ 1.2с</span></div>
+          <div class="card"><div class="led">
+            <div><span class="t">0.00с</span> ▸ user: «пост про запуск»</div>
+            <div><span class="t">0.01с</span> ▸ model <b>opus-4.8</b> → шлюз :4000</div>
+            <div><span class="t">0.40с</span> ▸ tool <b>firecrawl</b> <span class="c">−3 кр</span></div>
+            <div><span class="t">0.62с</span> ▸ аренда автора <b>@ainews</b> <span class="c">бесплатно</span></div>
+            <div><span class="t">0.95с</span> ▸ дописал 3 варианта</div>
+            <div><span class="t">1.20с</span> <span class="c">✓ ok</span> · 2.4k токенов</div>
+          </div></div>
+          <div class="card flat"><div class="row between"><span class="metric"><b>2.4k</b> токенов</span><span class="metric"><b>1</b> тулза</span><span class="metric">аренда <b>0 кр</b></span><span class="metric amber-tx"><b>итого 12 кр</b></span></div></div>
+          <div class="row" style="gap:10px"><div class="btn ghost sm">↻ Повторить</div><div class="btn ghost sm">⤴ Поделиться</div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  </div>
+
+  <!-- ════════════════════════ D · СОЗДАНИЕ ════════════════════════ -->
+  <div class="grp-head"><span class="gl">D</span> Создание агента · <span class="gd">путь, билдер, configure, провайдер, тулзы</span></div>
+  <div class="row-board">
+
+  <figure class="artboard" id="s12">
+    <figcaption class="cap"><b>12 · Создать — выбор пути ★</b><span class="tag live">live</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/create</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Как создаём?</h2><p>От двух кликов до полного контроля.</p></div>
+          <div class="grid2">
+            <div class="card amber"><div class="row top"><div class="av amber">⌨</div><div><div class="t-title">Словами</div><div class="t-sub">опиши — AI соберёт спец сам</div></div></div></div>
+            <div class="card"><div class="row top"><div class="av">⚡</div><div><div class="t-title">Из шаблона — 2 клика</div><div class="t-sub">готовая роль + модель + тулзы</div></div></div></div>
+            <div class="card"><div class="row top"><div class="av">✎</div><div><div class="t-title">С нуля (Configure)</div><div class="t-sub">персона, модели, провайдер, тулзы</div></div></div></div>
+            <div class="card"><div class="row top"><div class="av">🔌</div><div><div class="t-title">Подключить свой Hermes</div><div class="t-sub">свой рантайм + наши модели/тулзы</div></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s13">
+    <figcaption class="cap"><b>13 · Словами (AI-билдер)</b><span class="tag live">live</span></figcaption>
+    <div class="win md">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/create/words</span></div>
+      <div class="appshell" style="min-height:440px">
+        <div class="pmain" style="gap:10px">
+          <div class="steps"><span class="dot done">✓</span><span class="ln"></span><span class="dot on">2</span><span class="ln"></span><span class="dot">3</span></div>
+          <div class="bubble them">Опиши, какого агента хочешь — я соберу.</div>
+          <div class="bubble me">агент, который пишет посты в мой TG-канал, дерзко и коротко</div>
+          <div class="bubble them">Собрал черновик ↓ Поправить?</div>
+          <div class="card amber">
+            <div class="row between"><div class="row"><div class="av amber">✍️</div><div class="t-title">Дерзкий постовик</div></div><span class="faint">✎</span></div>
+            <div class="t-sub" style="margin-top:8px">Модель: <b>GPT-5.5</b> · Тон: дерзкий · Вывод: 3 варианта</div>
+          </div>
+          <div class="sp"></div>
+          <div class="row" style="gap:10px"><div class="btn ghost" style="flex:1">Настроить вручную</div><div class="btn" style="flex:1.3">Создать ✓</div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s14">
+    <figcaption class="cap"><b>14 · Из шаблона (галерея)</b><span class="tag live">live</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/create/templates</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ptop"><div class="search">🔎 Поиск шаблона…</div></div>
+          <div class="chips"><span class="chip on">Все</span><span class="chip">Контент</span><span class="chip">Код</span><span class="chip">Саппорт</span><span class="chip free">бесплатные</span></div>
+          <div class="list">
+            <div class="card"><div class="row between"><div class="row"><div class="av amber">✍️</div><div><div class="t-title">Копирайтер</div><div class="t-sub num">GPT-5.5 · ~12 кр/прогон</div></div></div><div class="row" style="gap:8px"><span class="price free">бесплатно</span><div class="btn sm">2 клика →</div></div></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">💻</div><div><div class="t-title">Код-ревьюер</div><div class="t-sub num">Opus 4.8 · ~20 кр</div></div></div><div class="row" style="gap:8px"><span class="price">300 кр/мес</span><div class="btn sm ghost">→</div></div></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🎧</div><div><div class="t-title">Саппорт 24/7</div><div class="t-sub num">Gemini 3.5 · ~6 кр</div></div></div><div class="row" style="gap:8px"><span class="price">150 кр/мес</span><div class="btn sm ghost">→</div></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s15">
+    <figcaption class="cap"><b>15 · Configure — спец ★</b><span class="tag live">live</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/create/configure</span></div>
+      <div class="appshell">
+        <div class="pmain" style="gap:11px">
+          <div class="grid2">
+            <div class="field"><div class="label">Имя</div><div class="input ink">Мой агент</div></div>
+            <div class="field"><div class="label">Роль (кто это)</div><div class="input">Контент-редактор</div></div>
+          </div>
+          <div class="field"><div class="label">Персона (SOUL)</div><div class="input area">Ты — дерзкий редактор, пишешь кратко…</div></div>
+          <div class="grid2">
+            <div class="card"><div class="row between"><div class="row"><div class="av">🎚</div><div class="t-title">Модели <span class="chip sky sm">скоро</span></div></div><span class="muted num">1 ›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🔌</div><div class="t-title">Провайдер <span class="chip sky sm">скоро</span></div></div><span class="muted">AIAG ›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🛠</div><div class="t-title">Тулзы <span class="chip sky sm">скоро</span></div></div><span class="muted num">2 ›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">💳</div><div class="t-title">Бюджет <span class="chip sky sm">скоро</span></div></div><span class="muted num">50 кр/день ›</span></div></div>
+          </div>
+          <div class="btn block">Создать агента</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s16">
+    <figcaption class="cap"><b>16 · Мульти-модель слоты</b><span class="tag soon">скоро</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/agent/models</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Модели по ролям</h2><p>Разные модели под разные задачи — смешанный биллинг.</p></div>
+          <div class="grid2">
+            <div class="card amber"><div class="row between"><div class="row"><div class="av amber">💬</div><div><div class="t-title">Чат / reasoning</div><div class="t-sub num">Opus 4.8 · AIAG</div></div></div><span class="muted">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🖼</div><div><div class="t-title">Изображения</div><div class="t-sub num">nano-banana-pro</div></div></div><span class="muted">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🎙</div><div><div class="t-title">Голос (TTS)</div><div class="t-sub num">не выбрано</div></div></div><span class="amber-tx">＋</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">👁</div><div><div class="t-title">Vision</div><div class="t-sub num">наследует чат</div></div></div><span class="muted">›</span></div></div>
+          </div>
+          <div class="card flat"><div class="row"><div class="av">∑</div><div class="t-sub" style="margin:0">Оценка: <b class="amber-tx">~40 кр</b>/прогон · смешанный биллинг по слотам</div></div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s17">
+    <figcaption class="cap"><b>17 · Провайдер-пикер ★</b><span class="tag soon">скоро</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/agent/provider</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Откуда модель</h2><p>Чья модель и чьи деньги. Свой ключ / Gonka → 0 комиссии.</p></div>
+          <div class="list">
+            <div class="card amber"><div class="row between"><div class="row"><div class="av amber">A</div><div><div class="t-title">AIAG-шлюз</div><div class="t-sub">managed · с наценкой</div></div></div><span class="chip on sm">● выбран</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">R</div><div><div class="t-title">OpenRouter <span class="faint">(свой ключ)</span></div><div class="t-sub good-tx">комиссия 0</div></div></div><span class="muted">○</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">O</div><div><div class="t-title">OpenAI / Anthropic (BYOK)</div><div class="t-sub good-tx">комиссия 0</div></div></div><span class="muted">○</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av sky">G</div><div><div class="t-title">Gonka <span class="chip sky sm">DeAI</span></div><div class="t-sub good-tx">GNK-кошелёк · 0 комиссии</div></div></div><span class="muted">○</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">⌁</div><div class="t-title">Custom URL <span class="faint">(OpenAI-совм.)</span></div></div><span class="muted">○</span></div></div>
+          </div>
+          <div class="btn block">Выбрать провайдер</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s18">
+    <figcaption class="cap"><b>18 · Оснастить тулзами</b><span class="tag soon">скоро</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/agent/tools</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Что умеет агент</h2><p>Платные тулзы списываются при вызове.</p></div>
+          <div class="grid2">
+            <div class="card"><div class="row between"><div class="row"><div class="av">🔍</div><div><div class="t-title">Web Search</div><div class="t-sub num">0.2 кр</div></div></div><div class="toggle on"></div></div></div>
+            <div class="card amber"><div class="row between"><div class="row"><div class="av amber">🔥</div><div><div class="t-title">Firecrawl</div><div class="t-sub num">1 кр</div></div></div><div class="toggle on"></div></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🖼</div><div><div class="t-title">Image-gen</div><div class="t-sub num">2 кр</div></div></div><div class="toggle"></div></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🧮</div><div><div class="t-title">Calc</div><div class="t-sub">встроенная</div></div></div><div class="toggle on"></div></div></div>
+          </div>
+          <div class="card flat"><div class="row"><div class="av">∑</div><div class="t-sub" style="margin:0">3 тулзы · <b class="amber-tx">~1.4 кр</b>/прогон при веб-поиске</div></div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  </div>
+
+  <!-- ════════════════════════ E · СВОЙ HERMES ════════════════════════ -->
+  <div class="grp-head"><span class="gl">E</span> Свой Hermes · <span class="gd">подключить рантайм, BYOK</span></div>
+  <div class="row-board">
+
+  <figure class="artboard" id="s19">
+    <figcaption class="cap"><b>19 · Подключить свой Hermes ★</b><span class="tag live">live</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/connect/hermes</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Свой Hermes</h2><p>Наведи AIAG на твой эндпоинт. Работает через него — со своими тулзами и памятью. Можно докинуть наши модели/скиллы поверх.</p></div>
+          <div class="grid2">
+            <div class="field"><div class="label">Base URL (OpenAI-совм. / Hermes :8642)</div><div class="input num">http://host:8642/v1</div></div>
+            <div class="field"><div class="label">API-ключ (если есть)</div><div class="input row between"><span class="num muted">····</span><span class="amber-tx">вставить</span></div></div>
+          </div>
+          <div class="card sky"><div class="row"><div class="av sky">🔍</div><div class="t-sub" style="margin:0">Проверим запросом к <b>/models</b>. Эндпоинт не покидает твою инфру — мы только маршрутизируем.</div></div></div>
+          <div class="card"><div class="row between"><div class="row"><div class="av">🧩</div><div class="t-title">Использовать наши тулзы / скиллы</div></div><div class="toggle on"></div></div></div>
+          <div class="btn block">Проверить и подключить</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s20">
+    <figcaption class="cap"><b>20 · BYOK — свой ключ = 0 комиссии</b><span class="tag live">live</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/connect/byok</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Свой ключ</h2><p>Шифруем. Оплата по твоему ключу — не из баланса, 0 комиссии.</p></div>
+          <div class="field"><div class="label">1 · Провайдер</div><div class="chips"><span class="chip on">OpenAI</span><span class="chip">Anthropic</span><span class="chip">Google</span><span class="chip">OpenRouter</span><span class="chip sky">Gonka</span><span class="chip">Custom</span></div></div>
+          <div class="grid2">
+            <div class="field"><div class="label">2 · API-ключ</div><div class="input row between"><span class="num muted">sk-····abcd</span><span class="amber-tx">вставить</span></div></div>
+            <div class="field"><div class="label">3 · Модель</div><div class="input row between"><span class="ink">gpt-5.5</span><span class="faint">список ›</span></div></div>
+          </div>
+          <div class="card good"><div class="row"><div class="av" style="border-color:var(--good-line);background:var(--good-soft);color:var(--good)">🔒</div><div class="t-sub" style="margin:0">Сохраняем только шифр + последние 4 символа. Проверка через /models.</div></div></div>
+          <div class="btn block">Проверить и сохранить</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  </div>
+
+  <!-- ════════════════════════ F · MANAGED HERMES ════════════════════════ -->
+  <div class="grp-head"><span class="gl">F</span> Managed Hermes · <span class="gd">облачный рантайм (R&D)</span></div>
+  <div class="row-board">
+
+  <figure class="artboard" id="s21">
+    <figcaption class="cap"><b>21 · Provisioning</b><span class="tag rnd">R&D</span></figcaption>
+    <div class="win md">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/hermes/provision</span></div>
+      <div class="appshell" style="min-height:440px">
+        <div class="pmain center" style="gap:16px;padding:36px 48px">
+          <span class="aiag-mark" aria-hidden="true" style="width:54px;height:54px"></span>
+          <div class="ph-h" style="text-align:center"><h2>Поднимаем твой<br>облачный Hermes</h2><p style="margin:6px auto 0">Отдельный рантайм на нашей инфре. Своя память, тулзы, расписания.</p></div>
+          <div class="card" style="width:100%;text-align:left"><div class="led">
+            <div><span class="c">✓</span> под выделен · 512 МБ</div>
+            <div><span class="c">✓</span> Hermes v0.15 развёрнут</div>
+            <div><span class="c">✓</span> провайдеры → шлюз :4000</div>
+            <div><span class="amber-tx">●</span> инъекция конфига… <span class="t">12с</span></div>
+          </div></div>
+          <div class="meter" style="width:100%"><i style="width:72%"></i></div>
+          <div class="metric faint">~30–60с · спит, когда не нужен</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s22">
+    <figcaption class="cap"><b>22 · Мой Hermes — статус</b><span class="tag rnd">R&D</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/hermes/status</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="row between"><div class="row"><div class="av"><span class="aiag-mark" aria-hidden="true" style="width:18px;height:18px"></span></div><div><div class="t-title">Рантайм активен · Постовик</div><div class="t-sub num">v0.15 · uptime 4д</div></div></div><span class="chip good sm"><span class="sdot"></span> live</span></div>
+          <div class="grid3">
+            <div class="card flat"><div class="label">CPU</div><div class="num" style="font-size:17px">18%</div></div>
+            <div class="card flat"><div class="label">RAM</div><div class="num" style="font-size:17px">412 МБ</div></div>
+            <div class="card flat"><div class="label">статус</div><div class="num good-tx" style="font-size:17px">ok</div></div>
+          </div>
+          <div class="card flat"><div class="row between"><span class="metric"><b>1.2k</b> ранов/нед</span><span class="metric amber-tx"><b>34</b> кр/нед</span><span class="metric">p50 <b>0.9с</b></span></div></div>
+          <div class="row" style="gap:10px"><div class="btn ghost sm" style="flex:1">Конфиг</div><div class="btn ghost sm" style="flex:1">Логи</div><div class="btn ghost sm" style="flex:1">⏸ Сон</div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s23">
+    <figcaption class="cap"><b>23 · Конфиг (control-plane)</b><span class="tag rnd">R&D</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/hermes/config</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="card sky flat"><div class="t-sub" style="margin:0">У Hermes нет remote-API → меняем инъекцией конфига + рестарт рантайма.</div></div>
+          <div class="grid2">
+            <div class="card amber"><div class="row between"><div class="row"><div class="av amber">🧠</div><div class="t-title">Персона (SOUL.md)</div></div><span class="muted">✎</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🎚</div><div class="t-title">Модели</div></div><span class="muted num">4 ›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🧩</div><div class="t-title">Скиллы</div></div><span class="muted num">3 ›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🛠</div><div class="t-title">Тулзы / MCP</div></div><span class="muted num">5 ›</span></div></div>
+          </div>
+          <div class="btn block">Применить и перезапустить</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s24">
+    <figcaption class="cap"><b>24 · Память / знания (pgvector)</b><span class="tag rnd">R&D</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/hermes/memory</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Знания</h2><p>База знаний (pgvector). Приватна — не уходит в шаблон при публикации.</p></div>
+          <div class="list">
+            <div class="card"><div class="row between"><div class="row"><div class="av">📄</div><div><div class="t-title">brand-voice.md</div><div class="t-sub num">12 КБ · векторизован</div></div></div><span class="chip good sm">✓</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">📄</div><div><div class="t-title">faq.pdf</div><div class="t-sub num">340 КБ · 1.2k чанков</div></div></div><span class="chip good sm">✓</span></div></div>
+          </div>
+          <div class="empty">Перетащи файл сюда или подключи Notion / Drive (MCP).</div>
+          <div class="btn ghost block">＋ Добавить источник</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s25">
+    <figcaption class="cap"><b>25 · Расписания / cron</b><span class="tag soon">скоро</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/hermes/schedules</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Когда срабатывает</h2><p>Hermes :8642 /api/jobs — cron из коробки.</p></div>
+          <div class="list">
+            <div class="card amber"><div class="row between"><div><div class="t-title">Утренний дайджест</div><div class="t-sub num">09:00 · в @news</div></div><div class="toggle on"></div></div></div>
+            <div class="card"><div class="row between"><div><div class="t-title">Ответ на упоминание</div><div class="t-sub">триггер · вебхук</div></div><div class="toggle on"></div></div></div>
+            <div class="card"><div class="row between"><div><div class="t-title">Недельный отчёт</div><div class="t-sub num">Пн 10:00</div></div><div class="toggle"></div></div></div>
+          </div>
+          <div class="btn ghost block">＋ Новое расписание</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s26">
+    <figcaption class="cap"><b>26 · Канбан / swarm</b><span class="tag rnd">R&D</span></figcaption>
+    <div class="win lg">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/hermes/board</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Доска задач</h2><p>Цель → агент дробит на шаги (swarm-стейт Hermes).</p></div>
+          <div class="kanban">
+            <div class="col"><h4>Очередь <span>2</span></h4><div class="tk">Утренний дайджест<div class="m">cron 09:00</div></div><div class="tk">Ответить на 3 упом.<div class="m">триггер</div></div></div>
+            <div class="col"><h4>В работе <span>1</span></h4><div class="tk amber">Пост · 3 хука<div class="m">● 12 кр</div></div></div>
+            <div class="col done"><h4>Готово <span>5</span></h4><div class="tk">Сценарий рилса<div class="m">✓ 18 кр</div></div><div class="tk">Письмо<div class="m">✓ 6 кр</div></div></div>
+          </div>
+          <div class="card flat"><div class="row between"><span class="metric"><b>8</b> задач</span><span class="metric amber-tx"><b>34</b> кр всего</span></div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  </div>
+
+  <!-- ════════════════════════ G · ТУЛЗЫ / СКИЛЛЫ / MCP ════════════════════════ -->
+  <div class="grp-head"><span class="gl">G</span> Тулзы / скиллы / MCP · <span class="gd">возможности агенту</span></div>
+  <div class="row-board">
+
+  <figure class="artboard" id="s27">
+    <figcaption class="cap"><b>27 · Маркет тулзов (x402)</b><span class="tag rnd">R&D</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/tools</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><span class="kicker">Тулзы</span><h2>Маркет тулзов</h2><p>Возможности агенту. Оплата поштучно (x402-стиль — цена ДО вызова).</p></div>
+          <div class="ptop"><div class="search">🔎 Поиск тулзы…</div></div>
+          <div class="chips"><span class="chip on">Все</span><span class="chip">Веб</span><span class="chip">Данные</span><span class="chip sky">x402 ⚡</span></div>
+          <div class="list">
+            <div class="card amber"><div class="row between"><div class="row"><div class="av amber">🔥</div><div><div class="t-title">Firecrawl · скрейп</div><div class="t-sub">веб → markdown</div></div></div><span class="price">1 кр / вызов</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">⚡</div><div><div class="t-title">x402 Bazaar <span class="chip sky sm">авто</span></div><div class="t-sub">внешние сервисы по протоколу x402</div></div></div><span class="muted">›</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s28">
+    <figcaption class="cap"><b>28 · Тулза — pay-per-call</b><span class="tag rnd">R&D</span></figcaption>
+    <div class="win md">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/tools/firecrawl</span></div>
+      <div class="appshell" style="min-height:440px">
+        <div class="pmain">
+          <div class="row"><div class="av amber" style="width:48px;height:48px;font-size:20px">🔥</div><div><div class="t-title" style="font-size:17px">Firecrawl</div><div class="author">веб → markdown</div></div></div>
+          <div class="grid3">
+            <div class="card flat"><div class="label">Цена</div><div class="num amber-tx" style="font-size:17px">1 кр</div><div class="metric faint">/вызов</div></div>
+            <div class="card flat"><div class="label">Рельс</div><div class="num" style="font-size:14px">key-broker</div></div>
+            <div class="card flat"><div class="label">Аптайм</div><div class="num" style="font-size:17px">99.8%</div></div>
+          </div>
+          <div class="card sky"><div class="row"><div class="av sky">🔒</div><div class="t-sub" style="margin:0">Ключ у нас — агент не видит. Списываем 1 кр атомарно. Ошибка → возврат. Цена показана ДО вызова (x402-стиль).</div></div></div>
+          <div class="out">firecrawl_scrape({ url }) → { content, cost: 1 }</div>
+          <div class="sp"></div>
+          <div class="btn block">＋ Добавить агенту</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s29">
+    <figcaption class="cap"><b>29 · Маркет скиллов (hub)</b><span class="tag rnd">R&D</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/skills</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><span class="kicker">Скиллы</span><h2>Навыки</h2><p>Готовые процедуры (SKILL.md). Шарятся в шаблоне, ключи приватны.</p></div>
+          <div class="ptop"><div class="search">🔎 Поиск скилла…</div></div>
+          <div class="list">
+            <div class="card"><div class="row between"><div class="row"><div class="av amber">✍️</div><div><div class="t-title">Копирайт AIDA</div><div class="author">@skillsmith</div></div></div><div class="row" style="gap:8px"><span class="price free">бесплатно</span><div class="btn sm ghost">＋</div></div></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🔎</div><div><div class="t-title">Deep research</div><div class="author">@research · ★ 4.9</div></div></div><div class="row" style="gap:8px"><span class="price">50 кр/мес</span><div class="btn sm ghost">＋</div></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s30">
+    <figcaption class="cap"><b>30 · MCP-серверы (OAuth)</b><span class="tag rnd">R&D</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/mcp</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>MCP-серверы</h2><p>Third-party — через OAuth 2.1 + PKCE.</p></div>
+          <div class="list">
+            <div class="card good"><div class="row between"><div class="row"><div class="av" style="border-color:var(--good-line);background:var(--good-soft);color:var(--good)">N</div><div><div class="t-title">Notion</div><div class="t-sub good-tx">подключён · OAuth</div></div></div><span class="chip good sm">✓</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">S</div><div><div class="t-title">Google Sheets</div><div class="t-sub">нужен вход</div></div></div><div class="btn sm">Войти</div></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">⚙</div><div><div class="t-title">Свой MCP</div><div class="t-sub num">bearer · per-agent</div></div></div><span class="muted">›</span></div></div>
+          </div>
+          <div class="btn ghost block">＋ Добавить MCP</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  </div>
+
+  <!-- ════════════════════════ H · КОШЕЛЁК ════════════════════════ -->
+  <div class="grp-head"><span class="gl">H</span> Кошелёк · <span class="gd">мульти-крипто кредиты, пополнение, бюджет агента</span></div>
+  <div class="row-board">
+
+  <figure class="artboard" id="s31">
+    <figcaption class="cap"><b>31 · Баланс (мульти-крипто кредиты) ★</b><span class="tag live">live</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/wallet</span></div>
+      <div class="appshell">
+        <nav class="pside">
+          <div class="ph-brand"><span class="lg" aria-hidden="true"></span><span class="nm">AI<b>·</b>Aggregator</span></div>
+          <div class="pnav"><span class="ic"></span>Агенты</div>
+          <div class="pnav"><span class="ic"></span>Маркет</div>
+          <div class="pnav on"><span class="ic"></span>Кошелёк</div>
+          <div class="pnav"><span class="ic"></span>Профиль</div>
+        </nav>
+        <div class="pmain">
+          <div class="ph-h"><span class="kicker">Кошелёк</span><h2>Баланс</h2></div>
+          <div class="card amber"><div class="row between"><div><div class="balance amber-tx">1 250 кр</div><div class="metric faint">≈ 12.5 USDT · пополнено в TON / ETH / SOL</div></div><div class="btn sm amber">＋ Пополнить</div></div>
+            <div class="metric faint" style="margin-top:10px">расход ~34 кр/день · хватит на ~36 дней</div></div>
+          <div class="label">последние операции</div>
+          <div class="list">
+            <div class="card flat"><div class="row between"><div class="t-sub" style="margin:0">Пополнение · TON Connect</div><span class="num good-tx">+1000 кр</span></div></div>
+            <div class="card flat"><div class="row between"><div class="t-sub" style="margin:0">Аренда «Ника» · @smm</div><span class="num muted">−200 кр</span></div></div>
+            <div class="card flat"><div class="row between"><div class="t-sub" style="margin:0">Постовик · прогон</div><span class="num muted">−12 кр</span></div></div>
+            <div class="card flat"><div class="row between"><div class="t-sub" style="margin:0">Firecrawl · тулза</div><span class="num muted">−3 кр</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s32">
+    <figcaption class="cap"><b>32 · Пополнить — TON + другие крипто (НЕ Stars)</b><span class="tag live">live</span></figcaption>
+    <div class="win modal-wrap">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/wallet/topup</span></div>
+      <div class="appshell" style="min-height:470px">
+        <div class="pmain" style="filter:saturate(.5);opacity:.5"><div class="ph-h"><span class="kicker">Кошелёк</span><h2>Баланс</h2></div><div class="card amber"><div class="balance amber-tx">1 250 кр</div></div></div>
+      </div>
+      <div class="scrim">
+        <div class="modal">
+          <h3>Пополнить</h3>
+          <div class="chips"><span class="chip">+500 кр</span><span class="chip on">+1000 кр</span><span class="chip">+2500 кр</span><span class="chip">Другое</span></div>
+          <div class="metric faint">1000 кр ≈ 10 USDT · оплата криптой, без Telegram Stars</div>
+          <div class="label">кошелёк / сеть</div>
+          <div class="list">
+            <div class="card amber flat"><div class="row between"><div class="row"><div class="av amber">💎</div><div class="t-title">TON Connect (TON / USDT)</div></div><span class="amber-tx">●</span></div></div>
+            <div class="card flat"><div class="row between"><div class="row"><div class="av">Ξ</div><div><div class="t-title">EVM (ETH / USDC)</div><div class="t-sub">WalletConnect</div></div></div><span class="muted">○</span></div></div>
+            <div class="card flat"><div class="row between"><div class="row"><div class="av">◎</div><div><div class="t-title">Solana (SOL / USDC)</div><div class="t-sub">Phantom</div></div></div><span class="muted">○</span></div></div>
+          </div>
+          <div class="btn block">Оплатить · 1000 кр</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s33">
+    <figcaption class="cap"><b>33 · Бюджет агента (delegated wallet)</b><span class="tag soon">скоро</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/agent/budget</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Карта агента · Постовик</h2><p>Агент тратит только из лимита. Основной баланс не трогается.</p></div>
+          <div class="card amber"><div class="row between"><div class="label">Сегодня</div><div class="num">12 / 50 кр</div></div><div class="meter" style="margin-top:9px"><i style="width:24%"></i></div><div class="metric faint" style="margin-top:9px">сброс 00:00 · авто-стоп при превышении</div></div>
+          <div class="grid2">
+            <div class="card"><div class="row between"><div class="row"><div class="av">◎</div><div class="t-title">Лимит / день</div></div><span class="muted num">50 кр ›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">⛔</div><div class="t-title">Лимит / вызов</div></div><span class="muted num">5 кр ›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">✓</div><div class="t-title">Разрешённые тулзы</div></div><span class="muted num">3 ›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">📅</div><div class="t-title">Лимит аренды авторов</div></div><span class="muted num">350 кр/мес ›</span></div></div>
+          </div>
+          <div class="card sky flat"><div class="row"><div class="av sky">🔒</div><div class="t-sub" style="margin:0">Делегированный лимит без раскрытия ключа · отзыв в один клик · аудит-лог.</div></div></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  </div>
+
+  <!-- ════════════════════════ I · РЫНОК ════════════════════════ -->
+  <div class="grp-head"><span class="gl">I</span> Двусторонний рынок · <span class="gd">автор, публикация (free / цена-аренда), ремикс</span></div>
+  <div class="row-board">
+
+  <figure class="artboard" id="s34">
+    <figcaption class="cap"><b>34 · Профиль автора + доход</b><span class="tag soon">скоро</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/author/ainews</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="row"><div class="av amber" style="width:50px;height:50px;font-size:22px">✍️</div><div><div class="t-title" style="font-size:17px">@ainews</div><div class="author">автор · 6 агентов · ★ 4.9</div></div></div>
+          <div class="grid3">
+            <div class="card flat"><div class="label">прогоны</div><div class="num" style="font-size:18px">124k</div></div>
+            <div class="card flat"><div class="label">активных аренд</div><div class="num" style="font-size:18px">418</div></div>
+            <div class="card flat"><div class="label">доход (кредиты)</div><div class="num amber-tx" style="font-size:18px">38 600 кр</div></div>
+          </div>
+          <div class="label">мои агенты · доход = точная сумма автора, без процента площадки</div>
+          <div class="list">
+            <div class="card"><div class="row between"><div class="row"><div class="av amber">✍️</div><div><div class="t-title">Постовик</div><div class="runs"><b>48k</b> прогонов</div></div></div><div class="row" style="gap:10px"><span class="price free">бесплатно</span><span class="metric">0 кр/мес</span></div></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">📊</div><div><div class="t-title">Ника · SMM</div><div class="runs"><b>31k</b></div></div></div><div class="row" style="gap:10px"><span class="price">200 кр/мес</span><span class="metric amber-tx"><b>×142 аренды</b></span></div></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🎬</div><div><div class="t-title">Сценарист</div><div class="runs"><b>12k</b></div></div></div><div class="row" style="gap:10px"><span class="price">120 кр/мес</span><span class="metric amber-tx"><b>×88</b></span></div></div></div>
+          </div>
+          <div class="btn block">Вывести доход → кошелёк</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s35">
+    <figcaption class="cap"><b>35 · Опубликовать (free / задать цену-аренду)</b><span class="tag soon">скоро</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/publish</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="ph-h"><h2>Опубликовать агента</h2><p>Шарим настройку, НЕ данные. Цену задаёшь ты — площадка не берёт процент с аренды.</p></div>
+          <div class="grid2">
+            <div class="card"><div class="label">публично (в шаблон)</div><div class="list" style="margin-top:9px;gap:7px">
+              <div class="row between"><span class="t-sub" style="margin:0">Персона + промпт</span><span class="chip on sm">✓</span></div>
+              <div class="row between"><span class="t-sub" style="margin:0">Модели (имена)</span><span class="chip on sm">✓</span></div>
+              <div class="row between"><span class="t-sub" style="margin:0">Скиллы + тулзы + MCP-дефы</span><span class="chip on sm">✓</span></div>
+            </div></div>
+            <div class="card warn"><div class="label" style="color:var(--warn-ink)">приватно (остаётся у тебя)</div><div class="list" style="margin-top:9px;gap:7px">
+              <div class="row between"><span class="t-sub" style="margin:0">Ключи / токены</span><span class="faint">🔒</span></div>
+              <div class="row between"><span class="t-sub" style="margin:0">Память, знания, история</span><span class="faint">🔒</span></div>
+            </div></div>
+          </div>
+          <div class="field"><div class="label">Цена аренды</div>
+            <div class="row" style="gap:10px">
+              <div class="chip free" style="padding:8px 14px">бесплатно</div>
+              <div class="chip on" style="padding:8px 14px">задать цену</div>
+              <div class="input ink" style="flex:1"><span class="num" style="flex:1">200</span><span class="faint">кр / мес</span></div>
+            </div>
+          </div>
+          <div class="rentline"><span class="who">пользователь платит: модель + деплой + <b>твоя сумма 200 кр/мес</b></span><span class="amt">→ тебе 200 кр</span></div>
+          <div class="btn block">Опубликовать</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s36">
+    <figcaption class="cap"><b>36 · Ремикс / lineage</b><span class="tag soon">скоро</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/remix/postovik</span></div>
+      <div class="appshell">
+        <div class="pmain">
+          <div class="card"><div class="row"><div class="av amber">✍️</div><div><div class="t-title">Постовик</div><div class="author">оригинал от <b>@ainews</b> · бесплатный</div></div></div><div class="metric faint" style="margin-top:9px">↳ форкнули 2.3k · 14 ремиксов</div></div>
+          <div class="label">наследуем</div>
+          <div class="chips"><span class="chip on">персона</span><span class="chip on">модель</span><span class="chip on">скиллы</span><span class="chip">тулзы</span></div>
+          <div class="field"><div class="label">что меняешь</div><div class="input area">тон → деловой; + тулза Firecrawl; своя память…</div></div>
+          <div class="card sky flat"><div class="row"><div class="av sky">🔗</div><div class="t-sub" style="margin:0">Lineage сохраняется: оригиналу — атрибуция, тебе — твой ремикс. Свою цену-аренду ставишь сам.</div></div></div>
+          <div class="btn block">Создать ремикс</div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  </div>
+
+  <!-- ════════════════════════ J · АККАУНТ / МОДАЛКИ ════════════════════════ -->
+  <div class="grp-head"><span class="gl">J</span> Аккаунт / модалки · <span class="gd">профиль и состояния</span></div>
+  <div class="row-board">
+
+  <figure class="artboard" id="s37">
+    <figcaption class="cap"><b>37 · Профиль</b><span class="tag live">live</span></figcaption>
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b>/profile</span></div>
+      <div class="appshell">
+        <nav class="pside">
+          <div class="ph-brand"><span class="lg" aria-hidden="true"></span><span class="nm">AI<b>·</b>Aggregator</span></div>
+          <div class="pnav"><span class="ic"></span>Агенты</div>
+          <div class="pnav"><span class="ic"></span>Маркет</div>
+          <div class="pnav"><span class="ic"></span>Кошелёк</div>
+          <div class="pnav on"><span class="ic"></span>Профиль</div>
+        </nav>
+        <div class="pmain">
+          <div class="row"><div class="av amber" style="width:46px;height:46px;font-size:20px">👤</div><div><div class="t-title" style="font-size:16px">@username</div><div class="t-sub">AIAG · с мая 2026</div></div></div>
+          <div class="card amber"><div class="label">Баланс</div><div class="row between"><div class="balance amber-tx" style="font-size:24px">1 250 кр</div><div class="btn sm amber">Пополнить</div></div></div>
+          <div class="grid2">
+            <div class="card"><div class="row between"><div class="row"><div class="av">🔌</div><div class="t-title">Провайдеры / ключи</div></div><span class="muted num">2 ›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">👛</div><div class="t-title">Кошельки (TON · EVM · SOL)</div></div><span class="muted">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">✍️</div><div class="t-title">Мои агенты / доход</div></div><span class="muted">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🧾</div><div class="t-title">История / чеки</div></div><span class="muted">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">⚙️</div><div class="t-title">Настройки · 152-ФЗ</div></div><span class="muted">›</span></div></div>
+            <div class="card"><div class="row between"><div class="row"><div class="av">🚪</div><div class="t-title">Выйти</div></div><span class="muted">›</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="artboard" id="s38">
+    <figcaption class="cap"><b>38 · Модалки — состояния</b><span class="tag live">live</span></figcaption>
+    <div class="win lg">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lock">🔒</span><b>ai-aggregator.ru</b> · модальные состояния</span></div>
+      <div class="appshell" style="min-height:480px;background:var(--card-2)">
+        <div class="pmain" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-content:start">
+          <div class="modal" style="box-shadow:var(--shadow);width:auto">
+            <div class="row"><div class="modal-ic good" style="background:var(--good-soft);color:var(--good)">✓</div><div><h3 style="font-size:14px">Провайдер подключён</h3><p>OpenAI · ответ /models 200.</p></div></div>
+            <div class="btn sm block">Готово</div>
+          </div>
+          <div class="modal" style="box-shadow:var(--shadow);width:auto">
+            <div class="row"><div class="modal-ic" style="background:var(--warn-soft);color:var(--warn-ink)">!</div><div><h3 style="font-size:14px;color:var(--warn-ink)">Ключ не принят</h3><p>401 от провайдера. Проверь ключ и модель.</p></div></div>
+            <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">Закрыть</div><div class="btn sm" style="flex:1">Повторить</div></div>
+          </div>
+          <div class="modal" style="box-shadow:var(--shadow);width:auto">
+            <div class="row"><div class="modal-ic" style="background:var(--amber-soft);color:var(--amber-ink)">⚡</div><div><h3 style="font-size:14px">Низкий баланс</h3><p>Осталось 40 кр. Аренда «Ника» спишется через 2 дня.</p></div></div>
+            <div class="btn sm amber block">＋ Пополнить</div>
+          </div>
+          <div class="modal" style="box-shadow:var(--shadow);width:auto">
+            <div class="row"><div class="modal-ic" style="background:var(--warn-soft);color:var(--warn-ink)">🗑</div><div><h3 style="font-size:14px;color:var(--warn-ink)">Удалить агента?</h3><p>«Постовик» и его история удалятся безвозвратно.</p></div></div>
+            <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">Отмена</div><div class="btn sm" style="flex:1;background:var(--warn-ink);border-color:var(--warn-ink)">Удалить</div></div>
+          </div>
+          <div class="modal" style="box-shadow:var(--shadow);width:auto">
+            <div class="row"><div class="modal-ic" style="background:var(--amber-soft);color:var(--amber-ink)">🏷</div><div><h3 style="font-size:14px">Цена публикации</h3><p>Аренда 200 кр/мес. Площадка не берёт процент — сумма идёт тебе целиком.</p></div></div>
+            <div class="rentline"><span class="who">тебе за каждую аренду</span><span class="amt">200 кр</span></div>
+            <div class="btn sm block">Опубликовать за 200 кр/мес</div>
+          </div>
+          <div class="modal" style="box-shadow:var(--shadow);width:auto">
+            <div class="row"><div class="modal-ic amber" style="background:var(--amber-soft);color:var(--amber-ink)">🔥</div><div><h3 style="font-size:14px">Подтвердить тулзу</h3><p>Агент вызовет Firecrawl · ~3 кр. Цена показана до вызова.</p></div></div>
+            <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">Отклонить</div><div class="btn sm" style="flex:1">Разрешить</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  </div>
+
+  <footer class="board-footer">
+    AIAG WEB · светлый борд «Studio23» · десктоп-зеркало TMA · агенты как персонажи.<br>
+    Монетизация (2026-06-03): автор публикует <b>бесплатно</b> или ставит <b>цену-аренду (X кр/мес)</b>; пользователь платит модель + деплой + точную сумму автора; <b>процентной комиссии с аренды нет</b>.<br>
+    Портреты — стилизованные монограммы (плейсхолдеры). Ручки и каналы — нейтральные плейсхолдеры (@username).
+  </footer>
+
+</main>
+
+<script>
+/* ── Character sheet for Screen 05 (light translation of characters-video.html) ── */
+const C = {
+  alisa: { name:'Алиса', role:'Контент-редактор, тон дерзкий и быстрый', model:'GPT-5.5 · AIAG', ch:28,
+    author:'@ainews', price:'бесплатно', priceClass:'free', state:'running',
+    bio:'Берёт сырой текст и возвращает подтянутым: режет воду, выпрямляет логику, ставит крючок в первую строку. <b>Не подлизывается.</b> Слабая идея — скажет прямо и предложит сильнее.',
+    tone:{l:'дерзкий', r:'деловой', pos:26}, strengths:[['редактура',95],['крючки и заголовки',88],['структура',72]],
+    voice:{prompt:'сократи этот абзац вдвое', said:'Лишнее вырезала. Осталась суть и один глагол, который тянет всю фразу. Хочешь жёстче — скажи.'},
+    spec:[['Душа',[['persona: дерзкий редактор',1],['temp 0.7',0]]],['Модели',[['chat: GPT-5.5',1],['image: nano-banana',0]]],['Навыки',[['рерайт',0],['заголовки',0],['тон-чек',0]]],['Тулзы',[['web.search',0],['readability',0]]]],
+    lineage:{from:'Базовый редактор', gl:'Б', lh:62, remixes:38},
+    stats:[['48','k','запусков'],['4.9','','★ рейтинг (312)','star'],['1.2','с','медиана']],
+    prompts:['Сократи этот пост вдвое, оставь суть','Придумай 5 заголовков с крючком','Перепиши строже, убери воду'] },
+  nika: { name:'Ника', role:'SMM-менеджер, тон лёгкий и быстрый', model:'GPT-5.5 · AIAG', ch:340,
+    author:'@smm', price:'200 кр/мес', priceClass:'', state:'owned',
+    bio:'Живёт в ленте: ловит формат раньше, чем он стал шумом, и собирает из него постинг-план. <b>Думает охватами, а не лайками.</b>',
+    tone:{l:'дерзкий', r:'деловой', pos:40}, strengths:[['тренд-чутьё',90],['форматы',82],['копи под платформу',70]],
+    voice:{prompt:'что постить на этой неделе', said:'Берём короткие до/после — сейчас вытягивает охваты. Три поста: вт, чт, сб утром. Пятницу не трогаем.'},
+    spec:[['Душа',[['persona: трендвотчер',1],['temp 0.8',0]]],['Модели',[['chat: GPT-5.5',1]]],['Навыки',[['контент-план',0],['хуки',0]]],['Тулзы',[['web.search',0],['trends',0]]]],
+    lineage:{from:'Алиса', gl:'А', lh:28, remixes:21},
+    stats:[['31','k','запусков'],['4.7','','★ рейтинг (4.4k)','star'],['200','кр','аренда/мес']],
+    prompts:['Контент-план на неделю под Telegram','Разбери, почему этот пост зашёл','10 хуков на тему запуска'] },
+  grisha: { name:'Гриша', role:'Аналитик данных, тон сухой и предметный', model:'Claude 4.8 · AIAG', ch:165,
+    author:'@finbot', price:'9 кр/прогон', priceClass:'', state:'owned',
+    bio:'Читает данные без эмоций: цифры, тренды, аномалии. <b>Говорит цифрами, не эмоциями.</b> Если в данных шум — скажет «вывод ненадёжен».',
+    tone:{l:'дерзкий', r:'деловой', pos:80}, strengths:[['SQL и метрики',92],['визуализация',78],['аномалии',74]],
+    voice:{prompt:'выручка просела, почему', said:'Просадка −12% по когорте маркета, не по продукту. Причина — отток в сегменте «триал». Остальное в норме.'},
+    spec:[['Душа',[['persona: сухой аналитик',1],['temp 0.3',0]]],['Модели',[['chat: Claude 4.8',1]]],['Навыки',[['SQL',0],['метрики',0]]],['Тулзы',[['db.query',0],['charts',0]]]],
+    lineage:{from:'С нуля', gl:'+', lh:165, remixes:9},
+    stats:[['19','k','запусков'],['4.9','','★ рейтинг (2.4k)','star'],['9','кр','за прогон']],
+    prompts:['Разбери воронку за квартал','Найди аномалии в выручке','Собери SQL под этот отчёт'] },
+};
+
+function tagcls(s){ return s===1 ? 'tag2 lead' : 'tag2'; }
+function renderSheet(k){
+  const c = C[k];
+  const dims = `<div class="dim"><div class="dim-head"><span>тон</span><span class="val">${c.tone.l} ↔ ${c.tone.r}</span></div><div class="scale"><span class="knob" style="left:${c.tone.pos}%"></span></div></div>` +
+    c.strengths.map(s=>`<div class="dim"><div class="dim-head"><span>${s[0]}</span><span class="val">${s[1]}</span></div><div class="strength"><i data-w="${s[1]}"></i></div></div>`).join('');
+  const spec = c.spec.map(r=>`<div class="spec-row"><div class="lb">${r[0]}</div><div class="vals">${r[1].map(v=>`<span class="${tagcls(v[1])}">${v[0]}</span>`).join('')}</div></div>`).join('');
+  const stats = c.stats.map(s=>`<div><div class="v ${s[3]||''}">${s[0]}<span class="u">${s[1]}</span></div><div class="k">${s[2]}</div></div>`).join('');
+  const prompts = c.prompts.map(p=>`<div class="pchip">${p}<span class="arrow">▶</span></div>`).join('');
+  const rentAmt = c.priceClass==='free' ? '<span class="amt good-tx">бесплатно</span>' : `<span class="amt">${c.price}</span>`;
+  return `
+  <div style="--ch:${c.ch}">
+    <div class="row between" style="align-items:flex-start">
+      <div class="row" style="align-items:flex-start"><div class="pf xl"><span class="tdot"></span>${c.state==='running'?'<span class="plive pulse"></span>':''}<span class="gly">${c.name[0]}</span></div>
+        <div><div class="t-title" style="font-size:21px">${c.name}</div>
+          <div class="crole">${c.role}</div>
+          <div class="metric faint" style="margin-top:4px">основная модель: ${c.model} · от <b style="color:var(--ink-2)">${c.author}</b></div>
+          <div class="row" style="gap:8px;margin-top:9px"><span class="price ${c.priceClass}">${c.price}</span><span class="metric">★ ${c.stats[1][0]} · ${c.stats[0][0]}${c.stats[0][1]} прогонов</span></div>
+        </div>
+      </div>
+      <button class="sheet-close" id="closeSheet">✕</button>
+    </div>
+    <p class="t-sub" style="font-size:13px;margin-top:14px;max-width:64ch;line-height:1.55">${c.bio}</p>
+    <div class="sheet-grid" style="margin-top:18px">
+      <div class="sheet-portrait">${dims}</div>
+      <div>
+        <div class="voice"><div class="vk"><span>как говорит</span><span>пример вывода</span></div><div class="echo">ты: «${c.voice.prompt}»</div><div>${c.voice.said}</div></div>
+        <div style="margin-top:16px">${spec}</div>
+      </div>
+    </div>
+    <div class="lineage" style="margin-top:16px"><span class="gl" style="--lh:${c.lineage.lh}">${c.lineage.gl}</span><span class="arrow">↳ форк от</span> <b>${c.lineage.from}</b><span class="remixes"><b>${c.lineage.remixes}</b> ремиксов</span></div>
+    <div class="bigstats" style="margin-top:16px">${stats}</div>
+    <div class="label" style="margin:18px 0 9px">быстрый старт</div>${prompts}
+    <div class="rentline" style="margin-top:16px"><span class="who">аренда автора <b>${c.author}</b></span>${rentAmt}</div>
+    <div class="row" style="gap:10px;margin-top:14px"><div class="btn amber">▶ Запустить · 1-й прогон бесплатно</div><div class="btn ghost">⎘ Клонировать</div></div>
+  </div>`;
+}
+
+const mount = document.getElementById('agent-mount');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function openAgent(k){
+  mount.innerHTML = renderSheet(k);
+  const fill = () => mount.querySelectorAll('.strength > i').forEach(i => i.style.width = i.dataset.w + '%');
+  if (reduce) fill(); else requestAnimationFrame(fill);
+  document.getElementById('closeSheet').onclick = () => openAgent('alisa');
+}
+openAgent('alisa');
+
+/* clicking a character card in #03 swaps the open sheet + jumps to it */
+document.querySelectorAll('.gcard[data-id]').forEach(card => {
+  card.addEventListener('click', () => {
+    openAgent(card.dataset.id || 'alisa');
+    document.getElementById('s05').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+</script>
+</body>
+</html>

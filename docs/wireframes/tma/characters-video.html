@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AIAG — агенты · голографические видео-карты</title>
+<style>
+  :root{
+    --bg-deep:oklch(0.125 0.010 280);--bg:oklch(0.155 0.011 280);
+    --surface:oklch(0.205 0.013 280);--surface-2:oklch(0.245 0.014 280);
+    --line:oklch(0.32 0.016 280);--line-soft:oklch(0.27 0.013 280);
+    --ink:oklch(0.95 0.01 90);--ink-dim:oklch(0.74 0.018 280);--ink-faint:oklch(0.56 0.018 280);
+    --amber:oklch(0.82 0.15 75);--amber-deep:oklch(0.62 0.14 65);--good:oklch(0.80 0.14 155);
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;--sans:-apple-system,'Segoe UI',Roboto,system-ui,sans-serif;
+    --exp:cubic-bezier(0.16,1,0.3,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--sans);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;padding:0 20px 96px;
+    background:
+      radial-gradient(900px 600px at 82% -6%, oklch(0.28 0.09 300/.5), transparent 60%),
+      radial-gradient(720px 520px at -2% 8%, oklch(0.26 0.08 235/.45), transparent 55%),
+      var(--bg-deep);background-attachment:fixed}
+  .wrap{max-width:1080px;margin:0 auto}
+
+  @keyframes rise{from{opacity:0;transform:translateY(20px) scale(.99)}to{opacity:1;transform:none}}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+  @keyframes ring{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.4);opacity:0}}
+  @keyframes scan{from{transform:translateY(-110%)}to{transform:translateY(820%)}}
+  @keyframes flipIn{from{opacity:0;transform:perspective(1400px) rotateY(-14deg) translateY(14px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+  header{padding:58px 0 24px;animation:rise .7s var(--exp) both}
+  .kick{font-family:var(--mono);font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--amber);margin-bottom:16px}
+  h1{font-size:clamp(28px,5vw,46px);line-height:1.05;letter-spacing:-.02em;font-weight:680;max-width:20ch}
+  h1 .q{color:var(--ink-faint)}
+  .lead{font-size:16px;color:var(--ink-dim);max-width:62ch;margin-top:14px}
+  .switch{display:inline-flex;margin-top:24px;padding:4px;border-radius:13px;background:oklch(0.2 0.013 280);border:1px solid var(--line)}
+  .switch button{font:600 13px var(--sans);color:var(--ink-dim);background:none;border:0;cursor:pointer;padding:8px 16px;border-radius:10px;display:inline-flex;gap:8px;align-items:center}
+  .switch button .cnt{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);border:1px solid var(--line);border-radius:20px;padding:1px 7px}
+  .switch button.on{background:linear-gradient(180deg,oklch(0.85 0.15 75),oklch(0.74 0.15 70));color:oklch(0.2 0.05 60)}
+  .switch button.on .cnt{color:oklch(0.26 0.05 60);border-color:oklch(0.42 0.06 60)}
+  .seclabel{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin:30px 0 18px;display:flex;align-items:center;gap:12px}
+  .seclabel::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+  .seclabel .accent{color:oklch(0.84 0.10 75)}
+
+  /* ── holographic video card ─────────────────── */
+  .gallery{display:flex;gap:26px;flex-wrap:wrap;perspective:1500px}
+  .vcard{--ang:0deg;--mx:50%;--my:50%;--rx:0deg;--ry:0deg;--ch:25;
+    position:relative;width:252px;aspect-ratio:5/7;border-radius:20px;flex:none;cursor:pointer;background:#0a0a12;
+    transform:rotateX(var(--rx)) rotateY(var(--ry));transform-style:preserve-3d;
+    transition:transform .4s var(--exp),box-shadow .4s ease;
+    box-shadow:0 18px 52px -16px oklch(0.10 0.05 280/.85);animation:rise .7s var(--exp) both}
+  .vcard:nth-child(2){animation-delay:.08s}.vcard:nth-child(3){animation-delay:.16s}
+  /* iridescent border — 4px, flows around the perimeter, no corner brackets */
+  .vcard .frame{position:absolute;inset:0;border-radius:20px;padding:4px;pointer-events:none;z-index:4;opacity:.7;transition:opacity .4s ease;
+    background:conic-gradient(from var(--ang),
+      oklch(0.86 0.2 20),oklch(0.9 0.19 90),oklch(0.86 0.2 165),oklch(0.86 0.2 235),oklch(0.86 0.2 305),oklch(0.86 0.2 20));
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+  .vcard:hover .frame{opacity:1}
+  .vcard video{position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px);object-fit:cover;border-radius:16px;z-index:1;background:#0a0a12}
+  .vcard .holofx{position:absolute;inset:4px;border-radius:16px;z-index:2;pointer-events:none;mix-blend-mode:color-dodge;opacity:0;transition:opacity .4s ease;
+    background:repeating-linear-gradient(115deg,transparent 0 6%,oklch(0.7 0.18 20/.5) 7%,oklch(0.7 0.18 130/.5) 9%,oklch(0.7 0.18 250/.5) 11%,transparent 14% 20%);
+    background-size:300% 300%;background-position:var(--mx) var(--my)}
+  .vcard .glare{position:absolute;inset:4px;border-radius:16px;z-index:3;pointer-events:none;opacity:0;transition:opacity .4s ease;mix-blend-mode:overlay;
+    background:radial-gradient(circle at var(--mx) var(--my),oklch(1 0 0/.35),transparent 40%)}
+  .vcard:hover .holofx{opacity:.5}.vcard:hover .glare{opacity:.7}
+  .vcard:hover{box-shadow:0 26px 72px -16px oklch(0.10 0.06 280/.9),0 0 38px -8px oklch(0.75 0.16 var(--ch)/.5)}
+  .vcard .run-badge{position:absolute;top:12px;right:12px;z-index:3;display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9px;color:var(--good);
+    background:oklch(0.15 0.02 155/.65);border:1px solid oklch(0.7 0.12 155/.5);border-radius:20px;padding:3px 8px;backdrop-filter:blur(3px)}
+  .vcard .run-badge i{width:6px;height:6px;border-radius:50%;background:var(--good);animation:pulse 1.9s ease-in-out infinite}
+  .vcard .meta{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:40px 15px 15px;border-radius:0 0 16px 16px;pointer-events:none;
+    background:linear-gradient(to top,oklch(0.07 0.02 280/.95) 14%,oklch(0.07 0.02 280/.55) 56%,transparent)}
+  .vcard .nm{font-size:20px;font-weight:680;letter-spacing:-.01em}
+  .vcard .rl{font-size:12.5px;color:oklch(0.88 0.09 var(--ch));margin-top:2px}
+  .vcard .mbadge{display:inline-block;margin-top:8px;font-family:var(--mono);font-size:10px;color:var(--ink-dim);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
+  .vcard .st{display:flex;gap:14px;margin-top:10px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}
+  .vcard .st b{color:var(--ink)}.vcard .st .star{color:oklch(0.86 0.13 90)}
+  @media (hover:none){.vcard{transform:none!important}.vcard .frame{opacity:.9}.vcard .holofx{opacity:.4}}
+
+  /* ── opened character sheet (ported from v2) ─────────────────── */
+  #mount{margin-top:10px}
+  .sheet-label{margin-top:44px}
+  .sheet{position:relative;border-radius:22px;border:1px solid oklch(0.6 0.12 var(--ch)/.4);overflow:hidden;animation:flipIn .62s var(--exp) both;
+    background:radial-gradient(60% 90% at 100% 0%,oklch(0.6 0.14 var(--ch)/.16),transparent 60%),linear-gradient(180deg,oklch(0.21 0.014 280),oklch(0.165 0.012 280))}
+  .sheet-grid{display:grid;grid-template-columns:320px 1fr}
+  .sheet-portrait{position:relative;border-right:1px solid var(--line-soft);padding:24px;display:flex;flex-direction:column}
+  .sheet-portrait .big{position:relative;aspect-ratio:3/4;border-radius:16px;overflow:hidden;border:1px solid oklch(0.6 0.13 var(--ch)/.45);background:#0a0a12}
+  .sheet-portrait .big video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .sheet-portrait .big .scanline{position:absolute;left:0;right:0;top:0;height:26%;z-index:3;pointer-events:none;
+    background:linear-gradient(180deg,transparent,oklch(0.97 0.05 var(--ch)/.3),transparent);animation:scan 1.1s var(--exp) .12s 1 both}
+  .sheet-portrait .holo2{position:absolute;inset:0;border-radius:16px;padding:3px;pointer-events:none;z-index:2;opacity:.6;
+    background:conic-gradient(from var(--ang),oklch(0.86 0.2 20),oklch(0.86 0.2 165),oklch(0.86 0.2 305),oklch(0.86 0.2 20));
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+  .owner-row{display:flex;align-items:center;gap:8px;margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+  .owner-row .pill{display:inline-flex;align-items:center;gap:6px;border-radius:7px;padding:3px 9px;color:var(--good);border:1px solid oklch(0.8 0.14 155/.5);background:oklch(0.8 0.14 155/.13)}
+  .owner-row .pill i{width:6px;height:6px;border-radius:50%;background:var(--good);animation:pulse 1.9s ease-in-out infinite}
+  .ref-note{margin-top:14px;font-size:11px;color:var(--ink-faint);line-height:1.5;font-family:var(--mono)}
+  .ref-note b{color:oklch(0.86 0.10 var(--ch));font-weight:500}
+  .sheet-body{padding:28px 30px}
+  .sheet-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+  .sheet-close{flex:none;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink-dim);font-size:16px;cursor:pointer;line-height:1;transition:transform .3s var(--exp),color .3s,border-color .3s}
+  .sheet-close:hover{color:var(--ink);border-color:oklch(0.82 0.15 75/.5);transform:rotate(90deg)}
+  .sheet-body h2{font-size:34px;letter-spacing:-.02em;font-weight:700;line-height:1}
+  .h2-role{font-size:14px;color:oklch(0.86 0.10 var(--ch));margin-top:6px}
+  .h2-model{font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-top:6px}
+  .bio{font-size:15px;color:var(--ink-dim);max-width:60ch;margin-top:16px}.bio b{color:var(--ink);font-weight:600}
+  .persona{margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:18px 28px;max-width:64ch}
+  @media(max-width:540px){.persona{grid-template-columns:1fr}}
+  .dim-head{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-faint);margin-bottom:7px}
+  .scale{position:relative;height:6px;border-radius:4px;background:oklch(0.24 0.012 280);border:1px solid var(--line-soft)}
+  .scale>.knob{position:absolute;top:50%;width:13px;height:13px;border-radius:50%;transform:translate(-50%,-50%);background:oklch(0.92 0.06 var(--ch));border:2px solid oklch(0.16 0.03 var(--ch));box-shadow:0 0 0 3px oklch(0.6 0.12 var(--ch)/.2);transition:left .7s var(--exp)}
+  .strength{position:relative;height:6px;border-radius:4px;background:oklch(0.24 0.012 280);border:1px solid var(--line-soft);overflow:hidden}
+  .strength>i{display:block;height:100%;border-radius:4px;width:0;background:linear-gradient(90deg,oklch(0.55 0.10 var(--ch)),oklch(0.82 0.13 var(--ch)));transition:width .8s var(--exp)}
+  .dim .val{font-family:var(--mono);color:oklch(0.86 0.10 var(--ch))}
+  .voice{margin-top:22px;padding:14px 16px;border-radius:12px;background:oklch(0.6 0.12 var(--ch)/.08);border:1px solid oklch(0.6 0.12 var(--ch)/.3);font-size:14px;color:var(--ink);line-height:1.55}
+  .voice .vk{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:oklch(0.84 0.10 var(--ch));display:flex;justify-content:space-between;margin-bottom:7px}
+  .voice .vk .src{color:var(--ink-faint)}
+  .voice .prompt-echo{font-size:12px;color:var(--ink-faint);font-style:italic;margin-bottom:8px}
+  .spec{margin-top:24px}
+  .spec-row{display:grid;grid-template-columns:104px 1fr;gap:14px;padding:11px 0;border-top:1px solid var(--line-soft);align-items:baseline}
+  .spec-row:first-of-type{border-top:none}
+  .spec-row .label{font-family:var(--mono);font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em}
+  .spec-row .vals{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:7px;border:1px solid var(--line);color:var(--ink-dim);background:var(--surface)}
+  .tag.lead{color:oklch(0.92 0.05 var(--ch));border-color:oklch(0.6 0.12 var(--ch)/.45);background:oklch(0.6 0.12 var(--ch)/.10)}
+  .tag.off{color:var(--ink-faint)}
+  .lineage{margin-top:22px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 15px;border-radius:12px;border:1px dashed var(--line);font-size:13px;color:var(--ink-dim)}
+  .lineage .gl{width:28px;height:28px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:14px;color:oklch(0.95 0.04 var(--lh,75));border:1px solid oklch(0.7 0.10 var(--lh,75)/.5);background:oklch(0.2 0.04 var(--lh,75))}
+  .lineage b{color:var(--ink);font-weight:600}.lineage .arrow{color:var(--ink-faint);font-family:var(--mono)}
+  .lineage .remixes{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink-faint)}.lineage .remixes b{color:oklch(0.86 0.10 var(--ch))}
+  .sheet-stats{display:flex;gap:26px;margin-top:22px;flex-wrap:wrap}
+  .sheet-stats .v{font-family:var(--mono);font-size:22px;color:var(--ink)}.sheet-stats .v.star{color:oklch(0.86 0.13 90)}.sheet-stats .v .u{font-size:12px;color:var(--ink-faint)}
+  .sheet-stats .k{font-size:10px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+  .prompts-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin:24px 0 10px}
+  .pchip{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:11px;border:1px solid var(--line);background:var(--surface);font-size:13px;color:var(--ink-dim);cursor:pointer;margin-bottom:8px;max-width:60ch;transition:border-color .3s,transform .3s var(--exp),color .3s}
+  .pchip:hover{border-color:oklch(0.6 0.12 var(--ch)/.5);color:var(--ink);transform:translateX(3px)}
+  .pchip .arrow{font-family:var(--mono);color:oklch(0.82 0.10 var(--ch));margin-left:auto}
+  .cta{display:flex;align-items:center;gap:12px;margin-top:26px;flex-wrap:wrap}
+  .run{display:inline-flex;align-items:center;gap:9px;height:50px;padding:0 26px;border-radius:13px;font-size:15px;font-weight:680;border:0;cursor:pointer;color:oklch(0.2 0.04 60);background:linear-gradient(180deg,oklch(0.85 0.15 75),oklch(0.74 0.15 70));box-shadow:0 10px 28px -10px oklch(0.78 0.15 70/.6);transition:transform .3s var(--exp),box-shadow .3s}
+  .run:hover{transform:translateY(-2px)}
+  .clone{display:inline-flex;align-items:center;gap:8px;height:50px;padding:0 20px;border-radius:13px;font-size:14px;font-weight:600;cursor:pointer;color:var(--ink);background:var(--surface);border:1px solid var(--line);transition:border-color .3s,transform .3s var(--exp)}
+  .clone:hover{border-color:oklch(0.6 0.12 var(--ch)/.55);transform:translateY(-2px)}
+  .run-meta{font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
+  footer{margin-top:54px;padding-top:24px;border-top:1px solid var(--line-soft);font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.7}
+  footer b{color:var(--ink-dim);font-weight:500}footer a{color:var(--amber);text-decoration:none}
+  @media(max-width:720px){.sheet-grid{grid-template-columns:1fr}.sheet-portrait{border-right:none;border-bottom:1px solid var(--line-soft)}}
+</style>
+</head>
+<body data-mode="open">
+<div class="wrap">
+
+  <header>
+    <div class="kick">AIAG · коллекция агентов</div>
+    <h1>Агент не функция. <span class="q">Это персонаж с лицом, именем и характером.</span></h1>
+    <p class="lead">Голографическая видео-карта: живой портрет в рамке, имя, кто это и на какой модели. Тап раскрывает анкету персонажа: характер, как говорит, спец и запуск.</p>
+    <div class="switch"><button class="on">Каталог <span class="cnt">3</span></button><button>Моя коллекция <span class="cnt">1</span></button></div>
+  </header>
+
+  <div class="seclabel"><span class="accent">Каталог</span> · персонажи</div>
+
+  <div class="gallery" id="gallery">
+
+    <div class="vcard" data-id="alisa" style="--ch:28">
+      <span class="frame"></span>
+      <video src="./assets/char/ref1.mp4" poster="./assets/char/ref1.png" autoplay loop muted playsinline></video>
+      <span class="holofx"></span><span class="glare"></span>
+      <span class="run-badge"><i></i>в работе</span>
+      <div class="meta"><div class="nm">Алиса</div><div class="rl">Контент-редактор</div>
+        <span class="mbadge">GPT-5.5</span>
+        <div class="st"><span><b>12.4k</b> запусков</span><span class="star">★ <b>4.9</b></span></div></div>
+    </div>
+
+    <div class="vcard" data-id="nika" style="--ch:50">
+      <span class="frame"></span>
+      <video src="./assets/char/ref2.mp4" poster="./assets/char/ref2.png" autoplay loop muted playsinline></video>
+      <span class="holofx"></span><span class="glare"></span>
+      <div class="meta"><div class="nm">Ника</div><div class="rl">SMM-менеджер</div>
+        <span class="mbadge">Gemini 3.5</span>
+        <div class="st"><span><b>15.1k</b> запусков</span><span class="star">★ <b>4.7</b></span></div></div>
+    </div>
+
+    <div class="vcard" data-id="nova" style="--ch:300">
+      <span class="frame"></span>
+      <video src="./assets/char/ref3.mp4" poster="./assets/char/ref3.png" autoplay loop muted playsinline></video>
+      <span class="holofx"></span><span class="glare"></span>
+      <div class="meta"><div class="nm">Нова</div><div class="rl">Трейдер</div>
+        <span class="mbadge">Claude Opus 4.8</span>
+        <div class="st"><span><b>9.3k</b> запусков</span><span class="star">★ <b>4.8</b></span></div></div>
+    </div>
+
+  </div>
+
+  <div id="mount"></div>
+
+  <footer>
+    AIAG TMA · агенты как персонажи · голографические видео-карты.<br>
+    Видео-портреты <b>демонстрационные</b>; финальные лица генерируются по твоим референсам и привязываются к персонажу. Ручки и каналы это нейтральные плейсхолдеры (@username). · <a href="index.html">борд</a>
+  </footer>
+</div>
+
+<script>
+const C={
+  alisa:{name:'Алиса',role:'Контент-редактор, тон дерзкий и быстрый',model:'GPT-5.5 · AIAG',ch:28,vid:'./assets/char/ref1.mp4',poster:'./assets/char/ref1.png',state:'running',
+    bio:'Берёт сырой текст и возвращает подтянутым: режет воду, выпрямляет логику, ставит крючок в первую строку. <b>Не подлизывается.</b> Слабая идея — скажет прямо и предложит сильнее.',
+    tone:{l:'дерзкий',r:'деловой',pos:26}, strengths:[['редактура',95],['крючки и заголовки',88],['структура',72]],
+    voice:{prompt:'сократи этот абзац вдвое',said:'Лишнее вырезала. Осталась суть и один глагол, который тянет всю фразу. Хочешь жёстче — скажи.'},
+    spec:[['Душа',[['persona: дерзкий редактор',1],['temp 0.7',0]]],['Модели',[['chat: GPT-5.5',1],['image: nano-banana',0],['voice: off',-1]]],['Навыки',[['рерайт',0],['заголовки',0],['структура',0],['тон-чек',0]]],['Тулзы',[['web.search',0],['readability',0]]],['MCP',[['notion',0],['telegram',0]]],['Память',[['гайд по тону бренда',0]]]],
+    lineage:{from:'Базовый редактор',gl:'Б',lh:75,remixes:38},
+    stats:[['12.4','k','запусков'],['4.9','','★ рейтинг (3.1k)','star'],['2.1','с','медиана ответа']],
+    prompts:['Сократи этот пост вдвое, оставь суть','Придумай 5 заголовков с крючком','Перепиши строже, убери воду']},
+  nika:{name:'Ника',role:'SMM-менеджер, тон лёгкий и быстрый',model:'Gemini 3.5 · AIAG',ch:50,vid:'./assets/char/ref2.mp4',poster:'./assets/char/ref2.png',state:'owned',
+    bio:'Живёт в ленте: ловит формат раньше, чем он стал шумом, и собирает из него постинг-план. <b>Думает охватами, а не лайками.</b> Подскажет, где зайдёт, а где выгоришь зря.',
+    tone:{l:'дерзкий',r:'деловой',pos:40}, strengths:[['тренд-чутьё',90],['форматы',82],['копи под платформу',70]],
+    voice:{prompt:'что постить на этой неделе',said:'Берём короткие до/после, сейчас вытягивает охваты. Три поста: вт, чт, сб утром. Пятницу не трогаем, там просадка.'},
+    spec:[['Душа',[['persona: трендвотчер',1],['temp 0.8',0]]],['Модели',[['chat: Gemini 3.5',1],['image: nano-banana',0],['voice: off',-1]]],['Навыки',[['контент-план',0],['хуки',0],['адаптация VK/TG',0]]],['Тулзы',[['web.search',0],['trends',0]]],['MCP',[['telegram',0],['vk-ads',0]]],['Память',[['тон бренда',0],['прошлые победители',0]]]],
+    lineage:{from:'Алиса',gl:'А',lh:28,remixes:21},
+    stats:[['15.1','k','запусков'],['4.7','','★ рейтинг (4.4k)','star'],['1.8','с','медиана ответа']],
+    prompts:['Контент-план на неделю под Telegram','Разбери, почему этот пост зашёл','10 хуков на тему запуска']},
+  nova:{name:'Нова',role:'Трейдер, тон холодный и предметный',model:'Claude Opus 4.8 · AIAG',ch:300,vid:'./assets/char/ref3.mp4',poster:'./assets/char/ref3.png',state:'owned',
+    bio:'Читает рынок без эмоций: уровни, объёмы, риск. <b>Считает риск, не обещает иксы.</b> Если сетап слабый — скажет «не лезь», а не нарисует тренд.',
+    tone:{l:'дерзкий',r:'деловой',pos:78}, strengths:[['тех-анализ',90],['риск-менеджмент',86],['сигналы',72]],
+    voice:{prompt:'стоит заходить в эту монету?',said:'Перегрет: RSI 78, объёмы падают третий день. Я бы ждал отката к поддержке, а не заходил на FOMO. Риск выше профита.'},
+    spec:[['Душа',[['persona: холодный трейдер',1],['temp 0.3',0]]],['Модели',[['chat: Claude Opus 4.8',1],['image: off',-1],['voice: off',-1]]],['Навыки',[['тех-анализ',0],['риск',0],['сигналы',0],['портфель',0]]],['Тулзы',[['market.data',0],['charts',0]]],['MCP',[['exchange',0],['tradingview',0]]],['Память',[['твой риск-профиль',0]]]],
+    lineage:{from:'С нуля',gl:'+',lh:300,remixes:9},
+    stats:[['9.3','k','запусков'],['4.8','','★ рейтинг (2.4k)','star'],['2.6','с','медиана ответа']],
+    prompts:['Разбери эту монету по тех-анализу','Собери сигналы за день','Оцени риск этой сделки'],
+    note:'Не инвест-рекомендация. Решения и риск на тебе.'},
+};
+const exp=getComputedStyle(document.documentElement);
+function tagcls(s){return s===1?'tag lead':s===-1?'tag off':'tag'}
+function renderSheet(k){
+  const c=C[k];
+  const dims=`<div class="dim"><div class="dim-head"><span>тон</span><span class="val">${c.tone.l} ↔ ${c.tone.r}</span></div><div class="scale"><span class="knob" style="left:${c.tone.pos}%"></span></div></div>`+
+    c.strengths.map(s=>`<div class="dim"><div class="dim-head"><span>${s[0]}</span><span class="val">${s[1]}</span></div><div class="strength"><i data-w="${s[1]}"></i></div></div>`).join('');
+  const spec=c.spec.map(r=>`<div class="spec-row"><div class="label">${r[0]}</div><div class="vals">${r[1].map(v=>`<span class="${tagcls(v[1])}">${v[0]}</span>`).join('')}</div></div>`).join('');
+  const stats=c.stats.map(s=>`<div class="st"><div class="v ${s[3]||''}">${s[0]}<span class="u">${s[1]}</span></div><div class="k">${s[2]}</div></div>`).join('');
+  const prompts=c.prompts.map(p=>`<div class="pchip">${p}<span class="arrow">▶</span></div>`).join('');
+  const ownerPill=c.state==='running'?'<span class="pill"><i></i>в работе</span>':'<span class="pill" style="color:var(--ink-dim);border-color:var(--line);background:none">в коллекции</span>';
+  return `<div class="seclabel sheet-label"><span class="accent">${c.name}</span> · анкета персонажа</div>
+  <div class="sheet" style="--ch:${c.ch}">
+    <div class="sheet-grid">
+      <div class="sheet-portrait">
+        <div class="big"><video src="${c.vid}" poster="${c.poster}" autoplay loop muted playsinline></video><span class="holo2"></span><span class="scanline"></span></div>
+        <div class="owner-row">${ownerPill}</div>
+        <div class="ref-note">Видео-портрет это <b>референс персонажа</b>. Финальное лицо генерится по твоему фото и держится стабильным между прогонами.</div>
+      </div>
+      <div class="sheet-body">
+        <div class="sheet-head"><div><h2>${c.name}</h2><div class="h2-role">${c.role}</div><div class="h2-model">основная модель: ${c.model}</div></div><button class="sheet-close" id="closeSheet">✕</button></div>
+        <p class="bio">${c.bio}</p>
+        <div class="persona">${dims}</div>
+        <div class="voice"><div class="vk"><span>как говорит</span><span class="src">пример вывода</span></div><div class="prompt-echo">ты: «${c.voice.prompt}»</div><div class="said">${c.voice.said}</div></div>
+        <div class="spec"><div class="prompts-label">состав агента</div>${spec}</div>
+        <div class="lineage"><span class="gl" style="--lh:${c.lineage.lh}">${c.lineage.gl}</span><span class="arrow">↳ форк от</span> <b>${c.lineage.from}</b><span class="remixes"><b>${c.lineage.remixes}</b> ремиксов</span></div>
+        <div class="sheet-stats">${stats}</div>
+        <div class="prompts-label">быстрый старт</div>${prompts}
+        <div class="cta"><button class="run"><span style="width:8px;height:8px;border-radius:50%;background:oklch(0.3 0.06 150)"></span>Запустить · 1-й прогон бесплатно</button><button class="clone">⎘ Клонировать</button></div>
+        ${c.note?`<div class="run-meta" style="margin-top:14px">⚠ ${c.note}</div>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+const mount=document.getElementById('mount');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function open(k){
+  mount.innerHTML=renderSheet(k);
+  if(!reduce){ requestAnimationFrame(()=>{ mount.querySelectorAll('.strength>i').forEach(i=>i.style.width=i.dataset.w+'%'); }); }
+  else { mount.querySelectorAll('.strength>i').forEach(i=>i.style.width=i.dataset.w+'%'); }
+  document.getElementById('closeSheet').onclick=()=>{mount.innerHTML='';};
+  mount.scrollIntoView({behavior:'smooth',block:'start'});
+}
+document.querySelectorAll('.vcard').forEach(card=>{
+  card.addEventListener('click',()=>open(card.dataset.id));
+  if(reduce||matchMedia('(hover:none)').matches) return;
+  card.addEventListener('pointermove',e=>{
+    const r=card.getBoundingClientRect();const px=(e.clientX-r.left)/r.width,py=(e.clientY-r.top)/r.height;
+    card.style.setProperty('--ry',((px-0.5)*15).toFixed(2)+'deg');
+    card.style.setProperty('--rx',((0.5-py)*17).toFixed(2)+'deg');
+    card.style.setProperty('--mx',(px*100).toFixed(1)+'%');card.style.setProperty('--my',(py*100).toFixed(1)+'%');
+  });
+  card.addEventListener('pointerleave',()=>{card.style.setProperty('--ry','0deg');card.style.setProperty('--rx','0deg');card.style.setProperty('--mx','50%');card.style.setProperty('--my','50%');});
+});
+// iridescence flows around the perimeter
+let ang=0; if(!reduce){ setInterval(()=>{ang=(ang+0.8)%360; document.documentElement.style.setProperty('--ang',ang+'deg'); document.querySelectorAll('.frame,.holo2').forEach(f=>f.style.setProperty('--ang',ang+'deg'));},45); }
+</script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gonka Grant — Submission Checklist (AIAG)</title>
+<style>
+  :root{
+    --bg:#0a0a0b; --panel:#141416; --panel-2:#1b1b1e; --line:#2a2a2e;
+    --ink:#f4f4f5; --muted:#a1a1aa; --dim:#71717a;
+    --amber:#f59e0b; --amber-soft:rgba(245,158,11,.12);
+    --green:#34d399; --green-soft:rgba(52,211,153,.10);
+    --red:#f87171; --red-soft:rgba(248,113,113,.10);
+    --blue:#60a5fa; --blue-soft:rgba(96,165,250,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;padding:32px 24px 80px}
+  .wrap{max-width:1240px;margin:0 auto}
+  header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:28px}
+  h1{margin:0 0 6px;font-size:26px;letter-spacing:-.02em}
+  h1 .accent{color:var(--amber)}
+  .sub{color:var(--muted);font-size:14px;max-width:880px}
+  .meta{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+  .pill{font-size:11.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+    background:var(--panel);color:var(--muted)}
+  .pill.amber{border-color:var(--amber);color:var(--amber);background:var(--amber-soft)}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:22px 0 6px;font-size:12.5px;color:var(--muted)}
+  .legend b{color:var(--ink);font-weight:600}
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    padding:2px 7px;border-radius:5px;vertical-align:middle}
+  .tag.p1{background:var(--blue-soft);color:var(--blue);border:1px solid rgba(96,165,250,.4)}
+  .tag.p2{background:var(--amber-soft);color:var(--amber);border:1px solid rgba(245,158,11,.4)}
+  .tag.p3{background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.4)}
+  .tag.fd{background:var(--red-soft);color:var(--red);border:1px solid rgba(248,113,113,.4)}
+
+  .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:18px}
+  @media(max-width:980px){.cols{grid-template-columns:1fr}}
+  .col{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .col-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .col-head h2{margin:0;font-size:15px;letter-spacing:.01em}
+  .col-head .count{margin-left:auto;font-size:12px;color:var(--dim)}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .done .dot{background:var(--green);box-shadow:0 0 0 4px var(--green-soft)}
+  .notdone .dot{background:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
+  .needed .dot{background:var(--amber);box-shadow:0 0 0 4px var(--amber-soft)}
+  ul{list-style:none;margin:0;padding:8px 0}
+  li{padding:11px 16px;border-bottom:1px solid rgba(42,42,46,.55);font-size:13.5px}
+  li:last-child{border-bottom:none}
+  li .t{display:flex;gap:8px;align-items:flex-start}
+  li .mark{flex:0 0 auto;margin-top:1px;font-weight:700}
+  .done li .mark{color:var(--green)}
+  .notdone li .mark{color:var(--red)}
+  .needed li .mark{color:var(--amber)}
+  li .body{flex:1}
+  li b{color:var(--ink);font-weight:600}
+  li .note{display:block;color:var(--muted);font-size:12px;margin-top:3px;line-height:1.45}
+  li code{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;
+    padding:1px 5px;font-size:11.5px;color:#e4e4e7}
+  .tags{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}
+  footer{margin-top:34px;border-top:1px solid var(--line);padding-top:18px;color:var(--dim);font-size:12px}
+  .map{margin-top:30px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .map h3{margin:0 0 12px;font-size:14px;color:var(--amber)}
+  .map table{width:100%;border-collapse:collapse;font-size:13px}
+  .map th,.map td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  .map th{color:var(--muted);font-weight:600;font-size:11.5px;letter-spacing:.03em;text-transform:uppercase}
+  .map td:first-child{white-space:nowrap}
+  .warn{margin-top:18px;background:var(--red-soft);border:1px solid rgba(248,113,113,.35);
+    border-radius:10px;padding:12px 14px;font-size:12.5px;color:#fecaca}
+  .warn b{color:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="accent">Gonka</span> Foundation Grant — Submission Checklist</h1>
+    <div class="sub">
+      Maps to Gonka roadmap <b>Track 2 — Developer &amp; AI-agent access</b>:
+      <span class="tag p1">P1</span> SDK / agent-runtime &nbsp;·&nbsp;
+      <span class="tag p2">P2</span> OpenRouter / aggregator adapter &nbsp;·&nbsp;
+      <span class="tag p3">P3</span> delegated wallets &amp; agent accounts.
+      Track-2 is almost exactly the AIAG TMA product: a live OpenAI-compatible aggregator gateway + a Telegram agents marketplace.
+    </div>
+    <div class="meta">
+      <span class="pill amber">2026-06-03 · draft for founder review</span>
+      <span class="pill">Sources: grant draft · R-03 spike · D-4 synthesis · CLAUDE.md</span>
+      <span class="pill">Posture: Gonka = ONE optional provider + a grant, NOT a dependency</span>
+    </div>
+    <div class="legend">
+      <span><span class="tag fd">FD</span> <b>founder input</b> (only the founder can supply)</span>
+      <span>Tracks shown per row · <b>green</b> = built, <b>red</b> = gap, <b>amber</b> = to-submit</span>
+    </div>
+  </header>
+
+  <div class="cols">
+
+    <!-- ============ DONE ============ -->
+    <section class="col done">
+      <div class="col-head"><span class="dot"></span><h2>DONE — already have / built</h2><span class="count">9</span></div>
+      <ul>
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b>Live OpenAI-compatible aggregator gateway</b>
+          <span class="note">Hono/Bun on <code>:4000</code> (<code>packages/api-gateway</code>), proxies multiple upstreams behind one endpoint with per-call metering + per-upstream markup + white-label brand stripping. Running in prod (<code>ai-aggregator.ru</code>). This IS the P2 aggregator layer.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b>Telegram Mini-App agents marketplace + worker</b>
+          <span class="note"><code>apps/tg-miniapp</code> + <code>apps/agent-worker</code>: discover / run / create agents in Telegram; agent CRUD, run, conversation history. Shipped &amp; live (Phase 15).</span>
+          <div class="tags"><span class="tag p1">P1</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b>R0 money path — atomic credit ledger (LIVE)</b>
+          <span class="note">Phase 15.1 complete on prod: per-call crypto-credit billing, atomic deduct, daily-budget guard, run-start gating, <code>settleRun</code> atomicity (integration test 4/4 green). This ledger becomes the P3 delegated-wallet enforcement engine.</span>
+          <div class="tags"><span class="tag p1">P1</span><span class="tag p3">P3</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b>D-0 money-path margin — done (on branch)</b>
+          <span class="note">Per-upstream markup pricing (<code>cost = upstreamUsd × rate × markup × …</code>) in <code>src/lib/pricing.ts</code> + <code>routing/resolver.ts</code>; markup default 1.25, configurable per <code>model_upstreams</code>. Gateway returns realized margin. Branch <code>plan/15.1…</code>, not merged to master.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b>Pluggable upstream adapter pattern</b>
+          <span class="note"><code>UpstreamAdapter</code> interface + <code>registry.ts</code> dispatch by provider name; DB-driven slugs/markup via <code>resolveModel()</code>. <code>openrouter.ts</code> is the exact OpenAI-compatible template a Gonka adapter copies (~95% identical).</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b>Commission rule in code</b>
+          <span class="note">AIAG-supplied model via <code>:4000</code> → debit + markup; <b>own key/provider (OpenRouter / Gonka / BYOK) → ZERO commission</b>. This is the exact dividing line for the two Gonka integration paths.</span>
+          <div class="tags"><span class="tag p2">P2</span><span class="tag p3">P3</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b>Auth hardening (LIVE)</b>
+          <span class="note"><code>AIAG_GATEWAY_KEY</code> (<code>sk_aiag_live_…</code>) minted; Next 14.2.33 CVE patch, HS256 pin, nginx header strip — all deployed + verified on prod.</span>
+          <div class="tags"><span class="tag p1">P1</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b><code>safeFetch</code> SSRF guard — done (on branch)</b>
+          <span class="note"><code>packages/shared/src/safe-fetch.ts</code> + <code>apps/agent-worker/src/safe-fetch.ts</code>. Required before holding upstream / user provider secrets (RK-6).</span>
+          <div class="tags"><span class="tag p3">P3</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b>Gonka integration spike — research complete (R-03)</b>
+          <span class="note">Verified: 3 access models (self-host opengnk / GonkaGate / brokers), auth shapes, <code>https://node4.gonka.ai</code> discovery, the one live model, the BYO-wallet vs markup-upstream decision, full integration step plan. Adversarially reviewed.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+      </ul>
+    </section>
+
+    <!-- ============ NOT DONE ============ -->
+    <section class="col notdone">
+      <div class="col-head"><span class="dot"></span><h2>NOT DONE — gaps</h2><span class="count">9</span></div>
+      <ul>
+        <li><div class="t"><span class="mark">✕</span><div class="body">
+          <b>Gonka provider adapter not built</b>
+          <span class="note"><code>packages/api-gateway/src/upstreams/gonka.ts</code> does <b>not</b> exist (confirmed — only openrouter/kie/groq/ollama/mock). PLANNED = copy <code>openrouter.ts</code> → <code>gonka.ts</code>, base <code>https://api.gonkagate.com/v1</code>, key from <code>GONKA_API_KEY</code>, keep white-label stripping verbatim.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✕</span><div class="body">
+          <b>Gonka not registered in the gateway</b>
+          <span class="note">No <code>case 'gonka'</code> in <code>registry.ts</code>; no <code>upstreams</code> / <code>models</code> / <code>model_upstreams</code> rows. A slug absent from the registry → 400 "Unknown model", so nothing can route yet.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✕</span><div class="body">
+          <b>No live Gonka-routed inference</b>
+          <span class="note">No end-to-end call has gone through us to Gonka. The grant deliverable-#1 acceptance demo (pick Gonka → real Qwen3 completion → ledger debit + markup) is unproven.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✕</span><div class="body">
+          <b>No measured spike numbers</b>
+          <span class="note">p50/p95 latency, real per-token cost (Gonka is metered now, not free), live <code>GET /v1/models</code> output, GonkaGate <code>gp-</code> key obtained. R-03 gives the method; numbers not yet captured.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✕</span><div class="body">
+          <b>No fallback upstream row for <code>gonka/*</code></b>
+          <span class="note">Single-upstream Gonka model would hard-fail any agent on a 5xx/timeout (network is mid-DevShards migration). A second <code>model_upstreams</code> row for the same slug is an acceptance gate, not a hope.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✕</span><div class="body">
+          <b>Delegated agent wallets not built</b>
+          <span class="note">No Gonka-native delegated-wallet primitive exists; we build it: per-agent spend policy (daily cap + per-call cap + tool allowlist) on top of the R0 ledger + one-tap revoke + audit log. Currently only the R0 deduct ledger exists.</span>
+          <div class="tags"><span class="tag p3">P3</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✕</span><div class="body">
+          <b>Public Gonka demo agent + RU tutorial</b>
+          <span class="note">P1 deliverable: a public demo agent running on Gonka + a short technical tutorial in Russian. Neither exists.</span>
+          <div class="tags"><span class="tag p1">P1</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✕</span><div class="body">
+          <b>opengnk BYO-wallet path not stood up</b>
+          <span class="note">The "BYO-GNK = zero-commission" narrative (provider-picker screen 17) needs the self-hosted opengnk proxy on a <b>separate host</b> (do NOT co-locate on the 2 GB prod VPS — OOM kills the money path). Track 2b (holding users' raw secp256k1 keys) = out of scope until a KMS exists.</span>
+          <div class="tags"><span class="tag p2">P2</span><span class="tag p3">P3</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✕</span><div class="body">
+          <b>Branch not merged; latent registry bug</b>
+          <span class="note"><code>plan/15.1-r0-billing-identity</code> not on master. <code>DEFAULT_MODEL = nousresearch/hermes-4-405b</code> is not in the gateway registry (400) — no current victims (0 agents on prod) but must be fixed before a public demo.</span>
+          <div class="tags"><span class="tag p1">P1</span></div>
+        </div></div></li>
+      </ul>
+    </section>
+
+    <!-- ============ NEEDED TO SUBMIT ============ -->
+    <section class="col needed">
+      <div class="col-head"><span class="dot"></span><h2>NEEDED TO SUBMIT</h2><span class="count">10</span></div>
+      <ul>
+        <li><div class="t"><span class="mark">▸</span><div class="body">
+          <b>GNK wallet address</b> <span class="tag fd">FD</span>
+          <span class="note">Form field "GNK Wallet Address" — founder provides <code>gonka1…</code> (create via <code>inferenced create-client</code> or the GG/Gonka wallet app).</span>
+          <div class="tags"><span class="tag p3">P3</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">▸</span><div class="body">
+          <b>Discord ID</b> <span class="tag fd">FD</span>
+          <span class="note">Grant intake is community-driven (no public form surfaced on the web). Join the official Gonka Discord (<code>discord.gg/DyDxDsP3Pd</code>, ~13.5k members) and supply the handle. Neutral handle only.</span>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">▸</span><div class="body">
+          <b>Contact email</b> <span class="tag fd">FD</span>
+          <span class="note">Form field "Email" — founder provides. Neutral, not personal Telegram.</span>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">▸</span><div class="body">
+          <b>Run the spike → capture numbers</b>
+          <span class="note">Register a GonkaGate <code>gp-</code> key, build <code>gonka.ts</code> + register, seed one slug (<code>gonka/qwen3-235b</code> → <code>Qwen/Qwen3-235B-A22B-Instruct-2507-FP8</code>), then record: live <code>/v1/models</code>, p50/p95 latency, real per-token cost. Put these numbers in the application.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">▸</span><div class="body">
+          <b>Live Gonka-routed demo (deliverable-#1 acceptance)</b>
+          <span class="note"><code>curl :4000/v1/chat/completions</code> with <code>model=gonka/qwen3-235b</code> via <code>AIAG_GATEWAY_KEY</code> → real completion + verified ledger debit + markup. Capture for the submission (recording / transcript).</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">▸</span><div class="body">
+          <b>Decide Gonka fee treatment</b> <span class="tag fd">FD</span>
+          <span class="note">FD-6: GonkaGate = 5% deposit + 10% usage, stacks on 1.25 markup → ~1.375 effective. Absorb (margin hit) or surface in seeded price? Also budget the ~$20 min deposit beyond the $10 trial.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">▸</span><div class="body">
+          <b>Pick the deliverable-#1 demo path</b> <span class="tag fd">FD</span>
+          <span class="note">FD-6 / R-03 Q1: Track 1 (GonkaGate USD markup upstream — fastest green) vs Track 2a (self-hosted opengnk BYO-wallet — the "decentralized/BYO-GNK" narrative). Recommend lead with Track 1; mention 2a as the zero-commission path.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">▸</span><div class="body">
+          <b>Soften the model claim</b>
+          <span class="note">Only <code>Qwen3-235B-A22B</code> is reliably live today. Change "Qwen3, Kimi, …" → "Qwen3 today; Kimi/others as the network adds them (discovered at runtime via <code>/v1/models</code>)." Verify the live list before submitting.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">▸</span><div class="body">
+          <b>Confirm the P3 delegation framing with Gonka</b>
+          <span class="note">R-03 Q2: ask (via Discord) whether a native delegated-wallet / agent-account primitive is on their P3 timeline, or we build the spend-policy layer entirely ourselves. Affects how we phrase deliverable #2 in the form.</span>
+          <div class="tags"><span class="tag p3">P3</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">▸</span><div class="body">
+          <b>Finalize + paste the form answers</b>
+          <span class="note">Fill the <code>⟨…⟩</code> placeholders in <code>docs/specs/2026-06-03-gonka-grant-application-draft.md</code> with the above, then submit. Keep the 3 deliverables tied to Gonka's primary metric (real inference + developer activation + network usage).</span>
+          <div class="tags"><span class="tag p1">P1</span><span class="tag p2">P2</span><span class="tag p3">P3</span></div>
+        </div></div></li>
+      </ul>
+    </section>
+
+  </div>
+
+  <!-- Track mapping -->
+  <div class="map">
+    <h3>Deliverable → Track-2 mapping (what the grant is graded on)</h3>
+    <table>
+      <tr><th>Deliverable</th><th>Track</th><th>Acceptance</th><th>Status</th></tr>
+      <tr>
+        <td><b>#1 Gonka as first-class provider</b><br>in aggregator + agent picker</td>
+        <td><span class="tag p2">P2</span></td>
+        <td>User/agent picks Gonka → real inference end-to-end through us; ledger debit + markup.</td>
+        <td>Adapter PLANNED (copy openrouter.ts); spike + demo NOT done.</td>
+      </tr>
+      <tr>
+        <td><b>#2 Delegated agent wallets</b><br>("agent budget card")</td>
+        <td><span class="tag p3">P3</span></td>
+        <td>Agent runs continuously within a delegated GNK limit; owner can revoke + audit.</td>
+        <td>R0 ledger DONE (enforcement engine); spend-policy + revoke + audit NOT built.</td>
+      </tr>
+      <tr>
+        <td><b>#3 Agent-runtime + reference</b><br>integration + RU demo/tutorial</td>
+        <td><span class="tag p1">P1</span></td>
+        <td>Public demo agent on Gonka; RU technical tutorial published.</td>
+        <td>Runtime (stateless loop) DONE; public demo + tutorial NOT done.</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="warn">
+    <b>Hard guardrails before any prod move:</b>
+    do NOT co-locate the opengnk Docker proxy on the 2 GB prod VPS (OOM would take down the money path) — separate host or skip for the spike ·
+    Track 2b (holding users' raw secp256k1 private keys) is <b>out of scope until a KMS exists</b>, not merely deferred ·
+    Gonka is <b>metered now</b> (grace period operationally ending) — verify real per-token cost before seeding price ·
+    white-label stripping must be kept verbatim in <code>gonka.ts</code>.
+  </div>
+
+  <footer>
+    AIAG · Gonka grant checklist · 2026-06-03 · draft for founder review.
+    Sources: <code>docs/specs/2026-06-03-gonka-grant-application-draft.md</code> ·
+    <code>docs/specs/research/R-03.md</code> · <code>docs/specs/research/SYNTHESIS.md</code> (D-4, FD-6) ·
+    <code>CLAUDE.md</code> · <code>packages/api-gateway/CLAUDE.md</code>.
+    Code state verified: no <code>gonka.ts</code> in upstreams; <code>safeFetch</code> + D-0 markup present on branch <code>plan/15.1-r0-billing-identity</code>.
+  </footer>
+</div>
+</body>
+</html>

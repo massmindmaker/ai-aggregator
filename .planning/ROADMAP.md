@@ -318,3 +318,76 @@ Plans:
 - [x] 15.1-01-PLAN.md — Worker money path: route aiag→:4000 gateway (R0-1), per-run balance debit+gate (R0-2), atomic daily-spend (R0-3), wire 0026 provider columns (R0-6) + unit tests [wave 1] — ✓ 2026-06-02
 - [x] 15.1-02-PLAN.md — TMA auth hardening: Next≥14.2.33 + nginx strip for CVE-2025-29927 + HS256-pinned jwtVerify + JWT denylist (R0-4), fail-hard TMA_JWT_SECRET (R0-5) [wave 1] — ✓ 2026-06-02
 - [x] 15.1-03-PLAN.md — Integration test of enqueue→worker→settle→balance-debit atomicity (R0-1/2/3) [wave 2, depends 15.1-01] — ✓ 2026-06-02
+
+---
+
+## Milestone: R1 — Money-correct foundation + providers + managed-Hermes test
+
+**Added:** 2026-06-03 — re-cut from `docs/specs/research/SYNTHESIS.md` (lead-architect synthesis of R-01..R-12 + adversarial reviews) and `docs/specs/2026-06-03-monetization.md`. Founder decisions: `CLAUDE.md` §"Founder decisions (2026-06-02/03)".
+
+**Predecessor:** ✓ **R0 (Phase 15.1) COMPLETE + LIVE on prod** — TMA money path made safe to put traffic on (gateway routing for aiag runs, per-run balance debit/gate, atomic daily-spend, CVE-2025-29927 patch + JWT hardening, 0026 picker wired). Branch `plan/15.1-r0-billing-identity` (not yet merged to master).
+
+**Thesis (SYNTHESIS §0):** *the money path is the product.* Almost every research item is a question about money-correctness, and four (R-06/07/08/11) are blocked on one fork — **where margin is computed and which ledger is authoritative**. So R1 has two spines: (1) fix the single billing authority and make the gateway return realized margin **before** building anything that pays anyone; (2) keep the crypto deposit *surface* founder-gated (FD-1) while building the *plumbing* (correct under both Stars-and-crypto structures). Everything else layers on top.
+
+**Founder gates that bound this milestone:**
+- **FD-1 — Stars-vs-crypto surface (THE blocker).** Resolved direction (founder 2026-06-03): **multi-crypto now (TON + others), Stars deferred** (do not implement/show). Gates the deposit *UX/currency surface* (R1.2 jetton UX, R1.3 delivery inbound), NOT the ledger/reconciler/jetton *plumbing* (safe to build either way).
+- **FD-2 — withdrawable vs non-withdrawable credits (OPEN).** Decides creator cash-out and user withdrawals → gates the *withdraw* leg of R1.3 author economy; author-rent accrual itself can ship (fixed author-set sum, deterministic).
+- FD-3 (entity split / PD-localization), FD-5 (inbound-billing for Business chat), FD-6 (Gonka fee treatment), FD-7 (talking-vs-ambient character default), FD-8 (x402 rail) — gate specific deliverables noted per phase.
+
+### Phase R1.0: Money-correctness foundation ◆ IN PROGRESS (on branch)
+
+**Goal:** Make realized margin a number the worker can read and make the credit unit honest — the keystone that unblocks every paying feature (D-5, D-6, D-8/D-9, D-11, D-12).
+**Depends on:** R0 (Phase 15.1)
+**Build order:** SYNTHESIS Wave 0
+**Deliverables:**
+  1. **D-0 single billing authority + gateway-returns-margin** — `tg_user_balances` is the only TMA ledger; the `:4000` gateway returns per-request charged + upstream cost (or `margin_credits`) keyed by `gateway_request_id`; worker stops billing off `estimateCostRub` on the gateway path. Invariants `margin ≥ 0`, `author_share ≤ margin`; accrue 0 when margin unavailable (never guess).
+  2. **D-1 USD micro-credit anchor + `tg_ledger_entries`** — `1 credit = 1 USD` as `BIGINT` micro-USD; double-entry ledger + materialized projection; kill `USD_TO_RUB = 90` (both copies incl. `budget.test.ts:7`); ₽ becomes display-only via CBR. Live-balance migration is freeze-window + conservative + idempotent + dry-run SUM-invariant on a prod dump first (RK-8).
+  3. **D-8 initData hardening** — manual `timingSafeEqual` patch + `TMA_INITDATA_MAX_AGE_SEC` 600s + Redis one-shot nonce (do NOT trust the dependency's `!==` compare). ✓ **done on branch.**
+  4. **D-7 `safeFetch` egress guard** — resolve-then-pin, full blocked-range set, re-validate per redirect, allowlist `127.0.0.1:4000` + `openrouter.ai`. ✓ **done on branch (R0).**
+  5. **`DEFAULT_MODEL` registry fix** — seed+assert one controlled slug (the `nousresearch/hermes-4-405b` 400). ✓ **done.**
+**Founder gate:** none blocks R1.0 — it is pure engineering correctness and is the prerequisite for everything gated below.
+**Risks:** RK-2 (margin authority single point of failure), RK-8 (manual prod migrations, app role can't ALTER).
+
+### Phase R1.1: Deposits + tool money 📋 PLANNED
+
+**Goal:** Reconnect the deposit and tool money paths and add the first new provider — all without any crypto-legal dependency.
+**Depends on:** R1.0 (D-0 margin must be readable before tool/provider billing)
+**Build order:** SYNTHESIS Wave 1
+**Deliverables:**
+  1. **D-4 Gonka Track 1** — `gonka.ts` (copy `openrouter.ts`), seed `model_upstreams` + a fallback row, register `Qwen3-235B…FP8`, discover the rest at runtime, white-label strip. Fastest "new provider" win; validates the D-6 seams.
+  2. **D-9 tool broker (R-08a)** — `tools` catalog + `tool_calls` ledger, `(run_id, llm_call_id)` idempotency, Firecrawl first, refund-on-error. Closes a confirmed unbilled-tool leak. **Must** atomically increment `spent_today_rub` with the same guarded UPDATE (daily-budget-bypass fix).
+  3. **R-04 deposit reconciler** — server-side `lt`-watermark cron (authoritative) + TonAPI webhook (push wake) + client poll demoted to UX. Fixes the four documented funds-loss modes. Correct under both Stars and crypto structures.
+  4. **D-6 catalog-sync + native adapters + BYOK unification** — daily BullMQ sync from `models.dev` into the gateway `models`/`model_upstreams`; **`/1M → /1k` conversion at sync time + CI assertion** (the 1000× money bug); native Anthropic adapter + Google-via-OAI base; route **all** native-protocol traffic (AIAG-supplied AND BYO) through the gateway; unify the two BYOK mechanisms; strip `X-AIAG-Upstream` for native adapters.
+**Founder gate:** **FD-6** (Gonka 5%+10% fee — absorb vs surface) tunes D-4 pricing but does not block the build. No FD blocks the phase.
+**Risks:** RK-5 (white-label leakage per adapter), RK-1 (do NOT co-locate opengnk proxy on the 2 GB prod box).
+
+### Phase R1.2: Jetton + real runtime + delivery 📋 PLANNED
+
+**Goal:** Real on-chain USDT deposits, a real agent runtime layered onto the existing loop, and (gated) Telegram delivery.
+**Depends on:** R1.1
+**Build order:** SYNTHESIS Wave 2
+**Deliverables:**
+  1. **R-04 jetton USDT-on-TON** — corrected `0x0f8a7ea5` transfer-init shape, `forward_ton_amount ≥ 0.05 TON`, master allowlist + `get_wallet_address` fake-jetton defense, per-user deposit addresses (the real loss-mode-2 fix).
+  2. **D-5 real AI-SDK runtime** — `ai` + `@ai-sdk/openai-compatible` with `baseURL=127.0.0.1:4000`; pgvector in our Postgres for memory; OTel → Grafana Cloud free tier. **Gate:** do NOT stream the billed call (`usage: null` risk → ₽0 settle); re-implement mid-run budget cutoffs via `onStepFinish`; fall back to `estimateCostRub` (never 0) when usage missing; defer bot streaming.
+  3. **D-11 MCP (re-sequenced)** — `agent_tokens` table + minting endpoint FIRST (the "per-agent bearer" does not exist today), then inbound zero-cost tools only (`calc`/`memory`), then the outbound Notion OAuth showcase via `@modelcontextprotocol/sdk`. Do NOT run an Authorization Server or `mcp-context-forge` (won't fit 2 GB).
+  4. **D-13 grammY delivery (R-10 phase 3)** — grammY Business mode as a separate `apps/tg-bot` pm2 process; reuse the `agent-run` pipeline; deliver-after-settle; pass `business_connection_id` explicitly.
+**Founder gates:** **FD-1** gates the jetton *deposit UX surface* (resolved=crypto-now, so the surface is in scope; plumbing was already safe). **FD-5** (who-pays for Business-chat answers) is a hard precondition for D-13; **FD-1** Premium-reach number may favor bring-your-own-bot-token.
+**Risks:** RK-1 (pgvector HNSW build RAM on 2 GB — bound rows, measure RSS), RK-3 (ToS wall on the crypto surface), RK-7 (MCP SDK / TON shape drift — pin + re-verify).
+
+### Phase R1.3: Managed-Hermes test + creator economy 📋 PLANNED / R&D-GATED
+
+**Goal:** De-risk managed-Hermes with a measurement spike before committing infra, then ship the author-rent creator economy and the character pipeline.
+**Depends on:** R1.0 (D-0 margin) for the creator accrual; R1.2 for runtime/delivery substrate
+**Build order:** SYNTHESIS Wave 3
+**Deliverables:**
+  1. **D-2/D-3 Managed-Hermes Phase-0 spike** — stand up ONE real Hermes with `backend: daytona` pointed at `:4000` on the **~18 GB shared VPS** (founder 2026-06-03); **measure resident-gateway RAM + whether one gateway multiplexes many users** (the real cost question), resume latency, a week's bill. Build the provisioner only if the measurement says the resident-orchestrator cost is acceptable → then tier (dedicated for high-payers, shared for ~$20-tier). Sidecar control-plane (D-3, loopback `/api/*`, no token-capture, `--no-open --host 127.0.0.1` NO `--insecure`) for closed beta ≤20 agents.
+  2. **D-12 creator economy (author-rent, per `2026-06-03-monetization.md`)** — substrate (publish/clone/lineage tables) first, then accrual. **Author rent = pass-through, NO % cut**: renter pays the exact author-set sum (free OR priced, e.g. monthly), author receives it in spendable `tg_user_balances` credits; AIAG earns only on model markup + tools + deploy. Anti-abuse: rank by realized usage from distinct *funded* renters, self-deal exclusion, single-hop attribution, per-author slug namespace, dust floor. Author-payout sweep is a **separate pass** from the renter debit (lock ordering). Exclude BYOK-fixed-fee runs.
+  3. **D-14 character pipeline** — reference-sheet anchor → nano-banana-pro portrait → kling-2.6 ambient loop → ElevenLabs voice → optional Kling-Avatar talking card. Fix **three** input-shape gaps (image `image_input[]`, video `image_urls[]`+`sound`, audio remap); edit ONLY `api-gateway/src/upstreams/kie.ts`; gate the talking card behind a verified schema; re-host Kie assets to our S3/CDN; ship ambient first.
+**Founder gates:** **FD-2** (withdrawable credits — OPEN) gates author *cash-out/withdraw*; rent accrual ships regardless. **FD-3** (entity split / PD-localization) gates managed-Hermes for *real* users ($-billed compute on the foreign entity). **FD-4** (default `author_share_bps`) — N/A under the pass-through author-rent model but tunable if a platform fee is ever added. **FD-7** (talking-vs-ambient default, stock vs cloned voice — recommend ambient + stock + founder-owned faces).
+**Risks:** RK-1 (resident orchestrators 300–600 MB each — the 2 GB→18 GB box is the binding constraint; "needs a second/bigger box" is the honest answer), RK-4 (two-entity legal boundary), RK-6 (secrets isolation inside the agent boundary).
+
+### Deferred / R&D (explicitly not in R1)
+
+- **D-10 x402 outbound** — defer to real demand (FD-8); fix the custody model (facilitator = gas-only; separate hard-capped spend wallet) when built.
+- **Gonka opengnk self-host (Track 2a)** — off the prod VPS (separate host or skip).
+- **Gonka Track 2b** (raw user secp256k1 keys), **template cash-out** (FD-2), **MCP Authorization Server**, **Mastra**, **Helicone/SigNoz self-host**, **mcp-context-forge** — gated on a second box or a legal structure that does not yet exist.

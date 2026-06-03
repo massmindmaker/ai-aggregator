@@ -17,7 +17,7 @@ describe('contest-eval processor', () => {
         submissionId: 's1',
         evaluatorScriptId: 'e1',
         scriptSource: 'print(1)',
-        submissionFiles: {},
+        submissionFiles: [],
         inputJson: {},
       }),
       'tok'
@@ -36,7 +36,7 @@ describe('contest-eval processor', () => {
         submissionId: 's2',
         evaluatorScriptId: 'e1',
         scriptSource: '',
-        submissionFiles: {},
+        submissionFiles: [],
         inputJson: {},
       }),
       'tok'
@@ -53,7 +53,7 @@ describe('contest-eval processor', () => {
         submissionId: 's3',
         evaluatorScriptId: 'e1',
         scriptSource: '',
-        submissionFiles: {},
+        submissionFiles: [],
         inputJson: {},
       }),
       'tok'

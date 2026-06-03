@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AIAG — Дизайн-аудит на 108 баллов · 2026-06-03</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+/* Tokens lifted verbatim from apps/web/src/app/globals.css (dark). */
+:root{
+  --bg:#0a0a0b; --bg-elev:#111114; --bg-surface:#18181b;
+  --ink:#f4f4f5; --ink-muted:#71717a;
+  --accent:#f59e0b; --accent-hover:#d97706; --accent-ink:#000;
+  --line:rgba(255,255,255,.08); --line-strong:rgba(255,255,255,.16);
+  --success:#22c55e; --danger:#ef4444; --warning:#eab308;
+  --radius:8px; --radius-md:6px; --radius-sm:4px;
+  --shadow-card:0 1px 2px rgba(0,0,0,.4);
+  --shadow-pop:0 20px 50px rgba(0,0,0,.55);
+  --ease:cubic-bezier(.23,1,.32,1);
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:'Inter',system-ui,sans-serif; line-height:1.6;
+  -webkit-font-smoothing:antialiased; padding:0 20px 120px;
+}
+.wrap{max-width:1080px;margin:0 auto}
+.mono{font-family:var(--mono)}
+
+/* grid background, lifted concept from globals.css .aiag-grid-bg */
+header.hero{
+  position:relative; padding:64px 0 40px; margin-bottom:8px;
+  border-bottom:1px solid var(--line);
+  background-image:
+    linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+  background-size:24px 24px;
+}
+.kick{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+h1{font-size:clamp(28px,4.4vw,42px);line-height:1.06;letter-spacing:-.02em;font-weight:800;max-width:24ch}
+h1 .q{color:var(--ink-muted)}
+.lead{font-size:15.5px;color:var(--ink-muted);max-width:70ch;margin-top:14px}
+
+.scorebar{display:flex;align-items:flex-end;gap:24px;margin-top:30px;flex-wrap:wrap}
+.bigscore{font-family:var(--mono);font-size:64px;font-weight:600;line-height:1;color:var(--accent)}
+.bigscore .den{font-size:28px;color:var(--ink-muted)}
+.verdict{font-size:14px;color:var(--ink);max-width:54ch;border-left:3px solid var(--accent);padding-left:16px}
+.verdict b{color:var(--accent)}
+
+h2.sec{font-size:13px;font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-muted);margin:52px 0 18px;display:flex;align-items:center;gap:14px}
+h2.sec::after{content:"";flex:1;height:1px;background:var(--line)}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);font-weight:600}
+tbody tr{transition:background-color 160ms ease,box-shadow 160ms ease}
+tbody tr:hover{background:rgba(245,158,11,.04);box-shadow:inset 3px 0 0 var(--accent)}
+td .dim{font-weight:600;color:var(--ink)}
+td .fix{color:var(--ink-muted);font-size:12.5px;margin-top:5px}
+td .fix b{color:var(--accent);font-weight:600}
+.sc{font-family:var(--mono);font-weight:600;font-size:16px;white-space:nowrap}
+.sc-hi{color:var(--success)} .sc-mid{color:var(--accent)} .sc-lo{color:var(--danger)}
+.meter{position:relative;height:5px;border-radius:3px;background:rgba(255,255,255,.08);margin-top:7px;width:90px;overflow:hidden}
+.meter i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:linear-gradient(90deg,var(--accent-hover),var(--accent))}
+tfoot td{font-family:var(--mono);font-weight:600;color:var(--ink);border-top:2px solid var(--line-strong);font-size:15px}
+
+/* top-10 */
+.improve{list-style:none;counter-reset:imp;margin-top:6px}
+.improve li{
+  counter-increment:imp; position:relative;
+  padding:15px 16px 15px 58px; margin-bottom:10px;
+  border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--bg-elev);
+}
+.improve li::before{
+  content:counter(imp); position:absolute; left:14px; top:14px;
+  width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-weight:600;font-size:14px;
+  background:color-mix(in srgb,var(--accent) 16%,transparent); color:var(--accent);
+  border:1px solid var(--accent-line,rgba(245,158,11,.4));
+}
+.improve li .t{font-weight:600;font-size:14.5px}
+.improve li .d{font-size:12.5px;color:var(--ink-muted);margin-top:4px}
+.improve li .m{display:inline-flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:10px;letter-spacing:.04em;padding:2px 8px;border-radius:9999px;border:1px solid currentColor;background:color-mix(in srgb,currentColor 8%,transparent);white-space:nowrap}
+.chip.qw{color:var(--success)} .chip.imp{color:var(--accent)} .chip.eff{color:var(--ink-muted)} .chip.big{color:#7aa2f7;border-color:rgba(122,162,247,.45)}
+
+.note{font-size:12px;color:var(--ink-muted);font-family:var(--mono);margin-top:14px;line-height:1.8}
+.note b{color:var(--ink)}
+.callout{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:var(--radius);padding:14px 16px;background:var(--bg-elev);font-size:13px;color:var(--ink-muted);margin:18px 0}
+.callout b{color:var(--ink)}
+footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--ink-muted);line-height:1.8}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="kick">AIAG · дизайн-аудит · 12 измерений × 9</div>
+  <h1>Витрина собрана честно. <span class="q">Но борды живут по другим токенам — продукт ещё не один язык.</span></h1>
+  <p class="lead">Оценка целого: новый единый <span class="mono">showcase.html</span> (рендерит и веб, и моб из одних данных + реальные токены globals.css), веб-борд, моб-борд и голографические видео-карты — против таргета <span class="mono">apps/web/src/app/globals.css</span>. Старший продуктовый дизайнер, без скидок.</p>
+  <div class="scorebar">
+    <div class="bigscore">78<span class="den">/108</span></div>
+    <div class="verdict"><b>Сильный B+.</b> Showcase — образцовый артефакт: токены подняты verbatim, реальный логотип-маска с glow, theme×device-матрица, мотив-библиотека <span class="mono">aiag-*</span> применена по делу. Главная брешь — три источника правды: showcase = globals.css (hex/HSL, ◆-маска PNG), а оба борда живут на собственном <span class="mono">styles.css</span> (OKLCH-палитра, ◆-плейсхолдер-ромб). Пока это два разных визуальных языка под одним именем.</div>
+  </div>
+</header>
+
+<h2 class="sec">12 измерений · каждое /9</h2>
+<table>
+  <thead><tr><th style="width:62px">балл</th><th>измерение · обоснование</th><th>высший рычаг — что чинить</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="sc sc-mid">7</span><div class="meter"><i style="width:78%"></i></div></td>
+      <td><span class="dim">Визуальная иерархия</span><div class="fix">Карта-персонаж читается мгновенно (портрет → имя → модель → трейт → mono-статы). Но на дом-ленте веб-борда masonry на <span class="mono">--ch</span> высотах создаёт ложную значимость: «feature»-карта и хаотичные высоты конкурируют, глаз не находит первичный CTA.</div></td>
+      <td class="fix"><b>Один доминантный CTA на экран.</b> Зафиксировать сетку карточек (без random <span class="mono">--ch</span>) и поднять «Запустить» в постоянный визуальный приоритет.</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-hi">8</span><div class="meter"><i style="width:89%"></i></div></td>
+      <td><span class="dim">Информационная архитектура (IA)</span><div class="fix">38 экранов в 10 группах (A–J), happy-path помечен ★, статусы live/скоро/R&D — честно и зрело. Дублирование «модели» как вкладки маркета и как провайдера внутри агента слегка размывает ментальную модель «модель vs провайдер».</div></td>
+      <td class="fix"><b>Развести «что» и «откуда».</b> Явно: модель = возможность, провайдер = источник+деньги; один глоссарий-карточка, переиспользуемая в #06/#16/#17.</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-mid">7</span><div class="meter"><i style="width:78%"></i></div></td>
+      <td><span class="dim">Навигация / поток</span><div class="fix">Showcase даёт живой routing и overview-матрицу — отлично. Борды же статичны: #05 «карточка+RUN» инъектится JS только в showcase, на бордах это пустой <span class="mono">#agent-mount</span>. Поток «создание → провайдер → тулзы → бюджет» логичен, но 4 захода в «Создать» (#12) без явного «рекомендуем новичку этот».</div></td>
+      <td class="fix"><b>Дефолт+прогрессивное раскрытие в #12.</b> Подсветить «Из шаблона — 2 клика» как рекомендованный, остальные — «для продвинутых».</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-lo">5</span><div class="meter"><i style="width:56%"></i></div></td>
+      <td><span class="dim">Консистентность (vs globals.css + логотип)</span><div class="fix"><b>Самое слабое.</b> Showcase = таргет: <span class="mono">--bg:#0a0a0b</span>, <span class="mono">--accent:#f59e0b</span> verbatim + реальная PNG-маска логотипа с <span class="mono">.aiag-logo-dot</span> glow. Но оба борда (<span class="mono">web/styles.css</span>, <span class="mono">tma/styles.css</span>) — на OKLCH-палитре и рисуют логотип ромбом «◆», которого нет в бренде. Три источника правды.</div></td>
+      <td class="fix"><b>Один токен-файл + один логотип-партиал.</b> Перевести борды на те же hex-токены и ту же <span class="mono">--logo-mask</span>, что в showcase; ◆ удалить везде.</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-hi">8</span><div class="meter"><i style="width:89%"></i></div></td>
+      <td><span class="dim">Типографика</span><div class="fix">Inter (UI) + JetBrains Mono (числа/цены/трейсы) — выдержанная, осмысленная пара: mono для денег и латентности читается как «данные». Tight letter-spacing на заголовках уместен. Минус: на видео-картах <span class="mono">font-weight:680/660</span> — нестандартный вес, может фоллбэчить непредсказуемо.</div></td>
+      <td class="fix"><b>Зафиксировать веса до подключённых (400–800).</b> Заменить 660/680 на 600/700, иначе на части систем рендер «прыгает».</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-mid">6</span><div class="meter"><i style="width:67%"></i></div></td>
+      <td><span class="dim">Цвет / контраст / a11y</span><div class="fix"><span class="mono">--ink-muted:#71717a</span> на <span class="mono">--bg:#0a0a0b</span> ≈ 4.0:1 — ниже AA для мелкого текста, а именно им набраны мета, цены, подписи. Amber-на-чёрном кнопка отлично (>10:1). Reduced-motion проработан везде. Но статусы кое-где несут смысл только цветом (chip без иконки/текста).</div></td>
+      <td class="fix"><b>Поднять muted до ~#8b8b94 для &lt;14px.</b> И дублировать статус не только цветом (иконка+слово), как уже сделано в #10b — масштабировать на все chip'ы.</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-hi">8</span><div class="meter"><i style="width:89%"></i></div></td>
+      <td><span class="dim">Моушн / микро-интеракции (vs aiag-*)</span><div class="fix">Showcase реально использует библиотеку (53 обращения): aurora-drift, stagger, glow-hover, pulse-dot, count-up, featured-ring, skeleton, check-draw, logo-dot. Видео-карты — тилт + иридесцентная рамка + glare, premium-уровень. Риск: holo/glare/conic-spin одновременно = дорого по GPU на слабых телефонах.</div></td>
+      <td class="fix"><b>Бюджет анимаций на mobile.</b> Гейтить conic-spin/holo за <span class="mono">(hover:hover)</span> и prefers-reduced-data; на бордах подключить ту же <span class="mono">aiag-*</span>, а не локальные кейфреймы.</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-mid">7</span><div class="meter"><i style="width:78%"></i></div></td>
+      <td><span class="dim">Аффорданс / фидбэк</span><div class="fix">Сильно: цена тулзы показана ДО вызова (#09), «списываем по факту» при стриме, «кредиты не списаны» при ошибке (#10b), TG MainButton-стенд-ин. Слабее: на бордах <span class="mono">.toggle</span>, <span class="mono">.chip</span>, <span class="mono">.btn</span> неотличимы от текста — нет hover/active/disabled состояний, всё «нарисовано включённым».</div></td>
+      <td class="fix"><b>Состояния интерактивов.</b> Дать видимые hover/active/disabled/focus-ring для кнопок, тогглов и чипов (focus-ring уже есть в токене <span class="mono">--ring</span> — применить).</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-hi">8</span><div class="meter"><i style="width:89%"></i></div></td>
+      <td><span class="dim">UX-копирайтинг</span><div class="fix">Живой, точный, с голосом: «режет воду без жалости», «контроль за тобой», «свой ключ → 0 комиссии», «спит, когда не нужен». Цена и комиссия объяснены человеческим языком. Иногда жаргон без раскрытия для новичка: «x402», «lineage», «control-plane», «swarm».</div></td>
+      <td class="fix"><b>Глоссарий по наведению.</b> Технотермины (x402, MCP, lineage) — с inline-tooltip «что это» при первом появлении.</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-hi">8</span><div class="meter"><i style="width:89%"></i></div></td>
+      <td><span class="dim">Онбординг / пустые / ошибки</span><div class="fix">Зрело: 03b «первый вход 0 агентов» с подобранным стартом, 04b skeleton+empty-search, 08b streaming, 08c «мало кредитов» с inline-пополнением, 10b «ран не прошёл — кредиты не списаны», 19b «ключ не принят», 32b «ждём сеть». Покрыты состояния, которые обычно забывают. Не хватает: глобальный offline/сетевой сбой и «провайдер недоступен, фоллбэк».</div></td>
+      <td class="fix"><b>Добавить сетевой/деградационный экран.</b> «Шлюз недоступен → переключаемся на резерв» — закрыть последний класс ошибок рантайма.</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-mid">6</span><div class="meter"><i style="width:67%"></i></div></td>
+      <td><span class="dim">Мобайл + веб-fit</span><div class="fix">Showcase решает это элегантно — один код, theme×device тумблер, общая модель. Но борды разъезжаются: tma на TG-tabbar/MainButton (правильно), web на sidebar+masonry. «Тот же продукт на большом экране» заявлен, но веб-дом — masonry-галерея, а моб — вертикальный список: это разные паттерны, не зеркало.</div></td>
+      <td class="fix"><b>Один компонент карточки, два layout-режима.</b> Свести веб и моб к общему <span class="mono">AgentCard</span> с responsive-сеткой, как уже доказано в showcase.</td>
+    </tr>
+    <tr>
+      <td><span class="sc sc-hi">9</span><div class="meter"><i style="width:100%"></i></div></td>
+      <td><span class="dim">Доверие / достоверность</span><div class="fix">Эталон. 152-ФЗ-согласия на входе, «оплата только за успешный прогон», «свой ключ не покидает инфру — только маршрутизируем», «храним шифр + последние 4», run-trace как ledger с −кр по шагам, дисклеймер у трейдер-агента «не инвест-рекомендация», нейтральные @username-плейсхолдеры. Прозрачность денег и данных — на уровне финтеха.</div></td>
+      <td class="fix"><b>Удержать планку.</b> Вынести «оплата за успех» и «0 комиссии при своём ключе» на онбординг/лендинг — это сильнейшие триггеры доверия, сейчас они спрятаны вглубь.</td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr><td class="sc sc-mid">78</td><td colspan="2">ИТОГО · 78 / 108 — сильный B+. Showcase тянет вверх, расхождение бордов тянет вниз.</td></tr>
+  </tfoot>
+</table>
+
+<div class="callout">
+<b>Ключевая находка по консистентности.</b> Showcase делает ровно то, что просили: токены — <span class="mono">verbatim</span> из globals.css (<span class="mono">--bg:#0a0a0b · --accent:#f59e0b · --radius:8px</span>), логотип — реальная <span class="mono">--logo-mask</span> PNG c анимацией <span class="mono">.aiag-logo-dot</span>, мотив — настоящая <span class="mono">aiag-*</span> библиотека. А вот <span class="mono">web/styles.css</span> и <span class="mono">tma/styles.css</span> живут на <span class="mono">OKLCH</span>-палитре и рисуют логотип ромбиком «◆», которого в бренде нет. Это не «почти то же» — это второй визуальный язык. Сведение бордов к showcase-токенам — единственная правка, поднимающая сразу 4 измерения.
+</div>
+
+<h2 class="sec">Топ-10 улучшений · impact × 1/effort</h2>
+<ol class="improve">
+  <li>
+    <div class="t">Свести борды на токены globals.css + реальный логотип-маску</div>
+    <div class="d">Заменить OKLCH-палитру и ◆-ромб в web/tma styles.css на hex-токены и <span class="mono">--logo-mask</span> из showcase. Чинит консистентность, доверие, частично цвет и mobile-fit разом.</div>
+    <div class="m"><span class="chip imp">impact ★★★★★</span><span class="chip eff">effort ★★☆☆☆</span><span class="chip qw">QUICK-WIN</span></div>
+  </li>
+  <li>
+    <div class="t">Поднять контраст <span class="mono">--ink-muted</span> для мелкого текста до AA</div>
+    <div class="d">#71717a → ~#8b8b94 для &lt;14px (цены, мета, подписи). Один токен — весь продукт проходит AA.</div>
+    <div class="m"><span class="chip imp">impact ★★★★☆</span><span class="chip eff">effort ★☆☆☆☆</span><span class="chip qw">QUICK-WIN</span></div>
+  </li>
+  <li>
+    <div class="t">Статус не только цветом: иконка + слово на всех chip'ах</div>
+    <div class="d">Паттерн из #10b («✕ таймаут», «✓ ok») распространить на все статусные чипы. A11y + читаемость при дальтонизме.</div>
+    <div class="m"><span class="chip imp">impact ★★★★☆</span><span class="chip eff">effort ★☆☆☆☆</span><span class="chip qw">QUICK-WIN</span></div>
+  </li>
+  <li>
+    <div class="t">Видимые состояния интерактивов (hover/active/disabled/focus-ring)</div>
+    <div class="d">Кнопки, тогглы, чипы на бордах «нарисованы включёнными». Применить <span class="mono">--ring</span> для focus и явные стейты — аффорданс резко вырастет.</div>
+    <div class="m"><span class="chip imp">impact ★★★★☆</span><span class="chip eff">effort ★★☆☆☆</span><span class="chip qw">QUICK-WIN</span></div>
+  </li>
+  <li>
+    <div class="t">Зафиксировать сетку дом-ленты, один доминантный CTA</div>
+    <div class="d">Убрать random <span class="mono">--ch</span>-высоты masonry на вебе; «Запустить» — постоянный визуальный приоритет на карточке и экране.</div>
+    <div class="m"><span class="chip imp">impact ★★★★☆</span><span class="chip eff">effort ★★★☆☆</span></div>
+  </li>
+  <li>
+    <div class="t">Рекомендованный путь в «Создать» (#12) + прогрессивное раскрытие</div>
+    <div class="d">Подсветить «Из шаблона — 2 клика» как дефолт для новичка, «С нуля/Hermes» — как advanced. Снижает паралич выбора.</div>
+    <div class="m"><span class="chip imp">impact ★★★☆☆</span><span class="chip eff">effort ★★☆☆☆</span><span class="chip qw">QUICK-WIN</span></div>
+  </li>
+  <li>
+    <div class="t">Inline-глоссарий для технотерминов</div>
+    <div class="d">x402, MCP, lineage, control-plane, swarm — tooltip «что это» при первом появлении. Сохраняет голос, убирает барьер для RU-аудитории.</div>
+    <div class="m"><span class="chip imp">impact ★★★☆☆</span><span class="chip eff">effort ★★☆☆☆</span></div>
+  </li>
+  <li>
+    <div class="t">Вынести триггеры доверия на онбординг/лендинг</div>
+    <div class="d">«Оплата только за успешный прогон» и «свой ключ → 0 комиссии» сейчас спрятаны в #10b/#20. Это сильнейшие конверсионные аргументы — на #01.</div>
+    <div class="m"><span class="chip imp">impact ★★★★☆</span><span class="chip eff">effort ★★☆☆☆</span><span class="chip qw">QUICK-WIN</span></div>
+  </li>
+  <li>
+    <div class="t">Единый <span class="mono">AgentCard</span>, два layout-режима (веб/моб)</div>
+    <div class="d">Свести веб-masonry и моб-список к одному компоненту с responsive-сеткой — как уже доказал showcase. Закрывает «тот же продукт на большом экране».</div>
+    <div class="m"><span class="chip big">impact ★★★★☆</span><span class="chip eff">effort ★★★★☆</span></div>
+  </li>
+  <li>
+    <div class="t">Бюджет анимаций + сетевой/деградационный экран</div>
+    <div class="d">Гейтить holo/conic-spin за hover+reduced-data на мобиле; добавить «шлюз недоступен → резерв» как последний класс рантайм-ошибок.</div>
+    <div class="m"><span class="chip imp">impact ★★★☆☆</span><span class="chip eff">effort ★★★☆☆</span></div>
+  </li>
+</ol>
+
+<p class="note">
+Оценено: <b>docs/wireframes/showcase.html</b> (единая витрина, рендерит веб+моб из одних данных) · <b>docs/wireframes/web/index.html</b> · <b>docs/wireframes/tma/index.html</b> · <b>docs/wireframes/tma/characters-video.html</b> · таргет <b>apps/web/src/app/globals.css</b>.<br>
+Метод: 12 измерений × 9 = 108. Дизайн-токены и мотив-библиотека этой страницы — реальные, из globals.css.
+</p>
+
+<footer>
+AIAG · дизайн-аудит на 108 баллов · 2026-06-03 · итог 78/108 (B+) · старший продуктовый дизайнер.<br>
+Сильнее всего: доверие (9), IA / типографика / моушн / копи / онбординг (8). Слабее всего: консистентность бордов vs globals.css (5), цвет/контраст и mobile-fit (6).
+</footer>
+
+</div>
+</body>
+</html>
