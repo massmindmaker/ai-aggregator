@@ -62,10 +62,13 @@ describe('resolveUpstream', () => {
     expect(u.isExternal).toBe(false);
   });
 
-  it('aiag with AIAG_GATEWAY_KEY unset → throws', async () => {
+  it('aiag with neither AIAG_GATEWAY_KEY nor OPENROUTER_API_KEY → throws', async () => {
+    // wave0 (aab50ee) added a graceful OpenRouter fallback when AIAG_GATEWAY_KEY
+    // is unset; resolveUpstream only throws when BOTH keys are missing.
     vi.stubEnv('AIAG_GATEWAY_KEY', '');
+    vi.stubEnv('OPENROUTER_API_KEY', '');
     await expect(resolveUpstream(makeAgent({ connection_type: 'aiag' }))).rejects.toThrow(
-      'AIAG_GATEWAY_KEY not set',
+      'neither AIAG_GATEWAY_KEY nor OPENROUTER_API_KEY set',
     );
   });
 
@@ -148,11 +151,15 @@ describe('callWithFallback — gateway → OpenRouter degraded fallback', () => 
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const resp = await callWithFallback(
+    const out = await callWithFallback(
       { url: GATEWAY, apiKey: 'sk_aiag', model: 'm', isExternal: false },
       { model: 'm', messages: [] },
     );
-    expect(resp.choices[0]?.message.content).toBe('ok');
+    expect(out.response.choices[0]?.message.content).toBe('ok');
+    // D-0: the OpenRouter fallback response carries no gateway billing headers,
+    // so the caller must NOT treat it as authoritatively billed.
+    expect(out.billedByGateway).toBe(false);
+    expect(out.chargedRub).toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     // assert the second hop hit openrouter with the OPENROUTER_API_KEY bearer
     const secondCall = fetchMock.mock.calls[1];
@@ -169,11 +176,50 @@ describe('callWithFallback — gateway → OpenRouter degraded fallback', () => 
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
-    const resp = await callWithFallback(
+    const out = await callWithFallback(
       { url: GATEWAY, apiKey: 'sk_aiag', model: 'm', isExternal: false },
       { model: 'm', messages: [] },
     );
-    expect(resp.choices[0]?.message.content).toBe('hi');
+    expect(out.response.choices[0]?.message.content).toBe('hi');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('D-0: gateway 200 WITH billing headers → billedByGateway + authoritative ₽', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'hi' } }] }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'x-aiag-charged-rub': '12.3400',
+          'x-aiag-upstream-cost-rub': '9.0000',
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const out = await callWithFallback(
+      { url: GATEWAY, apiKey: 'sk_aiag', model: 'm', isExternal: false },
+      { model: 'm', messages: [] },
+    );
+    expect(out.billedByGateway).toBe(true);
+    expect(out.chargedRub).toBeCloseTo(12.34, 6);
+    expect(out.upstreamCostRub).toBeCloseTo(9.0, 6);
+    // realized margin is now a readable number (charged − upstream cost)
+    expect(out.chargedRub - out.upstreamCostRub).toBeCloseTo(3.34, 6);
+  });
+
+  it('D-0: gateway 200 WITHOUT billing headers → NOT billedByGateway (caller estimates)', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'hi' } }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const out = await callWithFallback(
+      { url: GATEWAY, apiKey: 'sk_aiag', model: 'm', isExternal: false },
+      { model: 'm', messages: [] },
+    );
+    expect(out.billedByGateway).toBe(false);
+    expect(out.chargedRub).toBe(0);
   });
 });
