@@ -307,6 +307,23 @@ export function estimateCostRub(modelSlug: string, tokensIn: number, tokensOut: 
   return usd * USD_TO_RUB;
 }
 
+/**
+ * CHARGE-0 floor: the amount we actually settle a run at.
+ *
+ * The gateway's authoritative X-AIAG-Charged-Rub is trusted as-is, but a
+ * zero-usage gateway response (0 prompt+completion tokens → charged 0.0000) or a
+ * zero-token estimate would otherwise settle a BILLABLE run at 0₽ (free). The
+ * R0-2 MIN_RUN_COST gate only protects run START, not settle — so we re-apply it
+ * here as a nonzero floor on the final billable amount. Tool fees are already
+ * folded into `rawCostRub` (totalCostRub = basis + toolFeesRub), so they ride
+ * inside the floor. External / BYOK runs (isExternal=true) pay their own provider
+ * and MUST stay at exactly 0 — no floor.
+ */
+export function finalBillableCostRub(rawCostRub: number, isExternal: boolean): number {
+  if (isExternal) return 0;
+  return Math.max(MIN_RUN_COST, rawCostRub);
+}
+
 function buildSystem(agent: AgentRow): string {
   const lines = [agent.system_prompt];
   const hasTools = (agent.tools ?? []).length > 0;
@@ -491,6 +508,11 @@ export async function runAgent(runId: string): Promise<void> {
             `toolFees=${toolFeesRub.toFixed(4)}₽ (gateway-authoritative)`,
         );
       }
+      // CHARGE-0: floor the BILLABLE settle amount to MIN_RUN_COST so a
+      // zero-usage gateway charge (or a zero-token estimate) can never settle a
+      // billable run at 0₽. External/BYOK stays exactly 0. Tool fees are already
+      // inside totalCostRub, so they ride inside the floor.
+      const billable = finalBillableCostRub(totalCostRub, upstream.isExternal);
       // R0-2 + R0-3: mark completed + atomic daily-spend guard + balance debit
       // in ONE transaction. A failed guard/debit rolls back the completion too,
       // so the run never lands 'completed' without being paid for.
@@ -500,7 +522,7 @@ export async function runAgent(runId: string): Promise<void> {
           tgUserId: agent.tg_user_id,
           agentId: agent.id,
           output,
-          costRub: totalCostRub,
+          costRub: billable,
           tokensIn,
           tokensOut,
           isExternal: upstream.isExternal,
@@ -516,7 +538,7 @@ export async function runAgent(runId: string): Promise<void> {
         await notifyFailed(agent.tg_user_id, agent.name, agent.id, reason);
         return;
       }
-      await notifyCompleted(agent.tg_user_id, agent.name, agent.id, totalCostRub, output);
+      await notifyCompleted(agent.tg_user_id, agent.name, agent.id, billable, output);
       return;
     }
 
