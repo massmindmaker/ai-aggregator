@@ -19,6 +19,8 @@ interface Agent {
   external_base_url?: string | null;
   external_api_key_hint?: string | null;
   external_model_slug?: string | null;
+  mcp_endpoint_url?: string | null;
+  mcp_auth_set?: boolean;
 }
 
 // Tools implemented by the agent-worker (apps/agent-worker/src/tools.ts).
@@ -71,6 +73,10 @@ export default function AgentDetailPage() {
   const [connKey, setConnKey] = useState('');
   const [connUrl, setConnUrl] = useState('');
   const [connModel, setConnModel] = useState('');
+  // MCP (skills) editing. mcpSel: '' = не менять; 'clear' = отключить; 'set' = задать новый.
+  const [mcpSel, setMcpSel] = useState('');
+  const [mcpUrl, setMcpUrl] = useState('');
+  const [mcpAuth, setMcpAuth] = useState('');
 
   const runActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
 
@@ -86,6 +92,9 @@ export default function AgentDetailPage() {
     setConnKey('');
     setConnUrl('');
     setConnModel('');
+    setMcpSel('');
+    setMcpUrl('');
+    setMcpAuth('');
     setEditErr(null);
     setEditing(true);
   }
@@ -121,6 +130,16 @@ export default function AgentDetailPage() {
                     ? connUrl.trim()
                     : undefined,
                   external_model_slug: connModel.trim() || undefined,
+                }
+              : {}),
+          // MCP change is opt-in: 'clear' → detach the MCP server; 'set' → attach a new
+          // URL (+ optional auth); '' → leave the MCP columns untouched.
+          ...(mcpSel === 'clear'
+            ? { reset_mcp: true }
+            : mcpSel === 'set'
+              ? {
+                  mcp_endpoint_url: mcpUrl.trim(),
+                  mcp_auth: mcpAuth.trim() || undefined,
                 }
               : {}),
         }),
@@ -528,6 +547,65 @@ export default function AgentDetailPage() {
                         value={connModel}
                         onChange={(e) => setConnModel(e.target.value)}
                         placeholder="gpt-4o"
+                        style={editInputStyle}
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  border: '1px solid var(--line)',
+                  borderRadius: 8,
+                  padding: 12,
+                  background: 'var(--bg-surface)',
+                }}
+              >
+                <span className="tma-card-text" style={{ fontWeight: 600 }}>
+                  🧩 MCP-сервер (скиллы)
+                </span>
+                <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -4 }}>
+                  Сейчас:{' '}
+                  {agent.mcp_endpoint_url
+                    ? `подключён${agent.mcp_auth_set ? ' (с auth)' : ''} · ${agent.mcp_endpoint_url}`
+                    : 'не подключён'}
+                </p>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-text">Изменить</span>
+                  <select
+                    value={mcpSel}
+                    onChange={(e) => setMcpSel(e.target.value)}
+                    style={editInputStyle}
+                  >
+                    <option value="">— не менять —</option>
+                    <option value="set">Задать новый MCP-сервер</option>
+                    {agent.mcp_endpoint_url && <option value="clear">Отключить MCP</option>}
+                  </select>
+                </label>
+                {mcpSel === 'set' && (
+                  <>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span className="tma-card-text">URL</span>
+                      <input
+                        type="url"
+                        value={mcpUrl}
+                        onChange={(e) => setMcpUrl(e.target.value)}
+                        placeholder="https://mcp.example.com/mcp"
+                        style={editInputStyle}
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span className="tma-card-text">Auth-заголовок (опц.)</span>
+                      <input
+                        type="password"
+                        value={mcpAuth}
+                        onChange={(e) => setMcpAuth(e.target.value)}
+                        placeholder="Bearer …"
+                        autoComplete="off"
                         style={editInputStyle}
                       />
                     </label>

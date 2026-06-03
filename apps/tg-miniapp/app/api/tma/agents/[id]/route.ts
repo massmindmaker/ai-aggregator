@@ -27,6 +27,9 @@ interface AgentRow {
   external_base_url: string | null;
   external_api_key_hint: string | null;
   external_model_slug: string | null;
+  mcp_endpoint_url: string | null;
+  // Derived boolean (mcp_auth_encrypted IS NOT NULL) — never the encrypted token itself.
+  mcp_auth_set: boolean;
 }
 
 interface RunRow {
@@ -46,7 +49,9 @@ async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null>
            system_prompt, tools, model_slug, budget_rub_monthly::text,
            status, created_at, updated_at,
            connection_type, external_base_url, external_api_key_hint,
-           external_model_slug
+           external_model_slug,
+           mcp_endpoint_url,
+           (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set
     FROM agents
     WHERE id = ${id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
@@ -92,6 +97,12 @@ interface PatchBody {
   external_base_url?: string;
   external_model_slug?: string;
   reset_connection?: boolean;
+  // MCP (skills) editing (opt-in). mcp_endpoint_url present → set/replace the remote
+  // MCP server (+ optional mcp_auth token). reset_mcp → clear both columns. Neither →
+  // MCP columns untouched.
+  mcp_endpoint_url?: string;
+  mcp_auth?: string;
+  reset_mcp?: boolean;
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -178,6 +189,32 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         external_model_slug = ${newExtModel}`
     : sql``;
 
+  // ---- MCP (skills) editing (opt-in) ----
+  // Mirrors the create route: a new mcp_endpoint_url is https/SSRF-validated and the
+  // optional auth token is AES-256-GCM base64 (same crypto as BYOK keys). reset_mcp
+  // clears both columns. Neither → MCP columns left untouched. Touches NO money path.
+  let changeMcp = false;
+  let newMcpUrl: string | null = null;
+  let newMcpAuthEnc: string | null = null;
+
+  const mcpUrl = body.mcp_endpoint_url?.trim();
+  if (body.reset_mcp === true) {
+    changeMcp = true; // → clear both (defaults above are null)
+  } else if (mcpUrl) {
+    changeMcp = true;
+    const mguard = validateExternalUrl(mcpUrl);
+    if (!mguard.ok) return NextResponse.json({ error: `mcp_${mguard.reason}` }, { status: 400 });
+    newMcpUrl = mcpUrl.replace(/\/+$/, '');
+    const mcpToken = body.mcp_auth?.trim();
+    if (mcpToken) newMcpAuthEnc = encryptSecret(mcpToken).toString('base64');
+  }
+
+  const setMcp = changeMcp
+    ? sql`,
+        mcp_endpoint_url = ${newMcpUrl},
+        mcp_auth_encrypted = ${newMcpAuthEnc}`
+    : sql``;
+
   const upd = (await sql`
     UPDATE agents
     SET name = ${name},
@@ -186,14 +223,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         tools = ${sql.json(tools as never)},
         model_slug = ${modelSlug},
         budget_rub_monthly = ${budget},
-        updated_at = NOW()${setConn}
+        updated_at = NOW()${setConn}${setMcp}
     WHERE id = ${params.id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
     RETURNING id::text, tg_user_id::text, template_kind, name, description,
               system_prompt, tools, model_slug, budget_rub_monthly::text,
               status, created_at, updated_at,
               connection_type, external_base_url, external_api_key_hint,
-              external_model_slug
+              external_model_slug,
+              mcp_endpoint_url,
+              (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set
   `) as unknown as AgentRow[];
 
   return NextResponse.json({ agent: upd[0] });

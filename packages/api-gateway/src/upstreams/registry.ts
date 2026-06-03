@@ -16,6 +16,7 @@ import { openRouterUpstream } from './openrouter';
 import { kieUpstream } from './kie';
 import { ollamaUpstream } from './ollama';
 import { groqUpstream } from './groq';
+import { gonkaUpstream } from './gonka';
 
 export function getUpstream(provider: string): UpstreamAdapter {
   if (process.env.AIAG_FORCE_MOCK === '1') return mockUpstream;
@@ -29,6 +30,8 @@ export function getUpstream(provider: string): UpstreamAdapter {
       return process.env.OLLAMA_CLOUD_URL ? ollamaUpstream : mockUpstream;
     case 'groq':
       return process.env.GROQ_API_KEY ? groqUpstream : mockUpstream;
+    case 'gonka':
+      return process.env.GONKA_API_KEY ? gonkaUpstream : mockUpstream;
     default:
       return mockUpstream;
   }
