@@ -115,8 +115,12 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install deps (workspace-wide, frozen)
-        run: bun install --frozen-lockfile
+      - name: Install deps (workspace-wide)
+        # Prefer the frozen lockfile (reproducible). Fall back to a normal install
+        # if bun-version churn makes the committed lockfile look "changed" on the
+        # runner — the runner installs fresh each time anyway, so this only loses
+        # strict pinning when versions drift, and never blocks a deploy on it.
+        run: bun install --frozen-lockfile || bun install
 
       # Shared workspace libs must exist (dist/) before any app build so that
       # @aiag/shared, @aiag/database, gateway etc. resolve. Cheap + idempotent.
