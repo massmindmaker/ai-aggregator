@@ -9,6 +9,7 @@
 import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { settleCharge } from '../billing/settle';
+import { BILLING_HEADERS, formatRubHeader } from '../lib/billing-headers';
 import { logRequest } from '../logging/stream';
 import { calcCostRub, calcByokFeeRub } from '../lib/pricing';
 import { fetchUsdRubRate } from '../lib/cbr';
@@ -78,6 +79,8 @@ export async function streamSseAndSettle(
 
     // settle + log
     let totalRub = 0;
+    // D-0: upstream cost we bore (₽, no markup) — 0 for BYOK.
+    let upstreamCostRub = 0;
     try {
       if (opts.byok) {
         totalRub = calcByokFeeRub();
@@ -86,6 +89,7 @@ export async function streamSseAndSettle(
         const upstreamUsd =
           (inputTokens / 1000) * opts.upstream.price_per_1k_input +
           (outputTokens / 1000) * opts.upstream.price_per_1k_output;
+        upstreamCostRub = upstreamUsd * rate;
         totalRub = calcCostRub({
           upstreamUsd,
           rate,
@@ -107,6 +111,11 @@ export async function streamSseAndSettle(
         'sse_settle_failed'
       );
     }
+
+    // D-0: same authoritative billing headers as the non-streaming path
+    // (brand-neutral ₽ figures, keyed to gateway_request_id via X-Request-Id).
+    c.header(BILLING_HEADERS.CHARGED_RUB, formatRubHeader(totalRub));
+    c.header(BILLING_HEADERS.UPSTREAM_COST_RUB, formatRubHeader(upstreamCostRub));
 
     const statusCode = clientClosed || aborted ? 499 : 200;
     if (clientClosed || aborted) c.header('X-AIAG-Partial', 'true');

@@ -19,6 +19,7 @@ import {
 import { fetchUsdRubRate } from '../../lib/cbr';
 import { calcCostRub, calcByokFeeRub } from '../../lib/pricing';
 import { settleCharge } from '../../billing/settle';
+import { BILLING_HEADERS, formatRubHeader } from '../../lib/billing-headers';
 import { logRequest } from '../../logging/stream';
 import { streamSseAndSettle } from '../../streaming/sse';
 import { getUpstream } from '../../upstreams/registry';
@@ -93,6 +94,10 @@ chat.post('/completions', async (c) => {
   const usage = resp.usage;
   let totalRub = 0;
   let upstreamUsd = 0;
+  // D-0: authoritative upstream cost in ₽ (upstream_usd × rate, NO markup), so
+  // the caller can compute realized margin = charged − upstreamCost. For BYOK
+  // there is no upstream cost we bear (the user paid their provider) → 0.
+  let upstreamCostRub = 0;
   if (byok) {
     totalRub = calcByokFeeRub();
     await settleCharge({ orgId: key.org_id, requestId, totalRub });
@@ -101,6 +106,7 @@ chat.post('/completions', async (c) => {
     upstreamUsd =
       (usage.prompt_tokens / 1000) * upstream.price_per_1k_input +
       (usage.completion_tokens / 1000) * upstream.price_per_1k_output;
+    upstreamCostRub = upstreamUsd * rate;
     totalRub = calcCostRub({
       upstreamUsd,
       rate,
@@ -157,5 +163,10 @@ chat.post('/completions', async (c) => {
 
   c.header('X-AIAG-Mode-Applied', mode);
   c.header('X-AIAG-Upstream', upstream.provider);
+  // D-0: authoritative billing figures (₽), keyed to gateway_request_id via the
+  // echoed X-Request-Id. Brand-neutral (numbers only). The agent-worker reads
+  // these to bill off the REAL charge/cost instead of its local estimate.
+  c.header(BILLING_HEADERS.CHARGED_RUB, formatRubHeader(totalRub));
+  c.header(BILLING_HEADERS.UPSTREAM_COST_RUB, formatRubHeader(upstreamCostRub));
   return c.json(resp);
 });
