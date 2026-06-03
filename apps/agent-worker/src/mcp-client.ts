@@ -66,13 +66,22 @@ export async function listMcpToolDefs(client: McpClient): Promise<ToolDef[]> {
   const listed = await client.listTools();
   const tools = Array.isArray(listed?.tools) ? listed.tools : [];
   return tools
-    .filter((t) => t && typeof t.name === 'string' && t.inputSchema)
+    .filter(
+      (t) =>
+        t &&
+        typeof t.name === 'string' &&
+        // sane function name (OpenAI allows [a-zA-Z0-9_-], ≤64); also blocks a
+        // hostile server from injecting weird/huge names that break the model call
+        /^[a-zA-Z0-9_.-]{1,48}$/.test(t.name) &&
+        t.inputSchema,
+    )
     .slice(0, MAX_MCP_TOOLS)
     .map((t) => ({
       type: 'function' as const,
       function: {
         name: `${MCP_PREFIX}${t.name}`,
-        description: typeof t.description === 'string' ? t.description : '',
+        // cap attacker-controlled description (defense-in-depth vs context flooding)
+        description: (typeof t.description === 'string' ? t.description : '').slice(0, 1000),
         parameters: (t.inputSchema as Record<string, unknown>) ?? {
           type: 'object',
           properties: {},
