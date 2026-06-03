@@ -20,6 +20,15 @@ export type VerifyResult =
  */
 const DEFAULT_MAX_AGE_SEC = 600;
 
+/**
+ * Clock-skew tolerance for a future-dated auth_date (seconds). A bare
+ * `ageSec > max` freshness check lets a future timestamp through with an
+ * effectively unbounded window (negative age never exceeds max). We reject
+ * future-dated auth_date, but allow a small skew so legit logins aren't denied
+ * when our VPS clock trails Telegram's by a few seconds.
+ */
+const CLOCK_SKEW_TOLERANCE_SEC = 60;
+
 function initDataMaxAgeSec(): number {
   const raw = Number(process.env.TMA_INITDATA_MAX_AGE_SEC);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_AGE_SEC;
@@ -64,6 +73,7 @@ export function verifyInitData(rawInitData: string, botToken: string): VerifyRes
   const authDate = Number(params.get('auth_date') ?? 0);
   if (!authDate) return { ok: false, reason: 'missing_auth_date' };
   const ageSec = Date.now() / 1000 - authDate;
+  if (ageSec < -CLOCK_SKEW_TOLERANCE_SEC) return { ok: false, reason: 'future_auth_date' };
   if (ageSec > initDataMaxAgeSec()) return { ok: false, reason: 'expired' };
 
   const userJson = params.get('user');
