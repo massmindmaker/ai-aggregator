@@ -145,6 +145,29 @@
   }
   @keyframes shimmer { 100%{ transform:translateX(100%) } }
   @media (prefers-reduced-motion: reduce){ .skel::after{ animation:none } }
+
+  /* ═══ honesty pass (2026-06-03) ═════════════════════════════════════════
+   * In-screen one-line note = what's real vs. целевой вид (matches showcase.html).
+   * Source of truth: docs/specs/2026-06-03-user-workflows.md (readiness + 10 mismatches). */
+  .note {
+    display:flex; gap:7px; align-items:flex-start; font-size:10px; line-height:1.5;
+    color:var(--ink-dim); border:1px solid var(--line); border-radius:7px; padding:6px 8px;
+    background:var(--surface-2);
+  }
+  .note .ni { flex:none; font-family:var(--mono); font-size:10px; }
+  .note b { color:var(--ink); font-weight:600; }
+  .note.live   { border-color:rgba(34,197,94,.30) }  .note.live   .ni{ color:var(--good) }
+  .note.soon   { border-color:rgba(122,162,247,.30) } .note.soon   .ni{ color:#7aa2f7 }
+  .note.rnd    { border-color:var(--line) }           .note.rnd    .ni{ color:var(--ink-faint) }
+  .note.cannot { border-color:var(--bad-line); background:var(--bad-bg) } .note.cannot .ni{ color:var(--bad) }
+  /* «демо / целевой вид» inline marker on fabricated numbers (rating, uptime, p50, доход…) */
+  .demo {
+    font-family:var(--mono); font-size:8px; letter-spacing:.04em; vertical-align:middle;
+    color:var(--ink-faint); border:1px solid var(--line); border-radius:4px; padding:0 4px; margin-left:5px;
+  }
+  /* HERMES-CANNOT caption tag — distinct warn-red */
+  .cap .tag.cannot { color:var(--bad); border-color:var(--bad-line); }
+  .cap .tag.rnd    { color:var(--ink-faint); border-color:var(--line); }
 </style>
 </head>
 <body>
@@ -156,7 +179,9 @@
     <span class="tag live">live</span>работает сейчас<br>
     <span class="tag soon">скоро</span>ближний билд<br>
     <span class="tag rnd">R&D</span>отложено/ресёрч<br>
-    ★ = ядро (happy-path). Валюта: <b>Credits (кр)</b> · пополнение мульти-крипто (TON, USDT, ...)<br>
+    <span class="tag cannot">Hermes-CANNOT</span>нет remote-API (нужен наш control-plane)<br>
+    <span class="demo">демо</span>= вымышленные цифры (целевой вид, не live-факт)<br>
+    ★ = ядро (happy-path). Валюта: <b>Credits (кр)</b> · пополнение: <b>TON live</b>, остальные крипто — скоро<br>
     Карточки агентов = персонажи. Богатый вид карты: <a href="characters-video.html" style="color:var(--amber)">видео-карты →</a>
   </div>
 
@@ -175,7 +200,7 @@
 
   <div class="grp">C · Run / чат</div>
   <a href="#s08"><span class="n">08</span>★ Чат (composer-chip)</a>
-  <a href="#s08b"><span class="n">08b</span>★ Чат — агент думает</a>
+  <a href="#s08b"><span class="n">08b</span>★ Чат — агент работает (async)</a>
   <a href="#s08c"><span class="n">08c</span>★ Чат — мало кредитов</a>
   <a href="#s09"><span class="n">09</span>Тул-апрув карточка</a>
   <a href="#s10"><span class="n">10</span>Раны / история</a>
@@ -273,6 +298,7 @@
       <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
       <div class="screen" style="gap:10px">
         <div class="seg"><div class="s on">Для тебя</div><div class="s">Каталог</div><div class="s">Мои · 3</div></div>
+        <div class="note soon"><span class="ni">скоро</span><div>Лента <b>«Для тебя»</b> чужих авторов, ★-рейтинг и «N запусков» — целевой вид. Сейчас live только <b>«Мои»</b> (<span style="font-family:var(--mono)">GET /tma/agents</span>); рекомендателя и публичного каталога авторов нет.</div></div>
         <div class="metric faint">Рекомендуем тебе · персонажи под твои задачи</div>
         <div class="list">
           <div class="card" style="--ch:28"><div class="ccard">
@@ -282,9 +308,9 @@
               <div class="crole">Контент-редактор · от <b style="color:var(--ink-dim)">@ainews</b></div>
               <div class="ctrait">Дерзкая, режет воду без жалости.</div>
               <div class="cstats">
-                <div class="cs"><div class="cv">48<span class="u">k</span></div><div class="ck">запусков</div></div>
-                <div class="cs"><div class="cv star">4.9</div><div class="ck">★ рейтинг</div></div>
-                <div class="cs"><div class="cv">~6<span class="u">кр</span></div><div class="ck">за прогон</div></div>
+                <div class="cs"><div class="cv">48<span class="u">k</span></div><div class="ck">запусков<span class="demo">демо</span></div></div>
+                <div class="cs"><div class="cv star">4.9</div><div class="ck">★ рейтинг<span class="demo">демо</span></div></div>
+                <div class="cs"><div class="cv">~6<span class="u">кр</span></div><div class="ck">оценка</div></div>
               </div>
             </div>
           </div></div>
@@ -295,9 +321,9 @@
               <div class="crole">Аналитик данных · от <b style="color:var(--ink-dim)">@finbot</b></div>
               <div class="ctrait">Сухой. Говорит цифрами, не эмоциями.</div>
               <div class="cstats">
-                <div class="cs"><div class="cv">19<span class="u">k</span></div><div class="ck">запусков</div></div>
-                <div class="cs"><div class="cv star">4.9</div><div class="ck">★ рейтинг</div></div>
-                <div class="cs"><div class="cv">~9<span class="u">кр</span></div><div class="ck">за прогон</div></div>
+                <div class="cs"><div class="cv">19<span class="u">k</span></div><div class="ck">запусков<span class="demo">демо</span></div></div>
+                <div class="cs"><div class="cv star">4.9</div><div class="ck">★ рейтинг<span class="demo">демо</span></div></div>
+                <div class="cs"><div class="cv">~9<span class="u">кр</span></div><div class="ck">оценка</div></div>
               </div>
             </div>
           </div></div>
@@ -308,9 +334,9 @@
               <div class="crole">SMM, тренды · от <b style="color:var(--ink-dim)">@smm</b></div>
               <div class="ctrait">Чует вирусное за день до всех.</div>
               <div class="cstats">
-                <div class="cs"><div class="cv">31<span class="u">k</span></div><div class="ck">запусков</div></div>
-                <div class="cs"><div class="cv star">4.7</div><div class="ck">★ рейтинг</div></div>
-                <div class="cs"><div class="cv">~5<span class="u">кр</span></div><div class="ck">за прогон</div></div>
+                <div class="cs"><div class="cv">31<span class="u">k</span></div><div class="ck">запусков<span class="demo">демо</span></div></div>
+                <div class="cs"><div class="cv star">4.7</div><div class="ck">★ рейтинг<span class="demo">демо</span></div></div>
+                <div class="cs"><div class="cv">~5<span class="u">кр</span></div><div class="ck">оценка</div></div>
               </div>
             </div>
           </div></div>
@@ -326,7 +352,7 @@
     <div class="phone">
       <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
       <div class="screen" style="gap:12px">
-        <div class="ph"><span class="kicker">ДОБРО ПОЖАЛОВАТЬ</span><h2>Начни отсюда</h2><p>Выбери персонажа и запусти за 2 клика. Первый прогон бесплатно.</p></div>
+        <div class="ph"><span class="kicker">ДОБРО ПОЖАЛОВАТЬ</span><h2>Начни отсюда</h2><p>Выбери персонажа и запусти за 2 клика. Платишь по факту — в кредитах.</p></div>
         <div class="metric faint">Подобрали для старта</div>
         <div class="list">
           <div class="card" style="--ch:28"><div class="ccard">
@@ -355,7 +381,7 @@
           </div></div>
         </div>
         <div class="sp" style="flex:1"></div>
-        <div class="btn">Запусти первого · бесплатно</div>
+        <div class="btn">Запустить первого</div>
         <div class="metric faint" style="text-align:center">или <span class="amber-tx">собрать своего →</span></div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
@@ -368,24 +394,25 @@
       <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
       <div class="screen" style="gap:10px">
         <div class="seg"><div class="s">Для тебя</div><div class="s on">Каталог</div><div class="s">Мои · 3</div></div>
+        <div class="note soon"><span class="ni">скоро</span><div>Каталог чужих авторов + «N прогонов» — целевой вид. <span style="font-family:var(--mono)">marketplace</span> сейчас отдаёт <b>только модели</b>, не публичные агенты; рейтинга по популярности нет.</div></div>
         <div class="input">🔎 Найти агента…</div>
         <div class="chips"><span class="chip on">Все</span><span class="chip">Контент</span><span class="chip">Код</span><span class="chip">SMM</span><span class="chip">Данные</span><span class="chip">⇅ популярные</span></div>
         <div class="list">
           <div class="card" style="--ch:28"><div class="ccard">
             <div class="pf"><span class="tdot"></span><span class="gly">А</span></div>
-            <div class="cbody"><div class="row between"><div><div class="cname">Алиса <span class="mbadge">GPT-5.5</span></div><div class="crole">Контент-редактор · @ainews</div><div class="ctrait">Дерзкая, режет воду.</div></div><div class="runs"><b>48k</b></div></div></div>
+            <div class="cbody"><div class="row between"><div><div class="cname">Алиса <span class="mbadge">GPT-5.5</span></div><div class="crole">Контент-редактор · @ainews</div><div class="ctrait">Дерзкая, режет воду.</div></div><div class="runs"><b>48k</b><span class="demo">демо</span></div></div></div>
           </div></div>
           <div class="card" style="--ch:235"><div class="ccard">
             <div class="pf"><span class="tdot"></span><span class="gly">М</span></div>
-            <div class="cbody"><div class="row between"><div><div class="cname">Макс <span class="mbadge">Claude 4.8</span></div><div class="crole">Код-ревьюер · @dev</div><div class="ctrait">Найдёт баг, о котором ты забыл.</div></div><div class="runs"><b>22k</b></div></div></div>
+            <div class="cbody"><div class="row between"><div><div class="cname">Макс <span class="mbadge">Claude 4.8</span></div><div class="crole">Код-ревьюер · @dev</div><div class="ctrait">Найдёт баг, о котором ты забыл.</div></div><div class="runs"><b>22k</b><span class="demo">демо</span></div></div></div>
           </div></div>
           <div class="card" style="--ch:60"><div class="ccard">
             <div class="pf"><span class="tdot"></span><span class="gly">Л</span></div>
-            <div class="cbody"><div class="row between"><div><div class="cname">Лея <span class="mbadge">Gemini 3.5</span></div><div class="crole">Саппорт 24/7 · @cs</div><div class="ctrait">Тёплая, клиент не сорвётся.</div></div><div class="runs"><b>15k</b></div></div></div>
+            <div class="cbody"><div class="row between"><div><div class="cname">Лея <span class="mbadge">Gemini 3.5</span></div><div class="crole">Саппорт 24/7 · @cs</div><div class="ctrait">Тёплая, клиент не сорвётся.</div></div><div class="runs"><b>15k</b><span class="demo">демо</span></div></div></div>
           </div></div>
           <div class="card" style="--ch:165"><div class="ccard">
             <div class="pf"><span class="tdot"></span><span class="gly">Г</span></div>
-            <div class="cbody"><div class="row between"><div><div class="cname">Гриша <span class="mbadge">DeepSeek V4</span></div><div class="crole">SQL-аналитик · @data</div><div class="ctrait">Говорит цифрами, не эмоциями.</div></div><div class="runs"><b>9k</b></div></div></div>
+            <div class="cbody"><div class="row between"><div><div class="cname">Гриша <span class="mbadge">DeepSeek V4</span></div><div class="crole">SQL-аналитик · @data</div><div class="ctrait">Говорит цифрами, не эмоциями.</div></div><div class="runs"><b>9k</b><span class="demo">демо</span></div></div></div>
           </div></div>
         </div>
       </div>
@@ -427,16 +454,17 @@
             <div class="ctrait">Дерзкая, режет воду без жалости.</div>
           </div>
         </div>
-        <div class="pillrow"><span>★ 4.9 · 312 отз.</span><span>·</span><span>48k прогонов</span><span>·</span><span class="amber-tx">~6 кр / прогон</span></div>
+        <div class="pillrow"><span>★ 4.9 · 312 отз.<span class="demo">демо</span></span><span>·</span><span>48k прогонов<span class="demo">демо</span></span><span>·</span><span class="amber-tx">~6 кр / прогон</span></div>
         <div class="t-sub">Пишет посты для Telegram-каналов: хук, тело, CTA. 3 варианта.</div>
+        <div class="note live"><span class="ni">live</span><div>Запуск — <b>live</b>: <span style="font-family:var(--mono)">POST /tma/agents/[id]/run</span> ставит в очередь (202), воркер делает один проход и присылает карточку. ★-отзывы и «N прогонов» — <b>демо</b> (нет таблиц). «Клонировать» — скоро. Бесплатного 1-го прогона в коде нет.</div></div>
         <div class="label">быстрый старт</div>
         <div class="chips"><span class="starter on">Пост про запуск</span><span class="starter">Анонс эфира</span><span class="starter">Дайджест недели</span></div>
         <div class="field"><div class="label">тема</div><div class="input"><span class="val">запуск нашего ИИ-маркета</span></div></div>
-        <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">⎘ Клонировать</div><div class="btn ghost sm" style="flex:1">Сохранить</div></div>
+        <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">⎘ Клонировать<span class="soonchip">скоро</span></div><div class="btn ghost sm" style="flex:1">Сохранить</div></div>
         <div class="sp" style="flex:1"></div>
-        <div class="metric faint" style="text-align:center">~6 кр / прогон · 1-й прогон бесплатно</div>
+        <div class="metric faint" style="text-align:center">~6 кр / прогон · списываем по факту успешного прогона</div>
       </div>
-      <div class="mainbtn tg">▶ Запустить бесплатно</div>
+      <div class="mainbtn tg">▶ Запустить · ~6 кр</div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
     </div>
   </figure>
@@ -468,8 +496,8 @@
         <div class="row"><div class="av amber" style="width:44px;height:44px">A</div><div><div class="t-title" style="font-size:16px">Claude Opus 4.8</div><div class="t-sub">флагман · через AIAG-шлюз</div></div></div>
         <div class="card"><div class="row between"><div><div class="label">Ввод</div><div class="num">$5<span class="faint">/1M</span></div></div><div><div class="label">Вывод</div><div class="num">$25<span class="faint">/1M</span></div></div><div><div class="label">Контекст</div><div class="num">1M</div></div></div></div>
         <div class="chips"><span class="chip on">vision</span><span class="chip on">tools</span><span class="chip on">reasoning</span><span class="chip on">code</span></div>
-        <div class="row" style="gap:6px"><span class="route">✓ лучший маршрут</span><span class="route" style="color:var(--ink-dim);border-color:var(--line)">uptime 99.9%</span></div>
-        <div class="card"><div class="row between"><span class="metric">★ <b>4.9</b></span><span class="metric"><b>62k</b>/нед</span><span class="metric">p50 <b>410мс</b></span></div></div>
+        <div class="row" style="gap:6px"><span class="route">✓ лучший маршрут<span class="demo">демо</span></span><span class="route" style="color:var(--ink-dim);border-color:var(--line)">uptime 99.9%<span class="demo">демо</span></span></div>
+        <div class="card"><div class="row between"><span class="metric">★ <b>4.9</b></span><span class="metric"><b>62k</b>/нед</span><span class="metric">p50 <b>410мс</b></span></div><div class="metric faint" style="margin-top:6px"><span class="demo">демо</span> рейтинг / маршрут / uptime / p50 — целевой вид. Метрики маршрутизации и здоровья в TMA пока не выводятся.</div></div>
         <div class="sp" style="flex:1"></div>
         <div class="row" style="gap:8px"><div class="btn ghost" style="flex:1">Калькулятор</div><div class="btn" style="flex:1.4">Создать агента →</div></div>
       </div>
@@ -485,11 +513,12 @@
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">✍️ Постовик</span><span class="sp"></span><span class="ic">⋮</span></div>
       <div class="screen" style="gap:8px">
         <div class="seg"><div class="s on">Чат</div><div class="s">Раны</div><div class="s">Настройки</div></div>
+        <div class="note live"><span class="ni">live</span><div>Чат — <b>асинхронный</b>: каждое сообщение ставит прогон в очередь (202), воркер делает один не-стриминговый проход и присылает ответ карточкой. Токен-стрима нет. Смена модели «на лету» — скоро.</div></div>
         <div class="bubble them">Привет! Я Постовик. Что напишем?</div>
         <div class="bubble me">Пост в TG про запуск, 3 хука</div>
-        <div class="bubble them">Лови. 1) «Мы убрали VPN из формулы…» 2) «Готовый агент — за 2 клика…» 3) «Пока ты читаешь — агент уже…» ▍</div>
+        <div class="bubble them">Готово. 1) «Мы убрали VPN из формулы…» 2) «Готовый агент — за 2 клика…» 3) «Пока ты читаешь — агент уже…»</div>
         <div class="sp" style="flex:1"></div>
-        <div class="card" style="padding:8px"><div class="row between"><span class="metric"><span class="sdot"></span> Opus 4.8 · AIAG</span><span class="metric amber-tx">~12 кр · сменить ›</span></div></div>
+        <div class="card" style="padding:8px"><div class="row between"><span class="metric"><span class="sdot"></span> Opus 4.8 · AIAG</span><span class="metric amber-tx">оценка ~12 кр<span class="soonchip">сменить · скоро</span></span></div></div>
         <div class="input row between"><span class="muted">Сообщение…</span><span class="amber-tx">↑</span></div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
@@ -497,23 +526,20 @@
   </figure>
 
   <figure class="artboard" id="s08b">
-    <figcaption class="cap"><b>08b · Чат — агент думает (streaming) ★</b><span class="tag live">live</span></figcaption>
+    <figcaption class="cap"><b>08b · Чат — агент работает (async) ★</b><span class="tag live">live</span></figcaption>
     <div class="phone">
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">✍️ Постовик</span><span class="sp"></span><span class="ic">⋮</span></div>
       <div class="screen" style="gap:8px">
         <div class="seg"><div class="s on">Чат</div><div class="s">Раны</div><div class="s">Настройки</div></div>
+        <div class="note live"><span class="ni">live</span><div><b>Без стриминга.</b> Прогон принят (202) и идёт в фоне; ответ придёт <b>карточкой</b> в чат-бот. Нет токен-стрима, нет «остановить», нет live-цены за токен — биллинговый вызов специально не стримится.</div></div>
         <div class="bubble me">Пост в TG про запуск, 3 хука</div>
-        <div class="bubble them" style="max-width:88%">
-          <div class="thinking"><span>Думаю</span><span class="dots"><i></i><i></i><i></i></span></div>
-          <div class="stream" style="margin-top:7px">
-            <div><span class="now">▸</span> читаю тему запроса</div>
-            <div><span class="now">▸</span> вызываю Firecrawl <span class="c">−3 кр</span></div>
-            <div><span class="now">●</span> пишу варианты…</div>
-          </div>
+        <div class="bubble them" style="max-width:90%">
+          <div class="thinking"><span class="sdot"></span><span><b style="color:var(--ink)">Агент работает…</b></span></div>
+          <div class="metric faint" style="margin-top:7px;line-height:1.5">Ответ придёт карточкой в чат-бот. Можно закрыть приложение — уведомление придёт по готовности.</div>
         </div>
         <div class="sp" style="flex:1"></div>
-        <div class="card" style="padding:8px"><div class="row between"><span class="metric"><span class="sdot"></span> Opus 4.8 · AIAG</span><span class="metric amber-tx">списываем по факту</span></div></div>
-        <div class="input row between"><span class="ph-hint">Сообщение…</span><span class="muted">остановить ⏹</span></div>
+        <div class="card" style="padding:8px"><div class="row between"><span class="metric"><span class="sdot"></span> Opus 4.8 · AIAG</span><span class="metric amber-tx">в очереди · 202</span></div></div>
+        <div class="input row between"><span class="ph-hint">Сообщение…</span><span class="muted">↑</span></div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
     </div>
@@ -530,6 +556,7 @@
           <div class="chips" style="margin-top:10px"><span class="chip on">+500 кр</span><span class="chip">+1000 кр</span><span class="chip">+2500 кр</span></div>
           <div class="metric faint" style="margin-top:6px">+500 кр ≈ 5 USDT · пополняешь прямо здесь, не уходя из чата</div>
         </div>
+        <div class="note live"><span class="ni">live</span><div>Воркер <b>не запускает</b> биллинговый прогон при нехватке баланса — это live. Пополнение <b>прямо в чате</b> (не уходя из рана) — скоро: сейчас пополнение в кошельке, через TON.</div></div>
         <div class="sp" style="flex:1"></div>
         <div class="input row between"><span class="ph-hint">Сообщение…</span><span class="muted">↑</span></div>
       </div>
@@ -549,6 +576,7 @@
           <div class="row" style="gap:6px;margin-top:10px"><div class="btn sm ghost" style="flex:1">1 раз</div><div class="btn sm ghost" style="flex:1">Сессию</div><div class="btn sm" style="flex:1">Всегда</div></div>
           <div class="metric faint" style="margin-top:6px;text-align:center">или отклонить · контроль за тобой</div>
         </div>
+        <div class="note soon"><span class="ni">скоро</span><div>Гейта одобрения «1&nbsp;раз / Сессию / Всегда» нет. Firecrawl как тулза не встроена — live-веб-поиск это <b>бесплатный DuckDuckGo</b>. Целевой вид per-call консента.</div></div>
         <div class="sp" style="flex:1"></div>
         <div class="input row between"><span class="muted">Сообщение…</span><span class="amber-tx">↑</span></div>
       </div>
@@ -567,7 +595,7 @@
           <div class="card"><div class="row between"><div><div class="t-title">Сценарий рилса</div><div class="t-sub num">11:30 · 2.1с · 18 кр</div></div><span class="chip on">✓ ok</span></div></div>
           <div class="card err"><div class="row between"><div><div class="t-title errttl">Письмо рассылки</div><div class="t-sub num">вчера · таймаут модели</div></div><span class="chip" style="color:var(--bad);border-color:var(--bad-line)">не прошёл ›</span></div></div>
         </div>
-        <div class="card"><div class="row between"><span class="metric"><b>128</b> ранов</span><span class="metric"><b>99.2%</b> ok</span><span class="metric amber-tx"><b>340</b> кр/нед</span></div></div>
+        <div class="card"><div class="row between"><span class="metric"><b>128</b> ранов</span><span class="metric"><b>99.2%</b> ok</span><span class="metric amber-tx"><b>340</b> кр/нед</span></div><div class="metric faint" style="margin-top:6px">список ранов — <b style="color:var(--good)">live</b> (<span style="font-family:var(--mono)">agent_runs</span>); сводные % и «кр/нед» — <span class="demo">демо</span>.</div></div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
     </div>
@@ -587,7 +615,7 @@
         </div></div>
         <div class="metric faint">Частые причины: перегрузка модели, длинный контекст. Попробуй короче или другую модель.</div>
         <div class="sp" style="flex:1"></div>
-        <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">Сменить модель</div><div class="btn sm" style="flex:1.4">↻ Повторить бесплатно</div></div>
+        <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">Сменить модель<span class="soonchip">скоро</span></div><div class="btn sm" style="flex:1.4">↻ Повторить</div></div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
     </div>
@@ -599,6 +627,7 @@
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">Трейс · Пост · 3 хука</span><span class="sp"></span><span class="ic">✕</span></div>
       <div class="screen" style="gap:9px">
         <div class="row between"><div class="t-title">Прогон #4821</div><span class="chip on">✓ 1.2с</span></div>
+        <div class="note soon"><span class="ni">скоро</span><div>Пошаговый ledger (токены/тулзы/тайминги) не персистится — сегодня прогон даёт <b>одну итоговую сумму</b>. Firecrawl-строка — не встроенная тулза. Ниже — целевой вид трейса.</div></div>
         <div class="card"><div class="led">
           <div><span class="t">0.00с</span> ▸ user: «пост про запуск»</div>
           <div><span class="t">0.01с</span> ▸ model <b>opus-4.8</b> → шлюз :4000</div>
@@ -625,8 +654,9 @@
           <div class="card amber"><div class="row"><div class="av amber">⌨</div><div><div class="t-title">Словами</div><div class="t-sub">опиши — AI соберёт спец сам</div></div></div></div>
           <div class="card"><div class="row"><div class="av">⚡</div><div><div class="t-title">Из шаблона — 2 клика</div><div class="t-sub">готовая роль + модель + тулзы</div></div></div></div>
           <div class="card"><div class="row"><div class="av">✎</div><div><div class="t-title">С нуля (Configure)</div><div class="t-sub">персона, модели, провайдер, тулзы</div></div></div></div>
-          <div class="card"><div class="row"><div class="av">🔌</div><div><div class="t-title">Подключить свой Hermes</div><div class="t-sub">свой рантайм + наши модели/тулзы</div></div></div></div>
+          <div class="card"><div class="row"><div class="av">🔌</div><div><div class="t-title">Подключить свой Hermes</div><div class="t-sub">твои модели через твой /v1 · биллинг 0</div></div></div></div>
         </div>
+        <div class="note live"><span class="ni">live</span><div>«Свой Hermes» = OpenAI-совместимый эндпоинт (<span style="font-family:var(--mono)">/v1</span>), биллинг 0. Наши тулзы/память <b>на твоём Hermes не работают</b> — наш воркер не в твоём цикле.</div></div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
     </div>
@@ -644,6 +674,7 @@
           <div class="row between"><div class="row"><div class="av amber">✍️</div><div class="t-title">Дерзкий постовик</div></div><span class="faint">✎</span></div>
           <div class="t-sub" style="margin-top:8px">Модель: <b>GPT-5.5</b> · Тон: дерзкий · Вывод: 3 варианта</div>
         </div>
+        <div class="note live"><span class="ni">live</span><div>Создание — live. Черновик сводится к тому, что принимает <span style="font-family:var(--mono)">POST /tma/agents</span>: имя, system_prompt, тулзы, <b>одна</b> модель. «Тон/3 варианта» — это текст промпта, не отдельные поля.</div></div>
         <div class="sp" style="flex:1"></div>
         <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">Настроить</div><div class="btn" style="flex:1.4">Создать ✓</div></div>
       </div>
@@ -656,6 +687,7 @@
     <div class="phone">
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">Шаблоны</span><span class="sp"></span><span class="ic">✕</span></div>
       <div class="screen">
+        <div class="note live"><span class="ni">live</span><div>Шаблоны live — но это <b>встроенные</b> (<span style="font-family:var(--mono)">lib/agent-templates</span>), не опубликованный рынок авторов. Авторских хэндлов и клонов чужих шаблонов пока нет; цены — оценки.</div></div>
         <div class="input">🔎 Поиск шаблона…</div>
         <div class="chips"><span class="chip on">Все</span><span class="chip">Контент</span><span class="chip">Код</span><span class="chip">Саппорт</span></div>
         <div class="list">
@@ -674,11 +706,12 @@
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">Новый агент</span><span class="sp"></span><span class="ic">✕</span></div>
       <div class="screen" style="gap:9px">
         <div class="field"><div class="label">Имя</div><div class="input">Мой агент</div></div>
-        <div class="field"><div class="label">Персона (SOUL)</div><div class="input area muted">Ты — дерзкий редактор, пишешь кратко…</div></div>
+        <div class="field"><div class="label">Персона (промпт)</div><div class="input area muted">Ты — дерзкий редактор, пишешь кратко…</div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av">🎚</div><div class="t-title">Модели<span class="soonchip">скоро</span></div></div><span class="muted num">1 ›</span></div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av">🔌</div><div class="t-title">Провайдер<span class="soonchip">скоро</span></div></div><span class="muted">AIAG ›</span></div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av">🛠</div><div class="t-title">Тулзы<span class="soonchip">скоро</span></div></div><span class="muted num">2 ›</span></div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av">💳</div><div class="t-title">Бюджет агента<span class="soonchip">скоро</span></div></div><span class="muted num">50 кр/день ›</span></div></div>
+        <div class="note live"><span class="ni">live</span><div>Имя + персона (это <b>system_prompt</b>, не Hermes-файл SOUL.md) + <b>одна</b> модель — live. Редакторы мульти-модели / провайдера / тулзов — скоро; значения бюджета <b>живут и енфорсятся</b>, но экран-редактор — скоро.</div></div>
         <div class="btn">Создать агента</div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
@@ -696,6 +729,7 @@
         <div class="card"><div class="row between"><div class="row"><div class="av">🎙</div><div><div class="t-title">Голос (TTS)</div><div class="t-sub num">не выбрано</div></div></div><span class="amber-tx">＋</span></div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av">👁</div><div><div class="t-title">Vision</div><div class="t-sub num">наследует чат</div></div></div><span class="muted">›</span></div></div>
         <div class="card"><div class="row"><div class="av">∑</div><div class="t-sub">Оценка: <b class="amber-tx">~40 кр</b>/прогон · смешанный биллинг</div></div></div>
+        <div class="note soon"><span class="ni">скоро</span><div>Сейчас агент принимает <b>ровно одну</b> модель (<span style="font-family:var(--mono)">model_slug</span>). Слоты по ролям (чат/изображения/голос/vision) — целевой вид.</div></div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
     </div>
@@ -712,6 +746,7 @@
         <div class="card"><div class="row between"><div class="row"><div class="av">O</div><div><div class="t-title">OpenAI / Anthropic (BYOK)</div><div class="t-sub" style="color:var(--good)">комиссия 0</div></div></div><span class="muted">○</span></div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av amber">G</div><div><div class="t-title">Gonka <span class="chip" style="padding:0 5px">DeAI</span></div><div class="t-sub" style="color:var(--good)">GNK-кошелёк · 0 комиссии</div></div></div><span class="muted">○</span></div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av">⌁</div><div class="t-title">Custom URL (OpenAI-совм.)</div></div><span class="muted">○</span></div></div>
+        <div class="note soon"><span class="ni">скоро</span><div>Схема провайдеров есть (миграция 0026), но resolve в воркере + этот пикер <b>не связаны end-to-end</b>. Свой ключ Anthropic/Google роутится <b>через шлюз</b>, иначе 404. Gonka — отдельный спайк.</div></div>
         <div class="btn">Выбрать</div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
@@ -724,11 +759,12 @@
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">Тулзы агента</span><span class="sp"></span><span class="ic">✕</span></div>
       <div class="screen" style="gap:9px">
         <div class="ph"><h2>Что умеет агент</h2><p>Платные тулзы списываются при вызове.</p></div>
-        <div class="card"><div class="row between"><div class="row"><div class="av">🔍</div><div><div class="t-title">Web Search</div><div class="t-sub num">0.2 кр</div></div></div><div class="toggle on"></div></div></div>
-        <div class="card"><div class="row between"><div class="row"><div class="av amber">🔥</div><div><div class="t-title">Firecrawl</div><div class="t-sub num">1 кр</div></div></div><div class="toggle on"></div></div></div>
-        <div class="card"><div class="row between"><div class="row"><div class="av">🖼</div><div><div class="t-title">Image-gen</div><div class="t-sub num">2 кр</div></div></div><div class="toggle"></div></div></div>
-        <div class="card"><div class="row between"><div class="row"><div class="av">🧮</div><div><div class="t-title">Calc</div><div class="t-sub">встроенная</div></div></div><div class="toggle on"></div></div></div>
-        <div class="card"><div class="row"><div class="av">∑</div><div class="t-sub">3 тулзы · <b class="amber-tx">~1.4 кр</b>/прогон при веб-поиске</div></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">🔍</div><div><div class="t-title">Web Search <span class="mbadge" style="--ch:150">DuckDuckGo</span></div><div class="t-sub" style="color:var(--good)">встроенный · бесплатно</div></div></div><div class="toggle on"></div></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av amber">🔥</div><div><div class="t-title">Firecrawl<span class="soonchip">скоро</span></div><div class="t-sub num">1 кр</div></div></div><div class="toggle"></div></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">🖼</div><div><div class="t-title">Image-gen <span class="mbadge" style="--ch:30">Kie</span></div><div class="t-sub num">платно</div></div></div><div class="toggle"></div></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">🧮</div><div><div class="t-title">Calc</div><div class="t-sub" style="color:var(--good)">встроенная · бесплатно</div></div></div><div class="toggle on"></div></div></div>
+        <div class="card"><div class="row between"><div class="row"><div class="av">🧠</div><div><div class="t-title">Memory (KV)</div><div class="t-sub" style="color:var(--good)">встроенная</div></div></div><div class="toggle on"></div></div></div>
+        <div class="note soon"><span class="ni">скоро</span><div>4 встроенных тулзы (web_search/calc/image_gen/memory) <b>работают live</b> и учитываются в стоимости. <b>Firecrawl не встроен</b> — веб-поиск это бесплатный DuckDuckGo-скрейп. Экран-редактор тулзов — скоро.</div></div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
     </div>
@@ -741,11 +777,11 @@
     <div class="phone">
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">Свой агент</span><span class="sp"></span><span class="ic">✕</span></div>
       <div class="screen" style="gap:9px">
-        <div class="ph"><h2>Свой Hermes</h2><p>Наведи AIAG на адрес твоего рантайма. Работает через него — со своими тулзами и памятью.</p></div>
+        <div class="ph"><h2>Свой Hermes</h2><p>Наведи AIAG на адрес твоего OpenAI-совместимого рантайма. Твои модели через твой /v1 — биллинг 0.</p></div>
         <div class="field"><div class="label">Адрес рантайма</div><div class="input"><span class="ph-hint num">http://адрес:8642/v1</span></div><div class="metric faint" style="margin-top:5px">OpenAI-совместимый эндпоинт. <span class="amber-tx">Где взять адрес? →</span></div></div>
         <div class="field"><div class="label">Ключ доступа (если задан)</div><div class="input row between"><span class="ph-hint num">····</span><span class="amber-tx">вставить</span></div></div>
-        <div class="card"><div class="row"><div class="av">🔍</div><div class="t-sub">Проверим запросом к /models. Можешь докинуть наши модели/скиллы/тулзы поверх.</div></div></div>
-        <div class="card"><div class="row between"><div class="row"><div class="av">🧩</div><div class="t-title">Использовать наши тулзы/скиллы</div></div><div class="toggle on"></div></div></div>
+        <div class="card"><div class="row"><div class="av">🔍</div><div class="t-sub">Проверим запросом к <span class="num">/models</span>. SSRF-гард на адрес. Это просто внешний <span class="num">/v1</span> — с дашбордом Hermes мы не общаемся.</div></div></div>
+        <div class="note cannot"><span class="ni">×</span><div>Наши тулзы/скиллы/память <b>на твоём Hermes недоступны</b> — когда агент крутится на твоём рантайме, наш воркер не в его цикле. Чтобы получить наши тулзы — гоняй чат через AIAG, а не свой эндпоинт.</div></div>
         <div class="btn">Проверить и подключить</div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
@@ -802,7 +838,8 @@
           <div><span class="amber-tx">●</span> инъекция конфига… <span class="t">12с</span></div>
         </div></div>
         <div class="meter" style="width:100%"><i style="width:72%"></i></div>
-        <div class="metric faint">~30–60с · спит когда не нужен</div>
+        <div class="metric faint">~30–60с · целевой вид</div>
+        <div class="note rnd"><span class="ni">⚗</span><div>Провижинера нет; 2 ГБ VPS поды не потянет. Резидентный <span class="num">hermes gateway</span> держит ~300–600 МБ и <b>не засыпает</b> — «512 МБ / спит когда не нужен» это целевой вид, не факт.</div></div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
     </div>
@@ -820,6 +857,7 @@
           <div class="card" style="flex:1"><div class="label">статус</div><div class="num" style="color:var(--good)">ok</div></div>
         </div>
         <div class="card"><div class="row between"><span class="metric"><b>1.2k</b> ранов/нед</span><span class="metric amber-tx"><b>34</b> кр/нед</span><span class="metric">p50 <b>0.9с</b></span></div></div>
+        <div class="note rnd"><span class="ni">⚗</span><div>CPU/RAM/uptime/p50 и кнопка «Сон» — <span class="demo">демо</span>. Провижинера, чтения метрик пода и sleep/wake нет.</div></div>
         <div class="row" style="gap:8px"><div class="btn ghost sm" style="flex:1">Конфиг</div><div class="btn ghost sm" style="flex:1">Логи</div><div class="btn ghost sm" style="flex:1">⏸ Сон</div></div>
       </div>
       <div class="tabbar"><div class="t on"><div class="g"></div>Агенты</div><div class="t"><div class="g"></div>Маркет</div><div class="t"><div class="g"></div>Кошелёк</div><div class="t"><div class="g"></div>Профиль</div></div>
@@ -827,11 +865,12 @@
   </figure>
 
   <figure class="artboard" id="s23">
-    <figcaption class="cap"><b>23 · Конфиг (control-plane)</b><span class="tag rnd">R&D</span></figcaption>
+    <figcaption class="cap"><b>23 · Конфиг (control-plane)</b><span class="tag cannot">Hermes-CANNOT</span><span class="tag rnd">R&D</span></figcaption>
     <div class="phone">
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">Конфиг агента</span><span class="sp"></span><span class="ic">✕</span></div>
       <div class="screen" style="gap:9px">
         <p class="t-sub">У Hermes нет remote-API → меняем инъекцией конфига + рестарт рантайма.</p>
+        <div class="note cannot"><span class="ni">×</span><div>Управлять Hermes удалённо нельзя: конфиг — это запись файла + <span class="num">hermes gateway restart</span> на хосте, через <b>наш co-located control-plane sidecar</b>, которого ещё нет. У Персоны (SOUL.md) endpoint-а нет вовсе.</div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av amber">🧠</div><div class="t-title">Персона (SOUL.md)</div></div><span class="muted">✎</span></div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av">🎚</div><div class="t-title">Модели</div></div><span class="muted num">4 ›</span></div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av">🧩</div><div class="t-title">Скиллы</div></div><span class="muted num">3 ›</span></div></div>
@@ -848,6 +887,7 @@
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">Память агента</span><span class="sp"></span><span class="ic">✕</span></div>
       <div class="screen" style="gap:9px">
         <div class="ph"><h2>Знания</h2><p>База знаний (pgvector). Приватна — не уходит в шаблон.</p></div>
+        <div class="note rnd"><span class="ni">⚗</span><div>pgvector + векторизация + чанки — целевой вид. Сегодня есть только плоский KV <span class="num">agent_memory</span>; расширения <span class="num">vector</span> и инжеста нет. Файлы ниже — <span class="demo">демо</span>.</div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av">📄</div><div><div class="t-title">brand-voice.md</div><div class="t-sub num">12 КБ · векторизован</div></div></div><span class="chip on">✓</span></div></div>
         <div class="card"><div class="row between"><div class="row"><div class="av">📄</div><div><div class="t-title">faq.pdf</div><div class="t-sub num">340 КБ · 1.2k чанков</div></div></div><span class="chip on">✓</span></div></div>
         <div class="empty">Перетащи файл или подключи Notion/Drive (MCP).</div>
@@ -862,7 +902,8 @@
     <div class="phone">
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">Расписания</span><span class="sp"></span><span class="ic">✕</span></div>
       <div class="screen" style="gap:9px">
-        <div class="ph"><h2>Когда срабатывает</h2><p>Hermes :8642 /api/jobs — cron из коробки.</p></div>
+        <div class="ph"><h2>Когда срабатывает</h2><p>Cron-расписания запусков.</p></div>
+        <div class="note soon"><span class="ni">скоро</span><div>Планировщика нет. Hermes-cron (<span class="num">/api/jobs</span>) живёт <b>только за loopback</b> — доступен лишь через несуществующий sidecar; своего шедулера у нас тоже пока нет. Расписания ниже — целевой вид.</div></div>
         <div class="card amber"><div class="row between"><div><div class="t-title">Утренний дайджест</div><div class="t-sub num">09:00 · в @news</div></div><div class="toggle on"></div></div></div>
         <div class="card"><div class="row between"><div><div class="t-title">Ответ на упоминание</div><div class="t-sub">триггер</div></div><div class="toggle on"></div></div></div>
         <div class="card"><div class="row between"><div><div class="t-title">Недельный отчёт</div><div class="t-sub num">Пн 10:00</div></div><div class="toggle"></div></div></div>
@@ -878,6 +919,7 @@
       <div class="tg-bar"><span class="ic">‹</span><span class="dom">Задачи · Постовик</span><span class="sp"></span><span class="ic">⋮</span></div>
       <div class="screen" style="gap:10px">
         <div class="ph"><h2>Доска задач</h2><p>Цель → агент дробит на шаги (swarm-стейт Hermes).</p></div>
+        <div class="note rnd"><span class="ni">⚗</span><div>Swarm-стейт Hermes мы не читаем — API для этого нет. Доска целиком — целевой вид, цифры <span class="demo">демо</span>.</div></div>
         <div class="kanban">
           <div class="col"><h4>Очередь <span>2</span></h4><div class="tk">Дайджест<div class="m">cron 09:00</div></div><div class="tk">Ответить 3<div class="m">триггер</div></div></div>
           <div class="col"><h4>В работе <span>1</span></h4><div class="tk amber">Пост · 3 хука<div class="m">● 12 кр</div></div></div>
@@ -897,6 +939,7 @@
       <div class="tg-bar"><span class="dom">//ai-aggregator</span><span class="sp"></span><span class="ic">⋮</span><span class="ic">✕</span></div>
       <div class="screen" style="gap:9px">
         <div class="ph"><span class="kicker">ТУЛЗЫ</span><h2>Маркет тулзов</h2><p>Возможности агенту. Оплата поштучно.</p></div>
+        <div class="note rnd"><span class="ni">⚗</span><div>Тул-брокера нет: ни каталога, ни ledger-а <span class="num">tool_calls</span>, ни x402. Целевой вид рынка. Live сегодня — 4 встроенных тулзы (см. 18).</div></div>
         <div class="input">🔎 Поиск тулзы…</div>
         <div class="chips"><span class="chip on">Все</span><span class="chip">Веб</span><span class="chip">Данные</span><span class="chip">x402 ⚡</span></div>
         <div class="list">

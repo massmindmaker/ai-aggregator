@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIAG · CI/CD Plan & Founder Requirements · 2026-06-03</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --bg-soft: #131316;
+    --bg-card: #16161a;
+    --bg-elev: #1c1c21;
+    --border: #2a2a31;
+    --border-soft: #232329;
+    --accent: #f59e0b;
+    --accent-soft: rgba(245, 158, 11, 0.12);
+    --accent-line: rgba(245, 158, 11, 0.35);
+    --text: #e7e7ea;
+    --text-dim: #a1a1aa;
+    --text-faint: #71717a;
+    --green: #34d399;
+    --green-soft: rgba(52, 211, 153, 0.12);
+    --red: #f87171;
+    --red-soft: rgba(248, 113, 113, 0.12);
+    --blue: #60a5fa;
+    --blue-soft: rgba(96, 165, 250, 0.12);
+    --mono: "SFMono-Regular", ui-monospace, "JetBrains Mono", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 24px 120px;
+  }
+
+  /* ---- Header ---- */
+  header.page {
+    border-bottom: 1px solid var(--border);
+    background:
+      radial-gradient(900px 320px at 15% -10%, rgba(245,158,11,0.10), transparent 70%),
+      linear-gradient(180deg, #0c0c0e, var(--bg));
+    padding: 64px 0 44px;
+    margin-bottom: 8px;
+  }
+  header.page .inner { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  .kicker {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-bottom: 22px;
+  }
+  h1 {
+    font-size: 40px;
+    line-height: 1.12;
+    margin: 0 0 16px;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+  h1 .amp { color: var(--accent); }
+  .sub {
+    color: var(--text-dim);
+    font-size: 18px;
+    max-width: 720px;
+    margin: 0;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 28px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  .meta-row span {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 7px;
+    color: var(--text-dim);
+  }
+  .meta-row span b { color: var(--text); font-weight: 600; }
+
+  /* ---- TOC ---- */
+  nav.toc {
+    margin: 36px 0 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  nav.toc a {
+    display: block;
+    text-decoration: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    color: var(--text);
+    transition: border-color .15s ease, transform .15s ease, background .15s ease;
+  }
+  nav.toc a:hover {
+    border-color: var(--accent-line);
+    transform: translateY(-2px);
+    background: var(--bg-elev);
+  }
+  nav.toc .n {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  nav.toc .t { display: block; margin-top: 4px; font-weight: 600; }
+  nav.toc .d { display: block; margin-top: 3px; color: var(--text-faint); font-size: 13px; }
+
+  /* ---- Sections ---- */
+  section {
+    margin-top: 64px;
+    scroll-margin-top: 24px;
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 14px;
+    margin-bottom: 28px;
+  }
+  .section-head .num {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    border-radius: 8px;
+    padding: 3px 11px;
+    flex-shrink: 0;
+  }
+  h2 { font-size: 26px; margin: 0; letter-spacing: -0.01em; font-weight: 700; }
+  h3 {
+    font-size: 18px;
+    margin: 34px 0 14px;
+    color: var(--text);
+    font-weight: 650;
+  }
+  p { margin: 0 0 16px; color: var(--text); }
+  .lead { color: var(--text-dim); font-size: 17px; }
+
+  strong { color: #fff; font-weight: 650; }
+  em { color: var(--text-dim); font-style: italic; }
+
+  a.inline { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-line); }
+  a.inline:hover { border-bottom-color: var(--accent); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border-soft);
+    border-radius: 5px;
+    padding: 1px 6px;
+    color: #f4d29a;
+  }
+
+  /* ---- Cards / callouts ---- */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 26px;
+    margin: 22px 0;
+  }
+  .card.accent { border-color: var(--accent-line); background: linear-gradient(180deg, var(--accent-soft), var(--bg-card)); }
+  .card h3:first-child, .card h4:first-child { margin-top: 0; }
+
+  .callout {
+    border-radius: 12px;
+    padding: 18px 20px 18px 22px;
+    margin: 22px 0;
+    border-left: 3px solid;
+  }
+  .callout .label {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout.win { border-color: var(--green); background: var(--green-soft); }
+  .callout.win .label { color: var(--green); }
+  .callout.warn { border-color: var(--accent); background: var(--accent-soft); }
+  .callout.warn .label { color: var(--accent); }
+  .callout.bad { border-color: var(--red); background: var(--red-soft); }
+  .callout.bad .label { color: var(--red); }
+  .callout.info { border-color: var(--blue); background: var(--blue-soft); }
+  .callout.info .label { color: var(--blue); }
+
+  .verdict {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    background: var(--green-soft);
+    border: 1px solid rgba(52,211,153,0.3);
+    border-radius: 14px;
+    padding: 24px 26px;
+    margin: 26px 0;
+  }
+  .verdict .stamp {
+    font-family: var(--mono);
+    font-weight: 700;
+    color: var(--green);
+    font-size: 13px;
+    letter-spacing: .08em;
+    border: 1px solid rgba(52,211,153,0.5);
+    border-radius: 8px;
+    padding: 6px 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .verdict p { margin: 0; }
+
+  /* ---- Pipeline diagram ---- */
+  .pipeline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0;
+    margin: 26px 0;
+    counter-reset: step;
+  }
+  .pstep {
+    flex: 1 1 150px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 16px 18px;
+    position: relative;
+    margin: 6px;
+    min-width: 150px;
+  }
+  .pstep .pn {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .pstep .pt { display: block; margin-top: 6px; font-weight: 650; font-size: 15px; }
+  .pstep .pd { display: block; margin-top: 5px; color: var(--text-faint); font-size: 12.5px; line-height: 1.45; }
+  .pstep::after {
+    content: "→";
+    position: absolute;
+    right: -16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--accent);
+    font-size: 18px;
+    z-index: 2;
+  }
+  .pstep:last-child::after { content: ""; }
+
+  /* ---- Two-app architecture ---- */
+  .apps-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin: 24px 0;
+  }
+  .app-col {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+  }
+  .app-col.web { border-top: 3px solid var(--accent); }
+  .app-col.tma { border-top: 3px solid var(--blue); }
+  .app-col h4 { margin: 0 0 4px; font-size: 18px; }
+  .app-col .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .app-col dl { margin: 16px 0 0; }
+  .app-col dt { font-size: 12px; color: var(--text-faint); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; margin-top: 12px; }
+  .app-col dd { margin: 3px 0 0; color: var(--text); font-size: 14.5px; }
+
+  /* ---- Tables ---- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 22px 0;
+    font-size: 14.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-soft);
+    vertical-align: top;
+  }
+  th {
+    color: var(--text-faint);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  td { color: var(--text-dim); }
+  td strong { color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .pill.win { background: var(--green-soft); color: var(--green); border: 1px solid rgba(52,211,153,0.3); }
+  .pill.bad { background: var(--red-soft); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .pill.mid { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); }
+
+  /* ---- Lists ---- */
+  ul.clean, ol.clean { margin: 14px 0; padding-left: 0; list-style: none; }
+  ul.clean li, ol.clean li {
+    position: relative;
+    padding-left: 28px;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+  ul.clean li::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 9px;
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  ol.clean { counter-reset: li; }
+  ol.clean li { counter-increment: li; }
+  ol.clean li::before {
+    content: counter(li);
+    position: absolute;
+    left: 0;
+    top: 1px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ---- Checklist ---- */
+  .checklist { margin: 22px 0; }
+  .check-item {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    transition: border-color .15s ease;
+  }
+  .check-item:hover { border-color: var(--accent-line); }
+  .check-item .box {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--accent);
+    border-radius: 6px;
+    margin-top: 2px;
+  }
+  .check-item .body { flex: 1; }
+  .check-item .ttl { font-weight: 650; color: #fff; margin: 0 0 4px; }
+  .check-item .desc { color: var(--text-dim); font-size: 14px; margin: 0; }
+  .check-item .who {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    border-radius: 6px;
+    padding: 3px 9px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+  .check-item .who.opt { color: var(--text-faint); background: var(--bg-elev); border-color: var(--border); }
+
+  pre {
+    background: #0e0e10;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 16px 0;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    color: #d4d4d8;
+  }
+  pre .c { color: var(--text-faint); }
+  pre .k { color: var(--accent); }
+
+  footer.page {
+    margin-top: 80px;
+    border-top: 1px solid var(--border);
+    padding-top: 28px;
+    color: var(--text-faint);
+    font-size: 13px;
+  }
+  footer.page a { color: var(--text-dim); }
+  .src-list { font-family: var(--mono); font-size: 12px; line-height: 2; }
+  .src-list a { color: var(--text-dim); text-decoration: none; border-bottom: 1px solid var(--border); }
+  .src-list a:hover { color: var(--accent); }
+
+  @media (max-width: 720px) {
+    h1 { font-size: 30px; }
+    .apps-grid { grid-template-columns: 1fr; }
+    .pstep::after { content: "↓"; right: 50%; top: auto; bottom: -18px; transform: translateX(50%); }
+    .verdict { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="inner">
+    <span class="kicker">AIAG · Инфраструктура · 2026-06-03</span>
+    <h1>CI/CD план <span class="amp">&</span> требования к основателю</h1>
+    <p class="sub">Автодеплой AIAG: почему остаёмся на bare VPS + GitHub Actions, как сохраняем 2-приложенческую архитектуру, и что именно нужно сделать основателю, чтобы push в <code>master</code> превратился в живой деплой.</p>
+    <div class="meta-row">
+      <span><b>Решение:</b> Path A — bare VPS + улучшенный GitHub Actions</span>
+      <span><b>Timeweb Apps:</b> отклонён</span>
+      <span><b>Объём CI-работ:</b> ~1 день</span>
+      <span><b>Уверенность:</b> высокая</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <a href="#approach">
+      <span class="n">01</span>
+      <span class="t">Выбранный подход</span>
+      <span class="d">GitHub Actions → build-on-runner → atomic swap → self-heal pm2</span>
+    </a>
+    <a href="#twoapp">
+      <span class="n">02</span>
+      <span class="t">Архитектура из 2 приложений</span>
+      <span class="d">aggregator web/₽ vs TMA crypto — раздельные таргеты и домены</span>
+    </a>
+    <a href="#timeweb">
+      <span class="n">03</span>
+      <span class="t">Timeweb Apps: разбор</span>
+      <span class="d">Что это, почему не подходит, рекомендация</span>
+    </a>
+    <a href="#founder">
+      <span class="n">04</span>
+      <span class="t">Что должен сделать основатель</span>
+      <span class="d">Конкретный чек-лист действий</span>
+    </a>
+    <a href="#migration">
+      <span class="n">05</span>
+      <span class="t">Обработка миграций</span>
+      <span class="d">Ручные / gated DB-миграции на проде</span>
+    </a>
+  </nav>
+
+  <!-- ============ SECTION 1 ============ -->
+  <section id="approach">
+    <div class="section-head">
+      <span class="num">01</span>
+      <h2>Выбранный подход и ПОЧЕМУ</h2>
+    </div>
+
+    <p class="lead">Сборка на CI-раннере, доставка готового артефакта на VPS, атомарная подмена релиза через симлинк, и самовосстановление pm2 из <code>ecosystem</code>, лежащего внутри <code>current</code>. Это убирает три конкретные боли, которые у нас уже случались.</p>
+
+    <div class="pipeline">
+      <div class="pstep">
+        <span class="pn">STEP 1</span>
+        <span class="pt">GitHub Actions</span>
+        <span class="pd">Trigger на push в <code>master</code> (или merged PR). Раннер берёт код.</span>
+      </div>
+      <div class="pstep">
+        <span class="pn">STEP 2</span>
+        <span class="pt">Build on runner</span>
+        <span class="pd">Workspace-aware сборка (shared/database/upstream-adapters → apps) на раннере, НЕ на VPS.</span>
+      </div>
+      <div class="pstep">
+        <span class="pn">STEP 3</span>
+        <span class="pt">Tarball → scp</span>
+        <span class="pd">Готовый артефакт уезжает в <code>releases/&lt;ts&gt;</code> на VPS.</span>
+      </div>
+      <div class="pstep">
+        <span class="pn">STEP 4</span>
+        <span class="pt">Atomic swap</span>
+        <span class="pd">Симлинк <code>current</code> → новый релиз. Подмена мгновенная, без полу-собранного состояния.</span>
+      </div>
+      <div class="pstep">
+        <span class="pn">STEP 5</span>
+        <span class="pt">Self-heal pm2</span>
+        <span class="pd">pm2 поднимается из <code>ecosystem</code> внутри <code>current</code> + health-check + авто-rollback + keep-last-5.</span>
+      </div>
+    </div>
+
+    <h3>Почему именно так — три убитые боли</h3>
+
+    <div class="callout bad">
+      <span class="label">Боль 1 — OOM на 2GB VPS</span>
+      <p>Сборка bun-workspace из 4 приложений + gateway + 8 shared-пакетов на 2GB-боксе упирается в память и валит процесс. <strong>Build-on-runner</strong> переносит самую тяжёлую фазу на CI-раннер GitHub (где RAM не наша проблема), а на VPS приезжает уже собранный артефакт. OOM при деплое больше не возникает.</p>
+    </div>
+
+    <div class="callout bad">
+      <span class="label">Боль 2 — баг с абсолютными путями</span>
+      <p>Когда pm2 запускается из жёстко прописанного абсолютного пути конкретного релиза, после подмены симлинка процессы продолжают держать <em>старую</em> директорию (или ломаются, если её удалили в keep-last-5). <strong>Self-heal pm2 из ecosystem-on-<code>current</code></strong> означает, что конфиг pm2 всегда читается через симлинк <code>current</code> — пути стабильны между релизами, ротация старых релизов ничего не ломает.</p>
+    </div>
+
+    <div class="callout bad">
+      <span class="label">Боль 3 — ручная боль</span>
+      <p>Сегодня деплой = ручной SSH, ручная сборка на VPS, ручной <code>pm2 reload</code>/<code>restart</code>, ручная проверка. Каждый шаг — точка отказа (stale-процессы, забытый билд turbo-либ, расхождение lockfile). <strong>GitHub Actions</strong> делает всё это детерминированно по одному push, с health-check и авто-rollback, плюс Telegram-нотификация о результате.</p>
+    </div>
+
+    <div class="callout win">
+      <span class="label">Что мы НЕ переписываем</span>
+      <p>Существующий <code>deploy-production.yml</code> уже делает 80% тяжёлой работы: build-on-CI → tarball → scp → atomic <code>releases/&lt;ts&gt;</code> symlink swap → <code>pm2 reload</code> с health-check + авто-rollback + Telegram-notify + keep-last-5. Это <strong>доводка существующего пайплайна</strong>, а не новая система.</p>
+    </div>
+
+    <h3>Оставшиеся пробелы (закрываются за ~1 день)</h3>
+    <ol class="clean">
+      <li><strong>Сейчас только <code>workflow_dispatch</code></strong> — добавить авто-триггер на push в <code>master</code> (или merged PR) для настоящего автодеплоя.</li>
+      <li><strong>Тесты non-blocking</strong> (<code>bun test || true</code>, <code>gateway build || true</code>) — сделать gate'ом деплоя после стабилизации.</li>
+      <li><strong><code>agent-worker</code> и <code>tma</code> не first-class</strong> в матрице сборки (gateway build = <code>|| true</code>, worker не собирается в CI) — добавить их.</li>
+      <li><strong>Per-release <code>bun install</code> на VPS</strong> пере-резолвит весь workspace — пред-бандлить <code>node_modules</code> в артефакт или кэшировать, чтобы срезать время деплоя и давление на RAM.</li>
+      <li><strong>Известные операционные грабли</strong> (SSH-via-VPN/fail2ban, root-owned dirs, нет workflow-scope у токена, <code>pm2 reload</code> оставляет stale-процесс → <code>pm2 restart</code>) — это VPS-конфиг фиксы, полностью совместимые с тем, чтобы остаться на месте.</li>
+    </ol>
+  </section>
+
+  <!-- ============ SECTION 2 ============ -->
+  <section id="twoapp">
+    <div class="section-head">
+      <span class="num">02</span>
+      <h2>Сохраняемая архитектура из 2 приложений</h2>
+    </div>
+
+    <p class="lead">У AIAG два отдельных продуктовых лица, которые деплоятся в разные таргеты и на разные домены. Пайплайн обязан сохранить это разделение — это не один сайт.</p>
+
+    <div class="apps-grid">
+      <div class="app-col web">
+        <span class="tag">Приложение A</span>
+        <h4>aggregator (web / ₽)</h4>
+        <dl>
+          <dt>Что это</dt>
+          <dd>Веб-приложение AIAG: оплата в рублях, основной продукт.</dd>
+          <dt>Стек</dt>
+          <dd>Next.js (<code>apps/web</code>)</dd>
+          <dt>Деньги</dt>
+          <dd>Рублёвый billing</dd>
+          <dt>Деплой-таргет</dt>
+          <dd>VPS, pm2-процесс <code>web</code>, основной домен</dd>
+        </dl>
+      </div>
+      <div class="app-col tma">
+        <span class="tag">Приложение B</span>
+        <h4>TMA (crypto)</h4>
+        <dl>
+          <dt>Что это</dt>
+          <dd>Telegram Mini App: маркетплейс агентов, крипто-расчёты (TON Connect).</dd>
+          <dt>Стек</dt>
+          <dd>Next.js (<code>apps/tg-miniapp</code>)</dd>
+          <dt>Деньги</dt>
+          <dd>Crypto (TON), без Telegram Stars</dd>
+          <dt>Деплой-таргет</dt>
+          <dd>VPS, pm2-процесс <code>tma</code>, basePath <code>/tg</code>, health <code>/tg/health</code></dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <span class="label">Ключевой инвариант</span>
+      <p>Это <strong>раздельные deploy-таргеты и домены</strong>: рублёвый web и крипто-TMA не смешиваются. Плюс к ним на VPS живут 3 сервиса без HTTP-лица — <code>gateway</code> (порт 4000), <code>worker</code> и <code>agent-worker</code> (фоновые воркеры денежного пути). nginx держит правила <code>/tg</code> basePath + strip. Пайплайн должен уметь собрать и выкатить каждый сервис в матрице, сохранив их раздельность.</p>
+    </div>
+
+    <p>Именно эта топология (2 Next.js-приложения + gateway + 2 не-HTTP воркера + workspace-сборка + nginx-правила + ручные prod-миграции) — то, что Timeweb Apps заставил бы переинженерить с нуля. Подробности — в разделе 03.</p>
+  </section>
+
+  <!-- ============ SECTION 3 ============ -->
+  <section id="timeweb">
+    <div class="section-head">
+      <span class="num">03</span>
+      <h2>Timeweb Apps: разбор и рекомендация</h2>
+    </div>
+
+    <div class="verdict">
+      <span class="stamp">РЕКОМЕНДАЦИЯ</span>
+      <p><strong>(A) Оставить bare VPS + улучшить GitHub Actions. НЕ мигрировать AIAG на Timeweb Cloud Apps.</strong> Уверенность: высокая. App Platform архитектурно плохо ложится на этот монорепо, стоимость миграции высока, а выигрыш (автодеплой на push) достижим на существующем VPS примерно за 1 день CI-работы.</p>
+    </div>
+
+    <h3>Проба Timeweb MCP (ключей нет)</h3>
+    <p>Все четыре read-only Timeweb-тула падают одинаково — у MCP нет API-токена:</p>
+    <pre><span class="k">get_deploy_settings</span>            <span class="c">→ ❌ Не установлены переменные окружения TIMEWEB_TOKEN</span>
+<span class="k">get_vcs_providers</span>              <span class="c">→ то же</span>
+<span class="k">get_allowed_presets</span>            <span class="c">→ то же</span>
+<span class="k">get_vcs_provider_repositories</span>  <span class="c">→ то же</span></pre>
+    <p>То есть MCP сегодня не может сделать <em>ничего</em> без <code>TIMEWEB_TOKEN</code> от основателя. Он подключён, но не аутентифицирован: ничего не перечислить, а write-тулы (<code>create_timeweb_app</code> / <code>add_vcs_provider</code>) тоже бы упали. (Firecrawl MCP тоже лежал — 404 на search/scrape — поэтому ресёрч шёл через WebSearch + WebFetch по официальной документации.)</p>
+
+    <h3>Что такое Timeweb Cloud Apps (из официальных доков)</h3>
+    <ul class="clean">
+      <li>Managed PaaS в стиле Heroku / DigitalOcean App Platform. Подключаешь GitHub/GitLab/Bitbucket-репо → он тянет код, ставит зависимости, собирает, запускает. «Build from latest commit» авто-пересобирает на каждый push в выбранную ветку. (Репозитории, подключённые по <em>URL</em>, а не через OAuth, автодеплоя <strong>не</strong> получают — только ручной redeploy.)</li>
+      <li>Типы приложений: backend (Node, в т.ч. Express/Fastify/Nest, Python, Go и т.д.), frontend (статика — React/Next/Nuxt как статические файлы), или <strong>Docker</strong> (Dockerfile, Docker Compose или образ из Docker Hub).</li>
+      <li><strong>Эфемерная файловая система:</strong> данные контейнера стираются на каждый redeploy — внешний S3/DBaaS обязателен. (У нас уже внешний Postgres + S3, так что эта часть ок.)</li>
+      <li>Ценообразование per-app, по usage-тиру («от 1 ₽» при крошечном объёме запросов до ~5.45 ₽/час при 10M req/мес). Конкретные тиры RAM/CPU <strong>не опубликованы</strong> на странице цен — нужен аккаунт основателя, чтобы увидеть реальные цифры.</li>
+    </ul>
+
+    <h3>Два fit-breaker'а для нашего монорепо</h3>
+
+    <div class="callout bad">
+      <span class="label">Fit-breaker 1 — мульти-сервис слабый</span>
+      <p>Docker Compose <em>поддерживается</em>, но доки явно говорят: проксирование на основной домен работает только для <strong>первого</strong> сервиса в <code>docker-compose.yml</code>; остальным нужен явный host-port. Плюс длинный список запрещённых директив (<code>volumes</code>, <code>privileged</code>, <code>cap_add</code>, <code>pid</code>, <code>ipc</code>, host networking, порты 80/443 зарезервированы). Наши 5 сервисов (web, gateway, worker, agent-worker, tg-miniapp) включают <strong>два не-HTTP фоновых воркера</strong> (<code>worker</code>, <code>agent-worker</code>) — App Platform построен вокруг «один HTTP-порт на приложение», и доки нигде не подтверждают поддержанную модель для долгоживущего не-HTTP процесса. Пришлось бы воевать с платформой.</p>
+    </div>
+
+    <div class="callout bad">
+      <span class="label">Fit-breaker 2 — нет документированной поддержки монорепо/subdir или кастомной build-команды</span>
+      <p>Доки про «как это работает», «подключение репозиториев» и FAQ <strong>не</strong> упоминают сборку из поддиректории и не упоминают кастомную build/run-команду. Нашему деплою нужен workspace-aware порядок (собрать shared/database/upstream-adapters до каждого приложения, <code>bun install --frozen-lockfile</code>, per-app <code>--cwd</code>-сборки). На turbo/bun-workspace с 4 приложениями + gateway + 8 shared-пакетами естественный маппинг в Timeweb = одно App на сервис = 5 отдельных Apps, каждое заново клонирует весь репо и требует рукописного Dockerfile для workspace-сборки. Это выбрасывает модель «rsync-tarball-once», которая у нас уже есть, и умножает стоимость сборки в 5 раз.</p>
+    </div>
+
+    <p><strong>Итог:</strong> чтобы захостить AIAG на Timeweb Apps, пришлось бы написать 5 Dockerfile'ов, принять эфемерные контейнеры, потерять single-port-предположение для двух воркеров — и всё равно не получить workspace-aware single-build. Это переписывание, а не миграция.</p>
+
+    <h3>Как это ложится на нашу реальность</h3>
+    <table>
+      <thead>
+        <tr><th>Фактор</th><th>Реальность</th><th>Вывод</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>2GB VPS → нужен бокс побольше</strong></td>
+          <td>Это проблема <em>сайзинга сервера</em>, а не механизма деплоя. Фикс одинаков при любом выборе CI: resize Timeweb VPS (~120 ₽/GB RAM, 210 ₽/CPU; напр. 4GB/2CPU ≈ 1000 ₽/мес) или переезд на 4–8GB VPS.</td>
+          <td>Миграция на Apps тут <strong>не помогает</strong> — платил бы per-app за 5 приложений, вероятно <em>дороже</em> одного правильно-сайзнутого VPS, с меньшим контролем.</td>
+        </tr>
+        <tr>
+          <td><strong>2-app (web + TMA)</strong></td>
+          <td>Оба Next.js — единственные две части, что чисто ложатся на Timeweb Apps.</td>
+          <td>Если основатель когда-нибудь захочет managed-хостинг, web и tma — единственные вменяемые кандидаты. Но их же легче всего оставить на текущем VPS — нет принуждающего фактора.</td>
+        </tr>
+        <tr>
+          <td><strong>Managed-Hermes на отдельном ~18GB боксе</strong></td>
+          <td>R&D, реально отдельный. Большой, stateful, GPU/RAM-тяжёлый рантайм — ровно то, в чём PaaS вроде Apps <em>хуже всего</em> (эфемерная FS, request-tiered billing, нет persistent-томов).</td>
+          <td>Его место — <strong>собственный dedicated VPS/dedicated-сервер</strong> (Timeweb VDS или dedicated), независимо от выбора CI. Это не аргумент за Apps.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Почему улучшенный GitHub Actions побеждает</h3>
+    <p>Мы уже имеем пайплайн, делающий тяжёлые 80%. Пробелы малы и чинятся за ~1 день (см. раздел 01). Это сохраняет полный контроль над двумя не-HTTP воркерами, порядком workspace-сборки, nginx <code>/tg</code> basePath + strip и ручными prod-миграциями — всё, что Apps заставил бы переинженерить.</p>
+
+    <div class="callout win">
+      <span class="label">Bottom line</span>
+      <p>Миграция на Timeweb Apps тяжёлая (5 Dockerfile'ов, воркеры не влезают, нет монорепо-сборки, эфемерная FS, непрозрачное per-app ценообразование) ради выигрыша — автодеплой-на-push — который мы получаем на существующем VPS примерно за день, проапгрейдив уже имеющийся workflow. Resize VPS, доделать GitHub Actions (авто-триггер + worker/tma в матрице + gating-тесты), а managed-предложения Timeweb приберечь только для будущего отдельного managed-Hermes бокса (как dedicated VDS, не Apps).</p>
+    </div>
+
+    <h3>Что нужно по каждому пути (сводка)</h3>
+    <table>
+      <thead>
+        <tr><th>Путь</th><th>Статус</th><th>Что требует от основателя</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Path A</strong><br>bare VPS + GitHub Actions</td>
+          <td><span class="pill win">РЕКОМЕНДУЕТСЯ</span></td>
+          <td>Resize VPS (опц.), подтвердить GitHub-секреты, решение про авто-деплой и gating-тесты. От Timeweb не нужно ничего, MCP может остаться без токена.</td>
+        </tr>
+        <tr>
+          <td><strong>Path B</strong><br>миграция на Timeweb Apps</td>
+          <td><span class="pill bad">НЕ рекомендуется</span></td>
+          <td><code>TIMEWEB_TOKEN</code> (full-account, high-privilege), VCS OAuth-линк репо, 5 рукописных Dockerfile'ов + эфемерная FS + per-app billing, подтверждение реальных цен из аккаунта, реалистичный объём (макс. web + tg-miniapp, воркеры всё равно на VPS).</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============ SECTION 4 ============ -->
+  <section id="founder">
+    <div class="section-head">
+      <span class="num">04</span>
+      <h2>Что должен сделать / предоставить основатель</h2>
+    </div>
+
+    <p class="lead">Конкретный чек-лист для запуска автодеплоя по Path A. Пункты с тегом <span class="pill mid">ОПЦ</span> не блокируют запуск.</p>
+
+    <div class="checklist">
+
+      <div class="check-item">
+        <div class="box"></div>
+        <div class="body">
+          <p class="ttl">1. Выдать gh-токену scope <code>workflow</code></p>
+          <p class="desc">Без этого нельзя пушить изменения в файлы <code>.github/workflows/*</code>. Команда: <code>gh auth refresh -h github.com -s workflow</code></p>
+        </div>
+        <span class="who">Основатель</span>
+      </div>
+
+      <div class="check-item">
+        <div class="box"></div>
+        <div class="body">
+          <p class="ttl">2. Подтвердить актуальность GitHub-секретов</p>
+          <p class="desc">Проверить, что в репозитории заданы и свежие: <code>DEPLOY_SSH_KEY</code>, <code>DEPLOY_HOST</code>, <code>DEPLOY_USER</code> (=<code>aiag</code>), а также <code>TELEGRAM_ALERT_BOT_TOKEN</code> и <code>TELEGRAM_ALERT_CHAT_ID</code> для нотификаций. Новых внешних аккаунтов не требуется.</p>
+        </div>
+        <span class="who">Основатель</span>
+      </div>
+
+      <div class="check-item">
+        <div class="box"></div>
+        <div class="body">
+          <p class="ttl">3. Решить: deploy-user vs chown root-owned директорий</p>
+          <p class="desc">Директории <code>agent-worker</code> и <code>tma</code> на VPS принадлежат root. Либо деплоить под пользователем с правами на них, либо <code>chown</code> их под <code>aiag</code>, чтобы атомарная подмена и pm2-self-heal работали без sudo-прерываний.</p>
+        </div>
+        <span class="who">Основатель</span>
+      </div>
+
+      <div class="check-item">
+        <div class="box"></div>
+        <div class="body">
+          <p class="ttl">4. Вайтлистить GitHub-раннер из fail2ban</p>
+          <p class="desc">Подтвердить SSH-достижимость раннера (или добавить его IP-диапазоны в whitelist fail2ban), иначе SSH-шаг деплоя забанится как brute-force — это уже случалось при SSH-via-VPN.</p>
+        </div>
+        <span class="who">Основатель</span>
+      </div>
+
+      <div class="check-item">
+        <div class="box"></div>
+        <div class="body">
+          <p class="ttl">5. Решение про апгрейд VPS (2GB → 4GB+)</p>
+          <p class="desc">Под трафик и комфортный запас на 5 pm2-процессов. Build-on-runner снимает OOM при сборке, но для эксплуатации под нагрузкой бокс побольше всё равно желателен (≈ +700 ₽/мес).</p>
+        </div>
+        <span class="who opt">ОПЦ · трафик</span>
+      </div>
+
+      <div class="check-item">
+        <div class="box"></div>
+        <div class="body">
+          <p class="ttl">6. Решить: авто-деплой на push + gating-тесты</p>
+          <p class="desc">Да/нет на авто-триггер при push в <code>master</code> (или merged PR), и гейтить ли деплой на тестах прямо сейчас или после их стабилизации.</p>
+        </div>
+        <span class="who">Основатель</span>
+      </div>
+
+      <div class="check-item">
+        <div class="box"></div>
+        <div class="body">
+          <p class="ttl">7. Timeweb API-токен — ТОЛЬКО при managed-пути</p>
+          <p class="desc">Нужен <em>исключительно</em>, если выбираем Path B (Timeweb Apps) или поднимаем managed-Hermes через MCP. Для рекомендованного Path A не требуется — MCP остаётся без токена. Это full-account, high-privilege секрет.</p>
+        </div>
+        <span class="who opt">ОПЦ · managed-путь</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ SECTION 5 ============ -->
+  <section id="migration">
+    <div class="section-head">
+      <span class="num">05</span>
+      <h2>Обработка миграций (ручные / gated)</h2>
+    </div>
+
+    <p class="lead">DB-миграции на проде остаются <strong>ручными и вне авто-пайплайна</strong> — это сознательный выбор, а не недоработка.</p>
+
+    <div class="callout warn">
+      <span class="label">Почему не автоматизируем миграции в деплое</span>
+      <p>Prod-миграции у нас исторически ручные и без трекинга. <code>ALTER</code> требует <code>sudo -u postgres psql aiag</code> (app-пользователь <code>aiag</code> не может <code>ALTER</code>). Заворачивать это в авто-деплой опасно: schema-изменение на живом денежном пути (billing/identity) должно идти под наблюдением, с возможностью отката, отдельно от подмены кода.</p>
+    </div>
+
+    <h3>Правило</h3>
+    <ul class="clean">
+      <li><strong>Код деплоится автоматически</strong> по push (build-on-runner → atomic swap → self-heal pm2).</li>
+      <li><strong>Миграции применяются вручную / gated</strong> — оператором, до или после code-swap, через <code>sudo -u postgres psql aiag</code>, с явной проверкой. Авто-rollback кода не трогает БД.</li>
+      <li><strong>Порядок при breaking-схеме:</strong> expand → deploy code → contract. Сначала аддитивная миграция (новые колонки/таблицы), потом совместимый код, и только потом — удаление старого. Это держит авто-деплой кода безопасным даже при ручных миграциях.</li>
+    </ul>
+
+    <p>Так автодеплой кода (быстрый, частый, авто-откатываемый) и миграции схемы (редкие, под надзором, на денежном пути) остаются развязанными — каждый со своим уровнем риска.</p>
+  </section>
+
+  <footer class="page">
+    <p><strong>Релевантные файлы:</strong> <code>.github/workflows/deploy-production.yml</code> (workflow для доводки), скилл <code>aiag-deploy</code> (документированная release-процедура), и 5 сервисов: <code>apps/web</code>, <code>apps/worker</code>, <code>apps/agent-worker</code>, <code>apps/tg-miniapp</code> + <code>packages/api-gateway</code>.</p>
+    <p style="margin-top:18px;"><strong>Источники:</strong></p>
+    <div class="src-list">
+      <a href="https://timeweb.cloud/services/apps">Timeweb App Platform</a> ·
+      <a href="https://timeweb.cloud/docs/apps/how-it-works">how-it-works</a> ·
+      <a href="https://timeweb.cloud/docs/apps/deploying-with-docker-compose">docker-compose deploy</a> ·
+      <a href="https://timeweb.cloud/docs/apps/connecting-repositories">connecting repositories</a> ·
+      <a href="https://timeweb.cloud/docs/apps/faq">Apps FAQ</a> ·
+      <a href="https://timeweb.cloud/services/vds-vps">VPS tariffs/pricing</a>
+    </div>
+    <p style="margin-top:20px; color:var(--text-faint);">AIAG · CI/CD план и требования к основателю · 2026-06-03 · решение: Path A (bare VPS + улучшенный GitHub Actions)</p>
+  </footer>
+
+</div>
+</body>
+</html>

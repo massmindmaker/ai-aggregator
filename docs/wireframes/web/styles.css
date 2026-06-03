@@ -167,6 +167,24 @@ body {
 .cap b { color: var(--ink); font-weight: 600; }
 .cap .tag { font-size: 10px; padding: 0 5px; border-radius: 4px; border: 1px solid; }
 
+/* ── Honesty layer (matches showcase.html standard) ─────────────────────────
+ * .note  = in-screen honesty banner: what is real vs целевой вид / демо-данные.
+ * .demo  = inline tag wrapping fake/demo numbers (uptime, p50, ratings, доход…).
+ * .tag.demo / .tag.cant = caption-level honesty tags. */
+.note { font-family: var(--mono); font-size: 10.5px; line-height: 1.5; color: var(--ink-2);
+  border: 1px solid var(--line-strong); border-left: 3px solid var(--ink-dim);
+  background: var(--card-2); border-radius: 6px; padding: 7px 10px; margin: 2px 0 4px; }
+.note b { color: var(--ink); font-weight: 600; }
+.note.live  { border-left-color: var(--good);     background: var(--good-soft); }
+.note.soon  { border-left-color: var(--sky-deep);  background: var(--sky); }
+.note.rnd   { border-left-color: var(--ink-faint); }
+.note .mono { font-family: var(--mono); color: var(--amber-ink); }
+.demo { font-family: var(--mono); font-size: 9px; line-height: 1; vertical-align: middle;
+  padding: 1px 4px; border-radius: 4px; border: 1px solid var(--sky-line);
+  background: var(--sky); color: var(--sky-deep); margin-left: 4px; white-space: nowrap; }
+.tag.demo { color: var(--sky-deep); border-color: var(--sky-line); background: var(--sky); }
+.tag.cant { color: var(--danger); border-color: var(--line-strong); background: var(--card-2); }
+
 /* ── Desktop product frame (web view) ─────────────────────────────────────── */
 .win {
   width: 760px; border-radius: 16px; overflow: hidden;

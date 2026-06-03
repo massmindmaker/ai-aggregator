@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="ru" class="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIAG · Design Eval /108 v2 — финал-флагман vs 78/108</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* Tokens lifted verbatim from DESIGN.md (dark default). One palette, no second. */
+:root{
+  --bg:#0a0a0b; --bg-elev:#111114; --bg-surface:#18181b;
+  --ink:#f4f4f5; --ink-muted:#8b8b94; --ink-faint:#71717a;
+  --accent:#f59e0b; --accent-hover:#d97706; --accent-ink:#000;
+  --amber-soft:rgba(245,158,11,.14);
+  --line:rgba(255,255,255,.08); --line-strong:rgba(255,255,255,.16);
+  --success:#22c55e; --danger:#ef4444; --warning:#eab308;
+  --radius:8px; --radius-md:6px; --radius-sm:4px;
+  --shadow-pop:0 20px 60px rgba(0,0,0,.7);
+  --ease:cubic-bezier(.23,1,.32,1);
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:1080px;margin:0 auto;padding:48px 24px 96px;}
+.eyebrow{font-family:var(--mono);text-transform:uppercase;letter-spacing:.18em;font-size:11px;color:var(--ink-faint);}
+h1{font-size:clamp(28px,5vw,44px);font-weight:800;letter-spacing:-.03em;margin:10px 0 6px;}
+h1 .amber{color:var(--accent)}
+.lede{color:var(--ink-muted);max-width:75ch;font-size:15px;}
+.mono{font-family:var(--mono)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* hero score */
+.hero{display:flex;flex-wrap:wrap;gap:18px;margin:34px 0 14px;}
+.scorecard{flex:1;min-width:240px;background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);padding:22px;}
+.scorecard.win{border:2px solid var(--accent);position:relative;overflow:hidden}
+.scorecard.win::after{content:'';position:absolute;inset:-40%;background:radial-gradient(closest-side,var(--amber-soft),transparent 70%);pointer-events:none}
+.scorecard .lbl{font-size:12px;color:var(--ink-muted)}
+.scorecard .big{font-family:var(--mono);font-weight:700;font-size:48px;letter-spacing:-.03em;line-height:1;margin-top:6px}
+.scorecard .big small{font-size:20px;color:var(--ink-muted);font-weight:600}
+.scorecard .delta{margin-top:10px;font-family:var(--mono);font-size:13px;color:var(--success)}
+.scorecard .sub{font-size:12.5px;color:var(--ink-muted);margin-top:6px}
+
+/* section */
+section{margin-top:48px}
+h2{font-size:22px;font-weight:700;letter-spacing:-.02em;margin:0 0 4px}
+.shead p{color:var(--ink-muted);font-size:13.5px;margin:0 0 18px}
+
+/* dimension table */
+table{width:100%;border-collapse:collapse;font-size:14px}
+thead th{text-align:left;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);font-weight:600;padding:0 12px 10px;border-bottom:1px solid var(--line)}
+tbody td{padding:13px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:hover{background:var(--bg-elev)}
+.dim{font-weight:600;white-space:nowrap}
+.dim small{display:block;color:var(--ink-faint);font-weight:400;font-size:11px;font-family:var(--mono);margin-top:2px}
+.sc{font-family:var(--mono);font-weight:700;font-size:16px;white-space:nowrap}
+.sc .den{color:var(--ink-faint);font-size:11px;font-weight:500}
+.bar{height:5px;border-radius:3px;background:var(--bg-surface);margin-top:7px;overflow:hidden;width:74px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.bar i.lo{background:var(--danger)} .bar i.mid{background:var(--warning)}
+.note{color:var(--ink);font-size:13.5px}
+.fix{color:var(--ink-muted);font-size:12.5px;margin-top:6px}
+.fix b{color:var(--accent);font-weight:600;font-family:var(--mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+
+/* pills */
+.pill{display:inline-block;font-family:var(--mono);font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid;vertical-align:middle}
+.pill.live{color:var(--success);border-color:rgba(34,197,94,.45)}
+.pill.soon{color:#7aa2f7;border-color:rgba(122,162,247,.45)}
+.pill.rnd{color:var(--ink-faint);border-color:var(--line-strong)}
+.pill.bad{color:var(--danger);border-color:rgba(239,68,68,.5)}
+
+/* top10 */
+.t10{counter-reset:t}
+.t10 .item{display:flex;gap:16px;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-elev);margin-bottom:10px}
+.t10 .item::before{counter-increment:t;content:counter(t);font-family:var(--mono);font-weight:700;font-size:18px;color:var(--accent);background:var(--amber-soft);border:1px solid var(--line);border-radius:var(--radius-md);min-width:38px;height:38px;display:grid;place-items:center;flex:none}
+.t10 .item.p0::before{color:var(--danger);background:rgba(239,68,68,.1)}
+.t10 .b{font-weight:600;font-size:14.5px;margin-bottom:3px}
+.t10 .b .tag{font-family:var(--mono);font-size:10px;color:var(--ink-faint);margin-left:6px;text-transform:uppercase;letter-spacing:.08em}
+.t10 .d{color:var(--ink-muted);font-size:13px}
+.t10 .d .loc{font-family:var(--mono);color:var(--accent);font-size:11.5px}
+
+.verdict{background:var(--bg-elev);border:1px solid var(--line-strong);border-left:3px solid var(--accent);border-radius:var(--radius);padding:22px 24px;margin-top:14px}
+.verdict p{margin:0 0 10px;font-size:14px}
+.verdict p:last-child{margin:0}
+.verdict b{color:var(--ink)}
+.foot{margin-top:48px;color:var(--ink-faint);font-size:11.5px;font-family:var(--mono);border-top:1px solid var(--line);padding-top:18px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0 0;font-size:12px;color:var(--ink-muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Senior product-design critique · 12 dims × 9</div>
+  <h1>AIAG финал-дизайн <span class="amber">/108</span> · v2</h1>
+  <p class="lede">Контракт <span class="mono">DESIGN.md</span> против флагмана <span class="mono">showcase.html</span> и двух бордов (web/tma). Акцент: CONSISTENCY (строгое соответствие токенам/компонентам), отдельная линза FUNCTION-HONESTY (есть ли «живые» контролы, которых бэкенд не умеет — сверка с <span class="mono">2026-06-03-user-workflows.md</span>) и COMPLETENESS набора элементов.</p>
+
+  <div class="hero">
+    <div class="scorecard win">
+      <div class="lbl">Итог v2</div>
+      <div class="big">89<small>/108</small></div>
+      <div class="delta">▲ +11 к прошлому 78/108</div>
+      <div class="sub">82% · флагман-showcale поднял потолок; борды тянут вниз остаточными «live»-мисматчами.</div>
+    </div>
+    <div class="scorecard">
+      <div class="lbl">Прошлый раунд</div>
+      <div class="big" style="color:var(--ink-muted)">78<small>/108</small></div>
+      <div class="sub" style="margin-top:18px">72% · до того, как showcase получил inline-honesty и провайдер/крипто/рынок были чипованы по readiness.</div>
+    </div>
+    <div class="scorecard">
+      <div class="lbl">Что сдвинуло стрелку</div>
+      <div class="sub" style="margin-top:6px">Каждый экран showcase несёт баннер <span class="mono">honesty()</span>, примиряющий макет с кодом: чат = async, без стрима/стопа; Firecrawl развенчан; provider-строки понижены по-отдельности (ext live / OR+BYOK soon / Gonka rnd); крипто = TON live, остальное soon + нет реконсилера; весь рынок soon «целевой вид».</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="pill live">live</span> работает сейчас
+    <span class="pill soon">скоро</span> ближний билд
+    <span class="pill rnd">R&D</span> ресёрч
+    <span class="pill bad">мисматч</span> «live»-контрол, которого бэкенд не умеет
+  </div>
+
+  <section>
+    <div class="shead"><h2>12 измерений</h2><p>Каждое /9 · одна строка вердикта · highest-leverage фикс.</p></div>
+    <table>
+      <thead><tr><th>Измерение</th><th>/9</th><th>Вердикт · фикс</th></tr></thead>
+      <tbody>
+
+        <tr>
+          <td class="dim">1 · Visual hierarchy<small>fade-up, eyebrow, weight</small></td>
+          <td><span class="sc">8<span class="den">/9</span></span><div class="bar"><i style="width:89%"></i></div></td>
+          <td>
+            <div class="note">Eyebrow-mono + крупный заголовок + стейджированный fade-up читаются мгновенно; флагман держит «один акцент на экран».</div>
+            <div class="fix"><b>fix</b> На карточке агента 3 mono-стата конкурируют с ценой — задать одну доминанту (цена) и приглушить рейтинг до второго уровня.</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">2 · Typography<small>Inter + mono-numerics</small></td>
+          <td><span class="sc">9<span class="den">/9</span></span><div class="bar"><i style="width:100%"></i></div></td>
+          <td>
+            <div class="note">Безупречно по контракту: JetBrains Mono на ВСЕХ числах (баланс, цены, тайминги, токены, p50, адреса) и в eyebrow; шкала и вес-контраст соблюдены.</div>
+            <div class="fix"><b>fix</b> Зафиксировать tabular-nums на меняющихся счётчиках (баланс/таймер), чтобы цифры не «прыгали».</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">3 · Color &amp; accent discipline<small>amber = CTA/live/featured only</small></td>
+          <td><span class="sc">8<span class="den">/9</span></span><div class="bar"><i style="width:89%"></i></div></td>
+          <td>
+            <div class="note">Янтарь дисциплинирован: один primary, live-точка, featured-ring; per-character OKLCH — декор карточек, не вторая палитра. Успех/danger/warning из токенов.</div>
+            <div class="fix"><b>fix</b> На бордах amber-tx используется и для «~12 кр» и для «↑» send и для «›» — местами это body-amber. Свести к статусу/CTA, как в showcase.</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">4 · CONSISTENCY<small>строгое соответствие DESIGN.md токенам/компонентам</small></td>
+          <td><span class="sc">7<span class="den">/9</span></span><div class="bar"><i class="mid" style="width:78%"></i></div></td>
+          <td>
+            <div class="note">Showcase = эталон (токены verbatim, реальный <span class="mono">--logo-mask</span> цепь-лого, featured-ring, aiag-* кейфреймы, .dark/.light + web×моб матрица). Борды дрейфуют: свой набор CSS-переменных (<span class="mono">--warn-ink/--bad/--pend/--good-line</span>), <span class="pill soon">soon</span>-чип синий (#7aa2f7) вне токенов, наборы навигации расходятся (web-сайдбар 5 пунктов / tma-таббар 4 / showcase-nav с «Тулзы»).</div>
+            <div class="fix"><b>fix</b> Борды должны импортировать те же CSS-переменные, что и showcase (один <span class="mono">styles.css</span> = токены DESIGN.md); убрать самопальные warn/bad/pend, маппить на <span class="mono">--danger/--warning</span>.</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">5 · FUNCTION-HONESTY<small>нет ли «живых» контролов, которых нет в коде</small></td>
+          <td><span class="sc">7<span class="den">/9</span></span><div class="bar"><i class="mid" style="width:78%"></i></div></td>
+          <td>
+            <div class="note">Showcale — образцовая честность: inline-баннеры на КАЖДОМ экране сверены со spec (чат async/без стрима, Firecrawl-брокера нет, provider/крипто/рынок понижены пер-строчно). НО борды всё ещё несут старые over-promise как <span class="pill bad">live</span>: <span class="mono">tma s08b</span> «агент думает» + «остановить ⏹» + «−3 кр Firecrawl» помечен live (мисматч #1 spec); <span class="mono">s05</span> «Запустить бесплатно / 1-й прогон бесплатно» live (нет free-run в коде); home-лента ★-рейтинги и «48k запусков» чужих авторов live (нет каталога/отзывов).</div>
+            <div class="fix"><b>fix</b> Перерисовать tma s08b в честный «агент работает → уведомим» (как showcase), снять Firecrawl/«остановить»; снять «бесплатно» с s05 или внедрить грант; пометить ★/«N запусков» чужих агентов как soon.</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">6 · COMPLETENESS<small>buttons/cards/trace/provider/wallet/modal/states</small></td>
+          <td><span class="sc">8<span class="den">/9</span></span><div class="bar"><i style="width:89%"></i></div></td>
+          <td>
+            <div class="note">Полный набор присутствует: primary/ghost кнопки, character-card + featured, run-trace timeline + tool-call строки + метрик-стрип, provider-picker (5 источников), wallet-hero + topup-sheet + tx-лента, modal/bottom-sheet, skeleton, состояния loading/empty/error/blocking/pending (tma 04b/08c/10b/19b/32b). Чего нет: dedicated input-focus/disabled и success-toast как отдельный компонент.</div>
+            <div class="fix"><b>fix</b> Добавить в showcase явный input-states ряд (rest/focus-amber-ring/error/disabled) — сейчас input показан, но не его 4 состояния как в контракте.</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">7 · Motion<small>aiag-* lib, transform/opacity, reduced-motion</small></td>
+          <td><span class="sc">8<span class="den">/9</span></span><div class="bar"><i style="width:89%"></i></div></td>
+          <td>
+            <div class="note">Собственная aiag-* библиотека на месте: fade-up, glow-hover, pulse-dot, featured conic-spin, logo-dot, skeleton shimmer, modal-pop/sheet-up — все на transform/opacity, ease из контракта, полный <span class="mono">prefers-reduced-motion</span> off-switch в обоих бордах и showcase.</div>
+            <div class="fix"><b>fix</b> Добавить view-transition cross-fade между screen-свитчами showcase (заявлен в DESIGN.md, в коде смены экрана — мгновенная).</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">8 · Themes &amp; surfaces<small>dark/light, hairline elevation</small></td>
+          <td><span class="sc">8<span class="den">/9</span></span><div class="bar"><i style="width:89%"></i></div></td>
+          <td>
+            <div class="note">Hairline-elevation выдержан (1px бордеры + glow-hover, тяжёлая тень только у modal). Showcase доказывает матрицу: живой toggle .dark/.light + web×моб overview. Светлые токены — те же из DESIGN.md.</div>
+            <div class="fix"><b>fix</b> Web-борд захардкожен в light, tma — в dark; ни один борд не ре-темится. Доказательство темы живёт только в showcase — это ОК, но борды стоит пометить «тема-зеркало showcase», чтобы не воспринимались как отдельные палитры.</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">9 · Logo &amp; brand<small>amber chain mask, wordmark</small></td>
+          <td><span class="sc">9<span class="den">/9</span></span><div class="bar"><i style="width:100%"></i></div></td>
+          <td>
+            <div class="note">Везде реальная 4-узловая янтарная цепь через <span class="mono">--logo-mask</span> + wordmark «AI·Aggregator» с amber «·» и опциональным logo-dot glow. Старый <span class="mono">◆/AIAG</span>-плейсхолдер искоренён.</div>
+            <div class="fix"><b>fix</b> Нет — соответствие полное. (Закрепить mask как единственный источник, запретить текст-плейсхолдер линтером.)</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">10 · IA &amp; navigation<small>sidebar/tabbar active-amber</small></td>
+          <td><span class="sc">7<span class="den">/9</span></span><div class="bar"><i class="mid" style="width:78%"></i></div></td>
+          <td>
+            <div class="note">Active=amber соблюдён (web-сайдбар, tma-таббар, showcale-rail). Но три источника правды по навигации расходятся: web-сайдбар включает «Тулзы», tma-таббар из 4 без «Тулзы», showcase-nav свой 11-экранный список. Группы A–J бордов != SCREENS showcase.</div>
+            <div class="fix"><b>fix</b> Согласовать первичную навигацию между showcale и бордами на один canonical IA (5 корней: Агенты/Маркет/Тулзы/Кошелёк/Профиль), иначе «один продукт» читается как три.</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">11 · Content &amp; copy honesty<small>числа, обещания, единицы</small></td>
+          <td><span class="sc">6<span class="den">/9</span></span><div class="bar"><i class="lo" style="width:67%"></i></div></td>
+          <td>
+            <div class="note">Showcase честен в единицах («внутри ещё ₽, показываем как кр≈USD»). Но борды печатают фейковые точные числа как факт: «uptime 99.9% / p50 410мс / лучший маршрут» (s07, нет observability), «312 отз.», «48k/22k/15k прогонов», «доход 4 300 кр» — все как live, без «целевой вид»-рамки, которую ставит showcase.</div>
+            <div class="fix"><b>fix</b> Любое неживое число на бордах обернуть в тот же приём, что showcase: подпись «целевой вид / демо-данные» или снять. Особенно s07-метрики маршрутизации.</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="dim">12 · A11y &amp; states<small>status icon+word, contrast, AA</small></td>
+          <td><span class="sc">7<span class="den">/9</span></span><div class="bar"><i class="mid" style="width:78%"></i></div></td>
+          <td>
+            <div class="note">Status-pill = иконка+слово (✓ ok / не прошёл / скоро), не цвет в одиночку — хорошо. <span class="mono">--ink-muted</span> поднят до #8b8b94 ради AA на &lt;14px. Reduced-motion полный.</div>
+            <div class="fix"><b>fix</b> Per-character OKLCH-роль (<span class="mono">crole</span>) на цветном фоне местами &lt;4.5:1; декоративные dots/toggle без текст-альтернативы. Прогнать контраст на цветных карточках и дать aria-label статусам.</div>
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="shead"><h2>Top-10 фиксов · по убыванию плеча</h2><p>Сначала чинит честность бордов (там остался весь долг), затем единство токенов/IA.</p></div>
+    <div class="t10">
+
+      <div class="item p0">
+        <div><div class="b">Перерисовать <span class="mono">tma s08b</span> «агент думает (streaming)» — снять статус live<span class="tag">honesty · dim5</span></div>
+        <div class="d">Экран показывает токен-стрим, «остановить ⏹» и «−3 кр Firecrawl» как <span class="loc">live</span>. Spec мисматч #1: запуск = async 202, воркер не стримит, стопа нет, Firecrawl не построен. Скопировать честный async-паттерн из showcase. <span class="loc">tma/index.html s08b</span></div></div>
+      </div>
+
+      <div class="item p0">
+        <div><div class="b">Снять «1-й прогон бесплатно / Запустить бесплатно» или внедрить грант<span class="tag">honesty · dim5/11</span></div>
+        <div class="d">s03b, s05 (оба борда) обещают free-run; в коде гранта нет — любой прогон списывает реальную стоимость. Либо реализовать одноразовый кредит, либо убрать обещание. <span class="loc">tma+web s03b/s05</span></div></div>
+      </div>
+
+      <div class="item">
+        <div><div class="b">Обернуть фейковые числа бордов в «целевой вид / демо»<span class="tag">honesty · dim11</span></div>
+        <div class="d">«uptime 99.9% / p50 410мс / лучший маршрут» (s07), «312 отз.», «48k запусков», «доход 4 300 кр» поданы как факт. Showcase уже маркирует такое — перенести приём на борды. <span class="loc">web s07 · home-лента · s34</span></div></div>
+      </div>
+
+      <div class="item">
+        <div><div class="b">Единый источник токенов: борды импортируют CSS-переменные showcale<span class="tag">consistency · dim4</span></div>
+        <div class="d">Борды объявляют свои <span class="mono">--bad/--pend/--warn-ink/--good-line</span> и синий soon-чип #7aa2f7 вне DESIGN.md. Маппить на <span class="mono">--danger/--warning/--accent</span>; soon-чип сделать токен-производным. <span class="loc">styles.css обоих бордов</span></div></div>
+      </div>
+
+      <div class="item">
+        <div><div class="b">Свести первичную навигацию к одному canonical IA<span class="tag">IA · dim10</span></div>
+        <div class="d">web-сайдбар (5+Тулзы), tma-таббар (4 без Тулзы) и showcale-nav (11 SCREENS) расходятся. Зафиксировать 5 корней Агенты/Маркет/Тулзы/Кошелёк/Профиль на всех поверхностях. <span class="loc">все три файла</span></div></div>
+      </div>
+
+      <div class="item">
+        <div><div class="b">Понизить «использовать наши тулзы/скиллы» на Свой-Hermes (s19)<span class="tag">honesty · dim5</span></div>
+        <div class="d">Тоггл «наши тулзы/скиллы» при запуске на ЧУЖОМ Hermes невыполним (наш воркер не в их петле) — spec мисматч #6. Либо снять, либо переопределить как «маршрут через AIAG + наши тулзы». Showcase уже сузил до «/v1 endpoint billed 0»; борд — нет. <span class="loc">web+tma s19</span></div></div>
+      </div>
+
+      <div class="item">
+        <div><div class="b">Добавить явный ряд input-состояний в showcase<span class="tag">completeness · dim6</span></div>
+        <div class="d">Контракт требует input: rest / focus-amber-ring / error / disabled. Input показан, но 4 состояния как компонент-ряд отсутствуют. <span class="loc">showcase.html</span></div></div>
+      </div>
+
+      <div class="item">
+        <div><div class="b">Снять single-доминанту на карточке агента<span class="tag">hierarchy · dim1</span></div>
+        <div class="d">3 mono-стата (запуски/★/цена) равновесны и конкурируют. Сделать цену primary, рейтинг — вторичным. <span class="loc">showcase agentCard · борды home-лента</span></div></div>
+      </div>
+
+      <div class="item">
+        <div><div class="b">Контраст per-character OKLCH-роли до AA<span class="tag">a11y · dim12</span></div>
+        <div class="d"><span class="mono">crole</span> поверх цветного фона местами &lt;4.5:1; статус-точки без aria-label. Поднять L в OKLCH ролей, добавить текст-альтернативы. <span class="loc">все три файла</span></div></div>
+      </div>
+
+      <div class="item">
+        <div><div class="b">View-transition cross-fade между экранами<span class="tag">motion · dim7</span></div>
+        <div class="d">Заявлен в DESIGN.md; смена screen в showcase — мгновенная. Добавить cross-fade на transform/opacity (с reduced-motion off). <span class="loc">showcase setScreen</span></div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="shead"><h2>Вердикт vs 78/108</h2></div>
+    <div class="verdict">
+      <p><b>89/108 (82%), ▲ +11.</b> Скачок целиком заработан флагманом: <span class="mono">showcale.html</span> превратил дизайн из «красивый, но over-promising» в <b>самодокументирующийся честный контракт</b>. Inline-баннеры <span class="mono">honesty()</span> на каждом экране примиряют макет с кодом из <span class="mono">user-workflows.md</span> — это ровно то, чего не хватало в раунде 78: чат честно async-без-стрима, Firecrawl развенчан как «не построен», provider-строки понижены пер-источнику, мульти-крипто = TON live + остальное soon с оговоркой про отсутствующий реконсилер, весь двусторонний рынок — soon «целевой вид».</p>
+      <p>Токены, типографика, лого и motion-библиотека — на уровне 8–9/9: один палитра-источник, mono на всех числах, реальная цепь-маска, полный aiag-* набор с reduced-motion.</p>
+      <p><b>Что держит ниже 95+:</b> весь остаточный долг сместился в <b>два борда</b>, которые НЕ догнали showcase. Они печатают старые over-promise как <span class="pill bad">live</span> (streaming-чат s08b, free-run, фейковые uptime/p50/отзывы/доход) и заводят собственные CSS-переменные и расходящуюся навигацию. То есть три поверхности больше не говорят одним голосом — флагман честен, борды отстали. Закрытие Top-5 (перерисовать s08b, снять free-run, обернуть фейк-числа, унифицировать токены, свести IA) поднимает к <b>~98/108</b> почти без новой работы по визуалу — это правки честности и единого источника, а не редизайн.</p>
+    </div>
+  </section>
+
+  <div class="foot">
+    Источники: DESIGN.md · docs/wireframes/showcase.html · docs/wireframes/web/index.html · docs/wireframes/tma/index.html · docs/specs/2026-06-03-user-workflows.md<br>
+    Сгенерировано 2026-06-03 · дарк, токены DESIGN.md verbatim · 12 dims × 9 = 108
+  </div>
+
+</div>
+</body>
+</html>

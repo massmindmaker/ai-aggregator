@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-03T10:36:54.472Z",
+  "timestamp": "2026-06-03T12:56:17.104Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -160,11 +160,75 @@
   "uncommitted_files": [
     {
       "status": "M",
-      "path": ".github/workflows/deploy-production.yml"
+      "path": ".claude/worktrees/agent-a07167902aa6f7ee5"
     },
     {
       "status": "M",
-      "path": ".gitignore"
+      "path": ".claude/worktrees/agent-a48dbb78405cb98ce"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-a5f7550954a20bca8"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-a66810f1c52cff63b"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-a77dd5559117429ef"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-a783aa41fced67b5d"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-a82af33b281334865"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-a89d9a0fd33238807"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-a9744bf689a001c80"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-aa75796dd30a32d67"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-ad0c94eaa3c534c8e"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-ad8b79aee094b5c24"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/agent-aee9fc033bf60f706"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/feat/phase15-tma-concept"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/wf_2963ae1f-02d-2"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/wf_3c7fd885-9e9-3"
+    },
+    {
+      "status": "M",
+      "path": ".claude/worktrees/wf_a8abd622-103-1"
+    },
+    {
+      "status": "M",
+      "path": ".github/workflows/deploy-production.yml"
     },
     {
       "status": "M",
@@ -172,265 +236,29 @@
     },
     {
       "status": "M",
-      "path": ".planning/ROADMAP.md"
-    },
-    {
-      "status": "M",
-      "path": ".planning/STATE.md"
-    },
-    {
-      "status": "M",
-      "path": ".serena/memories/project_overview.md"
-    },
-    {
-      "status": "M",
-      "path": ".serena/memories/suggested_commands.md"
-    },
-    {
-      "status": "M",
-      "path": ".serena/memories/task_completion_checklist.md"
-    },
-    {
-      "status": "M",
-      "path": "apps/worker/src/queues/__tests__/contest-eval.test.ts"
-    },
-    {
-      "status": "M",
-      "path": "docs/specs/2026-06-01-tma-108-reframe.md"
-    },
-    {
-      "status": "M",
       "path": "docs/wireframes/tma/index.html"
     },
     {
       "status": "M",
-      "path": "docs/wireframes/tma/styles.css"
+      "path": "docs/wireframes/web/index.html"
+    },
+    {
+      "status": "M",
+      "path": "docs/wireframes/web/styles.css"
     },
     {
       "status": "??",
-      "path": ".claude/"
+      "path": "docs/specs/2026-06-03-cicd-plan.html"
     },
     {
       "status": "??",
-      "path": ".firecrawl/"
+      "path": "docs/specs/2026-06-03-design-eval-108-v2.html"
     },
     {
       "status": "??",
-      "path": ".mcp.json"
-    },
-    {
-      "status": "??",
-      "path": ".planning/R1-MILESTONE.md"
-    },
-    {
-      "status": "??",
-      "path": ".planning/config.json"
-    },
-    {
-      "status": "??",
-      "path": ".planning/tmp/"
-    },
-    {
-      "status": "??",
-      "path": ".serena/memories/aiag_decisions_2026_06_03.md"
-    },
-    {
-      "status": "??",
-      "path": ".serena/memories/aiag_lore_and_nft_2026_05_30.md"
-    },
-    {
-      "status": "??",
-      "path": ".serena/memories/aiag_product_canon_2026_06_02.md"
-    },
-    {
-      "status": "??",
-      "path": ".serena/memories/aiag_r0_and_108_eval_2026_06_02.md"
-    },
-    {
-      "status": "??",
-      "path": ".serena/memories/aiag_session_2026_05_08_phase14_planning_complete.md"
-    },
-    {
-      "status": "??",
-      "path": ".serena/memories/aiag_state_2026_05_30.md"
-    },
-    {
-      "status": "??",
-      "path": ".serena/memories/aiag_strategy_synthesis_2026_05_30.md"
-    },
-    {
-      "status": "??",
-      "path": ".serena/memories/aiag_tma_agent_platform_vision_2026_05_30.md"
-    },
-    {
-      "status": "??",
-      "path": "CLAUDE.md"
-    },
-    {
-      "status": "??",
-      "path": "DESIGN.md"
-    },
-    {
-      "status": "??",
-      "path": "PRODUCT.md"
-    },
-    {
-      "status": "??",
-      "path": "SECURITY.md"
-    },
-    {
-      "status": "??",
-      "path": "apps/agent-worker/CLAUDE.md"
-    },
-    {
-      "status": "??",
-      "path": "apps/tg-miniapp/CLAUDE.md"
-    },
-    {
-      "status": "??",
-      "path": "apps/web/CLAUDE.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/ANIMATION.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/ARCHITECTURE.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-02-WHAT-WE-ARE-BUILDING.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-02-hermes-core-and-payment-explainer.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-02-hermes-webui-landscape-and-tma-positioning.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-02-product-coherence-map.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-02-r1-verified-plan.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-02-tma-product-definition.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-aiag-onepager.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-aiag-pitch-deck.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-aiag-ux-critique.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-backend-gap.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-deploy-test-readiness.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-design-eval-108.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-gonka-checklist.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-gonka-grant-application-draft.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-gonka-grant-application.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-gonka-pitch.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-monetization.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-readiness-summary.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-user-workflows.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/2026-06-03-voltagent-design-reuse.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/RESEARCH-BACKLOG.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/STATUS.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/research/"
-    },
-    {
-      "status": "??",
-      "path": "docs/superpowers/specs/2026-05-30-provider-picker-toolbroker-spec.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/superpowers/specs/2026-05-31-living-manifesto-arg-spec.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/wireframes/assets/"
-    },
-    {
-      "status": "??",
-      "path": "docs/wireframes/showcase.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/wireframes/tma/characters-video.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/wireframes/tma/characters.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/wireframes/tma/index-legacy-v1-v5.html"
-    },
-    {
-      "status": "??",
-      "path": "docs/wireframes/web/"
-    },
-    {
-      "status": "??",
-      "path": "packages/api-gateway/CLAUDE.md"
-    },
-    {
-      "status": "??",
-      "path": "packages/database/CLAUDE.md"
+      "path": "docs/wireframes/assets/video-ref/"
     }
   ],
   "next_action": "R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identity`",
-  "context_notes": "Status: R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identity`\n\nStopped at: R0 (Phase 15.1) COMPLETE on branch plan/15.1-r0-billing-identity. Re-cut the R1 milestone into ROADMAP.md from SYNTHESIS.md (Waves 0-3, D-0..D-14, FD-1..FD-8) + monetization.md. Current focus = R1.0 money-correctness foundation (D-0 in progress on branch; D-7/D-8/DEFAULT_MODEL done on branch).\n\nRecent commits:\n7a3560c fix(15.1-03): match settleRun integration test to live prod schema (green 4/4)\n0e68ee9 docs(15.1-03): complete settleRun integration test plan — SUMMARY.md + STATE.md + ROADMAP.md\n97afe5d test(15.1-03): integration test for settleRun atomicity (T-15.1-12, T-15.1-13)\nde3e083 fix(15.1-02): sync bun.lock to next@14.2.33 (CVE-2025-29927 lock drift)\naab50ee fix(15.1-01): graceful OpenRouter fallback when AIAG_GATEWAY_KEY unset (deploy-safety)"
+  "context_notes": "Status: R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identity`\n\nStopped at: R0 (Phase 15.1) COMPLETE on branch plan/15.1-r0-billing-identity. Re-cut the R1 milestone into ROADMAP.md from SYNTHESIS.md (Waves 0-3, D-0..D-14, FD-1..FD-8) + monetization.md. Current focus = R1.0 money-correctness foundation (D-0 in progress on branch; D-7/D-8/DEFAULT_MODEL done on branch).\n\nRecent commits:\n9771582 docs(session): design system + wireframes + specs + memory + R1 planning\n7a3560c fix(15.1-03): match settleRun integration test to live prod schema (green 4/4)\n0e68ee9 docs(15.1-03): complete settleRun integration test plan — SUMMARY.md + STATE.md + ROADMAP.md\n97afe5d test(15.1-03): integration test for settleRun atomicity (T-15.1-12, T-15.1-13)\nde3e083 fix(15.1-02): sync bun.lock to next@14.2.33 (CVE-2025-29927 lock drift)"
 }
