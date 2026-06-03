@@ -7,5 +7,9 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   splitting: false,
-  external: ['@aiag/database'],
+  // bullmq + ioredis MUST stay external: bundling BullMQ's ESM inlines an
+  // `import … from 'ioredis/built/utils'` (a directory import) which Node's ESM
+  // loader rejects with ERR_UNSUPPORTED_DIR_IMPORT → gateway crash-loop. Leaving
+  // them external lets the Redis stack resolve from node_modules at runtime.
+  external: ['@aiag/database', 'bullmq', 'ioredis'],
 });

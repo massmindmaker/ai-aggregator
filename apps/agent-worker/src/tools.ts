@@ -201,7 +201,7 @@ interface KieStatusResp {
 
 async function kieCreateTask(prompt: string, aspect: string): Promise<string> {
   const apiKey = process.env.KIE_API_KEY;
-  if (!apiKey) throw new Error('KIE_API_KEY not set');
+  if (!apiKey) throw new Error('image service not configured');
   const res = await fetch(`${KIE_BASE}/api/v1/playground/createTask`, {
     method: 'POST',
     headers: {
@@ -213,10 +213,10 @@ async function kieCreateTask(prompt: string, aspect: string): Promise<string> {
       input: { prompt, aspect_ratio: aspect, output_format: 'png' },
     }),
   });
-  if (!res.ok) throw new Error(`Kie createTask ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`image service error ${res.status}`);
   const j = (await res.json()) as KieCreateResp;
   if (j.code !== 200 || !j.data?.taskId) {
-    throw new Error(`Kie createTask err: ${j.msg ?? JSON.stringify(j)}`);
+    throw new Error('image service error: could not start generation');
   }
   return j.data.taskId;
 }
@@ -245,10 +245,10 @@ async function kiePoll(taskId: string, timeoutMs = 60_000): Promise<string> {
       }
     }
     if (state === 'fail') {
-      throw new Error(`Kie task failed: ${j.data?.failMsg ?? 'unknown'}`);
+      throw new Error('image generation failed');
     }
   }
-  throw new Error('Kie task timeout');
+  throw new Error('image generation timed out');
 }
 
 interface ImageGenResult {

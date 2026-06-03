@@ -194,7 +194,7 @@ async function pollOnce(prefixedJobId: string, byokKey?: string): Promise<MediaJ
     return {
       status: 'failed',
       job_id: prefixedJobId,
-      error: body.data?.failMsg ?? body.data?.failCode ?? 'kie job failed',
+      error: body.data?.failMsg ?? body.data?.failCode ?? 'image generation failed',
     };
   }
   // processing | queued | pending | running | waiting | queuing | generating
