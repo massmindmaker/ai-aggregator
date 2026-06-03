@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "bullmq": "^5.27.0",
     "ioredis": "^5.4.1",
     "postgres": "^3.4.5"

@@ -45,6 +45,8 @@ export default function NewAgentPage() {
     { id: string; name: string; apiBase: string | null; requiresBaseUrl: boolean }[]
   >([]);
   const [providerId, setProviderId] = useState('');
+  const [mcpUrl, setMcpUrl] = useState('');
+  const [mcpAuth, setMcpAuth] = useState('');
 
   async function handleTest() {
     if (!token) return;
@@ -143,6 +145,8 @@ export default function NewAgentPage() {
           model_slug: modelSlug.trim() || undefined,
           tools,
           budget_rub_monthly: budget,
+          mcp_endpoint_url: mcpUrl.trim() || undefined,
+          mcp_auth: mcpAuth.trim() || undefined,
           // BYOK via the provider catalog → backend routes through external_openai
           // (worker isExternal=true → 0 commission). No provider chosen → our gateway.
           ...(useExternal && providerId
@@ -473,6 +477,49 @@ export default function NewAgentPage() {
                       <div className="tma-error">Не получилось: {testResult.reason}</div>
                     )}
                   </>
+                )}
+              </div>
+
+              <div
+                style={{
+                  border: '1px solid var(--line)',
+                  borderRadius: 8,
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  background: 'var(--bg-surface)',
+                }}
+              >
+                <span className="tma-card-text" style={{ fontWeight: 600 }}>
+                  🧩 MCP-сервер (скиллы) — опционально
+                </span>
+                <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -6 }}>
+                  Подключи внешний MCP-сервер (https) — его инструменты станут доступны агенту.
+                  Только удалённый Streamable-HTTP. Вызовы бесплатны (0 комиссии).
+                </p>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-text">URL</span>
+                  <input
+                    type="url"
+                    value={mcpUrl}
+                    onChange={(e) => setMcpUrl(e.target.value)}
+                    placeholder="https://mcp.example.com/mcp"
+                    style={inputStyle}
+                  />
+                </label>
+                {mcpUrl.trim() && (
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span className="tma-card-text">Auth-заголовок (опц.)</span>
+                    <input
+                      type="password"
+                      value={mcpAuth}
+                      onChange={(e) => setMcpAuth(e.target.value)}
+                      placeholder="Bearer …"
+                      autoComplete="off"
+                      style={inputStyle}
+                    />
+                  </label>
                 )}
               </div>
 

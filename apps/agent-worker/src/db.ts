@@ -30,6 +30,10 @@ export interface AgentRow {
   model_id: string | null;
   auth_ref: string | null;
   base_url_override: string | null;
+  // MCP (skills) — optional remote Streamable-HTTP MCP server attached to the agent.
+  // mcp_auth_encrypted = AES-256-GCM base64 (crypto.ts), decrypted at run time.
+  mcp_endpoint_url: string | null;
+  mcp_auth_encrypted: string | null;
 }
 
 export interface AgentRunRow {
@@ -68,7 +72,9 @@ export async function loadAgent(agentId: string): Promise<AgentRow | null> {
            provider_id,
            model_id::text          AS model_id,
            auth_ref::text          AS auth_ref,
-           base_url_override
+           base_url_override,
+           mcp_endpoint_url,
+           mcp_auth_encrypted
     FROM agents WHERE id = ${agentId}::uuid LIMIT 1
   `) as unknown as AgentRow[];
   return rows[0] ?? null;

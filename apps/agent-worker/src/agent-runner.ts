@@ -20,6 +20,7 @@ import {
 } from './bot-api.js';
 import { decryptSecret } from './crypto.js';
 import { safeFetch } from './safe-fetch.js';
+import { openMcp, listMcpToolDefs, callMcpTool, MCP_PREFIX, type McpClient } from './mcp-client.js';
 
 // R0-1: aiag runs route through the :4000 gateway (revenue + white-label).
 // OPENROUTER_URL stays ONLY as the documented degraded fallback when the
@@ -410,6 +411,25 @@ export async function runAgent(runId: string): Promise<void> {
 
   const tools = pickToolDefs(agent.tools);
 
+  // MCP (skills): attach the agent's optional remote MCP server (read-only,
+  // SSRF-guarded via safeFetch, billed 0₽). Degrades to built-in tools if the
+  // connect/list fails — a misconfigured MCP server must never block the run.
+  let mcp: McpClient | null = null;
+  if (agent.mcp_endpoint_url) {
+    try {
+      const authHeader = agent.mcp_auth_encrypted
+        ? decryptSecret(Buffer.from(agent.mcp_auth_encrypted, 'base64'))
+        : null;
+      mcp = await openMcp({ url: agent.mcp_endpoint_url, authHeader });
+      tools.push(...(await listMcpToolDefs(mcp)));
+    } catch (e) {
+      console.warn(
+        `[agent-worker] MCP attach failed run=${runId}: ${(e as Error).message.slice(0, 160)}`,
+      );
+      mcp = null;
+    }
+  }
+
   let tokensIn = 0;
   let tokensOut = 0;
   let totalCostRub = 0;
@@ -427,6 +447,7 @@ export async function runAgent(runId: string): Promise<void> {
   let allModelCallsBilledByGateway = !upstream.isExternal;
   let toolFeesRub = 0;
 
+  try {
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     let call: ChatResult;
     try {
@@ -556,7 +577,10 @@ export async function runAgent(runId: string): Promise<void> {
       } catch {
         parsed = {};
       }
-      const exec = await executeTool(toolCall.function.name, parsed, { agentId: agent.id });
+      const exec =
+        mcp && toolCall.function.name.startsWith(MCP_PREFIX)
+          ? await callMcpTool(mcp, toolCall.function.name.slice(MCP_PREFIX.length), parsed)
+          : await executeTool(toolCall.function.name, parsed, { agentId: agent.id });
       if (exec.cost_rub > 0) {
         // Accumulate into toolFeesRub, NOT totalCostRub — the next iteration
         // recomputes totalCostRub from (basis + toolFeesRub), so adding here
@@ -573,4 +597,13 @@ export async function runAgent(runId: string): Promise<void> {
 
   await markFailed(runId, 'max_iterations_exceeded');
   await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'max_iterations_exceeded');
+  } finally {
+    if (mcp) {
+      try {
+        await mcp.close();
+      } catch {
+        /* ignore close errors — stateless worker leaves no dangling MCP conn */
+      }
+    }
+  }
 }

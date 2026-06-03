@@ -40,6 +40,8 @@ function makeAgent(overrides: Partial<AgentRow> = {}): AgentRow {
     model_id: null,
     auth_ref: null,
     base_url_override: null,
+    mcp_endpoint_url: null,
+    mcp_auth_encrypted: null,
     ...overrides,
   };
 }

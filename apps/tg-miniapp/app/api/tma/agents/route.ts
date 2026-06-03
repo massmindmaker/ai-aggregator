@@ -57,6 +57,9 @@ interface CreateBody {
   // Provider picker (catalog BYOK): pick a seeded provider, bring your own key.
   // Resolves server-side to the external_openai path → ZERO commission.
   provider_id?: string;
+  // MCP (skills): optional remote https MCP server + optional auth header value.
+  mcp_endpoint_url?: string;
+  mcp_auth?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -145,12 +148,27 @@ export async function POST(req: NextRequest) {
     externalModelSlug = body.external_model_slug?.trim() || null;
   }
 
+  // MCP (skills): optional remote MCP server. URL gets the same https/SSRF
+  // pre-check as external endpoints; the auth token (a header value like
+  // "Bearer x") is AES-256-GCM encrypted (base64) — the worker decrypts at run.
+  let mcpEndpointUrl: string | null = null;
+  let mcpAuthEncrypted: string | null = null;
+  const mcpUrl = body.mcp_endpoint_url?.trim();
+  if (mcpUrl) {
+    const mguard = validateExternalUrl(mcpUrl);
+    if (!mguard.ok) return NextResponse.json({ error: `mcp_${mguard.reason}` }, { status: 400 });
+    mcpEndpointUrl = mcpUrl.replace(/\/+$/, '');
+    const mcpToken = body.mcp_auth?.trim();
+    if (mcpToken) mcpAuthEncrypted = encryptSecret(mcpToken).toString('base64');
+  }
+
   const ins = (await sql`
     INSERT INTO agents (
       tg_user_id, template_kind, name, description,
       system_prompt, tools, model_slug, budget_rub_monthly,
       connection_type, external_base_url, external_api_key_encrypted,
-      external_api_key_hint, external_model_slug
+      external_api_key_hint, external_model_slug,
+      mcp_endpoint_url, mcp_auth_encrypted
     )
     VALUES (
       ${tgUserId}::bigint,
@@ -165,7 +183,9 @@ export async function POST(req: NextRequest) {
       ${externalBaseUrl},
       ${externalApiKeyEncrypted},
       ${externalApiKeyHint},
-      ${externalModelSlug}
+      ${externalModelSlug},
+      ${mcpEndpointUrl},
+      ${mcpAuthEncrypted}
     )
     RETURNING id::text, tg_user_id::text, template_kind, name, description,
               system_prompt, tools, model_slug, budget_rub_monthly::text,
