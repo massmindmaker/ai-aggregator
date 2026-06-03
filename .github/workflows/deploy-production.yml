@@ -138,6 +138,13 @@ jobs:
           # tma next build is the heavy one; give the runner headroom (runner
           # has ~7GB, unlike the 2GB VPS — this is exactly why we build here).
           NODE_OPTIONS: --max-old-space-size=6144
+          # Build-time placeholder ONLY. The D-8 module-level fail-hard guard
+          # (apps/tg-miniapp/app/api/tma/auth/verify + middleware) throws at
+          # IMPORT during next build's page-data collection if TMA_JWT_SECRET is
+          # unset/<32 chars. The REAL secret lives in /srv/aiag/shared/.env and is
+          # read at runtime (server-side env, never baked into the bundle). This
+          # dummy only lets the build's module load succeed.
+          TMA_JWT_SECRET: ci-build-placeholder-not-a-real-secret-000000
         run: |
           case "${{ matrix.app }}" in
             web)          bun run --cwd apps/web build ;;            # next build → apps/web/.next
