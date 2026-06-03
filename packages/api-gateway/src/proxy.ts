@@ -1,6 +1,11 @@
+import { safeFetch, SsrfError } from '@aiag/shared';
 import type { ProxyRequestOptions, ProxyResponse } from './types';
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
+
+// Exact hosts the gateway is allowed to proxy to without IP-range checks.
+// Everything else must DNS-resolve to a public IP (safeFetch enforces).
+const PROXY_ALLOWLIST = ['127.0.0.1:4000', 'openrouter.ai'];
 
 /**
  * Proxy request to upstream API
@@ -31,8 +36,15 @@ export async function proxyRequest(options: ProxyRequestOptions): Promise<ProxyR
       }
     }
 
-    // Make request
-    const response = await fetch(url, fetchOptions);
+    // Make request through the SSRF guard. safeFetch enforces HTTPS-only,
+    // DNS-resolves the host and rejects private / link-local / loopback / CGNAT
+    // / IPv6-ULA targets, pins the socket to the validated IP (anti-rebind) and
+    // re-validates every redirect hop. Trusted internal/openrouter hosts are
+    // allowlisted exactly.
+    const response = await safeFetch(url, {
+      ...fetchOptions,
+      allowlist: PROXY_ALLOWLIST,
+    });
 
     // Parse response
     const responseHeaders: Record<string, string> = {};
@@ -94,6 +106,17 @@ export async function proxyRequest(options: ProxyRequestOptions): Promise<ProxyR
     };
   } catch (error) {
     const responseTimeMs = Date.now() - startTime;
+
+    if (error instanceof SsrfError) {
+      // Blocked target (private/internal IP, non-HTTPS, encoded literal, etc.).
+      return {
+        status: 502,
+        statusText: 'Bad Gateway',
+        headers: {},
+        body: { error: 'Upstream address is not permitted' },
+        responseTimeMs,
+      };
+    }
 
     if (error instanceof Error) {
       if (error.name === 'AbortError') {

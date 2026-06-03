@@ -8,6 +8,9 @@ export * from './s3';
 // Startonus NFT minter API client (Phase 15 — TG Mini-App)
 export * from './startonus';
 
+// SSRF-hardened outbound fetch (synthesis D-7 / R1-7)
+export * from './safe-fetch';
+
 // Constants
 
 export const APP_NAME = 'AIAG';
