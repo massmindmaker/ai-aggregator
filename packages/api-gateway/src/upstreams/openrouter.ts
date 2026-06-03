@@ -14,9 +14,12 @@ import type {
   EmbeddingsRequest,
   EmbeddingsResponse,
 } from './interface';
+import { safeFetch } from '@aiag/shared';
 import { logger } from '../lib/logger';
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
+// safeFetch allowlist: OpenRouter is the only host this adapter ever talks to.
+const OPENROUTER_ALLOWLIST = ['openrouter.ai'];
 
 function selectKey(byok?: string): string | undefined {
   return byok || process.env.OPENROUTER_API_KEY;
@@ -42,10 +45,11 @@ export const openRouterUpstream: UpstreamAdapter = {
     });
 
     const start = Date.now();
-    const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    const res = await safeFetch(`${OPENROUTER_BASE}/chat/completions`, {
       method: 'POST',
       headers,
       body,
+      allowlist: OPENROUTER_ALLOWLIST,
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -108,7 +112,7 @@ export const openRouterUpstream: UpstreamAdapter = {
     if (process.env.OPENROUTER_APP_URL) headers['http-referer'] = process.env.OPENROUTER_APP_URL;
     if (process.env.OPENROUTER_APP_NAME) headers['x-title'] = process.env.OPENROUTER_APP_NAME;
 
-    const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    const res = await safeFetch(`${OPENROUTER_BASE}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -118,6 +122,7 @@ export const openRouterUpstream: UpstreamAdapter = {
         temperature: req.temperature,
         max_tokens: req.max_tokens,
       }),
+      allowlist: OPENROUTER_ALLOWLIST,
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
@@ -157,10 +162,11 @@ export const openRouterUpstream: UpstreamAdapter = {
     if (process.env.OPENROUTER_APP_NAME) headers['x-title'] = process.env.OPENROUTER_APP_NAME;
 
     const start = Date.now();
-    const res = await fetch(`${OPENROUTER_BASE}/embeddings`, {
+    const res = await safeFetch(`${OPENROUTER_BASE}/embeddings`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ model: req.modelId, input: req.input }),
+      allowlist: OPENROUTER_ALLOWLIST,
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
