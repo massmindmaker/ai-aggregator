@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
+import { encryptSecret, hintFromSecret } from '@/lib/crypto';
+import { validateExternalUrl } from '@/lib/external-agent';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,6 +23,10 @@ interface AgentRow {
   status: string;
   created_at: string;
   updated_at: string;
+  connection_type: string;
+  external_base_url: string | null;
+  external_api_key_hint: string | null;
+  external_model_slug: string | null;
 }
 
 interface RunRow {
@@ -38,7 +44,9 @@ async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null>
   const rows = (await sql`
     SELECT id::text, tg_user_id::text, template_kind, name, description,
            system_prompt, tools, model_slug, budget_rub_monthly::text,
-           status, created_at, updated_at
+           status, created_at, updated_at,
+           connection_type, external_base_url, external_api_key_hint,
+           external_model_slug
     FROM agents
     WHERE id = ${id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
@@ -77,6 +85,13 @@ interface PatchBody {
   tools?: unknown[];
   model_slug?: string;
   budget_rub_monthly?: number;
+  // Connection editing (opt-in). provider_id → BYOK via catalog (external_openai,
+  // 0 commission). reset_connection → back to the AIAG gateway. Neither → unchanged.
+  provider_id?: string;
+  external_api_key?: string;
+  external_base_url?: string;
+  external_model_slug?: string;
+  reset_connection?: boolean;
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -110,6 +125,59 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       ? body.budget_rub_monthly
       : Number(existing.budget_rub_monthly);
 
+  // ---- Connection editing (opt-in) ----
+  // Mirrors the create route: BYOK via the catalog routes through external_openai
+  // (worker isExternal=true → 0 commission); we NEVER set agents.provider_id (that
+  // selects the markup branch). reset_connection puts the agent back on the AIAG
+  // gateway. Neither → connection columns untouched.
+  let changeConn = false;
+  let newConnType: 'aiag' | 'external_openai' = 'aiag';
+  let newExtBase: string | null = null;
+  let newExtKeyEnc: Buffer | null = null;
+  let newExtKeyHint: string | null = null;
+  let newExtModel: string | null = null;
+
+  const providerId = body.provider_id?.trim();
+  if (body.reset_connection === true) {
+    changeConn = true; // → aiag gateway, clear external_* (defaults above)
+  } else if (providerId) {
+    changeConn = true;
+    const prov = (await sql`
+      SELECT id, api_base, requires_base_url
+      FROM providers WHERE id = ${providerId} AND enabled = true
+    `) as unknown as Array<{ id: string; api_base: string | null; requires_base_url: boolean }>;
+    if (prov.length === 0) {
+      return NextResponse.json({ error: 'unknown_provider' }, { status: 400 });
+    }
+    const key = body.external_api_key?.trim() ?? '';
+    if (!key) return NextResponse.json({ error: 'external_api_key_required' }, { status: 400 });
+    let base: string;
+    if (prov[0].requires_base_url) {
+      const url = body.external_base_url?.trim() ?? '';
+      if (!url) return NextResponse.json({ error: 'external_base_url_required' }, { status: 400 });
+      const guard = validateExternalUrl(url);
+      if (!guard.ok) return NextResponse.json({ error: guard.reason }, { status: 400 });
+      base = url.replace(/\/+$/, '');
+    } else {
+      base = (prov[0].api_base ?? '').replace(/\/+$/, '');
+      if (!base) return NextResponse.json({ error: 'provider_misconfigured' }, { status: 400 });
+    }
+    newConnType = 'external_openai';
+    newExtBase = base;
+    newExtKeyEnc = encryptSecret(key);
+    newExtKeyHint = hintFromSecret(key);
+    newExtModel = body.external_model_slug?.trim() || modelSlug || null;
+  }
+
+  const setConn = changeConn
+    ? sql`,
+        connection_type = ${newConnType},
+        external_base_url = ${newExtBase},
+        external_api_key_encrypted = ${newExtKeyEnc},
+        external_api_key_hint = ${newExtKeyHint},
+        external_model_slug = ${newExtModel}`
+    : sql``;
+
   const upd = (await sql`
     UPDATE agents
     SET name = ${name},
@@ -118,12 +186,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         tools = ${sql.json(tools as never)},
         model_slug = ${modelSlug},
         budget_rub_monthly = ${budget},
-        updated_at = NOW()
+        updated_at = NOW()${setConn}
     WHERE id = ${params.id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
     RETURNING id::text, tg_user_id::text, template_kind, name, description,
               system_prompt, tools, model_slug, budget_rub_monthly::text,
-              status, created_at, updated_at
+              status, created_at, updated_at,
+              connection_type, external_base_url, external_api_key_hint,
+              external_model_slug
   `) as unknown as AgentRow[];
 
   return NextResponse.json({ agent: upd[0] });

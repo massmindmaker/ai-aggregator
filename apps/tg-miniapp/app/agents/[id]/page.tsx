@@ -15,6 +15,10 @@ interface Agent {
   model_slug: string | null;
   budget_rub_monthly: string;
   tools: unknown;
+  connection_type?: string;
+  external_base_url?: string | null;
+  external_api_key_hint?: string | null;
+  external_model_slug?: string | null;
 }
 
 // Tools implemented by the agent-worker (apps/agent-worker/src/tools.ts).
@@ -59,6 +63,14 @@ export default function AgentDetailPage() {
   const [eModelSlug, setEModelSlug] = useState('');
   const [eBudget, setEBudget] = useState(0);
   const [eTools, setETools] = useState<string[]>([]);
+  // connection editing
+  const [providers, setProviders] = useState<
+    { id: string; name: string; apiBase: string | null; requiresBaseUrl: boolean }[]
+  >([]);
+  const [connSel, setConnSel] = useState(''); // '' = не менять; 'aiag' = шлюз; <id> = провайдер
+  const [connKey, setConnKey] = useState('');
+  const [connUrl, setConnUrl] = useState('');
+  const [connModel, setConnModel] = useState('');
 
   const runActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
 
@@ -70,6 +82,10 @@ export default function AgentDetailPage() {
     setEModelSlug(agent.model_slug ?? '');
     setEBudget(Number(agent.budget_rub_monthly));
     setETools(Array.isArray(agent.tools) ? (agent.tools as string[]) : []);
+    setConnSel('');
+    setConnKey('');
+    setConnUrl('');
+    setConnModel('');
     setEditErr(null);
     setEditing(true);
   }
@@ -93,6 +109,20 @@ export default function AgentDetailPage() {
           model_slug: eModelSlug.trim(),
           budget_rub_monthly: eBudget,
           tools: eTools,
+          // Connection change is opt-in: 'aiag' → back to gateway; a provider id →
+          // BYOK (external_openai, 0 commission); '' → leave connection untouched.
+          ...(connSel === 'aiag'
+            ? { reset_connection: true }
+            : connSel
+              ? {
+                  provider_id: connSel,
+                  external_api_key: connKey.trim(),
+                  external_base_url: providers.find((p) => p.id === connSel)?.requiresBaseUrl
+                    ? connUrl.trim()
+                    : undefined,
+                  external_model_slug: connModel.trim() || undefined,
+                }
+              : {}),
         }),
       });
       if (!res.ok) {
@@ -135,6 +165,14 @@ export default function AgentDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch('/tg/api/tma/providers', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : { providers: [] }))
+      .then((j) => setProviders(Array.isArray(j.providers) ? j.providers : []))
+      .catch(() => {});
+  }, [token]);
 
   useEffect(() => {
     const hasActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
@@ -421,6 +459,81 @@ export default function AgentDetailPage() {
                   style={editInputStyle}
                 />
               </label>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  border: '1px solid var(--line)',
+                  borderRadius: 8,
+                  padding: 12,
+                  background: 'var(--bg-surface)',
+                }}
+              >
+                <span className="tma-card-text" style={{ fontWeight: 600 }}>
+                  Подключение
+                </span>
+                <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -4 }}>
+                  Сейчас:{' '}
+                  {agent.connection_type === 'external_openai'
+                    ? `свой провайдер${agent.external_api_key_hint ? ` (${agent.external_api_key_hint})` : ''} · 0 комиссии`
+                    : 'наш шлюз (с наценкой)'}
+                </p>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-text">Сменить на</span>
+                  <select
+                    value={connSel}
+                    onChange={(e) => setConnSel(e.target.value)}
+                    style={editInputStyle}
+                  >
+                    <option value="">— не менять —</option>
+                    <option value="aiag">Наш шлюз (с наценкой)</option>
+                    {providers.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — свой ключ, 0 комиссии
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {connSel && connSel !== 'aiag' && (
+                  <>
+                    {providers.find((p) => p.id === connSel)?.requiresBaseUrl && (
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span className="tma-card-text">URL</span>
+                        <input
+                          type="url"
+                          value={connUrl}
+                          onChange={(e) => setConnUrl(e.target.value)}
+                          placeholder="https://example.com/v1"
+                          style={editInputStyle}
+                        />
+                      </label>
+                    )}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span className="tma-card-text">API key (введи заново)</span>
+                      <input
+                        type="password"
+                        value={connKey}
+                        onChange={(e) => setConnKey(e.target.value)}
+                        placeholder="sk-…"
+                        autoComplete="off"
+                        style={editInputStyle}
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span className="tma-card-text">Модель (опционально)</span>
+                      <input
+                        type="text"
+                        value={connModel}
+                        onChange={(e) => setConnModel(e.target.value)}
+                        placeholder="gpt-4o"
+                        style={editInputStyle}
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
 
               {editErr && <div className="tma-error">Ошибка: {editErr}</div>}
 
