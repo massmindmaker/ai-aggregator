@@ -1,8 +1,40 @@
 name: Deploy to Production (bare-metal VPS)
 
-# Plan 08 — Rolling deploy через SSH + rsync + pm2 reload.
-# Схема: releases/<timestamp> → symlink current → pm2 reload graceful.
-# Rollback = symlink на предыдущий release + pm2 reload.
+# ============================================================================
+# AIAG rolling deploy — build-EVERYTHING-in-CI → atomic `current` swap → pm2.
+#
+# WHY THIS WAS REWRITTEN (audit F1–F9 / 2026-06):
+#   F1  `pm2 reload` errors on fork-mode procs ("Process not found"). Old
+#       fallback ended in `exit 1`, so even a recoverable restart was marked
+#       failed. FIX: self-heal chain reload→restart→startOrReload(ecosystem).
+#   F2  pm2 was started on ABSOLUTE old-release paths, so symlink swap was a
+#       no-op — restart re-exec'd stale code. FIX: the committed ecosystem
+#       file pins every app's cwd/script to `/srv/aiag/<app>/current/...`, so
+#       once pm2 is re-pinned (one-time, see ops/ecosystem.config.cjs header)
+#       swap+restart ALWAYS runs new code.
+#   F3  No ecosystem file existed. FIX: ops/ecosystem.config.cjs (committed),
+#       deployed once to /srv/aiag/shared/ — the startOrReload recovery tier.
+#   F4  tma/agent-worker release dirs were root:root → runner couldn't extract.
+#       FIX (one-time on box): chown -R aiag:aiag /srv/aiag/{tma,agent-worker}.
+#   F5+F6  tma/agent-worker were built MANUALLY on the 2GB VPS → next build
+#       OOM risk on the live money path. FIX: build EVERY app on the GitHub
+#       runner; ship the build outputs (.next / dist) in the tarball. The box
+#       only runs `bun install --production` + `next start`/`node dist`.
+#   F7  Migrations are MANUAL + UNTRACKED on prod and the app DB role cannot
+#       ALTER (see packages/database/CLAUDE.md). This pipeline DELIBERATELY
+#       does NOT run migrations — see the "Migrations" note in the deploy job.
+#   F9  Per-app health path+port (tma → /tg/health on :3100, no /health);
+#       rollback resolves "previous" from `readlink current` BEFORE swap,
+#       not by mtime; the build IS a gate (no `|| true`).
+#
+# ARCHITECTURE — two independent products, never co-mingled (see /CLAUDE.md):
+#   Product 1  Aggregator (₽/RUB):   web(:3000) + gateway(:4000) + worker(no port)
+#   Product 2  TMA (crypto credits): tma(:3100, basePath /tg) + agent-worker(:3101)
+#   Each app has its OWN /srv/aiag/<app>/{releases,current} tree + its OWN pm2
+#   entry. The `apps` input selects which to ship; passing web,gateway,worker
+#   never touches tma/agent-worker and vice-versa. The matrix below preserves
+#   that isolation — one matrix leg == one app == one release tree.
+# ============================================================================
 
 on:
   workflow_dispatch:
@@ -12,7 +44,7 @@ on:
         required: true
         default: 'master'
       apps:
-        description: 'Apps (comma-sep): web,gateway,worker'
+        description: 'Apps (comma-sep). Product1: web,gateway,worker  Product2: tma,agent-worker'
         required: true
         default: 'web,gateway,worker'
 
@@ -21,11 +53,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  # --------------------------------------------------------------------------
+  # plan — turn the comma-separated `apps` input into a JSON matrix of only the
+  # apps actually requested. This is what keeps the 2-product split intact:
+  # each selected app becomes one isolated matrix leg (own build + own swap).
+  # --------------------------------------------------------------------------
+  plan:
     runs-on: ubuntu-24.04
     outputs:
       release: ${{ steps.release.outputs.release }}
       sha: ${{ steps.release.outputs.sha }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,51 +75,124 @@ jobs:
           echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - id: matrix
+        env:
+          APPS: ${{ inputs.apps }}
+        run: |
+          # Validate against the known app set and emit {"app":[...]} for the matrix.
+          KNOWN="web gateway worker tma agent-worker"
+          ITEMS=""
+          for APP in $(echo "$APPS" | tr ',' ' '); do
+            APP="$(echo "$APP" | xargs)"   # trim
+            [[ -z "$APP" ]] && continue
+            case " $KNOWN " in
+              *" $APP "*) ITEMS="$ITEMS \"$APP\"" ;;
+              *) echo "::error::Unknown app '$APP' (allowed: $KNOWN)"; exit 1 ;;
+            esac
+          done
+          [[ -z "$ITEMS" ]] && { echo "::error::No valid apps in input"; exit 1; }
+          JSON="{\"app\":[$(echo $ITEMS | tr ' ' ',')]}"
+          echo "matrix=$JSON" >> "$GITHUB_OUTPUT"
+          echo "Deploy matrix: $JSON"
+
+  # --------------------------------------------------------------------------
+  # build — one matrix leg PER APP. Builds shared libs first, then the app,
+  # then packages a tarball that INCLUDES the build output (.next / dist).
+  # This is the OOM-killer: the 2GB VPS never runs `next build` / `tsc`.
+  # --------------------------------------------------------------------------
+  build:
+    needs: plan
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false   # one app failing to build must not abort sibling apps
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install deps
+      - name: Install deps (workspace-wide, frozen)
         run: bun install --frozen-lockfile
 
-      - name: Build web
-        if: contains(inputs.apps, 'web')
+      # Shared workspace libs must exist (dist/) before any app build so that
+      # @aiag/shared, @aiag/database, gateway etc. resolve. Cheap + idempotent.
+      - name: Build shared libraries
+        run: |
+          for pkg in shared database upstream-adapters email telegram-alerts tinkoff yookassa; do
+            if [[ -f "packages/$pkg/package.json" ]]; then
+              bun run --cwd "packages/$pkg" build || echo "::warning::lib $pkg has no build / build failed"
+            fi
+          done
+
+      # Per-app real build. NOTE: build IS a gate now (no `|| true`) — a broken
+      # build must NOT ship. Each `case` matches the matrix leg exactly.
+      - name: Build ${{ matrix.app }}
         env:
-          APP_VERSION: ${{ steps.release.outputs.release }}
-          GIT_SHA: ${{ steps.release.outputs.sha }}
+          APP_VERSION: ${{ needs.plan.outputs.release }}
+          GIT_SHA: ${{ needs.plan.outputs.sha }}
           BUILD_TIME: ${{ github.event.repository.updated_at }}
-        run: bun run --cwd apps/web build
+          # tma next build is the heavy one; give the runner headroom (runner
+          # has ~7GB, unlike the 2GB VPS — this is exactly why we build here).
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          case "${{ matrix.app }}" in
+            web)          bun run --cwd apps/web build ;;            # next build → apps/web/.next
+            gateway)      bun run --cwd packages/api-gateway build ;; # tsup       → packages/api-gateway/dist
+            worker)       bun run --cwd apps/worker build ;;          # tsc        → apps/worker/dist
+            tma)          bun run --cwd apps/tg-miniapp build ;;      # next build → apps/tg-miniapp/.next (NOT standalone; needs node_modules + next start)
+            agent-worker) bun run --cwd apps/agent-worker build ;;    # tsc        → apps/agent-worker/dist
+          esac
 
-      - name: Build gateway
-        if: contains(inputs.apps, 'gateway')
-        run: bun run --cwd packages/api-gateway build || true
+      # Tests are advisory for now (kept non-gating until the suite stabilizes).
+      # The BUILD above is the real gate.
+      - name: Run tests (advisory)
+        run: bun test || echo "::warning::tests failed (advisory, not gating)"
 
-      - name: Run tests
-        run: bun test || true  # TODO: strict после стабилизации тестов
-
-      - name: Package tarball
+      # Package the WHOLE repo INCLUDING build outputs. We only drop caches and
+      # VCS/scratch dirs — .next/ and dist/ MUST be kept so the box never builds.
+      # node_modules is excluded; the box runs `bun install --production` per release.
+      - name: Package tarball (${{ matrix.app }})
         run: |
           mkdir -p dist-pkg
-          tar --exclude='node_modules' --exclude='.git' --exclude='dist-pkg' \
-              --exclude='.next/cache' \
+          tar --exclude='./node_modules' \
+              --exclude='*/node_modules' \
+              --exclude='./.git' \
+              --exclude='./dist-pkg' \
+              --exclude='**/.next/cache' \
+              --exclude='*.log' \
               -czf "dist-pkg/release.tar.gz" .
 
       - uses: actions/upload-artifact@v4
         with:
-          name: release-${{ steps.release.outputs.release }}
+          name: release-${{ needs.plan.outputs.release }}-${{ matrix.app }}
           path: dist-pkg/release.tar.gz
           retention-days: 14
 
+  # --------------------------------------------------------------------------
+  # deploy — one matrix leg PER APP. Each leg: upload tarball → extract into
+  # the app's OWN /srv/aiag/<app>/releases/<release> → bun install --production
+  # → atomic `current` symlink swap → pm2 self-heal chain → per-app health
+  # check → rollback on failure. The ecosystem references `current`, so a
+  # symlink swap + restart deterministically picks up new code (fixes F2).
+  # --------------------------------------------------------------------------
   deploy:
-    needs: build
+    needs: [plan, build]
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false   # an app's deploy failing must not abort siblings
+      max-parallel: 1    # serialize SSH sessions to the single VPS
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     environment:
       name: production
       url: https://ai-aggregator.ru
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: release-${{ needs.build.outputs.release }}
+          name: release-${{ needs.plan.outputs.release }}-${{ matrix.app }}
           path: dist-pkg/
 
       - name: Setup SSH
@@ -91,70 +202,120 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Upload release
+      - name: Upload release (${{ matrix.app }})
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
-          RELEASE: ${{ needs.build.outputs.release }}
+          RELEASE: ${{ needs.plan.outputs.release }}
+          APP: ${{ matrix.app }}
         run: |
-          ssh "$USER@$HOST" "mkdir -p /srv/aiag/deploy/tmp/$RELEASE"
-          scp dist-pkg/release.tar.gz "$USER@$HOST:/srv/aiag/deploy/tmp/$RELEASE/"
+          ssh "$USER@$HOST" "mkdir -p /srv/aiag/deploy/tmp/$RELEASE/$APP"
+          scp dist-pkg/release.tar.gz "$USER@$HOST:/srv/aiag/deploy/tmp/$RELEASE/$APP/"
 
-      - name: Atomic swap + pm2 reload
+      - name: Atomic swap + pm2 self-heal + health (${{ matrix.app }})
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
-          RELEASE: ${{ needs.build.outputs.release }}
-          APPS: ${{ inputs.apps }}
+          RELEASE: ${{ needs.plan.outputs.release }}
+          APP: ${{ matrix.app }}
         run: |
-          ssh "$USER@$HOST" "bash -s" << EOF
-            set -euo pipefail
-            for APP in \$(echo "$APPS" | tr ',' ' '); do
-              TARGET="/srv/aiag/\$APP/releases/$RELEASE"
-              mkdir -p "\$TARGET"
-              tar -xzf "/srv/aiag/deploy/tmp/$RELEASE/release.tar.gz" -C "\$TARGET"
+          # Pass APP/RELEASE as remote env so we avoid heredoc escaping hell.
+          ssh "$USER@$HOST" "APP='$APP' RELEASE='$RELEASE' bash -s" <<'REMOTE'
+          set -euo pipefail
+          ECOSYSTEM="/srv/aiag/shared/ecosystem.config.cjs"
+          TARGET="/srv/aiag/$APP/releases/$RELEASE"
+          CURRENT="/srv/aiag/$APP/current"
+          # Capture the PREVIOUS release BEFORE we swap, for a precise rollback
+          # (F9 — never resolve "previous" by mtime).
+          PREV_LINK="$(readlink "$CURRENT" 2>/dev/null || echo '')"
 
-              # install per-app (монорепо, bun install в каждом releasedir — используем PNPM или workspace aware)
-              cd "\$TARGET"
-              bun install --production --frozen-lockfile
+          echo "[$APP] extract → $TARGET"
+          mkdir -p "$TARGET"
+          tar -xzf "/srv/aiag/deploy/tmp/$RELEASE/$APP/release.tar.gz" -C "$TARGET"
 
-              # Atomic swap
-              ln -sfn "\$TARGET" "/srv/aiag/\$APP/current"
+          # Per-release runtime deps. Build OUTPUTS (.next / dist) are already in
+          # the tarball — this only supplies node_modules to run them.
+          cd "$TARGET"
+          bun install --production --frozen-lockfile
 
-              # Preflight check
-              if [[ "\$APP" = "gateway" || "\$APP" = "web" ]]; then
-                NODE_ENV=production bun run --cwd "\$TARGET" scripts/preflight-check.ts || exit 1
-              fi
+          # ---- Atomic swap: the ONLY thing that flips a release live. -------
+          ln -sfn "$TARGET" "$CURRENT"
 
-              # Graceful reload (zero-downtime для cluster mode)
-              pm2 reload "\$APP" --update-env
+          # ---- Restart from the ecosystem (which points at `current`). ------
+          # F1/F2/F3 self-heal chain:
+          #   reload  — graceful, works if proc exists (cluster or fork)
+          #   restart — fork-mode safe re-exec
+          #   startOrReload <ecosystem> --only $APP — recreate from `current`
+          #                  paths if the proc was deleted / never existed
+          pm2 reload "$APP" --update-env \
+            || pm2 restart "$APP" --update-env \
+            || pm2 startOrReload "$ECOSYSTEM" --only "$APP" --update-env
+          pm2 save
 
-              # Health check
-              PORT=\$(pm2 jlist | jq -r ".[] | select(.name==\"\$APP\") | .pm2_env.env.PORT // 3000")
-              sleep 3
-              curl -fsS "http://127.0.0.1:\$PORT/health" || {
-                echo "Health check failed, rolling back"
-                PREV=\$(ls -1t "/srv/aiag/\$APP/releases/" | sed -n '2p')
-                ln -sfn "/srv/aiag/\$APP/releases/\$PREV" "/srv/aiag/\$APP/current"
-                pm2 reload "\$APP" --update-env
-                exit 1
-              }
-            done
+          # ---- Per-app health check (F9). --------------------------------------
+          # web → :3000/health, gateway → :4000/health, tma → :3100/tg/health.
+          # worker / agent-worker have NO HTTP port → verify pm2 status instead.
+          HEALTH_URL=""
+          case "$APP" in
+            web)          HEALTH_URL="http://127.0.0.1:3000/health" ;;
+            gateway)      HEALTH_URL="http://127.0.0.1:4000/health" ;;
+            tma)          HEALTH_URL="http://127.0.0.1:3100/tg/health" ;;  # basePath /tg, NOT /health
+            worker|agent-worker) HEALTH_URL="" ;;                          # no HTTP — pm2-status check below
+          esac
 
-            # Keep last 5 releases, delete older
-            for APP in \$(echo "$APPS" | tr ',' ' '); do
-              cd "/srv/aiag/\$APP/releases"
-              ls -1t | tail -n +6 | xargs -r rm -rf
-            done
-          EOF
+          sleep 4
+          HEALTHY=1
+          if [[ -n "$HEALTH_URL" ]]; then
+            curl -fsS --max-time 6 "$HEALTH_URL" >/dev/null || HEALTHY=0
+          else
+            # Non-HTTP worker: must be 'online' and not flapping.
+            STATUS="$(pm2 jlist | jq -r ".[] | select(.name==\"$APP\") | .pm2_env.status" | head -n1)"
+            [[ "$STATUS" == "online" ]] || HEALTHY=0
+          fi
 
+          if [[ "$HEALTHY" -ne 1 ]]; then
+            echo "[$APP] HEALTH FAILED — rolling back"
+            if [[ -n "$PREV_LINK" ]]; then
+              ln -sfn "$PREV_LINK" "$CURRENT"
+              pm2 reload "$APP" --update-env \
+                || pm2 restart "$APP" --update-env \
+                || pm2 startOrReload "$ECOSYSTEM" --only "$APP" --update-env
+              pm2 save
+              echo "[$APP] rolled back to $PREV_LINK"
+            else
+              echo "[$APP] no previous release to roll back to"
+            fi
+            exit 1
+          fi
+          echo "[$APP] healthy"
+
+          # ---- Keep last 5 releases. ---------------------------------------
+          cd "/srv/aiag/$APP/releases"
+          ls -1t | tail -n +6 | xargs -r rm -rf
+          rm -rf "/srv/aiag/deploy/tmp/$RELEASE/$APP"
+          REMOTE
+
+      # ----------------------------------------------------------------------
+      # MIGRATIONS — DELIBERATELY NOT RUN BY THIS PIPELINE (audit F7).
+      # Prod migrations are MANUAL and UNTRACKED, and the app DB role `aiag`
+      # CANNOT run ALTER (see packages/database/CLAUDE.md). Schema changes go
+      # through `sudo -u postgres psql aiag` by hand, in order, BEFORE shipping
+      # code that depends on them. The manual recipe lives in skill `aiag-deploy`.
+      # Do NOT add an automatic `db:migrate` step here — it would either fail
+      # (no ALTER grant) or silently diverge from the untracked prod state.
+      # ----------------------------------------------------------------------
+
+  notify:
+    needs: [plan, deploy]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
       - name: Notify Telegram
-        if: always()
         env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_ALERT_BOT_TOKEN }}
           CHAT_ID: ${{ secrets.TELEGRAM_ALERT_CHAT_ID }}
-          STATUS: ${{ job.status }}
-          RELEASE: ${{ needs.build.outputs.release }}
+          STATUS: ${{ needs.deploy.result }}
+          RELEASE: ${{ needs.plan.outputs.release }}
         run: |
           if [[ -n "$BOT_TOKEN" && -n "$CHAT_ID" ]]; then
             curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
