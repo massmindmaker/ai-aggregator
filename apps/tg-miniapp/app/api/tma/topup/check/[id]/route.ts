@@ -10,7 +10,7 @@ interface Topup {
   id: string;
   tg_user_id: string;
   amount_nano_ton: string;
-  amount_rub: string;
+  amount_credits: string; // D-1: credited amount in US cents (BIGINT as text)
   comment_tag: string;
   status: string;
   tx_hash: string | null;
@@ -49,7 +49,7 @@ export async function POST(
     SELECT id::text,
            tg_user_id::text AS tg_user_id,
            amount_nano_ton::text AS amount_nano_ton,
-           amount_rub::text AS amount_rub,
+           amount_credits::text AS amount_credits,
            comment_tag,
            status,
            tx_hash
@@ -130,15 +130,44 @@ export async function POST(
     return NextResponse.json({ status: 'pending' });
   }
 
-  // Atomic confirm + credit. Re-check status in WHERE to avoid double-credit.
-  const upd = (await sql`
-    UPDATE tg_topups
-    SET status = 'confirmed', tx_hash = ${matched.hash}, confirmed_at = NOW()
-    WHERE id = ${topup.id}::uuid AND status = 'pending'
-    RETURNING id::text
-  `) as unknown as Array<{ id: string }>;
+  // Atomic confirm + credit + ledger, all in ONE transaction so the cached
+  // balance and the append-only ledger can never diverge. Re-check status in the
+  // WHERE to avoid a double-credit under concurrent polls.
+  let credited = false;
+  await sql.begin(async (sql) => {
+    const upd = (await sql`
+      UPDATE tg_topups
+      SET status = 'confirmed', tx_hash = ${matched!.hash}, confirmed_at = NOW()
+      WHERE id = ${topup.id}::uuid AND status = 'pending'
+      RETURNING id::text
+    `) as unknown as Array<{ id: string }>;
 
-  if (upd.length === 0) {
+    if (upd.length === 0) return; // already confirmed by a concurrent call
+
+    // D-1: credit the spendable balance in credits (US cents, BIGINT), and
+    // capture the post-credit balance for the ledger's balance_after.
+    const bal = (await sql`
+      INSERT INTO tg_user_balances (tg_user_id, balance_credits, updated_at)
+      VALUES (${topup.tg_user_id}::bigint, ${topup.amount_credits}::bigint, NOW())
+      ON CONFLICT (tg_user_id) DO UPDATE
+        SET balance_credits = tg_user_balances.balance_credits + EXCLUDED.balance_credits,
+            updated_at = NOW()
+      RETURNING balance_credits::text AS balance_credits
+    `) as unknown as Array<{ balance_credits: string }>;
+
+    // Append-only ledger topup entry (idempotent via uq_ledger_ref).
+    await sql`
+      INSERT INTO tg_ledger_entries
+        (tg_user_id, delta_credits, kind, ref_kind, ref_id, balance_after)
+      VALUES
+        (${topup.tg_user_id}::bigint, ${topup.amount_credits}::bigint, 'topup',
+         'tg_topup', ${topup.id}::uuid, ${bal[0]!.balance_credits}::bigint)
+      ON CONFLICT (ref_kind, ref_id, kind) WHERE ref_id IS NOT NULL DO NOTHING
+    `;
+    credited = true;
+  });
+
+  if (!credited) {
     // Already confirmed by a concurrent call — re-read final state.
     const re = (await sql`
       SELECT status, tx_hash FROM tg_topups WHERE id = ${topup.id}::uuid LIMIT 1
@@ -146,17 +175,9 @@ export async function POST(
     return NextResponse.json({ status: re[0]?.status ?? 'confirmed', tx_hash: re[0]?.tx_hash });
   }
 
-  await sql`
-    INSERT INTO tg_user_balances (tg_user_id, balance_rub, updated_at)
-    VALUES (${topup.tg_user_id}::bigint, ${topup.amount_rub}::numeric, NOW())
-    ON CONFLICT (tg_user_id) DO UPDATE
-      SET balance_rub = tg_user_balances.balance_rub + EXCLUDED.balance_rub,
-          updated_at = NOW()
-  `;
-
   return NextResponse.json({
     status: 'confirmed',
     tx_hash: matched.hash,
-    credited_rub: topup.amount_rub,
+    credited_credits: topup.amount_credits,
   });
 }

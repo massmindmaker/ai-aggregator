@@ -15,9 +15,10 @@ export interface AgentRow {
   system_prompt: string;
   tools: string[];
   model_slug: string | null;
-  budget_rub_monthly: string;
-  daily_budget_rub: string;
-  spent_today_rub: string;
+  // D-1: credit unit = integer US cents (BIGINT). 1 credit = $0.01.
+  budget_credits_monthly: string;
+  daily_budget_credits: string;
+  spent_today_credits: string;
   spent_today_date: string;
   status: string;
   connection_type: 'aiag' | 'external_openai';
@@ -60,10 +61,10 @@ export async function loadRun(runId: string): Promise<AgentRunRow | null> {
 export async function loadAgent(agentId: string): Promise<AgentRow | null> {
   const rows = (await sql`
     SELECT id::text, tg_user_id::text, name, system_prompt, tools, model_slug,
-           budget_rub_monthly::text  AS budget_rub_monthly,
-           daily_budget_rub::text    AS daily_budget_rub,
-           spent_today_rub::text     AS spent_today_rub,
-           spent_today_date::text    AS spent_today_date,
+           budget_credits_monthly::text AS budget_credits_monthly,
+           daily_budget_credits::text   AS daily_budget_credits,
+           spent_today_credits::text    AS spent_today_credits,
+           spent_today_date::text       AS spent_today_date,
            status,
            connection_type,
            external_base_url,
@@ -136,12 +137,12 @@ export async function loadProviderCredential(
 }
 
 /**
- * Sum cost_rub spent by this tg_user this calendar month (UTC).
+ * Sum cost_credits (US cents) spent by this tg_user this calendar month (UTC).
  * Used for the monthly aggregate budget gate at the user level.
  */
 export async function sumMonthlySpend(tgUserId: string): Promise<number> {
   const rows = (await sql`
-    SELECT COALESCE(SUM(cost_rub), 0)::text AS total
+    SELECT COALESCE(SUM(cost_credits), 0)::text AS total
     FROM agent_runs
     WHERE tg_user_id = ${tgUserId}::bigint
       AND created_at >= date_trunc('month', NOW())
@@ -155,33 +156,33 @@ export async function sumMonthlySpend(tgUserId: string): Promise<number> {
  */
 export async function getOrResetDailyBucket(
   agentId: string,
-): Promise<{ daily_budget_rub: number; spent_today_rub: number }> {
+): Promise<{ daily_budget_credits: number; spent_today_credits: number }> {
   const rows = (await sql`
     UPDATE agents
-       SET spent_today_rub  = CASE
+       SET spent_today_credits = CASE
              WHEN spent_today_date < (now() AT TIME ZONE 'Europe/Moscow')::date THEN 0
-             ELSE spent_today_rub
+             ELSE spent_today_credits
            END,
            spent_today_date = (now() AT TIME ZONE 'Europe/Moscow')::date
      WHERE id = ${agentId}::uuid
-     RETURNING daily_budget_rub::text AS daily_budget_rub,
-               spent_today_rub::text  AS spent_today_rub
-  `) as unknown as Array<{ daily_budget_rub: string; spent_today_rub: string }>;
+     RETURNING daily_budget_credits::text AS daily_budget_credits,
+               spent_today_credits::text  AS spent_today_credits
+  `) as unknown as Array<{ daily_budget_credits: string; spent_today_credits: string }>;
   const r = rows[0];
-  if (!r) return { daily_budget_rub: 0, spent_today_rub: 0 };
+  if (!r) return { daily_budget_credits: 0, spent_today_credits: 0 };
   return {
-    daily_budget_rub: Number(r.daily_budget_rub),
-    spent_today_rub: Number(r.spent_today_rub),
+    daily_budget_credits: Number(r.daily_budget_credits),
+    spent_today_credits: Number(r.spent_today_credits),
   };
 }
 
 export async function incrementDailySpend(
   agentId: string,
-  deltaRub: number,
+  deltaCredits: number,
 ): Promise<void> {
   await sql`
     UPDATE agents
-       SET spent_today_rub = spent_today_rub + ${deltaRub}
+       SET spent_today_credits = spent_today_credits + ${deltaCredits}
      WHERE id = ${agentId}::uuid
   `;
 }
@@ -259,7 +260,7 @@ export async function markStarted(runId: string): Promise<void> {
 export async function markCompleted(
   runId: string,
   output: string,
-  costRub: number,
+  costCredits: number,
   tokensIn: number,
   tokensOut: number,
 ): Promise<void> {
@@ -267,7 +268,7 @@ export async function markCompleted(
     UPDATE agent_runs
     SET status = 'completed',
         output = ${output},
-        cost_rub = ${costRub},
+        cost_credits = ${costCredits},
         tokens_in = ${tokensIn},
         tokens_out = ${tokensOut},
         completed_at = NOW()
@@ -287,23 +288,24 @@ export async function markFailed(runId: string, error: string): Promise<void> {
 
 // -- R0-2: prepaid balance (tg_user_balances) -----------------------------
 //
-// tg_user_balances.balance_rub IS the live spendable balance: the topup-check
-// route credits it (`INSERT … ON CONFLICT DO UPDATE SET balance_rub = balance
-// + EXCLUDED.balance_rub`, migration 0019) and the wallet route reads it.
-// `tg_users` is NOT the balance table in this repo — debit tg_user_balances.
+// D-1: tg_user_balances.balance_credits IS the live spendable balance, in
+// integer US cents (1 credit = $0.01). The topup-check route credits it
+// (`INSERT … ON CONFLICT DO UPDATE SET balance_credits = balance + EXCLUDED`,
+// migration 0029) and the wallet route reads it. `tg_users` is NOT the balance
+// table in this repo — debit tg_user_balances.
 
 /**
- * Live spendable balance (₽) for a tg_user. Returns 0 when no row exists
- * (no row ⇒ never topped up ⇒ zero balance), never null/throws.
+ * Live spendable balance (credits = US cents) for a tg_user. Returns 0 when no
+ * row exists (no row ⇒ never topped up ⇒ zero balance), never null/throws.
  */
 export async function getBalance(tgUserId: string): Promise<number> {
   const rows = (await sql`
-    SELECT COALESCE(balance_rub, 0)::text AS balance_rub
+    SELECT COALESCE(balance_credits, 0)::text AS balance_credits
     FROM tg_user_balances
     WHERE tg_user_id = ${tgUserId}::bigint
     LIMIT 1
-  `) as unknown as Array<{ balance_rub: string }>;
-  return Number(rows[0]?.balance_rub ?? 0);
+  `) as unknown as Array<{ balance_credits: string }>;
+  return Number(rows[0]?.balance_credits ?? 0);
 }
 
 /** Thrown when the guarded balance debit affects 0 rows (insufficient funds). */
@@ -328,20 +330,27 @@ export class InsufficientBalanceError extends Error {
  * so cost is never recorded without a debit, and a failed daily-spend guard
  * rolls the balance debit back too.
  *
- * External (user-supplied upstream) runs cost us 0 ₽ → skip the daily-spend
- * guard and the balance debit (only the run row is marked completed).
+ * External (user-supplied upstream) runs cost us 0 credits → skip the daily-spend
+ * guard, the balance debit, and the ledger entry (only the run row is marked
+ * completed).
+ *
+ * D-1: the append-only `tg_ledger_entries` row (the immutable audit truth) is
+ * written INSIDE this same `sql.begin`, right after the guarded debit, using the
+ * debit's `RETURNING balance_credits` as `balance_after`. Cached balance and
+ * ledger can therefore never diverge — they commit or roll back together. The
+ * UNIQUE (ref_kind, ref_id, kind) index makes a settle retry idempotent.
  */
 export async function settleRun(args: {
   runId: string;
   tgUserId: string;
   agentId: string;
   output: string;
-  costRub: number;
+  costCredits: number;
   tokensIn: number;
   tokensOut: number;
   isExternal: boolean;
 }): Promise<void> {
-  const { runId, tgUserId, agentId, output, costRub, tokensIn, tokensOut, isExternal } = args;
+  const { runId, tgUserId, agentId, output, costCredits, tokensIn, tokensOut, isExternal } = args;
   // Plain sql.begin → READ COMMITTED (the chosen approach). Use the
   // callback-scoped `sql`, not the module-level one, so queries stay in-tx.
   await sql.begin(async (sql) => {
@@ -349,7 +358,7 @@ export async function settleRun(args: {
       UPDATE agent_runs
       SET status = 'completed',
           output = ${output},
-          cost_rub = ${costRub},
+          cost_credits = ${costCredits},
           tokens_in = ${tokensIn},
           tokens_out = ${tokensOut},
           completed_at = NOW()
@@ -361,22 +370,35 @@ export async function settleRun(args: {
     // R0-3: atomic guarded daily-spend increment (kills the 4× TOCTOU).
     const daily = (await sql`
       UPDATE agents
-      SET spent_today_rub = spent_today_rub + ${costRub}
+      SET spent_today_credits = spent_today_credits + ${costCredits}
       WHERE id = ${agentId}::uuid
-        AND spent_today_rub + ${costRub} <= daily_budget_rub
+        AND spent_today_credits + ${costCredits} <= daily_budget_credits
       RETURNING id::text
     `) as unknown as Array<{ id: string }>;
     if (daily.length === 0) throw new Error('budget_exceeded_daily_settle');
 
-    // R0-2: guarded balance debit on the live spendable balance.
+    // R0-2: guarded balance debit on the live spendable balance (integer cents).
     const debit = (await sql`
       UPDATE tg_user_balances
-      SET balance_rub = balance_rub - ${costRub},
+      SET balance_credits = balance_credits - ${costCredits},
           updated_at = NOW()
       WHERE tg_user_id = ${tgUserId}::bigint
-        AND balance_rub >= ${costRub}
-      RETURNING balance_rub::text
-    `) as unknown as Array<{ balance_rub: string }>;
+        AND balance_credits >= ${costCredits}
+      RETURNING balance_credits::text
+    `) as unknown as Array<{ balance_credits: string }>;
     if (debit.length === 0) throw new InsufficientBalanceError();
+
+    // D-1: append-only ledger entry (run debit) in the SAME tx. delta is the
+    // negative of the cost; balance_after is the just-debited cached balance.
+    // ON CONFLICT DO NOTHING absorbs an idempotent settle retry (uq_ledger_ref).
+    const balanceAfter = debit[0]!.balance_credits;
+    await sql`
+      INSERT INTO tg_ledger_entries
+        (tg_user_id, delta_credits, kind, ref_kind, ref_id, balance_after)
+      VALUES
+        (${tgUserId}::bigint, ${-costCredits}, 'run_debit', 'agent_run',
+         ${runId}::uuid, ${balanceAfter}::bigint)
+      ON CONFLICT (ref_kind, ref_id, kind) WHERE ref_id IS NOT NULL DO NOTHING
+    `;
   });
 }

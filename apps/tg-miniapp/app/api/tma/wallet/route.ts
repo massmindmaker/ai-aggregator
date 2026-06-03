@@ -29,13 +29,14 @@ export async function GET(req: NextRequest) {
   }>;
 
   const balanceRows = (await sql`
-    SELECT balance_rub::text AS balance_rub
+    SELECT balance_credits::text AS balance_credits
     FROM tg_user_balances
     WHERE tg_user_id = ${tgUserId}::bigint
     LIMIT 1
-  `) as unknown as Array<{ balance_rub: string }>;
+  `) as unknown as Array<{ balance_credits: string }>;
 
-  const balance_rub = balanceRows[0]?.balance_rub ?? '0';
+  // D-1: balance is integer US cents (1 credit = $0.01). Returned as a string.
+  const balance_credits = balanceRows[0]?.balance_credits ?? '0';
 
-  return NextResponse.json({ wallets, balance_rub });
+  return NextResponse.json({ wallets, balance_credits });
 }

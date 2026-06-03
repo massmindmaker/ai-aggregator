@@ -17,9 +17,9 @@ type Status =
 
 interface InitResp {
   topup_id: string;
-  amount_rub: number;
+  amount_credits: number;
   amount_nano_ton: string;
-  rate_rub_per_ton: number;
+  rate_usd_cents_per_ton: number;
   comment: string;
   comment_tag: string;
   transaction: {
@@ -28,11 +28,18 @@ interface InitResp {
   };
 }
 
+// D-1: amounts are integer credits (US cents, 1 credit = $0.01).
+// Presets = $2 / $5 / $10 / $20. MIN 100 cr ($1), MAX 50 000 cr ($500).
 const PRESETS = [200, 500, 1000, 2000];
 const MIN = 100;
 const MAX = 50_000;
 const POLL_INTERVAL_MS = 5_000;
 const POLL_MAX_ATTEMPTS = 120; // 10 min
+
+// Format integer cents as "N.NN" credits for display.
+function fmtCredits(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
 
 function nanoToTon(nano: string): string {
   try {
@@ -95,7 +102,7 @@ export default function TopupPage() {
       return;
     }
     if (!Number.isFinite(amount) || amount < MIN || amount > MAX) {
-      setErrorMsg(`Сумма должна быть от ${MIN} до ${MAX} ₽`);
+      setErrorMsg(`Сумма должна быть от ${fmtCredits(MIN)} до ${fmtCredits(MAX)} cr`);
       return;
     }
 
@@ -107,7 +114,7 @@ export default function TopupPage() {
           'content-type': 'application/json',
           authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ amount_rub: amount, wallet_address: userAddress }),
+        body: JSON.stringify({ amount_credits: amount, wallet_address: userAddress }),
       });
       const j = await r.json();
       if (!r.ok) {
@@ -170,7 +177,7 @@ export default function TopupPage() {
                 className={`tma-btn ${amount === p ? 'tma-btn--primary' : ''}`}
                 onClick={() => setAmount(p)}
               >
-                {p} ₽
+                {fmtCredits(p)} cr
               </button>
             ))}
           </div>
@@ -212,7 +219,7 @@ export default function TopupPage() {
             </>
           ) : status === 'confirmed' ? (
             <div className="tma-success">
-              ✓ Зачислено {init?.amount_rub} ₽ на ваш баланс.
+              ✓ Зачислено {init ? fmtCredits(init.amount_credits) : '0.00'} cr на ваш баланс.
               <div className="tma-cta" style={{ marginTop: 12 }}>
                 <Link href="/profile" className="tma-btn tma-btn--primary">
                   В профиль
@@ -235,7 +242,7 @@ export default function TopupPage() {
               {status === 'awaiting_signature' && 'Подтвердите в кошельке…'}
               {status === 'submitted' && 'Отправлено, ждём блок…'}
               {status === 'polling' && 'Ждём подтверждения сети…'}
-              {(status === 'idle' || status === 'error') && `Оплатить ${amount} ₽`}
+              {(status === 'idle' || status === 'error') && `Оплатить ${fmtCredits(amount)} cr`}
             </button>
           )}
 

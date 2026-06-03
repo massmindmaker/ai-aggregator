@@ -82,7 +82,10 @@ async function createTask(
   byokKey?: string,
 ): Promise<MediaJob> {
   const apiKey = selectKey(byokKey);
-  if (!apiKey) throw new Error('KIE_API_KEY not configured');
+  if (!apiKey) {
+    logger.warn({ model }, 'kie_apikey_missing');
+    throw new Error('image service not configured');
+  }
   const family = familyOf(model);
   const ep = endpointsFor(family);
   const url = `${KIE_BASE}${ep.create}`;
@@ -108,20 +111,23 @@ async function createTask(
       { model, family, url, status: res.status, body: text.slice(0, 500) },
       'kie_submit_error',
     );
-    throw new Error(`Kie ${family} ${res.status}: ${text.slice(0, 200)}`);
+    throw new Error(`upstream error ${res.status}`);
   }
   let data: { code?: number; msg?: string; data?: { taskId?: string } };
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`Kie ${family} non-JSON: ${text.slice(0, 200)}`);
+    logger.warn({ family, body: text.slice(0, 500) }, 'kie_non_json');
+    throw new Error('upstream error: malformed response');
   }
   if (data?.code && data.code !== 200) {
-    throw new Error(`Kie ${family} code=${data.code}: ${data.msg ?? 'unknown'}`);
+    logger.warn({ family, code: data.code, msg: data.msg }, 'kie_error_code');
+    throw new Error(`upstream error code=${data.code}`);
   }
   const taskId = data?.data?.taskId;
   if (!taskId) {
-    throw new Error(`Kie ${family} returned no taskId: ${text.slice(0, 200)}`);
+    logger.warn({ family, body: text.slice(0, 500) }, 'kie_no_taskid');
+    throw new Error('upstream error: no job id');
   }
   logger.info({ model, family, taskId, ms: Date.now() - start }, 'kie_submit_ok');
   return {
@@ -164,7 +170,10 @@ function extractUrls(resultJson?: string): string[] {
 
 async function pollOnce(prefixedJobId: string, byokKey?: string): Promise<MediaJob> {
   const apiKey = selectKey(byokKey);
-  if (!apiKey) throw new Error('KIE_API_KEY not configured');
+  if (!apiKey) {
+    logger.warn({ jobId: prefixedJobId }, 'kie_apikey_missing');
+    throw new Error('image service not configured');
+  }
   // Job ids are stored as "<family>:<taskId>" so we know which status endpoint
   // to hit. Older callers passing a bare taskId default to the unified jobs API.
   const sep = prefixedJobId.indexOf(':');
@@ -178,7 +187,8 @@ async function pollOnce(prefixedJobId: string, byokKey?: string): Promise<MediaJ
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`Kie recordInfo ${res.status}: ${text.slice(0, 200)}`);
+    logger.warn({ status: res.status, body: text.slice(0, 500) }, 'kie_recordinfo_error');
+    throw new Error(`upstream error ${res.status}`);
   }
   const body = (await res.json()) as KieRecordResponse;
   const s = (body?.data?.state ?? '').toLowerCase();
@@ -204,7 +214,8 @@ async function pollOnce(prefixedJobId: string, byokKey?: string): Promise<MediaJ
 
 export const kieUpstream: UpstreamAdapter = {
   async chat(_req: ChatRequest): Promise<ChatResponse> {
-    throw new Error('Kie does not support chat completions');
+    logger.warn({}, 'kie_chat_unsupported');
+    throw new Error('this model does not support chat completions');
   },
 
   async imageGeneration(req: ImageRequest): Promise<MediaJob> {
@@ -232,7 +243,8 @@ export const kieUpstream: UpstreamAdapter = {
   },
 
   async audioTranscription(_req: AudioTranscriptionRequest): Promise<MediaJob> {
-    throw new Error('Kie does not provide STT; use a Whisper-capable upstream');
+    logger.warn({}, 'kie_stt_unsupported');
+    throw new Error('speech-to-text is not available for this model');
   },
 
   async pollJob(jobId: string): Promise<MediaJob> {

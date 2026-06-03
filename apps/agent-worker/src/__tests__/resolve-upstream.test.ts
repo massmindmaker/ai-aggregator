@@ -27,9 +27,9 @@ function makeAgent(overrides: Partial<AgentRow> = {}): AgentRow {
     system_prompt: 'be helpful',
     tools: [],
     model_slug: null,
-    budget_rub_monthly: '1000',
-    daily_budget_rub: '100',
-    spent_today_rub: '0',
+    budget_credits_monthly: '100000',
+    daily_budget_credits: '10000',
+    spent_today_credits: '0',
     spent_today_date: '2026-06-02',
     status: 'active',
     connection_type: 'aiag',
@@ -161,7 +161,7 @@ describe('callWithFallback — gateway → OpenRouter degraded fallback', () => 
     // D-0: the OpenRouter fallback response carries no gateway billing headers,
     // so the caller must NOT treat it as authoritatively billed.
     expect(out.billedByGateway).toBe(false);
-    expect(out.chargedRub).toBe(0);
+    expect(out.chargedCredits).toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     // assert the second hop hit openrouter with the OPENROUTER_API_KEY bearer
     const secondCall = fetchMock.mock.calls[1];
@@ -186,14 +186,17 @@ describe('callWithFallback — gateway → OpenRouter degraded fallback', () => 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('D-0: gateway 200 WITH billing headers → billedByGateway + authoritative ₽', async () => {
+  it('D-0/D-1: gateway 200 WITH micro-USD billing headers → billedByGateway + authoritative credits', async () => {
+    // Headers are integer micro-USD ($0.000001). credits = ceil(micro / 10_000):
+    //   charged 123_400 µ$ = $0.1234 → ceil(12.34) = 13 credits
+    //   upstream 90_000 µ$ = $0.09   → ceil(9)     = 9  credits
     const fetchMock = vi.fn(async () =>
       new Response(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'hi' } }] }), {
         status: 200,
         headers: {
           'content-type': 'application/json',
-          'x-aiag-charged-rub': '12.3400',
-          'x-aiag-upstream-cost-rub': '9.0000',
+          'x-aiag-charged-usd-micro': '123400',
+          'x-aiag-upstream-cost-usd-micro': '90000',
         },
       }),
     );
@@ -203,10 +206,10 @@ describe('callWithFallback — gateway → OpenRouter degraded fallback', () => 
       { model: 'm', messages: [] },
     );
     expect(out.billedByGateway).toBe(true);
-    expect(out.chargedRub).toBeCloseTo(12.34, 6);
-    expect(out.upstreamCostRub).toBeCloseTo(9.0, 6);
-    // realized margin is now a readable number (charged − upstream cost)
-    expect(out.chargedRub - out.upstreamCostRub).toBeCloseTo(3.34, 6);
+    expect(out.chargedCredits).toBe(13);
+    expect(out.upstreamCostCredits).toBe(9);
+    // realized margin is now a readable integer (charged − upstream cost), credits
+    expect(out.chargedCredits - out.upstreamCostCredits).toBe(4);
   });
 
   it('D-0: gateway 200 WITHOUT billing headers → NOT billedByGateway (caller estimates)', async () => {
@@ -222,6 +225,6 @@ describe('callWithFallback — gateway → OpenRouter degraded fallback', () => 
       { model: 'm', messages: [] },
     );
     expect(out.billedByGateway).toBe(false);
-    expect(out.chargedRub).toBe(0);
+    expect(out.chargedCredits).toBe(0);
   });
 });

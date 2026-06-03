@@ -37,15 +37,20 @@ const SAFE_FETCH_ALLOWLIST = ['127.0.0.1:4000', 'openrouter.ai'];
 // "Unknown model" (resolver.ts) instead of serving the run. Use a registered slug.
 const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 const MAX_ITERATIONS = 12;
-const USD_TO_RUB = 90;
-// D-0: the gateway returns the AUTHORITATIVE charged amount and the upstream
-// cost it bore, in ₽, per request. We bill off these instead of the local
-// PRICING×USD_TO_RUB estimate so realized margin is a real, readable number.
-// Brand-neutral (₽ figures only); keyed to gateway_request_id via X-Request-Id.
-const HDR_CHARGED_RUB = 'x-aiag-charged-rub';
-const HDR_UPSTREAM_COST_RUB = 'x-aiag-upstream-cost-rub';
-// R0-2 run-start gate: minimum spendable balance (₽) required to begin a
-// billable run. 1₽ floor (Claude's discretion per CONTEXT).
+// D-1: the credit unit is integer US cents (1 credit = $0.01). PRICING below is
+// already USD-native, so the worker bills purely in credits — there is no more
+// ₽ leg and no frozen USD→₽ rate. The crypto→USD conversion now happens ONCE at
+// top-up time (apps/tg-miniapp), after which everything here is credits.
+// D-0 (deferred gateway edit): the :4000 gateway returns the AUTHORITATIVE
+// charged amount + the upstream cost it bore, per request, as integer micro-USD
+// ($0.000001) headers (avoids float on the wire). The worker divides micro-USD
+// into credits/cents with Math.ceil(micro / 10_000). Until the gateway emits
+// these USD headers, they are absent → billedByGateway=false → the worker falls
+// back to the local estimateCostCredits (the existing "never bill 0" path).
+const HDR_CHARGED_USD_MICRO = 'x-aiag-charged-usd-micro';
+const HDR_UPSTREAM_COST_USD_MICRO = 'x-aiag-upstream-cost-usd-micro';
+// R0-2 run-start gate: minimum spendable balance (credits = US cents) required to
+// begin a billable run. 1-credit ($0.01) floor.
 const MIN_RUN_COST = 1;
 
 interface Upstream {
@@ -212,29 +217,35 @@ function isModelNotFound(status: number, text: string): boolean {
 
 /**
  * Result of one chat call: the parsed model response PLUS, when the response
- * came from the AIAG gateway, the gateway's AUTHORITATIVE billing figures (₽).
+ * came from the AIAG gateway, the gateway's AUTHORITATIVE billing figures, in
+ * credits (US cents).
  *
- * D-0: `billedByGateway` is true ONLY when the response actually came back from
- * the :4000 gateway (not the OpenRouter fallback) AND the X-AIAG-Charged-Rub
- * header parsed to a finite number. In that case `chargedRub` is the number the
- * caller MUST bill off (the gateway already debited the house org for it) and
- * `upstreamCostRub` is the upstream cost we bore (charged − cost = margin).
- * Otherwise `billedByGateway` is false → the caller falls back to estimateCostRub
- * (NEVER 0 / free).
+ * D-0/D-1: `billedByGateway` is true ONLY when the response actually came back
+ * from the :4000 gateway (not the OpenRouter fallback) AND the
+ * X-AIAG-Charged-USD-Micro header parsed to a finite micro-USD value. In that
+ * case `chargedCredits` is the number the caller MUST bill off (the gateway
+ * already debited the house org for it) and `upstreamCostCredits` is the
+ * upstream cost we bore (charged − cost = margin). Otherwise `billedByGateway`
+ * is false → the caller falls back to estimateCostCredits (NEVER 0 / free).
  */
 export interface ChatResult {
   response: ModelResponse;
   billedByGateway: boolean;
-  chargedRub: number;
-  upstreamCostRub: number;
+  chargedCredits: number;
+  upstreamCostCredits: number;
 }
 
-/** Parse a ₽ billing header into a finite number, or null if absent/garbage. */
-function parseRubHeader(res: Response, name: string): number | null {
+/**
+ * Parse an integer micro-USD ($0.000001) billing header into credits (US cents),
+ * or null if absent/garbage. credits = ceil(micro / 10_000) — round UP so we
+ * never undercharge, and the result is an exact integer.
+ */
+function parseUsdMicroHeaderToCredits(res: Response, name: string): number | null {
   const raw = res.headers.get(name);
   if (raw == null || raw.trim() === '') return null;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : null;
+  const micro = Number(raw);
+  if (!Number.isFinite(micro) || micro < 0) return null;
+  return Math.ceil(micro / 10_000);
 }
 
 /**
@@ -260,17 +271,20 @@ export async function callWithFallback(
   const isGateway = upstream.url === AIAG_GATEWAY_URL;
   const res = await postChat(upstream.url, upstream.apiKey, body, !upstream.isExternal, label);
   if (res.ok) {
-    // D-0: read billing figures BEFORE consuming the body. Only trust them on
-    // the real gateway path (not external/OpenRouter, which never set them).
-    const charged = isGateway ? parseRubHeader(res, HDR_CHARGED_RUB) : null;
-    const upstreamCost = isGateway ? parseRubHeader(res, HDR_UPSTREAM_COST_RUB) : null;
+    // D-0/D-1: read billing figures BEFORE consuming the body. Only trust them
+    // on the real gateway path (not external/OpenRouter, which never set them).
+    // Headers are integer micro-USD → converted to credits (cents) here.
+    const charged = isGateway ? parseUsdMicroHeaderToCredits(res, HDR_CHARGED_USD_MICRO) : null;
+    const upstreamCost = isGateway
+      ? parseUsdMicroHeaderToCredits(res, HDR_UPSTREAM_COST_USD_MICRO)
+      : null;
     const response = (await res.json()) as ModelResponse;
     return {
       response,
       billedByGateway: charged != null,
-      chargedRub: charged ?? 0,
+      chargedCredits: charged ?? 0,
       // upstream cost may be absent even when charged is present; default 0.
-      upstreamCostRub: upstreamCost ?? 0,
+      upstreamCostCredits: upstreamCost ?? 0,
     };
   }
 
@@ -284,7 +298,7 @@ export async function callWithFallback(
       if (fb.ok) {
         // Fallback to OpenRouter direct: no gateway markup/headers → estimate.
         const response = (await fb.json()) as ModelResponse;
-        return { response, billedByGateway: false, chargedRub: 0, upstreamCostRub: 0 };
+        return { response, billedByGateway: false, chargedCredits: 0, upstreamCostCredits: 0 };
       }
       const fbText = await fb.text();
       throw new Error(`upstream ${fb.status}: ${fbText.slice(0, 300)}`);
@@ -302,27 +316,32 @@ async function callModel(
   return callWithFallback(upstream, buildBody(upstream, messages, tools));
 }
 
-export function estimateCostRub(modelSlug: string, tokensIn: number, tokensOut: number): number {
+/**
+ * Local cost estimate in credits (US cents). PRICING is USD per 1M tokens, so we
+ * convert USD → integer cents with Math.ceil(usd * 100) — round UP so a small
+ * (sub-cent) run never undercharges and the result is an exact integer.
+ */
+export function estimateCostCredits(modelSlug: string, tokensIn: number, tokensOut: number): number {
   const p = PRICING[modelSlug] ?? FALLBACK_PRICE;
   const usd = (tokensIn * p.in + tokensOut * p.out) / 1_000_000;
-  return usd * USD_TO_RUB;
+  return Math.ceil(usd * 100);
 }
 
 /**
- * CHARGE-0 floor: the amount we actually settle a run at.
+ * CHARGE-0 floor: the amount (in credits = US cents) we actually settle a run at.
  *
- * The gateway's authoritative X-AIAG-Charged-Rub is trusted as-is, but a
- * zero-usage gateway response (0 prompt+completion tokens → charged 0.0000) or a
- * zero-token estimate would otherwise settle a BILLABLE run at 0₽ (free). The
- * R0-2 MIN_RUN_COST gate only protects run START, not settle — so we re-apply it
- * here as a nonzero floor on the final billable amount. Tool fees are already
- * folded into `rawCostRub` (totalCostRub = basis + toolFeesRub), so they ride
- * inside the floor. External / BYOK runs (isExternal=true) pay their own provider
- * and MUST stay at exactly 0 — no floor.
+ * The gateway's authoritative charge is trusted as-is, but a zero-usage gateway
+ * response (0 prompt+completion tokens → charged 0) or a zero-token estimate
+ * would otherwise settle a BILLABLE run at 0 credits (free). The R0-2
+ * MIN_RUN_COST gate only protects run START, not settle — so we re-apply it here
+ * as a nonzero floor on the final billable amount. Tool fees are already folded
+ * into `rawCostCredits` (totalCostCredits = basis + toolFeesCredits), so they
+ * ride inside the floor. External / BYOK runs (isExternal=true) pay their own
+ * provider and MUST stay at exactly 0 — no floor.
  */
-export function finalBillableCostRub(rawCostRub: number, isExternal: boolean): number {
+export function finalBillableCostCredits(rawCostCredits: number, isExternal: boolean): number {
   if (isExternal) return 0;
-  return Math.max(MIN_RUN_COST, rawCostRub);
+  return Math.max(MIN_RUN_COST, rawCostCredits);
 }
 
 function buildSystem(agent: AgentRow): string {
@@ -337,9 +356,9 @@ function buildSystem(agent: AgentRow): string {
 }
 
 async function notifyCompleted(
-  tgUserId: string, agentName: string, agentId: string, costRub: number, output: string,
+  tgUserId: string, agentName: string, agentId: string, costCredits: number, output: string,
 ): Promise<void> {
-  await sendBotMessage(tgUserId, buildRunCompletedMessage({ agentName, agentId, costRub, output }));
+  await sendBotMessage(tgUserId, buildRunCompletedMessage({ agentName, agentId, costCredits, output }));
 }
 
 async function notifyFailed(
@@ -360,8 +379,8 @@ export async function runAgent(runId: string): Promise<void> {
     return;
   }
 
-  // ---- budgets ----
-  const monthlyBudget = Number(agent.budget_rub_monthly);
+  // ---- budgets (all in credits = US cents) ----
+  const monthlyBudget = Number(agent.budget_credits_monthly);
   const monthlySpend = await sumMonthlySpend(agent.tg_user_id);
   if (monthlySpend >= monthlyBudget) {
     await markFailed(runId, 'budget_exceeded_monthly');
@@ -369,7 +388,7 @@ export async function runAgent(runId: string): Promise<void> {
     return;
   }
   const daily = await getOrResetDailyBucket(agent.id);
-  if (daily.spent_today_rub >= daily.daily_budget_rub) {
+  if (daily.spent_today_credits >= daily.daily_budget_credits) {
     await markFailed(runId, 'budget_exceeded_daily');
     await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'budget_exceeded_daily');
     return;
@@ -432,20 +451,20 @@ export async function runAgent(runId: string): Promise<void> {
 
   let tokensIn = 0;
   let tokensOut = 0;
-  let totalCostRub = 0;
-  // D-0 margin accounting (gateway path only):
-  //  - gatewayChargedTotal: Σ authoritative charged ₽ from the gateway headers.
-  //  - gatewayUpstreamCostTotal: Σ authoritative upstream cost ₽ (charged − cost
-  //    = realized margin, now a readable number for tool/author payouts).
+  let totalCostCredits = 0;
+  // D-0 margin accounting (gateway path only), all in credits (US cents):
+  //  - gatewayChargedTotal: Σ authoritative charged credits from gateway headers.
+  //  - gatewayUpstreamCostTotal: Σ authoritative upstream cost credits (charged −
+  //    cost = realized margin, a readable number for tool/author payouts).
   //  - allModelCallsBilledByGateway: true while EVERY model call this run came
   //    back authoritatively billed. The moment one call lacks figures (gateway
   //    didn't return them, or we fell back to OpenRouter) we flip to the local
   //    estimate for the WHOLE run — never silently mix the two, never bill 0.
-  //  - toolFeesRub: tool-side fees, added on top of either basis.
+  //  - toolFeesCredits: tool-side fees, added on top of either basis.
   let gatewayChargedTotal = 0;
   let gatewayUpstreamCostTotal = 0;
   let allModelCallsBilledByGateway = !upstream.isExternal;
-  let toolFeesRub = 0;
+  let toolFeesCredits = 0;
 
   try {
   for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -468,39 +487,39 @@ export async function runAgent(runId: string): Promise<void> {
     // for the whole run (fallback — never free).
     if (!upstream.isExternal) {
       if (call.billedByGateway) {
-        gatewayChargedTotal += call.chargedRub;
-        gatewayUpstreamCostTotal += call.upstreamCostRub;
+        gatewayChargedTotal += call.chargedCredits;
+        gatewayUpstreamCostTotal += call.upstreamCostCredits;
       } else {
         allModelCallsBilledByGateway = false;
       }
     }
 
-    // Effective run cost so far (excl. tool fees added below):
+    // Effective run cost so far in credits (excl. tool fees added below):
     //  - external: 0 (user pays their own provider),
     //  - gateway-authoritative: Σ gateway charge (the REAL charge),
     //  - fallback: local estimate from cumulative tokens (NEVER 0).
     if (upstream.isExternal) {
-      totalCostRub = 0;
+      totalCostCredits = 0;
     } else if (allModelCallsBilledByGateway) {
-      totalCostRub = gatewayChargedTotal + toolFeesRub;
+      totalCostCredits = gatewayChargedTotal + toolFeesCredits;
     } else {
       if (i === 0) {
         console.warn(
           '[agent-worker] D-0: gateway authoritative charge missing/unparseable — ' +
-            'falling back to local estimateCostRub (never 0). ' +
+            'falling back to local estimateCostCredits (never 0). ' +
             `model=${upstream.model} run=${runId}`,
         );
       }
-      totalCostRub = estimateCostRub(upstream.model, tokensIn, tokensOut) + toolFeesRub;
+      totalCostCredits = estimateCostCredits(upstream.model, tokensIn, tokensOut) + toolFeesCredits;
     }
 
     // Mid-run budget cutoff (monthly + daily)
-    if (monthlySpend + totalCostRub > monthlyBudget) {
+    if (monthlySpend + totalCostCredits > monthlyBudget) {
       await markFailed(runId, 'budget_exceeded_monthly_mid_run');
       await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'budget_exceeded_monthly_mid_run');
       return;
     }
-    if (daily.spent_today_rub + totalCostRub > daily.daily_budget_rub) {
+    if (daily.spent_today_credits + totalCostCredits > daily.daily_budget_credits) {
       await markFailed(runId, 'budget_exceeded_daily_mid_run');
       await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'budget_exceeded_daily_mid_run');
       return;
@@ -522,18 +541,18 @@ export async function runAgent(runId: string): Promise<void> {
       // observable. Brand-neutral (₽ only). margin can be <0 only if the gateway
       // mispriced; we still bill the authoritative charge.
       if (!upstream.isExternal && allModelCallsBilledByGateway) {
-        const marginRub = gatewayChargedTotal - gatewayUpstreamCostTotal;
+        const marginCredits = gatewayChargedTotal - gatewayUpstreamCostTotal;
         console.info(
-          `[agent-worker] D-0 settle run=${runId} charged=${gatewayChargedTotal.toFixed(4)}₽ ` +
-            `upstreamCost=${gatewayUpstreamCostTotal.toFixed(4)}₽ margin=${marginRub.toFixed(4)}₽ ` +
-            `toolFees=${toolFeesRub.toFixed(4)}₽ (gateway-authoritative)`,
+          `[agent-worker] D-0 settle run=${runId} charged=${gatewayChargedTotal}cr ` +
+            `upstreamCost=${gatewayUpstreamCostTotal}cr margin=${marginCredits}cr ` +
+            `toolFees=${toolFeesCredits}cr (gateway-authoritative)`,
         );
       }
       // CHARGE-0: floor the BILLABLE settle amount to MIN_RUN_COST so a
       // zero-usage gateway charge (or a zero-token estimate) can never settle a
-      // billable run at 0₽. External/BYOK stays exactly 0. Tool fees are already
-      // inside totalCostRub, so they ride inside the floor.
-      const billable = finalBillableCostRub(totalCostRub, upstream.isExternal);
+      // billable run at 0 credits. External/BYOK stays exactly 0. Tool fees are
+      // already inside totalCostCredits, so they ride inside the floor.
+      const billable = finalBillableCostCredits(totalCostCredits, upstream.isExternal);
       // R0-2 + R0-3: mark completed + atomic daily-spend guard + balance debit
       // in ONE transaction. A failed guard/debit rolls back the completion too,
       // so the run never lands 'completed' without being paid for.
@@ -543,7 +562,7 @@ export async function runAgent(runId: string): Promise<void> {
           tgUserId: agent.tg_user_id,
           agentId: agent.id,
           output,
-          costRub: billable,
+          costCredits: billable,
           tokensIn,
           tokensOut,
           isExternal: upstream.isExternal,
@@ -582,10 +601,12 @@ export async function runAgent(runId: string): Promise<void> {
           ? await callMcpTool(mcp, toolCall.function.name.slice(MCP_PREFIX.length), parsed)
           : await executeTool(toolCall.function.name, parsed, { agentId: agent.id });
       if (exec.cost_rub > 0) {
-        // Accumulate into toolFeesRub, NOT totalCostRub — the next iteration
-        // recomputes totalCostRub from (basis + toolFeesRub), so adding here
-        // would be overwritten. Tool fees ride on top of either billing basis.
-        toolFeesRub += exec.cost_rub;
+        // Accumulate into toolFeesCredits, NOT totalCostCredits — the next
+        // iteration recomputes totalCostCredits from (basis + toolFeesCredits),
+        // so adding here would be overwritten. Tool fees ride on top of either
+        // billing basis. (NB: tools.ts still names its fee field `cost_rub`; it
+        // is out of scope for D-1 and treated as a credit-denominated fee here.)
+        toolFeesCredits += exec.cost_rub;
       }
       messages.push({
         role: 'tool',

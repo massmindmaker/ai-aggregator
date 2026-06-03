@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
 import { beginCell } from '@ton/core';
-import { getTonRubRate } from '@/lib/ton-rate';
+import { getTonUsdRate } from '@/lib/ton-rate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,12 +9,14 @@ export const dynamic = 'force-dynamic';
 const sql = postgres(process.env.DATABASE_URL ?? '', { prepare: false });
 
 interface Body {
-  amount_rub: number;
+  amount_credits: number;
   wallet_address: string;
 }
 
-const MIN_RUB = 100;
-const MAX_RUB = 50_000;
+// D-1: amounts are integer credits (US cents, 1 credit = $0.01).
+// MIN 100 credits ($1), MAX 50_000 credits ($500).
+const MIN_CREDITS = 100;
+const MAX_CREDITS = 50_000;
 const TX_VALID_FOR_S = 600; // 10 min
 
 function randomTag(len = 8): string {
@@ -41,11 +43,16 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
   }
-  const amountRub = Number(body.amount_rub);
+  const amountCredits = Number(body.amount_credits);
   const walletAddress = body.wallet_address;
-  if (!Number.isFinite(amountRub) || amountRub < MIN_RUB || amountRub > MAX_RUB) {
+  if (
+    !Number.isFinite(amountCredits) ||
+    !Number.isInteger(amountCredits) ||
+    amountCredits < MIN_CREDITS ||
+    amountCredits > MAX_CREDITS
+  ) {
     return NextResponse.json(
-      { error: 'amount_out_of_range', min: MIN_RUB, max: MAX_RUB },
+      { error: 'amount_out_of_range', min: MIN_CREDITS, max: MAX_CREDITS },
       { status: 400 },
     );
   }
@@ -53,9 +60,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'wallet_address_required' }, { status: 400 });
   }
 
-  let rate: number;
+  let rateUsd: number;
   try {
-    rate = await getTonRubRate();
+    rateUsd = await getTonUsdRate(); // USD per 1 TON
   } catch (e) {
     return NextResponse.json(
       { error: 'rate_unavailable', detail: e instanceof Error ? e.message : 'rate' },
@@ -63,8 +70,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // amount_nano_ton = ceil(amount_rub / rate * 1e9)
-  const amountNanoBig = BigInt(Math.ceil((amountRub / rate) * 1e9));
+  // credits are US cents → dollars; amount_nano_ton = ceil(amount_usd / rate * 1e9)
+  const amountUsd = amountCredits / 100;
+  const amountNanoBig = BigInt(Math.ceil((amountUsd / rateUsd) * 1e9));
+  // Audit the conversion rate at top-up time, in US cents per TON (integer).
+  const rateUsdCentsPerTon = Math.round(rateUsd * 100);
 
   const tag = randomTag(8);
   const comment = `topup:${tag}`;
@@ -75,15 +85,15 @@ export async function POST(req: NextRequest) {
 
   const ins = (await sql`
     INSERT INTO tg_topups (
-      tg_user_id, wallet_address, amount_nano_ton, rate_rub_per_ton,
-      amount_rub, status, comment_tag, created_at
+      tg_user_id, wallet_address, amount_nano_ton, rate_usd_cents_per_ton,
+      amount_credits, status, comment_tag, created_at
     )
     VALUES (
       ${tgUserId}::bigint,
       ${walletAddress},
       ${amountNanoBig.toString()}::bigint,
-      ${rate},
-      ${amountRub},
+      ${rateUsdCentsPerTon}::bigint,
+      ${amountCredits}::bigint,
       'pending',
       ${tag},
       NOW()
@@ -99,9 +109,9 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     topup_id: topupId,
-    amount_rub: amountRub,
+    amount_credits: amountCredits,
     amount_nano_ton: amountNanoBig.toString(),
-    rate_rub_per_ton: rate,
+    rate_usd_cents_per_ton: rateUsdCentsPerTon,
     comment,
     comment_tag: tag,
     transaction: {

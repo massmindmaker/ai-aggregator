@@ -17,8 +17,8 @@ export async function GET(req: NextRequest) {
     SELECT id::text,
            wallet_address,
            amount_nano_ton::text AS amount_nano_ton,
-           rate_rub_per_ton::text AS rate_rub_per_ton,
-           amount_rub::text AS amount_rub,
+           rate_usd_cents_per_ton::text AS rate_usd_cents_per_ton,
+           amount_credits::text AS amount_credits,
            status,
            tx_hash,
            comment_tag,
@@ -32,8 +32,8 @@ export async function GET(req: NextRequest) {
     id: string;
     wallet_address: string;
     amount_nano_ton: string;
-    rate_rub_per_ton: string;
-    amount_rub: string;
+    rate_usd_cents_per_ton: string;
+    amount_credits: string;
     status: string;
     tx_hash: string | null;
     comment_tag: string;

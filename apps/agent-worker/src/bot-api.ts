@@ -51,14 +51,15 @@ function escapeHtml(s: string): string {
 export function buildRunCompletedMessage(args: {
   agentName: string;
   agentId: string;
-  costRub: number;
+  costCredits: number;
   output: string;
 }): string {
   const preview = args.output.slice(0, 240);
   const tail = args.output.length > 240 ? '…' : '';
+  // costCredits is integer US cents (1 credit = $0.01); display as "N.NN cr".
   return (
     `✓ Агент <b>${escapeHtml(args.agentName)}</b> готов\n` +
-    `Стоимость: <b>${args.costRub.toFixed(2)} ₽</b>\n\n` +
+    `Стоимость: <b>${(args.costCredits / 100).toFixed(2)} cr</b>\n\n` +
     `${escapeHtml(preview)}${tail}\n\n` +
     `<a href="${APP_BASE_URL}/agents/${args.agentId}">Открыть в Mini App</a>`
   );

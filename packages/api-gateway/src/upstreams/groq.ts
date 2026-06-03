@@ -27,7 +27,10 @@ function selectKey(byok?: string): string | undefined {
 export const groqUpstream: UpstreamAdapter = {
   async chat(req: ChatRequest): Promise<ChatResponse> {
     const apiKey = selectKey(req.byokKey);
-    if (!apiKey) throw new Error('GROQ_API_KEY not configured');
+    if (!apiKey) {
+      logger.warn({ model: req.modelId }, 'groq_apikey_missing');
+      throw new Error('model provider not configured');
+    }
     const headers: Record<string, string> = {
       authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
@@ -51,7 +54,7 @@ export const groqUpstream: UpstreamAdapter = {
         { status: res.status, model: req.modelId, body: text.slice(0, 500) },
         'groq_upstream_error'
       );
-      throw new Error(`Groq ${res.status}: ${text.slice(0, 200)}`);
+      throw new Error(`upstream error ${res.status}`);
     }
     const data = (await res.json()) as ChatResponse & {
       usage?: Partial<ChatResponse['usage']>;
@@ -75,7 +78,10 @@ export const groqUpstream: UpstreamAdapter = {
 
   async *chatStream(req: ChatRequest): AsyncIterable<unknown> {
     const apiKey = selectKey(req.byokKey);
-    if (!apiKey) throw new Error('GROQ_API_KEY not configured');
+    if (!apiKey) {
+      logger.warn({ model: req.modelId }, 'groq_apikey_missing');
+      throw new Error('model provider not configured');
+    }
     const headers: Record<string, string> = {
       authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
@@ -95,7 +101,11 @@ export const groqUpstream: UpstreamAdapter = {
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
-      throw new Error(`Groq stream ${res.status}: ${text.slice(0, 200)}`);
+      logger.warn(
+        { status: res.status, model: req.modelId, body: text.slice(0, 500) },
+        'groq_stream_error'
+      );
+      throw new Error(`upstream error ${res.status}`);
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -122,7 +132,10 @@ export const groqUpstream: UpstreamAdapter = {
 
   async embeddings(req: EmbeddingsRequest): Promise<EmbeddingsResponse> {
     const apiKey = selectKey(req.byokKey);
-    if (!apiKey) throw new Error('GROQ_API_KEY not configured');
+    if (!apiKey) {
+      logger.warn({ model: req.modelId }, 'groq_apikey_missing');
+      throw new Error('model provider not configured');
+    }
     const res = await fetch(`${GROQ_BASE}/embeddings`, {
       method: 'POST',
       headers: {
@@ -137,7 +150,7 @@ export const groqUpstream: UpstreamAdapter = {
         { status: res.status, model: req.modelId, body: text.slice(0, 500) },
         'groq_embeddings_error'
       );
-      throw new Error(`Groq embeddings ${res.status}: ${text.slice(0, 200)}`);
+      throw new Error(`upstream error ${res.status}`);
     }
     const data = (await res.json()) as {
       data?: Array<{ embedding: number[]; index?: number }>;

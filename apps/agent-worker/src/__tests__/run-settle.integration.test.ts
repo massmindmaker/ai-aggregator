@@ -78,8 +78,8 @@ describe.skipIf(!TEST_DB_URL)(
       await testSql`
         INSERT INTO agents (
           id, tg_user_id, name, system_prompt, template_kind,
-          budget_rub_monthly, daily_budget_rub,
-          spent_today_rub, spent_today_date,
+          budget_credits_monthly, daily_budget_credits,
+          spent_today_credits, spent_today_date,
           status, connection_type
         ) VALUES (
           ${agentId}::uuid,
@@ -96,11 +96,11 @@ describe.skipIf(!TEST_DB_URL)(
         )
       `;
 
-      // Insert funded balance row.
+      // Insert funded balance row (credits = US cents).
       await testSql`
-        INSERT INTO tg_user_balances (tg_user_id, balance_rub)
+        INSERT INTO tg_user_balances (tg_user_id, balance_credits)
         VALUES (${tgUserId}::bigint, 50)
-        ON CONFLICT (tg_user_id) DO UPDATE SET balance_rub = 50
+        ON CONFLICT (tg_user_id) DO UPDATE SET balance_credits = 50
       `;
 
       // Insert a queued run.
@@ -120,6 +120,7 @@ describe.skipIf(!TEST_DB_URL)(
     afterEach(async () => {
       // Clean up all seeded rows by their generated ids — never touches real data.
       const { agentId, runId, tgUserId } = seed;
+      await testSql`DELETE FROM tg_ledger_entries WHERE tg_user_id = ${tgUserId}::bigint`;
       await testSql`DELETE FROM agent_runs WHERE id = ${runId}::uuid`;
       await testSql`DELETE FROM tg_user_balances WHERE tg_user_id = ${tgUserId}::bigint`;
       await testSql`DELETE FROM agents WHERE id = ${agentId}::uuid`;
@@ -137,7 +138,7 @@ describe.skipIf(!TEST_DB_URL)(
         tgUserId,
         agentId,
         output: 'test output',
-        costRub: 10,
+        costCredits: 10,
         tokensIn: 100,
         tokensOut: 50,
         isExternal: false,
@@ -148,19 +149,33 @@ describe.skipIf(!TEST_DB_URL)(
       expect(balance).toBe(40);
 
       // Daily spend must have increased by exactly 10.
-      const agentRows = await testSql<{ spent_today_rub: string }[]>`
-        SELECT spent_today_rub::text AS spent_today_rub
+      const agentRows = await testSql<{ spent_today_credits: string }[]>`
+        SELECT spent_today_credits::text AS spent_today_credits
         FROM agents WHERE id = ${agentId}::uuid
       `;
-      expect(Number(agentRows[0].spent_today_rub)).toBe(10);
+      expect(Number(agentRows[0].spent_today_credits)).toBe(10);
 
       // Run must be completed with the correct cost.
-      const runRows = await testSql<{ status: string; cost_rub: string }[]>`
-        SELECT status, cost_rub::text AS cost_rub
+      const runRows = await testSql<{ status: string; cost_credits: string }[]>`
+        SELECT status, cost_credits::text AS cost_credits
         FROM agent_runs WHERE id = ${runId}::uuid
       `;
       expect(runRows[0].status).toBe('completed');
-      expect(Number(runRows[0].cost_rub)).toBe(10);
+      expect(Number(runRows[0].cost_credits)).toBe(10);
+
+      // D-1: the append-only ledger must carry a matching run_debit entry whose
+      // balance_after equals the cached balance (the two never diverge).
+      const ledger = await testSql<{ delta_credits: string; balance_after: string; kind: string }[]>`
+        SELECT delta_credits::text AS delta_credits,
+               balance_after::text AS balance_after,
+               kind
+        FROM tg_ledger_entries
+        WHERE ref_kind = 'agent_run' AND ref_id = ${runId}::uuid
+      `;
+      expect(ledger.length).toBe(1);
+      expect(ledger[0].kind).toBe('run_debit');
+      expect(Number(ledger[0].delta_credits)).toBe(-10);
+      expect(Number(ledger[0].balance_after)).toBe(40);
     });
 
     // -----------------------------------------------------------------------
@@ -185,7 +200,7 @@ describe.skipIf(!TEST_DB_URL)(
           tgUserId,
           agentId,
           output: 'should not be stored',
-          costRub: 100, // balance=50 < 100 → balance debit guard rejects
+          costCredits: 100, // balance=50 < 100 → balance debit guard rejects
           tokensIn: 1000,
           tokensOut: 500,
           isExternal: false,
@@ -196,22 +211,29 @@ describe.skipIf(!TEST_DB_URL)(
       const balance = await getBalance(tgUserId);
       expect(balance).toBe(50);
 
-      // spent_today_rub unchanged (still 0) — the daily-spend increment rolled back too.
-      const agentRows = await testSql<{ spent_today_rub: string }[]>`
-        SELECT spent_today_rub::text AS spent_today_rub
+      // spent_today_credits unchanged (still 0) — the increment rolled back too.
+      const agentRows = await testSql<{ spent_today_credits: string }[]>`
+        SELECT spent_today_credits::text AS spent_today_credits
         FROM agents WHERE id = ${agentId}::uuid
       `;
-      expect(Number(agentRows[0].spent_today_rub)).toBe(0);
+      expect(Number(agentRows[0].spent_today_credits)).toBe(0);
 
       // Run NOT completed — status still 'queued'.
-      const runRows = await testSql<{ status: string; cost_rub: string | null }[]>`
-        SELECT status, cost_rub::text AS cost_rub
+      const runRows = await testSql<{ status: string; cost_credits: string | null }[]>`
+        SELECT status, cost_credits::text AS cost_credits
         FROM agent_runs WHERE id = ${runId}::uuid
       `;
       expect(runRows[0].status).toBe('queued');
-      // cost_rub stays at its seeded default (0) — the rollback proves the
-      // attempted cost was NEVER recorded (agent_runs.cost_rub DEFAULT 0, not NULL).
-      expect(Number(runRows[0].cost_rub)).toBe(0);
+      // cost_credits stays at its seeded default (0) — the rollback proves the
+      // attempted cost was NEVER recorded (agent_runs.cost_credits DEFAULT 0, not NULL).
+      expect(Number(runRows[0].cost_credits)).toBe(0);
+
+      // No ledger entry was written — the whole tx rolled back.
+      const ledger = await testSql<{ c: string }[]>`
+        SELECT COUNT(*)::text AS c FROM tg_ledger_entries
+        WHERE ref_kind = 'agent_run' AND ref_id = ${runId}::uuid
+      `;
+      expect(Number(ledger[0].c)).toBe(0);
     });
 
     // -----------------------------------------------------------------------
@@ -225,7 +247,7 @@ describe.skipIf(!TEST_DB_URL)(
       // A cost of 5 would push it to 13 > 10 → daily-spend guard rejects.
       await testSql`
         UPDATE agents
-        SET daily_budget_rub = 10, spent_today_rub = 8
+        SET daily_budget_credits = 10, spent_today_credits = 8
         WHERE id = ${agentId}::uuid
       `;
       // Balance is 50 (more than enough) — the budget guard is what fails.
@@ -239,7 +261,7 @@ describe.skipIf(!TEST_DB_URL)(
           tgUserId,
           agentId,
           output: 'should not be stored',
-          costRub: 5, // 8+5=13 > daily_budget=10 → guard rejects
+          costCredits: 5, // 8+5=13 > daily_budget=10 → guard rejects
           tokensIn: 100,
           tokensOut: 50,
           isExternal: false,
@@ -250,22 +272,22 @@ describe.skipIf(!TEST_DB_URL)(
       const balance = await getBalance(tgUserId);
       expect(balance).toBe(50);
 
-      // spent_today_rub unchanged (still 8) — the guard prevented the increment.
-      const agentRows = await testSql<{ spent_today_rub: string }[]>`
-        SELECT spent_today_rub::text AS spent_today_rub
+      // spent_today_credits unchanged (still 8) — the guard prevented the increment.
+      const agentRows = await testSql<{ spent_today_credits: string }[]>`
+        SELECT spent_today_credits::text AS spent_today_credits
         FROM agents WHERE id = ${agentId}::uuid
       `;
-      expect(Number(agentRows[0].spent_today_rub)).toBe(8);
+      expect(Number(agentRows[0].spent_today_credits)).toBe(8);
 
       // Run NOT completed — status still 'queued'.
-      const runRows = await testSql<{ status: string; cost_rub: string | null }[]>`
-        SELECT status, cost_rub::text AS cost_rub
+      const runRows = await testSql<{ status: string; cost_credits: string | null }[]>`
+        SELECT status, cost_credits::text AS cost_credits
         FROM agent_runs WHERE id = ${runId}::uuid
       `;
       expect(runRows[0].status).toBe('queued');
-      // cost_rub stays at its seeded default (0) — the rollback proves the
-      // attempted cost was NEVER recorded (agent_runs.cost_rub DEFAULT 0, not NULL).
-      expect(Number(runRows[0].cost_rub)).toBe(0);
+      // cost_credits stays at its seeded default (0) — the rollback proves the
+      // attempted cost was NEVER recorded (agent_runs.cost_credits DEFAULT 0, not NULL).
+      expect(Number(runRows[0].cost_credits)).toBe(0);
     });
 
     // -----------------------------------------------------------------------
@@ -282,15 +304,15 @@ describe.skipIf(!TEST_DB_URL)(
         tgUserId,
         agentId,
         output: 'external output',
-        costRub: 0,
+        costCredits: 0,
         tokensIn: 100,
         tokensOut: 50,
         isExternal: true,
       });
 
       // Run IS completed (the run row itself is still written).
-      const runRows = await testSql<{ status: string; cost_rub: string | null }[]>`
-        SELECT status, cost_rub::text AS cost_rub
+      const runRows = await testSql<{ status: string; cost_credits: string | null }[]>`
+        SELECT status, cost_credits::text AS cost_credits
         FROM agent_runs WHERE id = ${runId}::uuid
       `;
       expect(runRows[0].status).toBe('completed');
@@ -299,12 +321,19 @@ describe.skipIf(!TEST_DB_URL)(
       const balance = await getBalance(tgUserId);
       expect(balance).toBe(50);
 
-      // spent_today_rub UNCHANGED (still 0) — external runs skip the daily guard.
-      const agentRows = await testSql<{ spent_today_rub: string }[]>`
-        SELECT spent_today_rub::text AS spent_today_rub
+      // spent_today_credits UNCHANGED (still 0) — external runs skip the daily guard.
+      const agentRows = await testSql<{ spent_today_credits: string }[]>`
+        SELECT spent_today_credits::text AS spent_today_credits
         FROM agents WHERE id = ${agentId}::uuid
       `;
-      expect(Number(agentRows[0].spent_today_rub)).toBe(0);
+      expect(Number(agentRows[0].spent_today_credits)).toBe(0);
+
+      // No ledger entry for an external run — the money path is fully skipped.
+      const ledger = await testSql<{ c: string }[]>`
+        SELECT COUNT(*)::text AS c FROM tg_ledger_entries
+        WHERE ref_kind = 'agent_run' AND ref_id = ${runId}::uuid
+      `;
+      expect(Number(ledger[0].c)).toBe(0);
     });
   },
 );

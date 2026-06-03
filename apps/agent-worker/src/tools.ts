@@ -182,8 +182,9 @@ function calc(expr: string): { result: number | string } {
 
 const KIE_BASE = 'https://api.kie.ai';
 const KIE_MODEL = 'google/nano-banana-pro';
-// Approx Kie pricing for nano-banana-pro (per image, RUB).
-const KIE_COST_RUB = 6.5;
+// D-1: tool fee in INTEGER credits (1 credit = 1 US cent). ~8¢ covers Kie's
+// ~$0.07/image. Must stay an integer — it flows into the BIGINT credit ledger.
+const KIE_COST_CREDITS = 8;
 
 interface KieCreateResp {
   code?: number;
@@ -271,7 +272,7 @@ async function imageGen(prompt: string, aspectRaw?: string): Promise<ImageGenRes
   }
   const taskId = await kieCreateTask(prompt, aspect);
   const url = await kiePoll(taskId);
-  return { url, prompt, aspect_ratio: aspect, cost_rub: KIE_COST_RUB };
+  return { url, prompt, aspect_ratio: aspect, cost_rub: KIE_COST_CREDITS };
 }
 
 function normaliseAspect(a?: string): string {

@@ -14,7 +14,10 @@ import { logger } from '../lib/logger';
 
 function getBaseUrl(): string {
   const url = process.env.OLLAMA_CLOUD_URL;
-  if (!url) throw new Error('OLLAMA_CLOUD_URL not configured');
+  if (!url) {
+    logger.warn({}, 'ollama_url_missing');
+    throw new Error('model provider not configured');
+  }
   return url;
 }
 
@@ -42,7 +45,7 @@ export const ollamaUpstream: UpstreamAdapter = {
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
       logger.warn({ status: res.status, body: txt }, 'ollama_chat_error');
-      throw new Error(`Ollama ${res.status}: ${txt.slice(0, 200)}`);
+      throw new Error(`upstream error ${res.status}`);
     }
     const data = await res.json() as {
       id?: string;
@@ -89,7 +92,7 @@ export const ollamaUpstream: UpstreamAdapter = {
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
         logger.warn({ status: res.status, body: txt }, 'ollama_embeddings_error');
-        throw new Error(`Ollama embeddings ${res.status}: ${txt.slice(0, 200)}`);
+        throw new Error(`upstream error ${res.status}`);
       }
       const json = (await res.json()) as { embedding?: number[] };
       data.push({ object: 'embedding', embedding: json.embedding ?? [], index: i });

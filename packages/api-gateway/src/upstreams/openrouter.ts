@@ -28,7 +28,10 @@ function selectKey(byok?: string): string | undefined {
 export const openRouterUpstream: UpstreamAdapter = {
   async chat(req: ChatRequest): Promise<ChatResponse> {
     const apiKey = selectKey(req.byokKey);
-    if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
+    if (!apiKey) {
+      logger.warn({ model: req.modelId }, 'openrouter_apikey_missing');
+      throw new Error('model provider not configured');
+    }
     const headers: Record<string, string> = {
       authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
@@ -57,7 +60,7 @@ export const openRouterUpstream: UpstreamAdapter = {
         { status: res.status, model: req.modelId, body: text.slice(0, 500) },
         'openrouter_upstream_error'
       );
-      throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`);
+      throw new Error(`upstream error ${res.status}`);
     }
     const data = (await res.json()) as ChatResponse & {
       usage?: Partial<ChatResponse['usage']>;
@@ -103,7 +106,10 @@ export const openRouterUpstream: UpstreamAdapter = {
 
   async *chatStream(req: ChatRequest): AsyncIterable<unknown> {
     const apiKey = selectKey(req.byokKey);
-    if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
+    if (!apiKey) {
+      logger.warn({ model: req.modelId }, 'openrouter_apikey_missing');
+      throw new Error('model provider not configured');
+    }
     const headers: Record<string, string> = {
       authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
@@ -126,7 +132,11 @@ export const openRouterUpstream: UpstreamAdapter = {
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
-      throw new Error(`OpenRouter stream ${res.status}: ${text.slice(0, 200)}`);
+      logger.warn(
+        { status: res.status, model: req.modelId, body: text.slice(0, 500) },
+        'openrouter_stream_error'
+      );
+      throw new Error(`upstream error ${res.status}`);
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -153,7 +163,10 @@ export const openRouterUpstream: UpstreamAdapter = {
 
   async embeddings(req: EmbeddingsRequest): Promise<EmbeddingsResponse> {
     const apiKey = selectKey(req.byokKey);
-    if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
+    if (!apiKey) {
+      logger.warn({ model: req.modelId }, 'openrouter_apikey_missing');
+      throw new Error('model provider not configured');
+    }
     const headers: Record<string, string> = {
       authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
@@ -174,7 +187,7 @@ export const openRouterUpstream: UpstreamAdapter = {
         { status: res.status, model: req.modelId, body: text.slice(0, 500) },
         'openrouter_embeddings_error'
       );
-      throw new Error(`OpenRouter embeddings ${res.status}: ${text.slice(0, 200)}`);
+      throw new Error(`upstream error ${res.status}`);
     }
     const data = (await res.json()) as {
       data?: Array<{ embedding: number[]; index?: number }>;

@@ -1,73 +1,76 @@
 import { describe, it, expect } from 'vitest';
-import { estimateCostRub, finalBillableCostRub } from '../agent-runner.js';
+import { estimateCostCredits, finalBillableCostCredits } from '../agent-runner.js';
 
-// USD_TO_RUB and the hermes price are internal constants in agent-runner.ts.
-// They are replicated here ONLY to compute the expected value; the assertion
-// proves estimateCostRub uses them.
-const USD_TO_RUB = 90;
+// D-1: the credit unit is integer US cents (1 credit = $0.01). PRICING in
+// agent-runner.ts is USD per 1M tokens; estimateCostCredits returns
+// Math.ceil(usd * 100) — exact integer cents, rounded UP (never undercharge).
+// The expected values below replicate that math; the assertions prove
+// estimateCostCredits uses it.
+//
 // MIN_RUN_COST is an internal constant in agent-runner.ts (the run-start gate
-// floor, reused as the CHARGE-0 settle floor). Replicated here for the expected
-// values; the assertions prove finalBillableCostRub uses it as the floor.
+// floor, reused as the CHARGE-0 settle floor) = 1 credit ($0.01). Replicated
+// here; the assertions prove finalBillableCostCredits uses it as the floor.
 const MIN_RUN_COST = 1;
 
-describe('estimateCostRub', () => {
-  it('known model (hermes-4-405b) = in*0.9 + out*1.5 per 1M tokens * USD_TO_RUB', () => {
+describe('estimateCostCredits', () => {
+  it('known model (hermes-4-405b) = ceil((in*0.9 + out*1.5)/1M USD * 100) cents', () => {
     const tokensIn = 1_000_000;
     const tokensOut = 1_000_000;
     const expectedUsd = (tokensIn * 0.9 + tokensOut * 1.5) / 1_000_000;
-    const expected = expectedUsd * USD_TO_RUB;
-    expect(estimateCostRub('nousresearch/hermes-4-405b', tokensIn, tokensOut)).toBeCloseTo(expected, 6);
+    const expected = Math.ceil(expectedUsd * 100);
+    expect(estimateCostCredits('nousresearch/hermes-4-405b', tokensIn, tokensOut)).toBe(expected);
   });
 
   it('unknown model uses the FALLBACK_PRICE (in:1.0, out:2.0)', () => {
     const tokensIn = 500_000;
     const tokensOut = 250_000;
     const expectedUsd = (tokensIn * 1.0 + tokensOut * 2.0) / 1_000_000;
-    const expected = expectedUsd * USD_TO_RUB;
-    expect(estimateCostRub('some/unknown-model-xyz', tokensIn, tokensOut)).toBeCloseTo(expected, 6);
+    const expected = Math.ceil(expectedUsd * 100);
+    expect(estimateCostCredits('some/unknown-model-xyz', tokensIn, tokensOut)).toBe(expected);
   });
 
-  it('zero tokens cost 0', () => {
-    expect(estimateCostRub('nousresearch/hermes-4-405b', 0, 0)).toBe(0);
+  it('zero tokens cost 0 credits', () => {
+    expect(estimateCostCredits('nousresearch/hermes-4-405b', 0, 0)).toBe(0);
+  });
+
+  it('a sub-cent run rounds UP to 1 credit (never free, never a fraction)', () => {
+    // 1 in-token + 1 out-token of hermes ≈ $2.4e-12 → ceil to 1 cent.
+    expect(estimateCostCredits('nousresearch/hermes-4-405b', 1, 1)).toBe(1);
   });
 });
 
 /**
- * CHARGE-0 regression: finalBillableCostRub floors the BILLABLE settle amount to
- * MIN_RUN_COST so a zero-usage gateway charge (X-AIAG-Charged-Rub: 0.0000) or a
- * zero-token estimate can never settle a billable run at 0₽ (free). The external
- * / BYOK path must stay exactly 0 (the user pays their own provider).
+ * CHARGE-0 regression: finalBillableCostCredits floors the BILLABLE settle amount
+ * to MIN_RUN_COST so a zero-usage gateway charge or a zero-token estimate can
+ * never settle a billable run at 0 credits (free). The external / BYOK path must
+ * stay exactly 0 (the user pays their own provider).
  */
-describe('finalBillableCostRub — CHARGE-0 floor on the billable settle amount', () => {
+describe('finalBillableCostCredits — CHARGE-0 floor on the billable settle amount', () => {
   it('billable zero-usage run (raw 0) settles at MIN_RUN_COST, NOT 0', () => {
-    expect(finalBillableCostRub(0, false)).toBe(MIN_RUN_COST);
-  });
-
-  it('billable run below the floor (raw 0.0004 from a zero-ish charge) is raised to MIN_RUN_COST', () => {
-    expect(finalBillableCostRub(0.0004, false)).toBe(MIN_RUN_COST);
+    expect(finalBillableCostCredits(0, false)).toBe(MIN_RUN_COST);
   });
 
   it('billable run at exactly the floor stays MIN_RUN_COST', () => {
-    expect(finalBillableCostRub(MIN_RUN_COST, false)).toBe(MIN_RUN_COST);
+    expect(finalBillableCostCredits(MIN_RUN_COST, false)).toBe(MIN_RUN_COST);
   });
 
   it('billable run above the floor is passed through unchanged (no over-charge)', () => {
-    expect(finalBillableCostRub(7.5, false)).toBe(7.5);
+    expect(finalBillableCostCredits(750, false)).toBe(750);
   });
 
   it('EXTERNAL / BYOK run stays exactly 0 even with a raw 0 (no floor)', () => {
-    expect(finalBillableCostRub(0, true)).toBe(0);
+    expect(finalBillableCostCredits(0, true)).toBe(0);
   });
 
   it('EXTERNAL / BYOK run stays 0 — the floor is never applied to it', () => {
     // Even if a nonzero raw value were somehow passed, external must not be billed.
-    expect(finalBillableCostRub(5, true)).toBe(0);
+    expect(finalBillableCostCredits(500, true)).toBe(0);
   });
 });
 
 /**
  * Daily-spend guard invariant. The atomic UPDATE in db.ts settleRun encodes:
- *   WHERE spent_today_rub + cost <= daily_budget_rub
+ *   WHERE spent_today_credits + cost <= daily_budget_credits
  * i.e. the run is allowed only if the post-increment total stays within budget.
  * This pure predicate documents the exact boundary the SQL guard enforces.
  */

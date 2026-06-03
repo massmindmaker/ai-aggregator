@@ -16,7 +16,7 @@ interface WalletRow {
 
 interface TopupRow {
   id: string;
-  amount_rub: string;
+  amount_credits: string;
   status: string;
   comment_tag: string;
   created_at: string;
@@ -28,10 +28,15 @@ function shortAddr(a: string): string {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
-function fmtRub(s: string): string {
-  const n = Number(s);
-  if (!Number.isFinite(n)) return s;
-  return n.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+// D-1: balances/amounts are integer US cents (1 credit = $0.01). Display as
+// "N.NN cr" — store/compute in cents, never expose the raw integer.
+function fmtCredits(s: string): string {
+  const cents = Number(s);
+  if (!Number.isFinite(cents)) return s;
+  return (cents / 100).toLocaleString('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export default function ProfilePage() {
@@ -68,9 +73,9 @@ export default function ProfilePage() {
       headers: { authorization: `Bearer ${token}` },
     });
     if (!r.ok) return;
-    const j = (await r.json()) as { wallets: WalletRow[]; balance_rub: string };
+    const j = (await r.json()) as { wallets: WalletRow[]; balance_credits: string };
     setWallets(j.wallets ?? []);
-    setBalance(j.balance_rub ?? '0');
+    setBalance(j.balance_credits ?? '0');
   }
 
   async function refreshTopups() {
@@ -118,14 +123,14 @@ export default function ProfilePage() {
           <span className="tma-badge">Профиль</span>
           <h1 className="tma-title">Кошелёк и баланс</h1>
           <p className="tma-subtitle">
-            Привяжите TON-кошелёк, пополните счёт в рублях через TON.
+            Привяжите TON-кошелёк, пополните счёт в кредитах через TON.
           </p>
         </header>
 
         <section className="tma-card">
           <div className="tma-row">
             <span className="tma-card-text">Баланс</span>
-            <span className="tma-mono">{fmtRub(balance)} ₽</span>
+            <span className="tma-mono">{fmtCredits(balance)} cr</span>
           </div>
           <div className="tma-cta" style={{ marginTop: 12 }}>
             <Link href="/profile/topup" className="tma-btn tma-btn--primary">
@@ -180,7 +185,7 @@ export default function ProfilePage() {
           ) : (
             topups.map((t) => (
               <div className="tma-row" key={t.id}>
-                <span className="tma-mono">{fmtRub(t.amount_rub)} ₽</span>
+                <span className="tma-mono">{fmtCredits(t.amount_credits)} cr</span>
                 <span className="tma-card-text">
                   {t.status === 'confirmed' ? '✓' : t.status === 'pending' ? '…' : t.status}{' '}
                   {new Date(t.created_at).toLocaleDateString('ru-RU')}
