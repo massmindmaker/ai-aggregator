@@ -19,13 +19,22 @@ import {
   buildRunFailedMessage,
 } from './bot-api.js';
 import { decryptSecret } from './crypto.js';
+import { safeFetch } from './safe-fetch.js';
 
 // R0-1: aiag runs route through the :4000 gateway (revenue + white-label).
 // OPENROUTER_URL stays ONLY as the documented degraded fallback when the
-// gateway lacks the requested model (404 / model_not_found).
+// gateway lacks the requested model (404 / model_not_found / 400 Unknown model).
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const AIAG_GATEWAY_URL = 'http://127.0.0.1:4000/v1/chat/completions';
-const DEFAULT_MODEL = 'nousresearch/hermes-4-405b';
+// safeFetch allowlist: the only hosts the worker is allowed to reach WITHOUT
+// public-IP validation. Everything else (external/provider user-supplied URLs)
+// is DNS-resolved + IP-validated by safeFetch. '127.0.0.1:4000' is http:// so
+// it MUST be allowlisted (allowlist bypasses the HTTPS check too).
+const SAFE_FETCH_ALLOWLIST = ['127.0.0.1:4000', 'openrouter.ai'];
+// Registered gateway slug. The previous default ('nousresearch/hermes-4-405b')
+// is NOT in the gateway model registry, so the :4000 gateway returns a 400
+// "Unknown model" (resolver.ts) instead of serving the run. Use a registered slug.
+const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 const MAX_ITERATIONS = 12;
 const USD_TO_RUB = 90;
 // R0-2 run-start gate: minimum spendable balance (₽) required to begin a
@@ -169,12 +178,29 @@ async function postChat(
     headers['HTTP-Referer'] = 'https://ai-aggregator.ru';
     headers['X-Title'] = 'AIAG TMA';
   }
-  return fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  // SSRF guard (D-7 / R1-7). safeFetch DNS-resolves the host and rejects
+  // private / link-local / loopback / CGNAT / IPv6-ULA targets, pins the socket
+  // to the validated IP (anti-rebind) and re-validates every redirect hop.
+  // External & provider (user-influenced base_url) upstreams thus get full
+  // validation; the trusted internal gateway (http://127.0.0.1:4000) and
+  // openrouter.ai are allowlisted (allowlist also bypasses the HTTPS-only check).
+  return safeFetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    allowlist: SAFE_FETCH_ALLOWLIST,
+  });
 }
 
-/** True when a gateway response means "I don't have this model" → fall back. */
+/**
+ * True when a gateway response means "I don't have this model" → fall back.
+ * Covers OpenRouter-style 404 / model_not_found AND the AIAG :4000 gateway's
+ * 400 "Unknown model" (resolver.ts), which the old check missed.
+ */
 function isModelNotFound(status: number, text: string): boolean {
-  return status === 404 || /model_not_found|model not found|no such model/i.test(text);
+  if (status === 404) return true;
+  if (status === 400 && /unknown model/i.test(text)) return true;
+  return /model_not_found|model not found|no such model/i.test(text);
 }
 
 /**
