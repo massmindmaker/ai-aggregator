@@ -76,7 +76,11 @@
   ul.facts{list-style:none;display:flex;flex-direction:column;gap:8px}
   ul.facts li{padding-left:22px;position:relative;color:var(--ink-muted);font-size:13.5px}
   ul.facts li::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--accent)}
-  ul.facts.done li::before{background:var(--good);border-color:var(--good)}ul.facts b{color:var(--ink)}
+  ul.facts.done li::before{background:var(--good);border-color:var(--good)}
+  ul.facts li:has(.p-live)::before{background:var(--good);border-color:var(--good)}
+  ul.facts li:has(.p-soon)::before{background:var(--accent);border-color:var(--accent)}
+  ul.facts li:has(.p-rnd)::before{border-color:var(--ink-faint)}
+  ul.facts b{color:var(--ink)}
   .pill{font-family:var(--mono);font-size:9.5px;padding:2px 7px;border-radius:5px;border:1px solid;margin-left:4px}.p-live{color:var(--good);border-color:rgba(34,197,94,.45)}.p-branch{color:var(--soon);border-color:rgba(122,162,247,.45)}.p-soon{color:var(--accent);border-color:rgba(245,158,11,.45)}.p-rnd{color:var(--ink-faint);border-color:var(--line-strong)}
   /* persisted checklist */
   .todo{display:flex;flex-direction:column;gap:7px}
@@ -234,7 +238,7 @@ function overview(){const page=document.createElement('div');page.className='pag
    +'<div class="stats"><div class="stat"><div class="v" style="color:var(--good)">20</div><div class="k">shipped</div></div><div class="stat"><div class="v">55<small>/108</small></div><div class="k">тех-стек</div></div><div class="stat"><div class="v">52<small>/108</small></div><div class="k">функционал</div></div><div class="stat"><div class="v" style="color:var(--accent)">72<small>/108</small></div><div class="k">дизайн (readiness)</div></div></div>'
    +'<div class="sec" style="color:var(--danger)">⚠️ Честность дашборда (readiness 2026-06-04)</div><ul class="facts"><li><b>D-0 маржа шлюза — ПОЧИНЕН ✓</b> (2026-06-04): шлюз шлёт x-aiag-charged-usd-micro, воркер читает → биллит по реальной марже; gold-verified на проде. Контракт-тесты против дрифта. <span class="pill p-live">исправлено</span></li><li><b>Mock-провайдер — ПОЧИНЕН ✓</b>: нет ключа → чистая 503 (не платный фейк-ответ); воркер markFailed, не биллит. <span class="pill p-live">исправлено</span></li><li>tg-miniapp money-роуты: <b>0 тестов</b> (topup/аренда/clone-of-paid) <span class="pill p-soon">P1</span></li><li>Дизайн 89 был потолком showcase, не продукта → честно ~72; shipped TMA 64 <span class="pill p-soon">пере-оценено</span></li></ul>'
    +'<div class="sec">Что ты можешь сделать прямо сейчас</div><ul class="facts done">'
-     +'<li><b>Создать агента</b> — из 6 шаблонов или с нуля: имя, характер, модель, бюджет, 4 тула</li>'
+     +'<li><b>Создать агента</b> — спека (имя/характер/модель/бюджет/4 тула) → гоняется на нашем <b>stateless-цикле</b> (грузит конфиг+историю→модель+тулзы→ответ+биллинг). Это НЕ управляемый Hermes (тот R&amp;D) — но агент реально отвечает, юзает тулзы, ходит по расписанию, нанимает других.</li>'
      +'<li><b>Подключить своего Hermes</b> (или любой OpenAI-совместимый адрес + ключ) и общаться с ним</li>'
      +'<li><b>Свой ключ/провайдер = бесплатно</b> — наценка только на наших моделях</li>'
      +'<li><b>Запускать агента</b> и смотреть историю прогонов</li>'
