@@ -1,6 +1,6 @@
 # Gonka Foundation — Grant / Developer-Incentive Application
 
-**Date:** 2026-06-03 · **Status:** near-submittable. Founder fills the `⟨…⟩` placeholders, then submit.
+**Date:** 2026-06-03 (wallet+email filled 2026-06-04) · **Status:** GNK wallet + contact email are now in. Remaining before submit: the **Discord ID/handle** (last identity item) + the **GonkaGate `gp-` key spike numbers** (run `scripts/gonka-spike.mjs` once the founder pastes the key). Then submit.
 **Supersedes draft:** `2026-06-03-gonka-grant-application-draft.md`.
 **Research backing:** `docs/specs/research/R-03.md` (Gonka spike findings) + synthesis decision **D-4**.
 
@@ -17,9 +17,9 @@ Gonka runs a **10,000,000-GNK developer incentive program** across three directi
 
 **One-line:** A live, OpenAI-compatible aggregator + a Telegram-native AI-agent marketplace for the Russian-speaking market — we expose Gonka as a selectable inference provider and route real agent demand to it.
 
-**GNK Wallet Address (`gonka1…`):** `⟨founder to provide — bech32 gonka1… created via inferenced/Keplr/Leap⟩`
-**Discord ID / handle:** `⟨founder to provide⟩`
-**Contact email:** `⟨founder to provide⟩`
+**GNK Wallet Address (`gonka1…`):** `gonka1zxvamsaz7ksekrgw3n0p7upqd97z5e0zzr0yzc`
+**Discord ID / handle:** `⟨founder to provide — LAST remaining identity item⟩`
+**Contact email:** `massmindmaker@gmail.com`
 **Repo / demo (optional):** `⟨ai-aggregator.ru — confirm whether to share the @aiaggbot TMA link / a public repo URL⟩`
 
 **Which incentive direction:** Infrastructure optimization / ecosystem — developer & AI-agent access (Gonka Roadmap Track 2: aggregator adapter + delegated agent wallets + agent-runtime reference integration).
