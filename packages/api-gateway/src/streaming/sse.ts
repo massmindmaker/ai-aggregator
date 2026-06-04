@@ -9,7 +9,11 @@
 import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { settleCharge } from '../billing/settle';
-import { BILLING_HEADERS, formatRubHeader } from '../lib/billing-headers';
+import {
+  BILLING_HEADERS,
+  formatRubHeader,
+  formatUsdMicroHeader,
+} from '../lib/billing-headers';
 import { logRequest } from '../logging/stream';
 import { calcCostRub, calcByokFeeRub } from '../lib/pricing';
 import { fetchUsdRubRate } from '../lib/cbr';
@@ -81,9 +85,14 @@ export async function streamSseAndSettle(
     let totalRub = 0;
     // D-0: upstream cost we bore (₽, no markup) — 0 for BYOK.
     let upstreamCostRub = 0;
+    // D-1 (USD-native): same figures in USD for the TMA worker's micro-USD pair.
+    let chargedUsd = 0;
+    let upstreamCostUsd = 0;
     try {
       if (opts.byok) {
         totalRub = calcByokFeeRub();
+        const rate = await fetchUsdRubRate().catch(() => 92);
+        chargedUsd = rate > 0 ? totalRub / rate : 0;
       } else {
         const rate = await fetchUsdRubRate().catch(() => 92);
         const upstreamUsd =
@@ -97,6 +106,9 @@ export async function streamSseAndSettle(
           cachedInputTokens,
           totalInputTokens: inputTokens,
         });
+        // USD-native off the SAME rate (chargedUsd × rate == totalRub).
+        upstreamCostUsd = upstreamUsd;
+        chargedUsd = rate > 0 ? totalRub / rate : 0;
       }
       if (totalRub > 0) {
         await settleCharge({
@@ -116,6 +128,12 @@ export async function streamSseAndSettle(
     // (brand-neutral ₽ figures, keyed to gateway_request_id via X-Request-Id).
     c.header(BILLING_HEADERS.CHARGED_RUB, formatRubHeader(totalRub));
     c.header(BILLING_HEADERS.UPSTREAM_COST_RUB, formatRubHeader(upstreamCostRub));
+    // D-1: USD-micro pair the TMA worker reads.
+    c.header(BILLING_HEADERS.CHARGED_USD_MICRO, formatUsdMicroHeader(chargedUsd));
+    c.header(
+      BILLING_HEADERS.UPSTREAM_COST_USD_MICRO,
+      formatUsdMicroHeader(upstreamCostUsd),
+    );
 
     const statusCode = clientClosed || aborted ? 499 : 200;
     if (clientClosed || aborted) c.header('X-AIAG-Partial', 'true');

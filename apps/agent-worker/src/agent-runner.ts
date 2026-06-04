@@ -54,8 +54,12 @@ const MAX_CALL_AGENT_PER_RUN = 3;
 // into credits/cents with Math.ceil(micro / 10_000). Until the gateway emits
 // these USD headers, they are absent → billedByGateway=false → the worker falls
 // back to the local estimateCostCredits (the existing "never bill 0" path).
-const HDR_CHARGED_USD_MICRO = 'x-aiag-charged-usd-micro';
-const HDR_UPSTREAM_COST_USD_MICRO = 'x-aiag-upstream-cost-usd-micro';
+// Exported so the gateway↔worker contract test can assert these reader names are
+// byte-equal to the names the gateway EMITS (packages/api-gateway
+// BILLING_HEADERS.CHARGED_USD_MICRO / UPSTREAM_COST_USD_MICRO). If either side
+// renames a header, that test fails instead of silently disabling billing.
+export const HDR_CHARGED_USD_MICRO = 'x-aiag-charged-usd-micro';
+export const HDR_UPSTREAM_COST_USD_MICRO = 'x-aiag-upstream-cost-usd-micro';
 // R0-2 run-start gate: minimum spendable balance (credits = US cents) required to
 // begin a billable run. 1-credit ($0.01) floor.
 const MIN_RUN_COST = 1;

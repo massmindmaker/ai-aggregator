@@ -19,7 +19,11 @@ import {
 import { fetchUsdRubRate } from '../../lib/cbr';
 import { calcCostRub, calcByokFeeRub } from '../../lib/pricing';
 import { settleCharge } from '../../billing/settle';
-import { BILLING_HEADERS, formatRubHeader } from '../../lib/billing-headers';
+import {
+  BILLING_HEADERS,
+  formatRubHeader,
+  formatUsdMicroHeader,
+} from '../../lib/billing-headers';
 import { logRequest } from '../../logging/stream';
 import { streamSseAndSettle } from '../../streaming/sse';
 import { getUpstream } from '../../upstreams/registry';
@@ -98,8 +102,19 @@ chat.post('/completions', async (c) => {
   // the caller can compute realized margin = charged − upstreamCost. For BYOK
   // there is no upstream cost we bear (the user paid their provider) → 0.
   let upstreamCostRub = 0;
+  // D-1 (USD-native): the SAME authoritative figures in USD, for the TMA worker's
+  // micro-USD headers. Derived from the ₽ figures via the SAME `rate` (computed
+  // once, below) so chargedUsd × rate == totalRub exactly — no second cost calc.
+  let chargedUsd = 0;
+  let upstreamCostUsd = 0;
   if (byok) {
     totalRub = calcByokFeeRub();
+    // BYOK pays a fixed ₽ fee, no upstream cost we bear. Convert the fee to USD
+    // via the live rate so the USD-micro header is populated too. (TMA BYOK runs
+    // are isExternal → the worker ignores these headers, but keep them coherent.)
+    const rate = await fetchUsdRubRate().catch(() => 92);
+    chargedUsd = rate > 0 ? totalRub / rate : 0;
+    upstreamCostUsd = 0;
     await settleCharge({ orgId: key.org_id, requestId, totalRub });
   } else {
     const rate = await fetchUsdRubRate().catch(() => 92);
@@ -114,6 +129,11 @@ chat.post('/completions', async (c) => {
       cachedInputTokens: usage.cached_input_tokens,
       totalInputTokens: usage.prompt_tokens,
     });
+    // USD-native equivalents off the SAME rate: upstream cost in USD is just
+    // upstreamUsd; the charged USD is totalRub / rate (markup + caching already
+    // folded into totalRub). One division, same rate → no drift vs the ₽ figures.
+    upstreamCostUsd = upstreamUsd;
+    chargedUsd = rate > 0 ? totalRub / rate : 0;
     await settleCharge({ orgId: key.org_id, requestId, totalRub });
   }
 
@@ -168,5 +188,12 @@ chat.post('/completions', async (c) => {
   // these to bill off the REAL charge/cost instead of its local estimate.
   c.header(BILLING_HEADERS.CHARGED_RUB, formatRubHeader(totalRub));
   c.header(BILLING_HEADERS.UPSTREAM_COST_RUB, formatRubHeader(upstreamCostRub));
+  // D-1: the USD-micro pair the TMA worker actually reads (USD-cent credits).
+  // ₽ pair kept above for the web aggregator / earnings; USD pair added for TMA.
+  c.header(BILLING_HEADERS.CHARGED_USD_MICRO, formatUsdMicroHeader(chargedUsd));
+  c.header(
+    BILLING_HEADERS.UPSTREAM_COST_USD_MICRO,
+    formatUsdMicroHeader(upstreamCostUsd),
+  );
   return c.json(resp);
 });
