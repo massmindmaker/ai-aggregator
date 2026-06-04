@@ -280,7 +280,23 @@
   .cover-hook{margin-top:34px; font-family:var(--mono); font-size:14px; color:var(--ink-faint); letter-spacing:.04em}
   .cover-hook .am{color:var(--amber)}
 
+  /* credit-hub — input rails → core unit → output providers */
+  .hub{display:grid; grid-template-columns:1fr auto 1fr; gap:clamp(20px,3vw,40px); align-items:center; margin-top:8px}
+  .hub-col{display:flex; flex-direction:column; gap:12px}
+  .hub-h{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:4px}
+  .hub-item{border:1px solid var(--line); border-radius:12px; background:var(--bg); padding:14px 16px; font-size:15px; color:var(--ink); display:flex; justify-content:space-between; align-items:center; gap:12px}
+  .hub-item b{font-family:var(--mono); font-size:11px; padding:3px 8px; border-radius:6px; border:1px solid var(--line); color:var(--ink-dim); white-space:nowrap}
+  .hub-item.live b{color:var(--good); border-color:var(--good-line)}
+  .hub-item.soon b{color:var(--soon); border-color:var(--soon-line)}
+  .hub-core{display:flex; justify-content:center; position:relative}
+  .hub-core-box{width:172px; border:1px solid var(--amber-line); border-radius:18px; background:var(--amber-soft); padding:22px 18px; text-align:center}
+  .hub-core-unit{font-family:var(--mono); font-size:26px; color:var(--amber); font-weight:600}
+  .hub-core-sub{font-size:12px; color:var(--ink-dim); line-height:1.6; margin-top:10px}
+  .hub-core-tag{font-family:var(--mono); font-size:10.5px; color:var(--good); border:1px solid var(--good-line); border-radius:6px; padding:4px 8px; margin-top:14px; display:inline-block}
+
   @media(max-width:920px){
+    .hub{grid-template-columns:1fr; gap:22px}
+    .hub-core-box{width:100%}
     .split,.bill,.tracks,.ask-grid{grid-template-columns:1fr; gap:34px}
     .paths,.stat{grid-template-columns:1fr}
     .road{grid-template-columns:1fr 1fr; gap:24px}
@@ -308,8 +324,8 @@
     <div class="inner">
       <div class="eyebrow" data-r="1">Питч · Telegram Mini App · 2026</div>
       <h1 data-r="2">Маркетплейс AI-агентов,<br>которые живут в Telegram.<br><span class="q">За крипту. С характером.</span></h1>
-      <p class="lead" data-r="3" style="margin-top:30px">Открой готового агента, склонируй шаблон или собери своего. Каждый агент — персонаж со своим лицом, характером и кошельком. Платишь по факту, в кредитах.</p>
-      <div class="cover-hook" data-r="4">hosted · multi-user · multi-provider · <span class="am">own key = free</span></div>
+      <p class="lead" data-r="3" style="margin-top:30px">Открой готового агента, склонируй шаблон или сдай свой в аренду. Каждый агент — персонаж со своим лицом и бюджетом. Платишь по факту, в кредитах. Авторы зарабатывают: <strong>0% комиссии с их аренды</strong>.</p>
+      <div class="cover-hook" data-r="4">hosted · multi-user · multi-provider · <span class="am">own key = 0 комиссии</span> · money-path на проде</div>
       <div class="pills" data-r="5">
         <span class="pill"><span class="dot d-live"></span> live — работает на проде</span>
         <span class="pill"><span class="dot d-soon"></span> скоро — ближний билд</span>
@@ -322,13 +338,13 @@
   <section class="slide" data-title="Проблема">
     <div class="inner">
       <div class="eyebrow" data-r="1">Проблема</div>
-      <h2 data-r="2">Агентные тулзы сегодня — это софт<br>для одного оператора на своём ПК.</h2>
+      <h2 data-r="2">Готового агента негде взять,<br>а автору агента — негде заработать.</h2>
       <div class="fail" data-r="3">
-        <div class="f"><div class="x">01</div><div><div class="ft">Однопользовательские десктоп-тулзы</div><div class="fd">Hermes и подобные рантаймы ставишь на свою машину и крутишь сам. Нет хостинга, нет онбординга, нет «зашёл и пользуешься».</div></div></div>
-        <div class="f"><div class="x">02</div><div><div class="ft">Нет маркетплейса с платными моделями и тулзами</div><div class="fd">Никто не даёт каталог готовых агентов, выбор провайдера по каждой модели и рынок тулзов в одном продукте.</div></div></div>
-        <div class="f"><div class="x">03</div><div><div class="ft">Нет крипто-биллинга по факту</div><div class="fd">Подписки и карты, а не оплата за реальное использование. Для агента, который тратит сам, нужен счётчик и лимит, а не тариф.</div></div></div>
+        <div class="f"><div class="x">01</div><div><div class="ft">RU/Telegram-пользователь хочет готового агента, а не сборку</div><div class="fd">Рантаймы вроде Hermes ставишь на свою машину и крутишь сам. Нет хостинга, нет онбординга, нет «зашёл в Telegram и пользуешься». Массовый пользователь так и не доходит до агента.</div></div></div>
+        <div class="f"><div class="x">02</div><div><div class="ft">Автору агента негде монетизировать сетап</div><div class="fd">Человек собрал классного агента — и не может сдать его другим без % посредника, биллинга и защиты ключей. Нет маркетплейса, где автор публикует спеку (без ключей и данных) и получает доход.</div></div></div>
+        <div class="f"><div class="x">03</div><div><div class="ft">Агентно-тул-экономика дробится по крипто-рельсам</div><div class="fd">Оплата моделей, тулзов и под-агентов растащена по разным провайдерам, токенам и сетям. Для агента, который тратит сам, нужен один честный юнит и лимит, а не зоопарк кошельков.</div></div></div>
       </div>
-      <p class="verdict" data-r="4">Свободная ниша: <span class="am">хостед, многопользовательский продукт</span> с маркетом шаблонов, выбором платных моделей и рынком тулзов. Этой полосы не занимает никто.</p>
+      <p class="verdict" data-r="4">Свободная ниша: <span class="am">Telegram-нативный маркетплейс агентов</span> с честным кредит-юнитом, моделью авторской аренды и кредит-хабом поверх крипто-рельсов. Этой полосы не занимает никто.</p>
     </div>
   </section>
 
@@ -340,9 +356,9 @@
       <div class="split">
         <div>
           <div class="feat-list">
-            <div class="fi" data-r="3"><h3>Агент — это композиция, не промпт</h3><p>Персона, модели по ролям, навыки, тулзы, MCP-серверы, память и расписания. Собранная сущность, а не одна строка.</p></div>
-            <div class="fi" data-r="4"><h3>Агенты как персонажи</h3><p>У каждого агента лицо, имя и характер. Каталог — это галерея личностей, а не список функций.</p></div>
-            <div class="fi" data-r="5"><h3>Внутри Telegram, на крипто-кредитах</h3><p>Открываешь Mini App, выбираешь агента, запускаешь. Никаких установок. Платишь за факт использования.</p></div>
+            <div class="fi" data-r="3"><h3>Агент — это композиция, не промпт</h3><p>Открытая спека: персона, модели по ролям, навыки, тулзы, MCP-серверы, память и расписания. Собранная сущность, а не одна строка. Расписания и скиллы-каталог — уже на проде.</p></div>
+            <div class="fi" data-r="4"><h3>Агенты как персонажи</h3><p>У каждого агента лицо, имя и характер. Каталог — галерея коллекционных карт, а не список функций. Live в обоих каталогах: и шаблоны, и свои агенты.</p></div>
+            <div class="fi" data-r="5"><h3>Агенты работают командой</h3><p>Агент может нанять другого агента под подзадачу — внутренний A2A на кредитах, с лимитом глубины и бюджетом. Уже на проде, без крипто-расчётов между агентами.</p></div>
           </div>
         </div>
         <div data-r="4">
@@ -383,7 +399,7 @@
           <span class="tag t-live">live</span>
         </div>
       </div>
-      <p class="pub-note" data-r="6">Своего агента можно <strong>опубликовать как шаблон</strong>: делимся настройкой — персона, модели, скиллы, — но НЕ ключами, памятью и данными. Другие клонируют, автор получает доход.</p>
+      <p class="pub-note" data-r="6">Своего агента можно <strong>опубликовать как шаблон</strong> — бесплатно или в аренду. Делимся настройкой (персона, модели, скиллы), но НЕ ключами, памятью и данными. Другие клонируют; <strong>автор получает 100% назначенной суммы аренды — 0% комиссии AIAG.</strong> Публикация, клон и платная аренда с выплатой автору — <span class="am">уже на проде</span>.</p>
     </div>
   </section>
 
@@ -417,27 +433,58 @@
   <section class="slide" data-title="Биллинг">
     <div class="inner">
       <div class="eyebrow" data-r="1">Деньги</div>
-      <h2 data-r="2">Единый кредит. Прозрачно по факту.</h2>
+      <h2 data-r="2">Единый кредит = 1 US-цент. Прозрачно по факту.</h2>
       <div class="bill">
         <div class="bill-rows" data-r="3">
-          <div class="br"><div class="bi">◎</div><div><div class="bt">Один понятный юнит — Credits (кр)</div><div class="bd">Под капотом USDT/TON. Пользователь не видит контрактов и газа.</div></div></div>
-          <div class="br"><div class="bi">↑</div><div><div class="bt">Пополнение через TON Connect и HOT Wallet</div><div class="bd">Без Telegram Stars и их 32% комиссии. Крипто-нативно.</div></div></div>
-          <div class="br"><div class="bi">%</div><div><div class="bt">Комиссия только на наших моделях</div><div class="bd">Модель от нас — списываем плюс наценка. Свой ключ или провайдер — ноль комиссии.</div></div></div>
+          <div class="br"><div class="bi">◎</div><div><div class="bt">Один понятный юнит — Credits (кр), USD-пеггед</div><div class="bd">1 кр = 1 US-цент. Append-only леджер, атомарное списание (D-1 на проде). Пользователь не видит контрактов и газа.</div></div></div>
+          <div class="br"><div class="bi">↑</div><div><div class="bt">Пополнение через TON Connect</div><div class="bd">TON top-up live на testnet (init gold-verified, курс тянется вживую). Без Telegram Stars и их комиссии. Мейннет-кошелёк — go-live задача.</div></div></div>
+          <div class="br"><div class="bi">%</div><div><div class="bt">Комиссия только на наших моделях</div><div class="bd">Модель от нас — списываем плюс наценка с реальной маржи (D-0 на проде). Свой ключ, Gonka или провайдер — ноль комиссии.</div></div></div>
         </div>
         <div class="budget" data-r="4">
-          <div class="bh">Бюджет-карта агента · delegated wallet</div>
-          <div class="kv"><span>Дневной лимит</span><span>20.0 кр</span></div>
-          <div class="kv"><span>Лимит на вызов</span><span>2.0 кр</span></div>
-          <div class="kv"><span>Разрешённые тулзы</span><span>search · image</span></div>
-          <div class="kv"><span>Отзыв делегирования</span><span>в один тап</span></div>
+          <div class="bh">Бюджет-карта агента · леджер-лимиты live</div>
+          <div class="kv"><span>Дневной лимит · live</span><span>20.0 кр</span></div>
+          <div class="kv"><span>Лимит на вызов · live</span><span>2.0 кр</span></div>
+          <div class="kv"><span>Разрешённые тулзы · live</span><span>search · image</span></div>
+          <div class="kv"><span>Отзыв-кошелёк (TON Agentic) · скоро</span><span>в один тап</span></div>
           <div class="meter"><i></i></div>
-          <div class="mlabel">потрачено сегодня 12.8 / 20.0 кр · аудит-лог включён</div>
+          <div class="mlabel">потрачено сегодня 12.8 / 20.0 кр · леджер-гард на каждом списании</div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- 07 — HERMES -->
+  <!-- 07 — CREDIT-HUB -->
+  <section class="slide" data-title="Кредит-хаб">
+    <div class="inner">
+      <div class="eyebrow" data-r="1">Финансовый слой</div>
+      <h2 data-r="2">Кредит-хаб: любая рельса на вход —<br>любой провайдер на выход.</h2>
+      <p class="lead" data-r="3" style="margin-bottom:8px">Внутри всё считается в одном USD-пеггед кредите. Это развязывает оплату от конкретной крипто-сети: <strong>заводи чем удобно — трать у любого провайдера.</strong> Адаптеры подключаются по фазам, ядро уже работает.</p>
+      <div class="hub" data-r="4">
+        <div class="hub-col">
+          <div class="hub-h">Вход · любая рельса</div>
+          <div class="hub-item live">TON Connect <b>live · testnet</b></div>
+          <div class="hub-item soon">USDT / jetton <b>скоро</b></div>
+          <div class="hub-item soon">Coinbase / фиат-онрамп <b>R&amp;D</b></div>
+        </div>
+        <div class="hub-core">
+          <div class="hub-core-box">
+            <div class="hub-core-unit">1 кр = 1¢</div>
+            <div class="hub-core-sub">USD-пеггед<br>append-only леджер<br>атомарное списание</div>
+            <div class="hub-core-tag">D-0 + D-1 · на проде</div>
+          </div>
+        </div>
+        <div class="hub-col">
+          <div class="hub-h">Выход · любой провайдер</div>
+          <div class="hub-item live">AIAG-шлюз (+маржа) <b>live</b></div>
+          <div class="hub-item live">Gonka / BYOK <b>live · 0%</b></div>
+          <div class="hub-item soon">x402 тул-оплата <b>R&amp;D</b></div>
+        </div>
+      </div>
+      <p class="hermes-note" data-r="5">Моат — не «агенты тратят крипту», а <strong>один честный юнит между всеми рельсами</strong>: TON на вход сегодня, Coinbase/x402 на выход — адаптеры, по фазам. Реальный x402 и внешние выплаты — R&amp;D, помечены честно.</p>
+    </div>
+  </section>
+
+  <!-- 08 — HERMES -->
   <section class="slide dark" data-title="Hermes">
     <div class="inner">
       <div class="eyebrow" data-r="1">Движок</div>
@@ -447,15 +494,15 @@
         <div class="track live" data-r="4">
           <div class="th"><span class="tag t-live">live · работает</span></div>
           <h3>Подключи свой Hermes</h3>
-          <p>Пользователь даёт адрес своего рантайма, мы поверх отдаём модели и тулзы и метрим оплату AIAG-вызовов. Мост в Telegram уже встроен в Hermes — мы его не строим.</p>
+          <p>Пользователь даёт адрес своего рантайма, мы поверх отдаём модели, скиллы и тулзы и метрим оплату AIAG-вызовов. Read-only Канбан над подключённым Hermes — уже на проде. Мост в Telegram встроен в сам Hermes — мы его не строим.</p>
         </div>
         <div class="track" data-r="5">
           <div class="th"><span class="tag t-rnd">R&amp;D · ресёрч</span></div>
           <h3>Managed Hermes</h3>
-          <p>Мы поднимаем рантайм на своей инфре при создании агента. Требует инфра-решения по провижинингу и изоляции. Пока не построено и честно помечено в продукте.</p>
+          <p>Поднимаем рантайм на своей инфре при создании агента. Hermes выкатил локальный дашборд, но это локальный конфиг, не remote-API — control-plane нам всё ещё строить, нужен отдельный ~16GB бокс. Честно помечено как R&amp;D в продукте.</p>
         </div>
       </div>
-      <p class="hermes-note" data-r="6">Сегодня рантайм по умолчанию — stateless-цикл через OpenRouter. Connect-your-own-Hermes — это реальная история managed-исполнения, которая работает уже сейчас.</p>
+      <p class="hermes-note" data-r="6">Сегодня рантайм по умолчанию — stateless-цикл через шлюз. Connect-your-own-Hermes — реальная история managed-исполнения, которая работает уже сейчас; managed-провижининг ждёт отдельного бокса и нашего control-plane.</p>
     </div>
   </section>
 
@@ -466,40 +513,42 @@
       <h2 data-r="2">Что работает, а что в плане. Без пустышек.</h2>
       <div class="stat">
         <div class="col live" data-r="3">
-          <div class="ch"><span class="dot d-live"></span> live — работает</div>
+          <div class="ch"><span class="dot d-live"></span> live — на проде</div>
           <ul>
-            <li>Каталог агентов, запуск, чат, история</li>
-            <li>Дневной бюджет, баланс и пополнение</li>
-            <li>Свой Hermes; свой ключ = бесплатно</li>
-            <li>Вход + 152-ФЗ</li>
-            <li>Атомарный money-path (R0)</li>
+            <li>Каталог-карты агентов, запуск, чат, история</li>
+            <li>USD-кредит-леджер (D-1) + реальная маржа (D-0)</li>
+            <li>Публикация / клон / платная аренда · доход автора (0% AIAG)</li>
+            <li>Рейтинги, remix-lineage, sort trending/top/new</li>
+            <li>Расписания (cron) + Скиллы-каталог</li>
+            <li>Внутренний A2A · провайдер-пикер · свой ключ = 0%</li>
+            <li>TON top-up (testnet) · Gonka через шлюз gold-verified</li>
           </ul>
         </div>
         <div class="col soon" data-r="4">
           <div class="ch"><span class="dot d-soon"></span> скоро — ближний билд</div>
           <ul>
-            <li>Полный провайдер-пикер, мульти-модель</li>
-            <li>Run-trace и тул-апрув</li>
-            <li>Бюджет-карта (delegated wallet)</li>
-            <li>Профиль автора + доход, публикация</li>
-            <li>Расписания (cron)</li>
+            <li>USDT / jetton мульти-крипто пополнение</li>
+            <li>Run-trace и тул-апрув UI</li>
+            <li>Вывод дохода автора (на решении FD-2)</li>
+            <li>Мейннет TON go-live</li>
+            <li>Rate-limit публикаций, opaque-автор</li>
           </ul>
         </div>
         <div class="col rnd" data-r="5">
           <div class="ch"><span class="dot d-rnd"></span> R&amp;D — ресёрч</div>
           <ul>
-            <li>Managed-Hermes (provisioning + дашборд)</li>
-            <li>Маркет тулзов (x402)</li>
-            <li>Маркет скиллов, MCP-серверы</li>
-            <li>Канбан / swarm</li>
+            <li>Managed-Hermes (provisioning + control-plane)</li>
+            <li>Реальный x402 тул-оплата (нужен Coinbase CDP)</li>
+            <li>Внешний A2A между чужими агентами</li>
+            <li>TON Agentic Wallets (отзыв-кошелёк)</li>
           </ul>
         </div>
       </div>
       <div class="scores" data-r="6">
+        <span>дизайн <b>89</b>/108</span>
         <span>стек <b>50</b>/108</span>
-        <span>функционал <b>43</b>/108</span>
-        <span>UX <b>59</b>/108</span>
-        <span class="am">фундамент денег и auth — построен и на проде</span>
+        <span>функционал <b>43→</b> (re-score после монетизации)</span>
+        <span class="am">money-path + монетизация — построены и на проде</span>
       </div>
     </div>
   </section>
@@ -511,11 +560,11 @@
       <h2 data-r="2">Track 2 — почти ровно под нас.</h2>
       <p class="lead" data-r="3" style="margin-bottom:6px">Gonka — децентрализованная сеть AI-инференса (токен GNK, OpenAI-совместимый API). Их Foundation финансирует команды за реальный инференс-трафик. Их roadmap <strong>Track 2 «Developer &amp; AI agent access»</strong> — буквально наш продукт.</p>
       <div class="fit" data-r="4">
-        <div class="fr"><div class="gonka">P2 · Adapter для агрегаторов</div><div class="arr">→</div><div class="ours">мы и есть <b>агрегатор</b> с живым OpenAI-совместимым шлюзом</div></div>
-        <div class="fr"><div class="gonka">P3 · Delegated wallets / agent accounts</div><div class="arr">→</div><div class="ours">это наша <b>бюджет-карта агента</b> поверх атомарного леджера</div></div>
-        <div class="fr"><div class="gonka">P1 · Agent-runtime интеграции</div><div class="arr">→</div><div class="ours">наш <b>агент-воркер</b> и путь connect-your-own-Hermes</div></div>
+        <div class="fr"><div class="gonka">P2 · Adapter для агрегаторов</div><div class="arr">→</div><div class="ours">✓ <b>проверено:</b> Gonka гоняется через наш шлюз, real completion (15 tok)</div></div>
+        <div class="fr"><div class="gonka">P3 · Delegated wallets / agent accounts</div><div class="arr">→</div><div class="ours">наша <b>бюджет-карта агента</b> поверх атомарного USD-леджера</div></div>
+        <div class="fr"><div class="gonka">P1 · Agent-runtime интеграции</div><div class="arr">→</div><div class="ours">наш <b>агент-воркер</b>, A2A и путь connect-your-own-Hermes</div></div>
       </div>
-      <p class="ask-line" data-r="5">Берём Gonka <strong>как провайдера плюс грант, не как зависимость</strong>. Платят в GNK за то, что мы и так генерим — реальный трафик от RU-аудитории. Черновик заявки готов.</p>
+      <p class="ask-line" data-r="5">Берём Gonka <strong>как провайдера плюс грант, не как зависимость</strong> (Gonka = 0% комиссии, BYO — пользователь платит сети напрямую). <strong class="am">Деливерабл #1 уже GOLD-VERIFIED:</strong> реальный completion через наш шлюз :4000 на model=gonka/qwen3-235b (живой usage, не мок). Платят в GNK за реальный трафик от RU-аудитории.</p>
     </div>
   </section>
 
@@ -527,27 +576,27 @@
       <div class="road">
         <div class="rstep now" data-r="3">
           <div class="rdot">●</div>
-          <div class="rwhen">сейчас · R0 на проде</div>
-          <h3>Money-path и auth</h3>
-          <p>Атомарный леджер, дневной бюджет, вход и 152-ФЗ. Фундамент уже работает.</p>
+          <div class="rwhen">сделано · на проде</div>
+          <h3>Money-path + монетизация</h3>
+          <p>USD-леджер, реальная маржа, авторская аренда (0% AIAG), рейтинги, расписания, A2A, провайдер-пикер, Gonka через шлюз.</p>
         </div>
         <div class="rstep" data-r="4">
           <div class="rdot">1</div>
-          <div class="rwhen">ближний билд</div>
-          <h3>Провайдер-пикер + Gonka</h3>
-          <p>Выбор провайдера по модели, Gonka как первый класс. Спайк эндпоинта до коммита.</p>
+          <div class="rwhen">go-live</div>
+          <h3>Мейннет + активация</h3>
+          <p>Мейннет TON-кошелёк, free-grant и наценка (FD-pricing), USDT-пополнение, вывод дохода автора.</p>
         </div>
         <div class="rstep" data-r="5">
           <div class="rdot">2</div>
-          <div class="rwhen">следом</div>
-          <h3>Бюджет-карта агента</h3>
-          <p>Delegated wallet: лимиты, allowlist тулз, отзыв в тап, аудит. Демо-агент на Gonka.</p>
+          <div class="rwhen">кредит-хаб</div>
+          <h3>Тул-маркет + x402</h3>
+          <p>Внешние платные тулзы через x402 (Coinbase CDP), run-trace и тул-апрув UI, мульти-крипто адаптеры.</p>
         </div>
         <div class="rstep" data-r="6">
           <div class="rdot">3</div>
-          <div class="rwhen">маркет</div>
-          <h3>Публикация и доход</h3>
-          <p>Профиль автора, публикация шаблонов, рейтинги по реальному usage, трекшн-дашборд.</p>
+          <div class="rwhen">R&amp;D</div>
+          <h3>Managed Hermes</h3>
+          <p>Отдельный бокс, наш control-plane поверх Hermes-дашборда, провижининг и изоляция. Спайк-план готов.</p>
         </div>
       </div>
     </div>
@@ -562,18 +611,18 @@
         <div class="askbox amber" data-r="3">
           <div class="ah">Грант</div>
           <h3>Grant в GNK</h3>
-          <p>Финансирование по Track 2 под три деливерабла: Gonka-провайдер, делегированные кошельки агентов, агент-рантайм с публичным демо. Привязка к реальной метрике инференса.</p>
+          <p>Track 2: деливерабл #1 (Gonka через наш шлюз) <strong>уже GOLD-VERIFIED</strong>. Дальше — делегированные кошельки агентов и агент-рантайм с публичным демо. Привязка к реальной метрике инференса.</p>
         </div>
         <div class="askbox" data-r="4">
           <div class="ah">Партнёрство</div>
           <h3>Gonka как провайдер</h3>
-          <p>Подключаем Gonka в шлюз и пикер, гоним реальный трафик от RU-аудитории. Совместная dev-активация и техтуториал на русском.</p>
+          <p>Gonka уже в шлюзе и пикере (0% комиссии, BYO). Гоним реальный трафик от RU-аудитории. Совместная dev-активация и техтуториал на русском.</p>
         </div>
       </div>
       <div class="contact" data-r="5">
-        <span class="cc">telegram · <b>@username</b></span>
+        <span class="cc">telegram · <b>@aiaggbot</b></span>
         <span class="cc">GNK-кошелёк · <b>gonka1…</b></span>
-        <span class="cc">demo · <b>ai-aggregator.ru</b></span>
+        <span class="cc">demo · <b>Mini App @aiaggbot</b></span>
       </div>
     </div>
   </section>
