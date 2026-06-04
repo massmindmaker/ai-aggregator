@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
 
 interface Template {
@@ -38,13 +39,17 @@ function monogram(name: string | null): string {
 }
 
 export default function TemplatesPage() {
+  const { token } = useAuth();
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!token) return;
     (async () => {
       try {
-        const res = await fetch('/tg/api/tma/templates');
+        const res = await fetch('/tg/api/tma/templates', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!res.ok) {
           setFetchErr(`HTTP ${res.status}`);
           return;
@@ -55,7 +60,7 @@ export default function TemplatesPage() {
         setFetchErr(e instanceof Error ? e.message : 'fetch_failed');
       }
     })();
-  }, []);
+  }, [token]);
 
   return (
     <>

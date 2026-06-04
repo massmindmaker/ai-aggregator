@@ -44,9 +44,11 @@ export default function TemplateDetailPage() {
   const [rentLocked, setRentLocked] = useState(false);
 
   const load = useCallback(async () => {
-    if (!id) return;
+    if (!id || !token) return;
     try {
-      const res = await fetch(`/tg/api/tma/templates/${id}`);
+      const res = await fetch(`/tg/api/tma/templates/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.status === 404) {
         setFetchErr('Шаблон не найден');
         return;
@@ -60,7 +62,7 @@ export default function TemplateDetailPage() {
     } catch (e) {
       setFetchErr(e instanceof Error ? e.message : 'fetch_failed');
     }
-  }, [id]);
+  }, [id, token]);
 
   useEffect(() => {
     load();
