@@ -97,7 +97,7 @@
 
     <!-- ============ DONE ============ -->
     <section class="col done">
-      <div class="col-head"><span class="dot"></span><h2>DONE — already have / built</h2><span class="count">9</span></div>
+      <div class="col-head"><span class="dot"></span><h2>DONE — already have / built</h2><span class="count">11</span></div>
       <ul>
         <li><div class="t"><span class="mark">✓</span><div class="body">
           <b>Live OpenAI-compatible aggregator gateway</b>
@@ -152,24 +152,24 @@
           <span class="note">Verified: 3 access models (self-host opengnk / GonkaGate / brokers), auth shapes, <code>https://node4.gonka.ai</code> discovery, the one live model, the BYO-wallet vs markup-upstream decision, full integration step plan. Adversarially reviewed.</span>
           <div class="tags"><span class="tag p2">P2</span></div>
         </div></div></li>
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b>Gonka provider adapter BUILT ✅ (2026-06-04)</b>
+          <span class="note"><code>packages/api-gateway/src/upstreams/gonka.ts</code> exists + committed — copies <code>openrouter.ts</code>, base <code>https://api.gonkagate.com/v1</code>, key from <code>GONKA_API_KEY</code> (lazy, no module-load crash), <code>safeFetch</code> allowlist, white-label stripping verbatim. Inert until the founder's GonkaGate key + deploy.</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
+
+        <li><div class="t"><span class="mark">✓</span><div class="body">
+          <b>Gonka registered in the gateway BUILT ✅ (2026-06-04)</b>
+          <span class="note"><code>registry.ts</code> registers the gonka upstream; migration <code>0030_gonka_provider.sql</code> seeds the <code>gonka/qwen3-235b</code> slug. Committed; NOT yet applied/seeded on prod (lands with the spike).</span>
+          <div class="tags"><span class="tag p2">P2</span></div>
+        </div></div></li>
       </ul>
     </section>
 
     <!-- ============ NOT DONE ============ -->
     <section class="col notdone">
-      <div class="col-head"><span class="dot"></span><h2>NOT DONE — gaps</h2><span class="count">9</span></div>
+      <div class="col-head"><span class="dot"></span><h2>NOT DONE — gaps</h2><span class="count">7</span></div>
       <ul>
-        <li><div class="t"><span class="mark">✕</span><div class="body">
-          <b>Gonka provider adapter not built</b>
-          <span class="note"><code>packages/api-gateway/src/upstreams/gonka.ts</code> does <b>not</b> exist (confirmed — only openrouter/kie/groq/ollama/mock). PLANNED = copy <code>openrouter.ts</code> → <code>gonka.ts</code>, base <code>https://api.gonkagate.com/v1</code>, key from <code>GONKA_API_KEY</code>, keep white-label stripping verbatim.</span>
-          <div class="tags"><span class="tag p2">P2</span></div>
-        </div></div></li>
-
-        <li><div class="t"><span class="mark">✕</span><div class="body">
-          <b>Gonka not registered in the gateway</b>
-          <span class="note">No <code>case 'gonka'</code> in <code>registry.ts</code>; no <code>upstreams</code> / <code>models</code> / <code>model_upstreams</code> rows. A slug absent from the registry → 400 "Unknown model", so nothing can route yet.</span>
-          <div class="tags"><span class="tag p2">P2</span></div>
-        </div></div></li>
 
         <li><div class="t"><span class="mark">✕</span><div class="body">
           <b>No live Gonka-routed inference</b>
