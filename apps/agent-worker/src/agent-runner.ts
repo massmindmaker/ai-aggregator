@@ -22,6 +22,7 @@ import {
 import { decryptSecret } from './crypto.js';
 import { safeFetch } from './safe-fetch.js';
 import { openMcp, listMcpToolDefs, callMcpTool, MCP_PREFIX, type McpClient } from './mcp-client.js';
+import { resolveMcpOauthBearer } from './mcp-oauth.js';
 
 // R0-1: aiag runs route through the :4000 gateway (revenue + white-label).
 // OPENROUTER_URL stays ONLY as the documented degraded fallback when the
@@ -537,9 +538,15 @@ export async function runAgent(runId: string): Promise<void> {
   let mcp: McpClient | null = null;
   if (agent.mcp_endpoint_url) {
     try {
-      const authHeader = agent.mcp_auth_encrypted
-        ? decryptSecret(Buffer.from(agent.mcp_auth_encrypted, 'base64'))
-        : null;
+      // OAuth bearer takes priority: if the agent has an agent_mcp_oauth row,
+      // resolve (and refresh-if-stale) the access token. Falls back to the
+      // static encrypted bearer (basic MCP) when there is no OAuth row.
+      const oauthBearer = await resolveMcpOauthBearer(agent.id);
+      const authHeader = oauthBearer
+        ? `Bearer ${oauthBearer}`
+        : agent.mcp_auth_encrypted
+          ? decryptSecret(Buffer.from(agent.mcp_auth_encrypted, 'base64'))
+          : null;
       mcp = await openMcp({ url: agent.mcp_endpoint_url, authHeader });
       tools.push(...(await listMcpToolDefs(mcp)));
     } catch (e) {

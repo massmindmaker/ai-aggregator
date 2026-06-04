@@ -30,6 +30,9 @@ interface AgentRow {
   mcp_endpoint_url: string | null;
   // Derived boolean (mcp_auth_encrypted IS NOT NULL) — never the encrypted token itself.
   mcp_auth_set: boolean;
+  // Derived booleans — never the token. mcp_oauth_set = an agent_mcp_oauth row exists.
+  mcp_oauth_set: boolean;
+  mcp_oauth_scope: string | null;
 }
 
 interface RunRow {
@@ -51,9 +54,12 @@ async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null>
            connection_type, external_base_url, external_api_key_hint,
            external_model_slug,
            mcp_endpoint_url,
-           (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set
+           (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
+           (o.agent_id IS NOT NULL) AS mcp_oauth_set,
+           o.scope AS mcp_oauth_scope
     FROM agents
-    WHERE id = ${id}::uuid
+    LEFT JOIN agent_mcp_oauth o ON o.agent_id = agents.id
+    WHERE agents.id = ${id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
       AND status != 'deleted'
     LIMIT 1
@@ -200,6 +206,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const mcpUrl = body.mcp_endpoint_url?.trim();
   if (body.reset_mcp === true) {
     changeMcp = true; // → clear both (defaults above are null)
+    // Detaching MCP also revokes any stored OAuth token for this agent.
+    await sql`DELETE FROM agent_mcp_oauth WHERE agent_id = ${params.id}::uuid`;
   } else if (mcpUrl) {
     changeMcp = true;
     const mguard = validateExternalUrl(mcpUrl);
@@ -232,7 +240,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
               connection_type, external_base_url, external_api_key_hint,
               external_model_slug,
               mcp_endpoint_url,
-              (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set
+              (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
+              EXISTS (SELECT 1 FROM agent_mcp_oauth o WHERE o.agent_id = agents.id) AS mcp_oauth_set,
+              (SELECT o.scope FROM agent_mcp_oauth o WHERE o.agent_id = agents.id) AS mcp_oauth_scope
   `) as unknown as AgentRow[];
 
   return NextResponse.json({ agent: upd[0] });

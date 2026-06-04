@@ -21,6 +21,8 @@ interface Agent {
   external_model_slug?: string | null;
   mcp_endpoint_url?: string | null;
   mcp_auth_set?: boolean;
+  mcp_oauth_set?: boolean;
+  mcp_oauth_scope?: string | null;
 }
 
 // Tools implemented by the agent-worker (apps/agent-worker/src/tools.ts).
@@ -103,6 +105,11 @@ export default function AgentDetailPage() {
   const [mcpSel, setMcpSel] = useState('');
   const [mcpUrl, setMcpUrl] = useState('');
   const [mcpAuth, setMcpAuth] = useState('');
+  // MCP OAuth (R19). oauthUrl + oauthClientId feed the /start call → openLink out.
+  const [oauthUrl, setOauthUrl] = useState('');
+  const [oauthClientId, setOauthClientId] = useState('');
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthErr, setOauthErr] = useState<string | null>(null);
 
   // ---- schedule (self-running agent) ----
   const [schedule, setSchedule] = useState<Schedule | null>(null);
@@ -129,6 +136,9 @@ export default function AgentDetailPage() {
     setMcpSel('');
     setMcpUrl('');
     setMcpAuth('');
+    setOauthUrl(agent.mcp_endpoint_url ?? '');
+    setOauthClientId('');
+    setOauthErr(null);
     setEditErr(null);
     setEditing(true);
   }
@@ -190,6 +200,47 @@ export default function AgentDetailPage() {
       setEditErr(err instanceof Error ? err.message : 'save_failed');
     } finally {
       setSaving(false);
+    }
+  }
+
+  // MCP OAuth (R19): call /start, then openLink() the authorize URL out to the
+  // system browser (the consent screen needs a real address bar; the webview
+  // can't catch the callback). The PKCE verifier + state live server-side.
+  async function handleMcpOauth() {
+    if (!token || !id) return;
+    const server = oauthUrl.trim();
+    const clientId = oauthClientId.trim();
+    if (!server || !clientId) {
+      setOauthErr('Укажите URL MCP-сервера и client_id');
+      return;
+    }
+    setOauthBusy(true);
+    setOauthErr(null);
+    try {
+      const res = await fetch(`/tg/api/tma/agents/${id}/mcp-oauth/start`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ server_url: server, client_id: clientId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        authorize_url?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.authorize_url) {
+        setOauthErr(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      const tg = (window as unknown as { Telegram?: { WebApp?: { openLink?: (u: string) => void } } })
+        .Telegram?.WebApp;
+      if (tg?.openLink) {
+        tg.openLink(data.authorize_url);
+      } else {
+        window.open(data.authorize_url, '_blank');
+      }
+    } catch (err) {
+      setOauthErr(err instanceof Error ? err.message : 'oauth_failed');
+    } finally {
+      setOauthBusy(false);
     }
   }
 
@@ -885,8 +936,13 @@ export default function AgentDetailPage() {
                 <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -4 }}>
                   Сейчас:{' '}
                   {agent.mcp_endpoint_url
-                    ? `подключён${agent.mcp_auth_set ? ' (с auth)' : ''} · ${agent.mcp_endpoint_url}`
+                    ? `подключён${
+                        agent.mcp_oauth_set ? ' (OAuth)' : agent.mcp_auth_set ? ' (с auth)' : ''
+                      } · ${agent.mcp_endpoint_url}`
                     : 'не подключён'}
+                  {agent.mcp_oauth_set && agent.mcp_oauth_scope
+                    ? ` · scope: ${agent.mcp_oauth_scope}`
+                    : ''}
                 </p>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <span className="tma-card-text">Изменить</span>
@@ -925,6 +981,57 @@ export default function AgentDetailPage() {
                     </label>
                   </>
                 )}
+
+                {/* MCP OAuth (R19) — авторизация по OAuth 2.1 + PKCE вместо статичного токена. */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    borderTop: '1px solid var(--line)',
+                    paddingTop: 12,
+                    marginTop: 4,
+                  }}
+                >
+                  <span className="tma-card-text" style={{ fontWeight: 600, fontSize: 13 }}>
+                    Войти через OAuth
+                  </span>
+                  <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -4 }}>
+                    {agent.mcp_oauth_set
+                      ? 'Подключено по OAuth. Можно переподключить.'
+                      : 'Для серверов, защищённых OAuth 2.1. Откроется браузер для входа.'}
+                  </p>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span className="tma-card-text">URL MCP-сервера</span>
+                    <input
+                      type="url"
+                      value={oauthUrl}
+                      onChange={(e) => setOauthUrl(e.target.value)}
+                      placeholder="https://mcp.example.com/mcp"
+                      style={editInputStyle}
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span className="tma-card-text">client_id</span>
+                    <input
+                      type="text"
+                      value={oauthClientId}
+                      onChange={(e) => setOauthClientId(e.target.value)}
+                      placeholder="client_id"
+                      autoComplete="off"
+                      style={editInputStyle}
+                    />
+                  </label>
+                  {oauthErr && <div className="tma-error">Ошибка: {oauthErr}</div>}
+                  <button
+                    type="button"
+                    onClick={handleMcpOauth}
+                    className="tma-btn"
+                    disabled={oauthBusy}
+                  >
+                    {oauthBusy ? 'Открываем…' : 'Войти через OAuth'}
+                  </button>
+                </div>
               </div>
 
               {editErr && <div className="tma-error">Ошибка: {editErr}</div>}
