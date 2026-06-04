@@ -105,9 +105,7 @@ const REPO='https://github.com/massmindmaker/aiag-marketplace';
 const TABS=[
  {id:'overview',ic:'📊',name:'Обзор',overview:true},
  {id:'tma',ic:'🎴',name:'TMA · агенты',cards:[
-   {t:'Showcase (флагман)',d:'Веб+моб × тёмн+светл, реальные токены, честный по функциям',p:'wireframes/showcase.html',ty:'html',star:1},
-   {t:'Мобильный борд TMA',d:'45 артбордов, dark/amber, экраны+состояния',p:'wireframes/tma/index.html',ty:'html'},
-   {t:'Персонажи (видео-карты)',d:'Голографические карточки: Алиса/Ника/Нова',p:'wireframes/tma/characters-video.html',ty:'html'},
+   {t:'★ Дизайн-борд (моб+веб, SoT)',d:'ОДИН борт вместо showcase/tma/web — мобильный+веб, тёмная/светлая, 45 экранов',p:'wireframes/design-board.html',ty:'html',star:1},
    {t:'Product definition',d:'3 способа завести агента, спец, биллинг',p:'specs/2026-06-02-tma-product-definition.md',ty:'md'},
    {t:'Монетизация',d:'Аренда автора (free/цена), AIAG 0% с аренды',p:'specs/2026-06-03-monetization.md',ty:'md'},
    {t:'Provider-picker — ПОСТРОЕНО',d:'Свой провайдер+ключ=0 комиссии при создании агента; money-correct, проверено',p:'specs/2026-06-03-provider-picker-implemented.md',ty:'md',star:1},
@@ -119,31 +117,22 @@ const TABS=[
  {id:'web',ic:'🌐',name:'Web · модели (₽)',cards:[
    {t:'Web-борд (светлый)',d:'Studio23-тема, маркет моделей, ₽ — отдельный продукт',p:'wireframes/web/index.html',ty:'html'},
    {t:'Product coherence map',d:'Где обещания ≠ реальность',p:'specs/2026-06-02-product-coherence-map.md',ty:'md'},
-   {t:'Архитектура (общая)',d:'Сервис-карта, 2 продукта, money-flow',p:'ARCHITECTURE.md',ty:'md'},
  ]},
  {id:'design',ic:'🎨',name:'Дизайн',cards:[
    {t:'★ ЕДИНЫЙ дизайн-борд (SoT)',d:'ОДИН борт: мобильный+веб, тёмная/светлая, меню слева / 45 экранов справа. Заменяет разрозненные tma/web/showcase',p:'wireframes/design-board.html',ty:'html',star:1},
    {t:'★ Design readiness (свежий)',d:'Консолидированная оценка: система 86 / shipped 64 / weighted ~72; супер­седит старые эвалы; топ-5 фиксов (карта-компонент, run-trace, shared-слой)',p:'specs/2026-06-04-design-readiness.md',ty:'md',star:1},
    {t:'DESIGN.md (токены SoT)',d:'Цвета/типографика/компоненты/анимации/логотип',p:'../DESIGN.md',ty:'md',star:1},
-   {t:'Оценка дизайна 108 v2 (устар.)',d:'89/108 = потолок SHOWCASE, не продукта → superseded design-readiness (~72). Держим как showcase-скор',p:'specs/2026-06-03-design-eval-108-v2.html',ty:'html'},
-   {t:'План улучшений дизайна (108 + честность)',d:'Свежая критика 108 + план по блокам, обе темы + карта что работает/чего нет',p:'specs/2026-06-03-design-108-eval-and-improvement-plan.md',ty:'md',star:1},
-   {t:'UX-критика',d:'Разбор по 12 измерениям',p:'specs/2026-06-03-aiag-ux-critique.html',ty:'html'},
    {t:'VoltAgent reuse',d:'Что переиспользовать (MIT), adopt/adapt/skip',p:'specs/2026-06-03-voltagent-design-reuse.md',ty:'md'},
    {t:'ANIMATION.md',d:'Моушн-принципы, aiag-* библиотека',p:'ANIMATION.md',ty:'md'},
  ]},
  {id:'video',ic:'🎬',name:'Видео',cards:[
    {t:'Видео-галерея (всё в одном)',d:'Промо-ролик + видео-карты персонажей + раскадровка + пайплайн',p:'wireframes/video.html',ty:'html',star:1},
-   {t:'Промо-ролик AIAG (финал v3)',d:'Встроен в галерею; исходники v1·v2·v3 в projects/hermes/aiag-promo/',p:'wireframes/assets/video/aiag-promo-v3.mp4',ty:'html'},
    {t:'Видео-карты персонажей',d:'Голографические карточки: Алиса/Ника/Нова',p:'wireframes/tma/characters-video.html',ty:'html'},
    {t:'Пайплайн портрет→видео→голос (R-12)',d:'4 стадии через Kie: лист → портрет → holo-карта → голос',p:'specs/research/R-12.md',ty:'md'},
  ]},
  {id:'arch',ic:'🏗️',name:'Архитектура / Research',cards:[
    {t:'🔴 ★ App readiness (критическая, 2026-06-04)',d:'Code-grounded пере-оценка: func 52 / tech 55. НАШЛА: D-0 сломан (RUB≠USD-micro заголовки), mock-биллинг по дефолту, 0 тестов money-роутов. Топ-5 P0-фиксов',p:'specs/2026-06-04-readiness-assessment.md',ty:'md',star:1},
    {t:'SYNTHESIS (архрешения)',d:'D-0…D-14, порядок билда, founder-гейты, риски',p:'specs/research/SYNTHESIS.html',ty:'html',star:1},
-   {t:'Backend gap',d:'Что не доделано (статус D-0…D-14)',p:'specs/2026-06-03-backend-gap.md',ty:'md'},
-   {t:'USD-реестр D-1 — план',d:'Кредиты=центы (BIGINT), tg_ledger_entries, убить USD_TO_RUB; 0 балансов=дёшево сейчас',p:'specs/2026-06-03-usd-ledger-plan.md',ty:'md',star:1},
-   {t:'Gateway build fix (ioredis)',d:'Корень крэша :4000 + фикс tsup external bullmq/ioredis',p:'specs/2026-06-03-gateway-build-fix.md',ty:'md'},
-   {t:'White-label fix (ошибки)',d:'6 утечек бренда в user-facing ошибках + точные правки',p:'specs/2026-06-03-white-label-fix.md',ty:'md'},
    {t:'ARCHITECTURE.md',d:'Сервис-карта, топология, money-flow',p:'ARCHITECTURE.md',ty:'md'},
    {t:'SECURITY.md',d:'Auth, секреты, billing-integrity',p:'../SECURITY.md',ty:'md'},
    {t:'Research backlog',d:'P0→P2 что исследовать',p:'specs/RESEARCH-BACKLOG.html',ty:'html'},
@@ -151,7 +140,6 @@ const TABS=[
    {t:'★ R&D-синтез 2026-06-04',d:'MCP-OAuth (#30) · внутренний A2A · исполнение skill-скриптов — что строится сейчас vs нужна инфра',p:'specs/research/2026-06-04-rnd-synthesis.md',ty:'md',star:1},
    {t:'Ресёрч-синтез 2026-06-04',d:'Hermes-updates · R-14 sandbox · R-15 skills-hub · R-16 obs · R-17 рынок · R-18 цены',p:'specs/research/2026-06-04-research-synthesis.md',ty:'md'},
    {t:'Hermes updates (свежий)',d:'Дашборд Hermes ЛОКАЛЬНЫЙ (не remote-API) → контрол-плейн всё ещё наш; cold-start быстрее',p:'specs/research/2026-06-04-hermes-updates.md',ty:'md'},
-   {t:'Tech-stack 108 eval',d:'Аудит стека (50/108)',p:'specs/2026-06-02-tma-tech-stack-108-eval.md',ty:'md'},
    {t:'R1 verified plan',d:'R1-1…R1-8 план',p:'specs/2026-06-02-r1-verified-plan.md',ty:'md'},
  ]},
  {id:'deploy',ic:'🚀',name:'Деплой / CI-CD',cards:[
@@ -159,6 +147,7 @@ const TABS=[
    {t:'Deploy/test readiness',d:'GO для Wave-0, runbook, capacity',p:'specs/2026-06-03-deploy-test-readiness.md',ty:'md'},
  ]},
  {id:'gonka',ic:'💸',name:'Gonka грант',cards:[
+   {t:'★ Gonka-пакет (питч+экраны+чекпоинты)',d:'Единый флоу для ревьюера: питч + GOLD-proof :4000 → встроенный design-board (45 экранов) → честная LIVE-vs-COMING таблица → UX',p:'specs/2026-06-04-gonka-package.html',ty:'html',star:1},
    {t:'Чек-лист гранта',d:'Сделано / не сделано / нужно для подачи',p:'specs/2026-06-03-gonka-checklist.html',ty:'html',star:1},
    {t:'План действий по Гонке (свежий)',d:'Что делаешь ТЫ (кошелёк/Discord/ключ) vs что строю Я (адаптер/спайк/демо) — критпуть к подаче',p:'specs/2026-06-03-gonka-action-plan.md',ty:'md',star:1},
    {t:'Питч под Gonka',d:'10 слайдов: RU-спрос → в Gonka',p:'specs/2026-06-03-gonka-pitch.html',ty:'html'},
@@ -177,7 +166,6 @@ const TABS=[
    {t:'Инструкция Coinbase CDP',d:'Для друга: завести CDP + Secret API Key (для x402, testnet бесплатно)',p:'specs/2026-06-04-coinbase-cdp-setup-instruction.md',ty:'md'},
  ]},
  {id:'plan',ic:'🗂️',name:'Планирование (GSD)',cards:[
-   {t:'Статус (живой)',d:'Что сделано, оценки, что дальше',p:'specs/STATUS.html',ty:'html',star:1},
    {t:'ROADMAP',d:'Все фазы + milestone R1',p:'../.planning/ROADMAP.md',ty:'md'},
    {t:'R1 milestone',d:'Money → providers → managed-Hermes',p:'../.planning/R1-MILESTONE.md',ty:'md'},
    {t:'STATE',d:'Текущая позиция GSD',p:'../.planning/STATE.md',ty:'md'},
