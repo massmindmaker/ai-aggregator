@@ -39,6 +39,13 @@ export function useAuth() {
 
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
+    // Signal Telegram the Mini App is ready + take full height (no-op in a browser).
+    try {
+      tg?.ready?.();
+      tg?.expand?.();
+    } catch {
+      /* ignore */
+    }
     if (!tg?.initData) {
       setError('Не открыто в Telegram');
       setLoading(false);

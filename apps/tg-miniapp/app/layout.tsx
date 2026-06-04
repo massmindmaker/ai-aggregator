@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Script from 'next/script';
 import { Providers } from './providers';
 import './globals.css';
 
@@ -18,6 +19,15 @@ export const viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
+      <head>
+        {/* Telegram WebApp SDK — REQUIRED so window.Telegram.WebApp + initData exist.
+            Without it useAuth always errors «Не открыто в Telegram» (the auth gate),
+            even inside Telegram. beforeInteractive = loaded before any app JS reads it. */}
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
+        />
+      </head>
       <body>
         <Providers>{children}</Providers>
       </body>

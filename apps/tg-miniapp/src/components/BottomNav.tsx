@@ -17,11 +17,6 @@ const ITEMS: Item[] = [
     iconPath: 'M12 2a3 3 0 013 3v1h2a2 2 0 012 2v3h1v4h-1v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3H4v-4h1V8a2 2 0 012-2h2V5a3 3 0 013-3z M9 13h.01 M15 13h.01', // robot
   },
   {
-    href: '/nft',
-    label: 'NFT',
-    iconPath: 'M6 3h12l3 6-9 12L3 9z M6 3l6 18 M18 3l-6 18 M3 9h18', // gem
-  },
-  {
     href: '/market',
     label: 'Маркет',
     iconPath: 'M3 7l9 4 9-4-9-4-9 4z M3 7v10l9 4 9-4V7 M12 11v10', // box
