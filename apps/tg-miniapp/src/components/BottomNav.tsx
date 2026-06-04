@@ -27,6 +27,11 @@ const ITEMS: Item[] = [
     iconPath: 'M3 7l9 4 9-4-9-4-9 4z M3 7v10l9 4 9-4V7 M12 11v10', // box
   },
   {
+    href: '/skills',
+    label: 'Скиллы',
+    iconPath: 'M13 2L3 14h7l-1 8 10-12h-7l1-8z', // bolt
+  },
+  {
     href: '/profile',
     label: 'Профиль',
     iconPath: 'M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 4-7 8-7s8 3 8 7', // user

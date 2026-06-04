@@ -435,6 +435,15 @@ export default function AgentDetailPage() {
               {runActive ? 'Идёт запуск — редактирование недоступно' : '✎ Редактировать'}
             </button>
 
+            {/* Канбан/swarm — read-only board of the user's connected Hermes.
+                Only meaningful for an external_openai (connect-your-own-Hermes)
+                agent; the page itself shows an honest empty state otherwise. */}
+            {agent.connection_type === 'external_openai' && (
+              <Link href={`/agents/${id}/kanban`} className="tma-btn">
+                ▤ Канбан (swarm)
+              </Link>
+            )}
+
             {/* Publish as a public template — shares the spec (no keys/data). */}
             {publishedId ? (
               <div className="tma-success">
