@@ -29,8 +29,10 @@
     { "id": "managed-hermes", "title": "Managed Hermes runtime (the real Wave 2/3 core)", "blocker": "needs a SEPARATE ~16GB VPS — the 2GB prod box hosts 0-1 instances (~300-600MB each)", "owner": "founder: provision the box", "doc": "docs/specs/2026-06-04-managed-hermes-spike-plan.md", "go_no_go": "idle RSS >800MB ⇒ shared multi-tenant not viable at $20 tier ⇒ stay connect-your-own-Hermes" }
   ],
   "decisions_pending": [
-    { "id": "FD-2", "question": "Author income — withdrawable OUT vs in-app-spend-only?", "blocks": "Slice-3 cash-out (currently in-app-spendable, withdraw = «скоро»)" },
-    { "id": "FD-6", "question": "GonkaGate 10% usage fee — absorb (margin hit) or surface in seeded price?", "blocks": "Gonka model price seeding" }
+    { "id": "FD-2", "question": "Author income — withdrawable OUT vs in-app-spend-only?", "blocks": "Slice-3 cash-out (currently in-app-spendable, withdraw = «скоро»)" }
+  ],
+  "decisions_resolved": [
+    { "id": "FD-6", "decision": "Gonka = 0% commission (BYO / pass-through) — the user pays Gonka directly, we don't tax it; matches the 'own provider = free' rule. We earn on the GRANT (paid in GNK), not on per-call Gonka margin. The GonkaGate platform fee only applies if we ever resell via our own key — deferred, not needed for the product.", "date": "2026-06-04" }
   ],
   "backlog": [
     { "id": "gateway-usd-headers", "title": "Gateway emits USD-micro margin headers (finish D-0)", "risk": "low", "note": "worker falls back to estimate until then (never 0)." },
@@ -42,7 +44,7 @@
   ],
   "founder_tasks": [
     { "id": "hermes-box", "title": "Provision ~16GB Hermes VPS (paid, recurring)", "status": "pending", "unblocks": "managed-hermes" },
-    { "id": "gonka", "title": "Gonka submission", "status": "in_progress", "provided": ["GNK wallet gonka1zxvamsaz7ksekrgw3n0p7upqd97z5e0zzr0yzc (2026-06-04)", "email massmindmaker@gmail.com (2026-06-04)"], "remaining": ["GonkaGate gp- key ($10 trial) — blocks the spike + live demo", "Discord handle", "FD-6 fee decision", "post the proposal"], "dev_ready": "scripts/gonka-spike.mjs ready (runs the moment GONKA_API_KEY is set); gonka.ts adapter verified correct; wallet+email filled into the application + checklist", "doc": "docs/specs/2026-06-03-gonka-grant-application.md" }
+    { "id": "gonka", "title": "Gonka submission", "status": "in_progress", "provided": ["GNK wallet gonka1zxvamsaz7ksekrgw3n0p7upqd97z5e0zzr0yzc", "email massmindmaker@gmail.com", "Discord — joined", "FD-6 RESOLVED → Gonka 0% commission (BYO)"], "remaining": ["GonkaGate gp- key ($10 trial → gonkagate.com/en/register, email signup, no crypto) — then I run the spike", "post the proposal (deferred — too early)"], "dev_ready": "scripts/gonka-spike.mjs ready (runs the moment GONKA_API_KEY is set); gonka.ts adapter verified correct; wallet+email filled into the application + checklist", "doc": "docs/specs/2026-06-03-gonka-grant-application.md" }
   ],
   "assets": [
     { "name": "Project dashboard", "type": "board", "path": "docs/DASHBOARD.html", "status": "live" },
