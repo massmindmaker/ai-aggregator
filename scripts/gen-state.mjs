@@ -54,6 +54,7 @@ const blocked = arr(state.blocked)
   .map((s) =>
     li(
       `<b>${esc(s.title)}</b><div class="note">⛔ ${esc(s.blocker)} · <b>${esc(s.owner ?? '')}</b>` +
+        (s.signal ? `<br>🆕 ${esc(s.signal)}` : '') +
         (s.go_no_go ? `<br>go/no-go: ${esc(s.go_no_go)}` : '') +
         (s.doc ? `<br><a href="${esc(s.doc.replace(/^docs\//, '../'))}">${esc(s.doc)}</a>` : '') +
         `</div>`,
