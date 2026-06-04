@@ -201,9 +201,31 @@ ${assets ? section('Ассеты', '📦 Assets', `<div class="files">\n    ${as
 
 writeFileSync(OUT, html, 'utf8');
 
+// --- memory automation: also emit a clean, AI/human-readable CURRENT-STATE.md ---
+// One command (node scripts/gen-state.mjs) now refreshes BOTH the dashboard's
+// STATUS.html AND this flat summary, so "what the founder sees" stays in sync with a
+// memory-ingestable doc. (memgraph/LightRAG are MCP servers — not callable from a
+// standalone script — so their push stays a periodic manual step that reads THIS file.)
+const sec = (title, items) => (items.length ? `\n## ${title}\n${items.join('\n')}\n` : '');
+const md =
+  `# AIAG — current state (AUTO-GENERATED from .planning/STATE.json — do NOT edit by hand)\n\n` +
+  `> updated ${m.updated ?? ''} · branch ${m.branch ?? ''} · ${m.merged_to_master ? 'in master' : 'not in master'} · ` +
+  `scores/108: func ${scores.functional ?? '?'} / tech ${scores.tech ?? '?'} / design ${scores.design ?? '?'}\n` +
+  `> ${m.prod ?? ''}\n` +
+  sec('✅ Shipped', arr(state.shipped).map((s) => `- **${s.title}**${s.note ? ` — ${s.note}` : ''}`)) +
+  sec('🔨 In progress', arr(state.in_progress).map((s) => `- **${s.title}**${s.note ? ` — ${s.note}` : ''}`)) +
+  sec('⛔ Blocked', arr(state.blocked).map((s) => `- **${s.title}** — ${s.blocker} (${s.owner ?? ''})`)) +
+  sec('🔑 Decisions pending', arr(state.decisions_pending).map((d) => `- **${d.id}** — ${d.question}`)) +
+  sec('📋 Backlog', arr(state.backlog).map((b) => `- ${b.title} [${b.risk ?? ''}]`)) +
+  sec('👤 Founder tasks', arr(state.founder_tasks).map((t) => `- ${t.title} [${t.status ?? ''}]`)) +
+  `\n---\n_Source of truth: .planning/STATE.json · dashboard: docs/DASHBOARD.html · regenerate: node scripts/gen-state.mjs_\n`;
+const MD_OUT = join(root, 'docs/specs/CURRENT-STATE.md');
+writeFileSync(MD_OUT, md, 'utf8');
+
 // Compact summary for memory sync (stdout).
 const count = (k) => arr(state[k]).length;
 console.log(`✓ generated ${OUT}`);
+console.log(`✓ generated ${MD_OUT} (memory-readable)`);
 console.log(
   `STATE: shipped=${count('shipped')} in_progress=${count('in_progress')} blocked=${count('blocked')} ` +
     `decisions=${count('decisions_pending')} backlog=${count('backlog')} founder_tasks=${count('founder_tasks')} ` +
