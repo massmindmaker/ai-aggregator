@@ -64,6 +64,15 @@ Small, time-boxed verification before any integration timeline is promised. Adop
 5. **Fallback test:** seed a second `model_upstreams` row for the same slug; kill the Gonka path and confirm an agent run fails over rather than hard-erroring.
 6. **Go/no-go:** only after 1–5 are green do we commit deliverable #1's timeline. If latency/uptime is unacceptable, Gonka stays an optional/labeled-beta provider and we report findings to the Foundation rather than over-promise.
 
+## Spike results — 2026-06-04 (direct via GonkaGate)
+Ran `scripts/gonka-spike.mjs` against `https://api.gonkagate.com/v1` with a live `gp-` key:
+- **Live models (`GET /v1/models`):** `qwen/qwen3-235b-a22b-instruct-2507-fp8`, `moonshotai/kimi-k2.6`, `minimaxai/minimax-m2.7` — 3 slugs answering (Qwen3-235B confirmed live).
+- **Qwen3-235B latency** (12 completions through GonkaGate): **p50 = 244 ms · p95 = 941 ms** (min 222 / max 941) — well within a usable range; the feared large-MoE TTFT is not an issue.
+- **Per-token cost:** not returned in `usage` → capture from the GonkaGate dashboard before seeding `model_upstreams` price.
+- **Gateway-routed demo (deliverable #1 acceptance):** PENDING — deploy the built `gonka.ts` adapter + seed migration `0030` + set `GONKA_API_KEY` on the gateway env, then one `:4000/v1/chat/completions` with `model=gonka/qwen3-235b` → real completion + verified ledger debit. Adapter built + reviewed and the key is in hand, so this is a deploy step.
+
+> Reachability + latency green → spike §1–3 PASS. Remaining for full go: the gateway-routed demo (above) + per-token cost from the dashboard.
+
 ---
 
 ## Internal notes (do NOT submit)
