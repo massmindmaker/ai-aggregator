@@ -17,7 +17,7 @@ interface Agent {
 }
 
 export default function AgentsPage() {
-  const { user, token, loading, error } = useAuth();
+  const { user, token, loading, error, debug } = useAuth();
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
 
@@ -72,6 +72,11 @@ export default function AgentsPage() {
                 ? 'Откройте через @aiag_bot в Telegram'
                 : `Ошибка авторизации: ${error}`}
             </p>
+            {debug && (
+              <p className="tma-card-text tma-text-small" style={{ opacity: 0.55, fontFamily: 'var(--font-mono, monospace)', marginTop: 6 }}>
+                диагностика: {debug}
+              </p>
+            )}
           </div>
         )}
 

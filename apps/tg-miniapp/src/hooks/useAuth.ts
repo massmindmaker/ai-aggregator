@@ -36,6 +36,7 @@ export function useAuth() {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [debug, setDebug] = useState<string | null>(null);
 
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
@@ -47,6 +48,14 @@ export function useAuth() {
       /* ignore */
     }
     if (!tg?.initData) {
+      // Temporary diagnostic: shows WHY initData is missing (SDK not loaded vs
+      // Telegram didn't pass the launch hash vs the SDK didn't parse it).
+      const hasHash =
+        typeof window !== 'undefined' &&
+        /tgWebAppData/.test(window.location.hash + window.location.search);
+      setDebug(
+        `sdk=${!!(window as any).Telegram} wa=${!!tg} initData=${tg?.initData?.length ?? 0} hash=${hasHash ? 'есть' : 'нет'}`,
+      );
       setError('Не открыто в Telegram');
       setLoading(false);
       return;
@@ -92,5 +101,5 @@ export function useAuth() {
     })();
   }, []);
 
-  return { user, token, loading, error };
+  return { user, token, loading, error, debug };
 }
