@@ -45,7 +45,6 @@
     { "id": "FD-6", "decision": "Gonka = 0% commission (BYO / pass-through) — the user pays Gonka directly, we don't tax it; matches the 'own provider = free' rule. We earn on the GRANT (paid in GNK), not on per-call Gonka margin. The GonkaGate platform fee only applies if we ever resell via our own key — deferred, not needed for the product.", "date": "2026-06-04" }
   ],
   "backlog": [
-    { "id": "mock-billing", "title": "🔴 P0: mock-upstream is the DEFAULT on a missing key + still bills", "risk": "P0 money", "note": "registry.ts returns a deterministic stub that bills via estimate (we saw 'Mock reply to:' for Gonka pre-key). Gate behind AIAG_FORCE_MOCK=1 only. Readiness 2026-06-04." },
     { "id": "money-tests", "title": "P1: tg-miniapp money routes have ZERO tests", "risk": "high", "note": "topup idempotency, rent payout (0% AIAG), clone-of-paid→402 untested. Readiness 2026-06-04." },
     { "id": "jetton", "title": "Jetton / USDT multi-crypto top-up", "risk": "low", "needs": "founder jetton wallet config" },
     { "id": "opaque-author", "title": "Opaque author handle instead of raw tg_user_id in the public catalog", "risk": "low", "note": "privacy, before public launch at scale" },
@@ -80,6 +79,8 @@
     { "milestone": "R0 money path (Phase 15.1) live", "date": "earlier", "verified": true },
     { "milestone": "R1 Wave-0 money foundation (D-0 + D-1)", "date": "2026-06-04", "verified": true },
     { "milestone": "R1 Wave-1 monetization (publish / clone / rent / author income)", "date": "2026-06-04", "verified": true },
-    { "milestone": "Creator economy + scheduled runs", "date": "2026-06-04", "verified": true }
+    { "milestone": "Creator economy + scheduled runs", "date": "2026-06-04", "verified": true },
+    { "milestone": "Screens 25/26/29/30 + Gonka demo + TON testnet + internal A2A", "date": "2026-06-04", "verified": true },
+    { "milestone": "Critical readiness pass + 2 money P0 fixes (D-0 wired, mock-billing closed) — gold-verified", "date": "2026-06-04", "verified": true }
   ]
 }
