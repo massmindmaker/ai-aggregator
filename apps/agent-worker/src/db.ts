@@ -81,6 +81,46 @@ export async function loadAgent(agentId: string): Promise<AgentRow | null> {
   return rows[0] ?? null;
 }
 
+/**
+ * R-20 (internal A2A): resolve a target agent BY NAME, scoped to one tg_user.
+ * The name match is case-insensitive + exact (trimmed). Used by the `call_agent`
+ * tool when the model passes `agent_name` instead of `agent_id`. The tg_user_id
+ * scope is the ownership guard at the SQL level — a user can only ever name their
+ * OWN agents — but the caller (agent-runner) re-asserts the tg_user_id match on
+ * the loaded row as a belt-and-suspenders hard guard. Returns the most-recently
+ * created active match, or null. Prepared-statement-safe (tagged template).
+ */
+export async function loadAgentByName(
+  tgUserId: string,
+  name: string,
+): Promise<AgentRow | null> {
+  const rows = (await sql`
+    SELECT id::text, tg_user_id::text, name, system_prompt, tools, model_slug,
+           budget_credits_monthly::text AS budget_credits_monthly,
+           daily_budget_credits::text   AS daily_budget_credits,
+           spent_today_credits::text    AS spent_today_credits,
+           spent_today_date::text       AS spent_today_date,
+           status,
+           connection_type,
+           external_base_url,
+           external_api_key_encrypted,
+           external_model_slug,
+           provider_id,
+           model_id::text          AS model_id,
+           auth_ref::text          AS auth_ref,
+           base_url_override,
+           mcp_endpoint_url,
+           mcp_auth_encrypted
+    FROM agents
+    WHERE tg_user_id = ${tgUserId}::bigint
+      AND lower(name) = lower(${name.trim()})
+      AND status = 'active'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `) as unknown as AgentRow[];
+  return rows[0] ?? null;
+}
+
 // -- R0-6: provider-picker credential loader (migration 0026) -------------
 
 export interface ProviderCredential {

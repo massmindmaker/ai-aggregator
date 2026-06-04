@@ -84,6 +84,20 @@ const BUILTIN_TOOL_SKILLS: SkillCard[] = [
     metadata: { author: 'aiag', version: '1.0.0' },
   },
   {
+    id: 'tool:call_agent',
+    kind: 'tool',
+    name: 'call-agent',
+    title: 'Делегирование агентам',
+    description:
+      'Этот агент может нанимать твоих других агентов: передаёт им подзадачу и получает ответ. ' +
+      'Работает только с твоими агентами, на один уровень вглубь (без цепочек), не больше 3 вызовов за запуск. ' +
+      'Платишь только за модель нанятого агента (свой ключ у нанятого = 0 комиссии).',
+    tool_id: 'call_agent',
+    status: 'live',
+    cost_hint: 'по модели нанятого агента',
+    metadata: { author: 'aiag', version: '1.0.0' },
+  },
+  {
     id: 'tool:memory',
     kind: 'tool',
     name: 'memory',

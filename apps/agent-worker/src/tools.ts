@@ -67,6 +67,31 @@ export const TOOL_DEFS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'call_agent',
+      description:
+        'Delegate a sub-task to ONE of YOUR OWN other agents and get its answer back. ' +
+        'Provide either agent_id (preferred) or agent_name, plus the prompt to run on it. ' +
+        'The sub-agent runs a single completion with its own persona/model and returns its ' +
+        'text. It cannot itself delegate further (depth 1 only), and you may call it at most ' +
+        'a few times per run. Use when another of your agents is better suited for a part of ' +
+        'the task.',
+      parameters: {
+        type: 'object',
+        properties: {
+          agent_id: { type: 'string', description: 'Target agent id (uuid). Preferred.' },
+          agent_name: {
+            type: 'string',
+            description: 'Target agent name (exact). Used only if agent_id is omitted.',
+          },
+          prompt: { type: 'string', description: 'The task/prompt to run on the target agent.' },
+        },
+        required: ['prompt'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'memory',
       description:
         'Persistent key-value memory for this agent. Use it to remember facts across runs ' +
@@ -322,9 +347,35 @@ export interface ToolExecResult {
   cost_rub: number;
 }
 
-/** Context passed to tools that need to know which agent is running. */
+/**
+ * Result of running ONE sub-agent completion (R-20 internal A2A): the target's
+ * output text plus the credit cost of that sub-completion (already ×markup via
+ * the same gateway/estimate path the parent run uses). cost_credits is 0 for a
+ * BYOK/external target (it pays its own provider — the `if (isExternal) return`
+ * rule). The agent-runner provides this callback so the heavy lifting
+ * (resolveUpstream/callModel/estimateCostCredits) stays in one place and tools.ts
+ * has no circular import on agent-runner.
+ */
+export interface SubAgentResult {
+  output: string;
+  cost_credits: number;
+}
+
+/** Context passed to tools that need to know which agent / user is running. */
 export interface ToolContext {
   agentId: string;
+  // R-20: the owning tg_user_id of the CALLING run. The `call_agent` tool uses it
+  // as the hard ownership guard — a sub-agent must belong to this same user.
+  tgUserId: string;
+  // R-20: injected by agent-runner. Resolves + runs ONE completion of a target
+  // agent (same-owner-guarded, recursion-stripped, capped) and returns its output
+  // + cost. Absent ⇒ the run has no call_agent capability and the tool degrades
+  // to a clean "not available" result (e.g. when running a sub-agent itself).
+  callAgent?: (args: {
+    agentId?: string;
+    agentName?: string;
+    prompt: string;
+  }) => Promise<SubAgentResult>;
 }
 
 export async function executeTool(
@@ -352,6 +403,30 @@ export async function executeTool(
           args.aspect_ratio ? String(args.aspect_ratio) : undefined,
         );
         return { result: { url: r.url, aspect_ratio: r.aspect_ratio }, cost_rub: r.cost_rub };
+      }
+      case 'call_agent': {
+        // R-20 internal A2A: delegate to one of the user's OWN agents. The
+        // ownership guard, recursion strip, per-run cap, and BYOK-zero billing
+        // all live in ctx.callAgent (agent-runner). Absent ⇒ this run can't
+        // delegate (e.g. it IS a depth-1 sub-agent) → degrade, never crash.
+        if (!ctx.callAgent) {
+          return {
+            result: { error: 'agent delegation is not available in this run' },
+            cost_rub: 0,
+          };
+        }
+        const prompt = String(args.prompt ?? '');
+        if (!prompt.trim()) {
+          return { result: { error: 'call_agent requires a non-empty "prompt"' }, cost_rub: 0 };
+        }
+        const sub = await ctx.callAgent({
+          agentId: args.agent_id !== undefined ? String(args.agent_id) : undefined,
+          agentName: args.agent_name !== undefined ? String(args.agent_name) : undefined,
+          prompt,
+        });
+        // The sub-completion's cost rides on toolFeesCredits → settleRun, exactly
+        // like image_gen's fee. No separate debit.
+        return { result: { output: sub.output }, cost_rub: sub.cost_credits };
       }
       case 'memory': {
         const result = await memoryTool(

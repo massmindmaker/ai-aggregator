@@ -1,6 +1,7 @@
 import {
   loadRun,
   loadAgent,
+  loadAgentByName,
   sumMonthlySpend,
   getOrResetDailyBucket,
   loadHistory,
@@ -12,7 +13,7 @@ import {
   InsufficientBalanceError,
   type AgentRow,
 } from './db.js';
-import { pickToolDefs, executeTool, type ToolDef } from './tools.js';
+import { pickToolDefs, executeTool, type ToolDef, type SubAgentResult } from './tools.js';
 import {
   sendBotMessage,
   buildRunCompletedMessage,
@@ -37,6 +38,11 @@ const SAFE_FETCH_ALLOWLIST = ['127.0.0.1:4000', 'openrouter.ai'];
 // "Unknown model" (resolver.ts) instead of serving the run. Use a registered slug.
 const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 const MAX_ITERATIONS = 12;
+// R-20 (internal A2A): hard cap on call_agent invocations per parent run. A
+// depth-1 sub-agent never gets the tool at all (it is stripped), so this only
+// bounds fan-out at the top level — guarding against a parent that loops
+// delegating and runs up spend. Tunable; 3 is the spec default.
+const MAX_CALL_AGENT_PER_RUN = 3;
 // D-1: the credit unit is integer US cents (1 credit = $0.01). PRICING below is
 // already USD-native, so the worker bills purely in credits — there is no more
 // ₽ leg and no frozen USD→₽ rate. The crypto→USD conversion now happens ONCE at
@@ -355,6 +361,101 @@ function buildSystem(agent: AgentRow): string {
   return lines.join('\n');
 }
 
+/**
+ * R-20 (internal A2A): run ONE completion of a TARGET agent as a sub-agent and
+ * return its output text + the credit cost of that sub-completion. Billing is
+ * NOT done here — the cost is returned and rides the caller run's existing
+ * toolFeesCredits → settleRun (no new debit path, no separate ledger entry).
+ *
+ * Hard guards (all enforced here):
+ *  - OWNERSHIP: the target MUST belong to the SAME tg_user_id as the calling run.
+ *    loadAgentByName is already scoped by tg_user_id; loadAgent (by id) is NOT, so
+ *    we re-assert `target.tg_user_id === parentTgUserId` on the loaded row and
+ *    reject otherwise with a neutral error (no leak of another user's agents).
+ *  - RECURSION (depth 1): the sub-agent runs with `call_agent` STRIPPED from its
+ *    tools, so it can never delegate further → no agent→agent→agent loops.
+ *  - BYOK/commission: a BYOK/external target (isExternal) costs 0 — the sub-call
+ *    respects the same `if (isExternal) return` zero-charge rule as a normal run.
+ *
+ * Cost basis mirrors the parent run: the gateway's authoritative charge when the
+ * model call came back billed by the :4000 gateway, otherwise the local
+ * estimateCostCredits (never 0 for a billable target). Errors are returned as a
+ * neutral tool error (output) with cost 0 — a failed sub-call must not bill or
+ * leak an upstream brand.
+ */
+async function runSubAgent(
+  parentTgUserId: string,
+  args: { agentId?: string; agentName?: string; prompt: string },
+): Promise<SubAgentResult> {
+  const neutral = (msg: string): SubAgentResult => ({ output: `delegation error: ${msg}`, cost_credits: 0 });
+
+  // Resolve the target (id preferred). loadAgentByName is tg_user-scoped; the
+  // by-id path is NOT, so the ownership re-assertion below is the real guard.
+  let target: AgentRow | null = null;
+  if (args.agentId && args.agentId.trim()) {
+    // Guard the uuid shape so a malformed id can't throw inside loadAgent's cast.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(args.agentId.trim())) {
+      return neutral('agent not found');
+    }
+    target = await loadAgent(args.agentId.trim());
+  } else if (args.agentName && args.agentName.trim()) {
+    target = await loadAgentByName(parentTgUserId, args.agentName.trim());
+  } else {
+    return neutral('provide agent_id or agent_name');
+  }
+
+  if (!target) return neutral('agent not found');
+  // HARD OWNERSHIP GUARD — reject cross-user targets (covers the by-id path).
+  if (String(target.tg_user_id) !== String(parentTgUserId)) {
+    return neutral('agent not found');
+  }
+  if (target.status !== 'active') return neutral('agent not available');
+
+  // RECURSION STRIP (depth 1): the sub-agent must NOT have call_agent.
+  const subTools = (target.tools ?? []).filter((t) => t !== 'call_agent');
+  const subAgent: AgentRow = { ...target, tools: subTools };
+
+  let upstream: Upstream;
+  try {
+    upstream = await resolveUpstream(subAgent);
+  } catch (e) {
+    return neutral(`target misconfigured: ${(e as Error).message.slice(0, 80)}`);
+  }
+
+  // Single completion: system_prompt + the delegated prompt. No history, no tools
+  // are offered to the sub-agent (it answers from its persona/knowledge in one
+  // shot) — depth 1, deterministic spend.
+  const messages: Message[] = [
+    { role: 'system', content: buildSystem(subAgent) },
+    { role: 'user', content: args.prompt.slice(0, 16000) },
+  ];
+  let call: ChatResult;
+  try {
+    call = await callModel(upstream, messages, []);
+  } catch (e) {
+    return neutral(`target run failed: ${(e as Error).message.slice(0, 80)}`);
+  }
+
+  const choice = call.response.choices[0];
+  const output = choice?.message?.content ?? '';
+
+  // Cost: BYOK/external → 0 (respect the zero-charge rule). Otherwise the
+  // gateway's authoritative charge if it billed this call, else the local
+  // estimate (never 0 for a billable sub-call).
+  let cost = 0;
+  if (!upstream.isExternal) {
+    if (call.billedByGateway) {
+      cost = call.chargedCredits;
+    } else {
+      const tIn = call.response.usage?.prompt_tokens ?? 0;
+      const tOut = call.response.usage?.completion_tokens ?? 0;
+      cost = estimateCostCredits(upstream.model, tIn, tOut);
+    }
+  }
+
+  return { output, cost_credits: cost };
+}
+
 async function notifyCompleted(
   tgUserId: string, agentName: string, agentId: string, costCredits: number, output: string,
 ): Promise<void> {
@@ -465,6 +566,9 @@ export async function runAgent(runId: string): Promise<void> {
   let gatewayUpstreamCostTotal = 0;
   let allModelCallsBilledByGateway = !upstream.isExternal;
   let toolFeesCredits = 0;
+  // R-20: per-run call_agent counter (hard cap). Closed over by the callAgent
+  // callback below.
+  let callAgentCount = 0;
 
   try {
   for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -599,7 +703,33 @@ export async function runAgent(runId: string): Promise<void> {
       const exec =
         mcp && toolCall.function.name.startsWith(MCP_PREFIX)
           ? await callMcpTool(mcp, toolCall.function.name.slice(MCP_PREFIX.length), parsed)
-          : await executeTool(toolCall.function.name, parsed, { agentId: agent.id });
+          : await executeTool(toolCall.function.name, parsed, {
+              agentId: agent.id,
+              tgUserId: agent.tg_user_id,
+              // R-20: delegation callback. Enforces the per-run cap, then runs ONE
+              // owner-guarded, recursion-stripped sub-completion. Its cost is
+              // returned as cost_rub and folded into toolFeesCredits → settleRun
+              // (no separate debit). The cap rejects with a neutral, zero-cost
+              // error once exceeded.
+              // R-20 BLOCKER fix: call_agent is DISABLED for BYOK/external parents.
+              // A BYOK parent run zeroes the WHOLE run cost (the isExternal short-circuit
+              // in settleRun), so letting it hire a billable AIAG sub-agent = marked-up
+              // model inference for 0 credits (free-exfil). Only a billable (AIAG-supplied)
+              // parent may delegate; tools.ts degrades to a neutral «not available» when
+              // callAgent is absent.
+              callAgent: upstream.isExternal
+                ? undefined
+                : async (a) => {
+                    if (callAgentCount >= MAX_CALL_AGENT_PER_RUN) {
+                      return {
+                        output: `delegation error: limit of ${MAX_CALL_AGENT_PER_RUN} agent calls per run reached`,
+                        cost_credits: 0,
+                      };
+                    }
+                    callAgentCount++;
+                    return runSubAgent(agent.tg_user_id, a);
+                  },
+            });
       if (exec.cost_rub > 0) {
         // Accumulate into toolFeesCredits, NOT totalCostCredits — the next
         // iteration recomputes totalCostCredits from (basis + toolFeesCredits),
