@@ -73,7 +73,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
   }
 
-  const templateKind = (body.template_kind || 'personal').slice(0, 40);
+  // SECURITY: a client may pick a seed kind (writer/coder/…) or 'personal', but must
+  // NOT forge a clone-provenance kind 'tpl:<uuid>' — only the server-side clone/rent
+  // routes stamp those. A forged tpl: kind would otherwise pass the rating-eligibility
+  // guard (templates/[id]/rate) + fake fork-lineage, with no clone/rent. Strip it.
+  const rawKind = (body.template_kind || 'personal').slice(0, 40);
+  const templateKind = /^tpl:/i.test(rawKind) ? 'personal' : rawKind;
   const template = getTemplate(templateKind);
 
   const name = (body.name?.trim() || template?.name || 'Без имени').slice(0, 200);

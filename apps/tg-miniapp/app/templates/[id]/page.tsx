@@ -18,6 +18,9 @@ interface Template {
   price_credits: string | null;
   visibility: string;
   fork_parent_id: string | null;
+  parent_name: string | null;
+  avg_rating: string | null;
+  rating_count: number;
   clone_count: number;
   author_tg_user_id: string;
   created_at: string;
@@ -28,6 +31,15 @@ function priceLabel(price: string | null): string {
   const n = Number(price);
   if (!Number.isFinite(n)) return 'бесплатно';
   return `${n} кр`;
+}
+
+// Russian plural for «оценка» (1 оценка / 2 оценки / 5 оценок).
+function ratingWord(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'оценка';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'оценки';
+  return 'оценок';
 }
 
 export default function TemplateDetailPage() {
@@ -45,6 +57,14 @@ export default function TemplateDetailPage() {
   const [renting, setRenting] = useState(false);
   const [rentErr, setRentErr] = useState<string | null>(null);
   const [insufficient, setInsufficient] = useState(false);
+
+  // Rating widget. `ratingStars` = the 1..5 the user picked; `ratingComment`
+  // optional. `rateState` drives the honest UI: 'idle' | 'sending' | 'done'
+  // (thanks) | 'ineligible' (403 not_eligible → «оцените после клонирования»).
+  const [ratingStars, setRatingStars] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [rateState, setRateState] = useState<'idle' | 'sending' | 'done' | 'ineligible'>('idle');
+  const [rateErr, setRateErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id || !token) return;
@@ -137,6 +157,44 @@ export default function TemplateDetailPage() {
     }
   }
 
+  // Submit a 1..5 rating + optional comment. The server enforces eligibility
+  // (must have cloned/rented this template) and returns 403 not_eligible for
+  // drive-by raters — we surface that as an honest disabled state, not an error.
+  async function handleRate() {
+    if (!token || !id || ratingStars < 1) return;
+    setRateState('sending');
+    setRateErr(null);
+    try {
+      const res = await fetch(`/tg/api/tma/templates/${id}/rate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          stars: ratingStars,
+          comment: ratingComment.trim() ? ratingComment.trim() : null,
+        }),
+      });
+      if (res.status === 403) {
+        setRateState('ineligible');
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setRateErr(body.error ?? `HTTP ${res.status}`);
+        setRateState('idle');
+        return;
+      }
+      // Refresh avg_rating / rating_count so the new value shows immediately.
+      await load();
+      setRateState('done');
+    } catch (e) {
+      setRateErr(e instanceof Error ? e.message : 'rate_failed');
+      setRateState('idle');
+    }
+  }
+
   const tools = Array.isArray(template?.tools) ? (template!.tools as unknown[]) : [];
 
   return (
@@ -152,6 +210,24 @@ export default function TemplateDetailPage() {
           <>
             <header className="tma-header">
               <h1 className="tma-title">{template.name ?? 'Без имени'}</h1>
+              {template.avg_rating !== null ? (
+                <span className="tma-rating">
+                  <span className="tma-rating-star">★</span>
+                  <span className="tma-rating-value">{template.avg_rating}</span>
+                  <span className="tma-rating-count">
+                    ({template.rating_count}{' '}
+                    {ratingWord(template.rating_count)})
+                  </span>
+                </span>
+              ) : (
+                <span className="tma-rating-empty">★ ещё нет оценок</span>
+              )}
+              {template.fork_parent_id && (
+                <Link href={`/templates/${template.fork_parent_id}`} className="tma-fork-link">
+                  <span className="tma-fork-glyph">⑂</span>
+                  Форк от: {template.parent_name ?? 'оригинал'}
+                </Link>
+              )}
               {template.description && (
                 <p className="tma-subtitle">{template.description}</p>
               )}
@@ -250,6 +326,56 @@ export default function TemplateDetailPage() {
                 )}
               </section>
             )}
+
+            {/* Rating widget. Shown to everyone; the server returns 403
+                not_eligible to drive-by raters → honest disabled state. */}
+            <section className="tma-card">
+              <h2 className="tma-card-title">Оценить шаблон</h2>
+              {rateState === 'done' ? (
+                <p className="tma-success">Спасибо за оценку</p>
+              ) : rateState === 'ineligible' ? (
+                <p className="tma-card-text tma-text-small">
+                  Оцените после клонирования — оценки доступны тем, кто запускал
+                  этого агента.
+                </p>
+              ) : (
+                <>
+                  <div className="tma-rate-stars" role="radiogroup" aria-label="Оценка">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        role="radio"
+                        aria-checked={ratingStars === n}
+                        aria-label={`${n} из 5`}
+                        disabled={rateState === 'sending'}
+                        className={`tma-rate-star${n <= ratingStars ? ' is-on' : ''}`}
+                        onClick={() => setRatingStars(n)}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    className="tma-rate-comment"
+                    placeholder="Комментарий (необязательно)"
+                    maxLength={2000}
+                    value={ratingComment}
+                    disabled={rateState === 'sending'}
+                    onChange={(e) => setRatingComment(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRate}
+                    disabled={ratingStars < 1 || rateState === 'sending'}
+                    className="tma-btn tma-btn--primary"
+                  >
+                    {rateState === 'sending' ? 'Отправка…' : 'Оценить'}
+                  </button>
+                  {rateErr && <div className="tma-error">Ошибка: {rateErr}</div>}
+                </>
+              )}
+            </section>
 
             <p className="tma-card-text tma-text-small">
               При клонировании настройки переносятся к вам. Ключи и приватные

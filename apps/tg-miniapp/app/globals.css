@@ -352,3 +352,136 @@ code {
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* === Sort segment (catalog) === */
+.tma-segment {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px;
+  gap: 2px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.tma-segment-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease;
+}
+
+.tma-segment-btn:hover:not(.is-active) {
+  color: var(--ink);
+}
+
+.tma-segment-btn.is-active {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* === Rating === */
+.tma-rating {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-rating-star {
+  color: var(--accent);
+}
+
+.tma-rating-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.tma-rating-count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--ink-muted);
+}
+
+.tma-rating-empty {
+  font-size: 12px;
+  color: var(--ink-faint, var(--ink-muted));
+}
+
+/* === Rating widget (detail) === */
+.tma-rate-stars {
+  display: flex;
+  gap: 6px;
+}
+
+.tma-rate-star {
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 28px;
+  line-height: 1;
+  padding: 2px;
+  color: var(--line-strong);
+  transition: color 120ms ease, transform 120ms ease;
+}
+
+.tma-rate-star.is-on {
+  color: var(--accent);
+}
+
+.tma-rate-star:hover:not(:disabled) {
+  transform: scale(1.12);
+}
+
+.tma-rate-star:disabled {
+  cursor: not-allowed;
+}
+
+.tma-rate-comment {
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tma-rate-comment:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tma-rate-comment:disabled {
+  opacity: 0.5;
+}
+
+/* === Fork lineage === */
+.tma-fork-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-muted);
+  text-decoration: none;
+}
+
+.tma-fork-link:hover {
+  color: var(--ink);
+}
+
+.tma-fork-glyph {
+  color: var(--accent);
+}

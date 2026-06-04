@@ -22,6 +22,9 @@ interface TemplateRow {
   price_credits: string | null;
   visibility: string;
   fork_parent_id: string | null;
+  parent_name: string | null;
+  avg_rating: string | null;
+  rating_count: number;
   clone_count: number;
   author_tg_user_id: string;
   created_at: string;
@@ -32,15 +35,23 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'invalid_id' }, { status: 400 });
   }
 
+  // avg_rating/rating_count from a correlated subquery on template_ratings (no JOIN
+  // fan-out on a single-row fetch). fork_parent_id + parent_name from a LEFT JOIN on
+  // the parent template so the UI can show «форк от X».
   const rows = (await sql`
-    SELECT id::text, name, description, system_prompt, model_slug, tools,
-           mcp_endpoint_url, suggested_skills,
-           price_credits::text AS price_credits, visibility,
-           fork_parent_id::text AS fork_parent_id, clone_count,
-           author_tg_user_id::text AS author_tg_user_id, created_at
-    FROM agent_templates
-    WHERE id = ${params.id}::uuid
-      AND visibility = 'public'
+    SELECT t.id::text, t.name, t.description, t.system_prompt, t.model_slug, t.tools,
+           t.mcp_endpoint_url, t.suggested_skills,
+           t.price_credits::text AS price_credits, t.visibility,
+           t.fork_parent_id::text AS fork_parent_id,
+           parent.name AS parent_name,
+           (SELECT ROUND(AVG(r.stars), 1)::text FROM template_ratings r WHERE r.template_id = t.id) AS avg_rating,
+           (SELECT COUNT(*)::int FROM template_ratings r WHERE r.template_id = t.id) AS rating_count,
+           t.clone_count,
+           t.author_tg_user_id::text AS author_tg_user_id, t.created_at
+    FROM agent_templates t
+    LEFT JOIN agent_templates parent ON parent.id = t.fork_parent_id
+    WHERE t.id = ${params.id}::uuid
+      AND t.visibility = 'public'
     LIMIT 1
   `) as unknown as TemplateRow[];
 

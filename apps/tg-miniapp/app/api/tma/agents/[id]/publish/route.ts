@@ -22,13 +22,17 @@ interface ShareSpecRow {
   tools: unknown;
   model_slug: string | null;
   mcp_endpoint_url: string | null;
+  // Provenance: if this agent is itself a clone, template_kind = 'tpl:<uuid>'.
+  template_kind: string | null;
 }
 
 async function loadShareSpec(id: string, tgUserId: string): Promise<ShareSpecRow | null> {
   // Ownership guard (id + tg_user_id), mirrors loadAgent in ../route.ts. Selects the
   // share-subset ONLY — no *_encrypted / *_hint / *_auth columns are referenced.
+  // template_kind carries the remix provenance ('tpl:<uuid>' for a clone).
   const rows = (await sql`
-    SELECT name, description, system_prompt, tools, model_slug, mcp_endpoint_url
+    SELECT name, description, system_prompt, tools, model_slug, mcp_endpoint_url,
+           template_kind
     FROM agents
     WHERE id = ${id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
@@ -36,6 +40,23 @@ async function loadShareSpec(id: string, tgUserId: string): Promise<ShareSpecRow
     LIMIT 1
   `) as unknown as ShareSpecRow[];
   return rows[0] ?? null;
+}
+
+const TPL_KIND_RE = /^tpl:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+// REMIX-LINEAGE: if the published agent is itself a clone (template_kind = 'tpl:<uuid>'),
+// resolve that source template's uuid as the new template's fork_parent_id — but ONLY
+// if it's a real agent_templates row (else leave NULL, e.g. a since-deleted parent or a
+// hardcoded-seed template_kind that is not a uuid).
+async function resolveForkParent(templateKind: string | null): Promise<string | null> {
+  if (!templateKind) return null;
+  const m = TPL_KIND_RE.exec(templateKind);
+  if (!m) return null;
+  const parentId = m[1]!;
+  const rows = (await sql`
+    SELECT id::text FROM agent_templates WHERE id = ${parentId}::uuid LIMIT 1
+  `) as unknown as Array<{ id: string }>;
+  return rows[0]?.id ?? null;
 }
 
 interface PublishBody {
@@ -74,12 +95,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const spec = await loadShareSpec(params.id, tgUserId);
   if (!spec) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
+  // Remix-lineage: derive fork_parent_id from this agent's provenance (validated as a
+  // real template row, else NULL).
+  const forkParentId = await resolveForkParent(spec.template_kind);
+
   // Snapshot ONLY the shareable spec into agent_templates. The target table has no
   // secret columns, so a secret is structurally impossible to publish.
   const ins = (await sql`
     INSERT INTO agent_templates (
       author_tg_user_id, name, description, system_prompt,
-      model_slug, tools, mcp_endpoint_url, price_credits, visibility
+      model_slug, tools, mcp_endpoint_url, price_credits, visibility,
+      fork_parent_id
     )
     VALUES (
       ${tgUserId}::bigint,
@@ -90,7 +116,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ${sql.json((Array.isArray(spec.tools) ? spec.tools : []) as never)},
       ${spec.mcp_endpoint_url},
       ${priceCredits},
-      ${visibility}
+      ${visibility},
+      ${forkParentId}
     )
     RETURNING id::text
   `) as unknown as Array<{ id: string }>;

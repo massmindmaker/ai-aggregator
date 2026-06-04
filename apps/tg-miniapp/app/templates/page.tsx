@@ -13,9 +13,19 @@ interface Template {
   tools: unknown;
   price_credits: string | null;
   clone_count: number;
+  avg_rating: string | null;
+  rating_count: number;
   author_tg_user_id: string;
   created_at: string;
 }
+
+// Sort modes map 1:1 to the route's ?sort= contract (see templates/route.ts).
+type SortMode = 'new' | 'trending' | 'top';
+const SORTS: { key: SortMode; label: string }[] = [
+  { key: 'new', label: 'Новые' },
+  { key: 'trending', label: 'В тренде' },
+  { key: 'top', label: 'Топ' },
+];
 
 // Per-character accent hues (OKLCH) — the collectible-card signature (DESIGN.md).
 // Deterministic per template id so a card always wears the same colour.
@@ -42,25 +52,35 @@ export default function TemplatesPage() {
   const { token } = useAuth();
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortMode>('new');
 
   useEffect(() => {
     if (!token) return;
+    let cancelled = false;
+    setTemplates(null);
+    setFetchErr(null);
     (async () => {
       try {
-        const res = await fetch('/tg/api/tma/templates', {
+        const res = await fetch(`/tg/api/tma/templates?sort=${sort}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (cancelled) return;
         if (!res.ok) {
           setFetchErr(`HTTP ${res.status}`);
           return;
         }
         const data = await res.json();
+        if (cancelled) return;
         setTemplates(data.templates ?? []);
       } catch (e) {
+        if (cancelled) return;
         setFetchErr(e instanceof Error ? e.message : 'fetch_failed');
       }
     })();
-  }, [token]);
+    return () => {
+      cancelled = true;
+    };
+  }, [token, sort]);
 
   return (
     <>
@@ -72,6 +92,21 @@ export default function TemplatesPage() {
             Клонируйте чужого агента себе. Настройки переносятся, ключи — нет.
           </p>
         </header>
+
+        <div className="tma-segment" role="tablist" aria-label="Сортировка">
+          {SORTS.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              role="tab"
+              aria-selected={sort === s.key}
+              className={`tma-segment-btn${sort === s.key ? ' is-active' : ''}`}
+              onClick={() => setSort(s.key)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
 
         {fetchErr && <div className="tma-error">Ошибка: {fetchErr}</div>}
 
@@ -134,7 +169,17 @@ export default function TemplatesPage() {
                       >
                         {priceLabel(t.price_credits)}
                       </span>
-                      <span className="tma-nft-supply">⧉ {t.clone_count}</span>
+                      {t.avg_rating !== null ? (
+                        <span className="tma-rating">
+                          <span className="tma-rating-star">★</span>
+                          <span className="tma-rating-value">{t.avg_rating}</span>
+                          {t.rating_count > 0 && (
+                            <span className="tma-rating-count">({t.rating_count})</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="tma-nft-supply">⧉ {t.clone_count}</span>
+                      )}
                     </div>
                   </div>
                 </Link>
