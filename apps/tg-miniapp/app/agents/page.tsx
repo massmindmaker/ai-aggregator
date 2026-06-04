@@ -15,14 +15,19 @@ interface Agent {
   created_at: string;
 }
 
-const EMOJI: Record<string, string> = {
-  writer: '✍️',
-  coder: '💻',
-  analyst: '📊',
-  researcher: '🔬',
-  marketer: '📣',
-  personal: '🤖',
-};
+// Per-character accent hue (OKLCH) — the collectible-card signature (DESIGN.md /
+// PRODUCT.md): the agents catalog now speaks the SAME card language as /templates,
+// not faceless emoji rows ("два языка сшиты"). Deterministic per agent id.
+const HUES = [28, 235, 340, 165, 60, 290, 200, 130];
+function hueFor(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return HUES[h % HUES.length];
+}
+function monogram(name: string | null): string {
+  const t = (name ?? '?').trim();
+  return (t[0] ?? '?').toUpperCase();
+}
 
 export default function AgentsPage() {
   const { user, token, loading, error } = useAuth();
@@ -93,32 +98,52 @@ export default function AgentsPage() {
             )}
 
             {agents && agents.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {agents.map((a) => (
-                  <Link
-                    key={a.id}
-                    href={`/agents/${a.id}`}
-                    className="tma-card"
-                    style={{ textDecoration: 'none', color: 'inherit' }}
-                  >
-                    <div className="tma-row">
-                      <h2 className="tma-card-title">
-                        <span style={{ marginRight: 8 }}>{EMOJI[a.template_kind] ?? '🤖'}</span>
-                        {a.name}
-                      </h2>
-                      <span className="tma-nft-supply">
-                        {Number(a.budget_rub_monthly).toFixed(0)} кр/мес
-                      </span>
-                    </div>
-                    {a.description && <p className="tma-card-text">{a.description}</p>}
-                    {a.model_slug && (
-                      <p className="tma-card-text tma-text-small">
-                        <code>{a.model_slug}</code>
-                      </p>
-                    )}
-                  </Link>
-                ))}
-              </div>
+              <section className="tma-nft-grid">
+                {agents.map((a) => {
+                  const hue = hueFor(a.id);
+                  return (
+                    <Link key={a.id} href={`/agents/${a.id}`} className="tma-nft-card">
+                      <div
+                        className="tma-nft-image tma-nft-image--placeholder"
+                        style={{
+                          background: `linear-gradient(155deg, oklch(0.32 0.08 ${hue}), oklch(0.18 0.04 ${hue}))`,
+                          color: `oklch(0.92 0.10 ${hue})`,
+                          fontSize: 40,
+                          fontWeight: 700,
+                        }}
+                      >
+                        <span>{monogram(a.name)}</span>
+                      </div>
+                      <div className="tma-nft-body">
+                        <h3 className="tma-nft-name">{a.name}</h3>
+                        {a.description && (
+                          <p
+                            className="tma-card-text tma-text-small"
+                            style={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {a.description}
+                          </p>
+                        )}
+                        {a.model_slug && (
+                          <span className="tma-mono" style={{ wordBreak: 'break-all' }}>
+                            {a.model_slug}
+                          </span>
+                        )}
+                        <div className="tma-nft-meta">
+                          <span className="tma-nft-supply" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {Number(a.budget_rub_monthly).toFixed(0)} кр/мес
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </section>
             )}
           </>
         )}
