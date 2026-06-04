@@ -2,38 +2,43 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>AIAG — статус проекта</title>
+<title>AIAG — живой статус (генерируется из STATE.json)</title>
 <style>
   :root{
     --bg:oklch(0.17 0.012 70);--bg2:oklch(0.21 0.014 70);--line:oklch(0.32 0.015 70);
     --ink:oklch(0.94 0.01 80);--dim:oklch(0.72 0.015 75);--faint:oklch(0.56 0.015 75);
-    --amber:oklch(0.80 0.15 75);--good:oklch(0.80 0.14 155);--soon:oklch(0.78 0.10 245);
+    --amber:oklch(0.80 0.15 75);--good:oklch(0.80 0.14 155);--soon:oklch(0.78 0.10 245);--red:oklch(0.70 0.17 25);
     --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;--sans:-apple-system,'Segoe UI',Roboto,system-ui,sans-serif;
   }
   *{margin:0;padding:0;box-sizing:border-box}
   body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;padding:0 24px 100px}
-  .wrap{max-width:820px;margin:0 auto}
+  .wrap{max-width:860px;margin:0 auto}
   a{color:var(--amber);text-decoration:none}a:hover{text-decoration:underline}
-  header{padding:64px 0 32px;border-bottom:1px solid var(--line)}
-  .kick{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);margin-bottom:16px}
-  h1{font-size:38px;letter-spacing:-.02em;margin-bottom:14px}
-  .lead{color:var(--dim);max-width:64ch}
-  section{padding:36px 0;border-bottom:1px solid var(--line)}
-  h2{font-size:20px;margin-bottom:16px}
-  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
-  p{color:var(--dim);margin-bottom:10px}
-  .scores{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
-  .score{border:1px solid var(--line);border-radius:12px;padding:14px 18px;background:var(--bg2);min-width:130px}
-  .score .v{font-family:var(--mono);font-size:26px}.score .l{font-size:12px;color:var(--faint);margin-top:2px}
-  ul{list-style:none;display:flex;flex-direction:column;gap:9px;margin-top:6px}
-  li{padding-left:24px;position:relative;color:var(--dim)}
+  header{padding:56px 0 28px;border-bottom:1px solid var(--line)}
+  .kick{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);margin-bottom:14px}
+  h1{font-size:36px;letter-spacing:-.02em;margin-bottom:12px}
+  .lead{color:var(--dim);max-width:70ch}
+  .pillrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .pill{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:20px;padding:4px 11px;color:var(--dim);background:var(--bg2)}
+  section{padding:30px 0;border-bottom:1px solid var(--line)}
+  h2{font-size:19px;margin-bottom:6px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  ul{list-style:none;display:flex;flex-direction:column;gap:10px;margin-top:10px}
+  li{padding-left:22px;position:relative;color:var(--dim)}
   li::before{content:"";position:absolute;left:0;top:9px;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--amber)}
+  li.done::before{border-color:var(--good);background:var(--good)}
+  li.block::before{border-color:var(--red);background:var(--red)}
+  li.need::before{border-color:var(--soon)}
   li b{color:var(--ink)}
-  .done li::before{border-color:var(--good);background:var(--good)}
-  .need li::before{border-color:var(--soon)}
-  .files{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
-  .file{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg2);font-size:14px}
-  .file .t{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .note{color:var(--faint);font-size:13.5px;margin-top:3px}
+  .note-inline{color:var(--faint);font-size:12.5px}
+  .mono{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+  .ok{color:var(--good);font-family:var(--mono);font-size:11px}
+  .tag{font-family:var(--mono);font-size:10px;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--faint)}
+  code{font-family:var(--mono);font-size:12.5px;color:var(--amber);background:var(--bg2);padding:1px 5px;border-radius:4px}
+  .files{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .file{border:1px solid var(--line);border-radius:10px;padding:11px 13px;background:var(--bg2);font-size:14px;color:var(--ink)}
+  .file .t{font-size:10px;color:var(--faint);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
   .meta{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:10px}
   @media(max-width:640px){.files{grid-template-columns:1fr}}
 </style>
@@ -41,83 +46,115 @@
 <body><div class="wrap">
 
 <header>
-  <div class="kick">AIAG · живой статус</div>
+  <div class="kick">AIAG · живой статус · авто-генерируется</div>
   <h1>Статус проекта</h1>
-  <p class="lead">Эта страница — твой способ догнать, что происходит, без копания в деталях. Обновляю её каждый рабочий проход. Как договорились: ты даёшь видение и требования, я веду разработку, ресёрчу, углубляю и улучшаю.</p>
-  <p class="meta">обновлено 2026-06-04</p>
+  <p class="lead">Эта страница рисуется из <code>.planning/STATE.json</code> — единственного источника правды. Каждый шип двигает STATE.json, генератор перерисовывает эту страницу. Руками HTML не трогается → ничего не устаревает.</p>
+  <div class="pillrow">
+    <span class="pill">обновлено 2026-06-04</span>
+    <span class="pill">ветка feat/r1.0-wave0-consolidated</span>
+    <span class="pill">не в master</span>
+    <span class="pill">dream-path 4.7/5</span>
+    <span class="pill">/108 · tech 50 · func 43 · design 89</span>
+  </div>
+  <p class="meta">ai-aggregator.ru (web, ₽) · TMA via @aiaggbot (crypto credits)</p>
 </header>
 
 <section>
-  <div class="eyebrow">Что строим (в одну строку)</div>
-  <p>Маркетплейс AI-агентов-персонажей в Telegram. За крипто-кредиты. Агент — это характер с лицом и кошельком, а не безликая функция.</p>
-</section>
-
-<section>
-  <div class="eyebrow">Оценки (шкала 108)</div>
-  <div class="scores">
-    <div class="score"><div class="v">50<span style="color:var(--faint);font-size:15px">/108</span></div><div class="l">тех-стек</div></div>
-    <div class="score"><div class="v">43<span style="color:var(--faint);font-size:15px">/108</span></div><div class="l">функционал</div></div>
-    <div class="score"><div class="v">89<span style="color:var(--faint);font-size:15px">/108</span></div><div class="l">UX / дизайн</div></div>
-  </div>
-  <p style="margin-top:14px">Дизайн закрыт до 89/108 (единый DESIGN.md-SoT). Функционал прыгнул: за 2026-06-04 на прод выкачен весь денежный путь + монетизация (см. ниже) — формальную переоценку /108 сделаю отдельно.</p>
-</section>
-
-<section>
-  <div class="eyebrow">Сделано</div>
-  <ul class="done">
-    <li><b>🟢 ДЕНЬГИ + МОНЕТИЗАЦИЯ — LIVE на проде (2026-06-04, проверено минченным JWT):</b> D-1 USD-кредитный реестр (₽ убит, 1 кредит = 1 цент, аудит-журнал) · Wave-1 марктеплейс авторской аренды (публикация → клон бесплатно / <b>аренда платно</b>, автору 0% AIAG, всё в одной транзакции → доход автора) · креатор-экономика (рейтинги + ремикс + сортировка) · плановые запуски агента. Ветка <code>feat/r1.0-wave0-consolidated</code></li>
-    <li><b>Дисциплина «перепроверяй всё»:</b> мульти-агентные ревью + проверки на проде поймали 8 багов (2 money-бага, регрессия агент-CRUD, auth-401, подделка рейтингов, утечка расхода) — ДО юзера</li>
-    <li><b>Единый wireframe-борд</b> — 39 экранов, один продукт, честные теги live/скоро/R&D</li>
-    <li><b>Карточки-персонажи</b> v2 — коллекция, редкость, состояния, профиль-анкета, reveal-анимация</li>
-    <li><b>One-pager</b> + <b>питч-дек</b> (11 слайдов) для упаковки</li>
-    <li><b>Критика UX /108</b> с топ-улучшениями</li>
-    <li><b>Заявка на грант Gonka</b> (черновик) + анализ возможности</li>
-    <li><b>Контекст-якоря:</b> CLAUDE.md, PRODUCT.md, product-definition — чтобы не терять нить</li>
-    <li><b>Система контекст-доков</b> (разбор шаблона Karpathy) — CLAUDE.md глобально + по папкам (tg-miniapp/agent-worker/gateway/web/database), + SECURITY / ARCHITECTURE / ANIMATION + правила поведения</li>
-    <li><b>Голографические видео-карты</b> — агенты как персонажи (Алиса/Ника/Нова) в призматической рамке, видео-портреты, tilt+holo, тап→профиль (characters-video.html)</li>
-    <li><b>NFT удалён</b> из продукта (решение основателя 2026-06-03)</li>
-    <li><b>Research-программа</b> P0+P1 (12 пунктов) — ЗАВЕРШЕНА: ресёрч + адверсариальная верификация + синтез → архитектурные решения D-0…D-14, порядок билда, founder-гейты (<a href="research/SYNTHESIS.html">SYNTHESIS</a>)</li>
-    <li><b>Веб-борд</b> (светлая Studio23-тема, 38 экранов+модалки, мульти-крипто, author-rent, без NFT) — <a href="../wireframes/web/index.html">web/index.html</a></li>
-    <li><b>Мобильный TMA углублён</b> — состояния (загрузка/думает/ошибки/низкий баланс), один CTA на экран, мульти-крипто кошелёк; + голографические видео-карты персонажей</li>
-    <li><b>GSD-роадмап перенарезан</b> из синтеза — milestone R1 (фазы R1.0–R1.3 = Waves 0–3), STATE.md обновлён (<code>.planning/R1-MILESTONE.md</code>)</li>
-    <li><b>Бэкенд Wave-0 на ветке</b> (НЕ в master, НЕ задеплоено): safeFetch (SSRF) + DEFAULT_MODEL fix + <b>D-0 (шлюз отдаёт реальную маржу, воркер биллит по ней)</b> + CHARGE-0 floor. Builds+tests зелёные, settleRun не тронут. Ветки: <code>feat/wave0-safefetch-defaultmodel</code> → <code>feat/wave0-d0-margin</code></li>
-    <li><b>D-8 (initData-хардеринг)</b> на ветке <code>feat/wave0-d8-initdata</code> — constant-time compare + max-age 600s + Redis-нонс (fail-open). 7/7 PASS, tsc чисто, не задеплоено</li>
-    <li><b>Единый дизайн-знаменатель</b> — <a href="../wireframes/showcase.html">showcase.html</a> (веб+моб×тёмн+светл, 1 страница) + оба борда переведены на РЕАЛЬНЫЕ токены ai-aggregator + настоящий логотип (◆ убран). Оценка дизайна <b>78/108</b> (<a href="2026-06-03-design-eval-108.html">eval</a>), главная просадка закрыта</li>
-    <li><b>DESIGN.md</b> — единый дизайн-SoT (реальные токены + формат VoltAgent MIT + aiag-анимации + логотип), авто-грузится</li>
-    <li><b>Готовность к деплою: GO</b> для Wave-0 (миграций нет, RAM≈0; риск только build-OOM tma → своп/CI). Тест = R0-паттерн + 4 smoke. + карта 14 user-workflow с топ-10 расхождений дизайн↔возможности + backend-gap (<a href="2026-06-03-readiness-summary.html">readiness</a>). Managed-Hermes = отдельный 18GB VPS</li>
-    <li><b>Gonka-пакет</b> — <a href="2026-06-03-gonka-checklist.html">чек-лист</a> + <a href="2026-06-03-gonka-pitch.html">питч</a> + заявка (заявка через их Discord; нужны GNK-кошелёк/Discord/email + спайк)</li>
-  </ul>
-  <div class="files">
-    <a class="file" href="../wireframes/tma/index.html"><div class="t">борд</div>index.html — 39 экранов</a>
-    <a class="file" href="../wireframes/tma/characters.html"><div class="t">дизайн</div>characters.html — персонажи</a>
-    <a class="file" href="2026-06-03-aiag-onepager.html"><div class="t">спека</div>one-pager</a>
-    <a class="file" href="2026-06-03-aiag-pitch-deck.html"><div class="t">упаковка</div>pitch-deck</a>
-    <a class="file" href="2026-06-03-aiag-ux-critique.html"><div class="t">оценка</div>ux-critique /108</a>
-    <a class="file" href="2026-06-03-gonka-grant-application-draft.md"><div class="t">грант</div>заявка Gonka</a>
-    <a class="file" href="RESEARCH-BACKLOG.html"><div class="t">ресёрч</div>research backlog (P0→P2)</a>
-  </div>
-</section>
-
-<section>
-  <div class="eyebrow">Что веду дальше</div>
+  <div class="eyebrow">Выкачено + проверено</div>
+  <h2>🟢 Shipped</h2>
   <ul>
-    <li><b>Управляемый Hermes (настоящая Wave 3)</b> — заблокирован инфрой: нужен отдельный ~16GB VPS (2GB-бокс тянет 0-1 инстанс). Спайк-план готов (<a href="2026-06-04-managed-hermes-spike-plan.md">spike</a>); жду твой «го» на платный бокс</li>
-    <li><b>Buildable без бокса (могу сам):</b> jetton/USDT-пополнение · непрозрачный author-handle в каталоге · rate-limit на publish/clone</li>
-    <li><b>Доход автора → вывод наружу</b> — ждёт твоё решение FD-2 (кэш-аут или только трата внутри)</li>
-    <li><b>Gonka-провайдер</b> — адаптер построен (<code>gonka.ts</code>), ждёт твой ключ GonkaGate + 5 процессных задач</li>
+    <li><b>D-0 — gateway returns realized margin</b> <span class="mono">2026-06-04 · 00bd2f3</span><div class="note">worker bills off the gateway's authoritative margin. (USD-micro header emission still in backlog → worker falls back to estimate, never bills 0.)</div></li>
+    <li><b>D-1 — USD-credit ledger</b> <span class="mono">2026-06-04 · 341d56e · mig 0029</span><div class="note">1 credit = 1 US cent (BIGINT); killed USD_TO_RUB=90; append-only tg_ledger_entries; settleRun atomic (guarded UPDATE…WHERE balance&gt;=cost RETURNING + ledger co-committed). Gold-verified.</div></li>
+    <li><b>Wave-1 Slice 1 — publish / browse / clone-free</b> <span class="mono">2026-06-04 · ca85b33 · mig 0031</span><div class="note">agent_templates has ZERO secret columns by design. Paid template → 402 (no free clone of paid).</div></li>
+    <li><b>Wave-1 Slice 2 — paid rent + author payout (0% AIAG)</b> <span class="mono">2026-06-04 · a6e0499 · mig 0032</span><div class="note">whole rent in ONE sql.begin: debit renter → upsert-credit author 100% pass-through → 2 equal-and-opposite ledger entries → clone in-tx. uq_rental_active stops double-charge. Money-reviewed twice (split-tx HIGH fixed).</div></li>
+    <li><b>Wave-1 Slice 3 — author income view</b> <span class="mono">2026-06-04 · dca8540</span><div class="note">read-only, scoped to authed author. Withdraw deferred on FD-2.</div></li>
+    <li><b>Creator economy — ratings + remix-lineage + sort</b> <span class="mono">2026-06-04 · 2f9035e · mig 0033</span><div class="note">ratings eligibility-guarded (only cloned/rented can rate; create route strips client tpl: kind → server-trusted). catalog ?sort=trending|top|new. Review caught BLOCKER+HIGH+MED, all fixed.</div></li>
+    <li><b>Scheduled agent runs (self-running agent)</b> <span class="mono">2026-06-04 · 2955693 · mig 0034</span><div class="note">60s worker tick claims due schedules (gated on agents.status=active) → enqueues a normal budget-guarded run. No new billing. MUST-FIX (soft-deleted spend leak) fixed before deploy.</div></li>
+    <li><b>₽→кр relabel in the agents UI</b> <span class="mono">2026-06-04 · 6e32aa7</span><div class="note">founder rule 'draw credits, not ₽' — no ₽ left in any TMA page.</div></li>
+    <li><b>Provider-picker (create + edit) — own key = 0 commission</b> <span class="mono">2026-06-03</span><div class="note">routes via external_openai branch; never sets agents.provider_id.</div></li>
+    <li><b>MCP skills (create + edit) — remote Streamable-HTTP per agent</b> <span class="mono">2026-06-03</span><div class="note">safeFetch-guarded, 0₽, connect-per-run.</div></li>
+    <li><b>White-label hardening (kie/openrouter/groq/ollama + tools.ts)</b> <span class="mono">2026-06-04</span><div class="note">brand kept only in server logs.</div></li>
+    <li><b>Repo made PRIVATE + security review passed</b> <span class="mono">2026-06-04</span><div class="note">no secrets in git history; auth/money/SSRF posture solid.</div></li>
   </ul>
+</section>
+
+<section>
+  <div class="eyebrow">В работе</div>
+  <h2>🔨 In progress</h2>
+  <ul>
+    <li><b>Living-state system (this file + gen-state + memory sync)</b><div class="note">STATE.json single source → generates STATUS.html → syncs memory; archive snapshots; kill manual dashboard patching.</div></li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Заблокировано</div>
+  <h2>⛔ Blocked</h2>
+  <ul>
+    <li class="block"><b>Managed Hermes runtime (the real Wave 2/3 core)</b><div class="note">⛔ needs a SEPARATE ~16GB VPS — the 2GB prod box hosts 0-1 instances (~300-600MB each) · <b>founder: provision the box</b><br>go/no-go: idle RSS &gt;800MB ⇒ shared multi-tenant not viable at $20 tier ⇒ stay connect-your-own-Hermes<br><a href="../specs/2026-06-04-managed-hermes-spike-plan.md">docs/specs/2026-06-04-managed-hermes-spike-plan.md</a></div></li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Решения от тебя</div>
+  <h2>🔑 Нужно решение</h2>
+  <ul>
+    <li class="need"><b>FD-2</b> — Author income — withdrawable OUT vs in-app-spend-only?<div class="note">блокирует: Slice-3 cash-out (currently in-app-spendable, withdraw = «скоро»)</div></li>
+    <li class="need"><b>FD-6</b> — GonkaGate 10% usage fee — absorb (margin hit) or surface in seeded price?<div class="note">блокирует: Gonka model price seeding</div></li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Задачи основателя</div>
+  <h2>👤 На тебе</h2>
+  <ul>
+    <li class="need"><b>Provision ~16GB Hermes VPS (paid, recurring)</b> <span class="tag">pending</span><div class="note">разблокирует: managed-hermes</div></li>
+    <li class="need"><b>Gonka submission</b> <span class="tag">in_progress</span><div class="note">✅ дано: GNK wallet gonka1zxvamsaz7ksekrgw3n0p7upqd97z5e0zzr0yzc (2026-06-04) · email massmindmaker@gmail.com (2026-06-04)</div><div class="note">⏳ осталось: GonkaGate gp- key ($10 trial) — blocks the spike + live demo · Discord handle · FD-6 fee decision · post the proposal</div></li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Бэклог (без блокеров)</div>
+  <h2>📋 Backlog</h2>
+  <ul>
+    <li><b>Gateway emits USD-micro margin headers (finish D-0)</b> <span class="tag">low</span><div class="note">worker falls back to estimate until then (never 0).</div></li>
+    <li><b>Jetton / USDT multi-crypto top-up</b> <span class="tag">low</span> <span class="note-inline">нужно: founder jetton wallet config</span></li>
+    <li><b>Opaque author handle instead of raw tg_user_id in the public catalog</b> <span class="tag">low</span><div class="note">privacy, before public launch at scale</div></li>
+    <li><b>Rate-limit publish / clone (anti-spam)</b> <span class="tag">low</span></li>
+    <li><b>Automate pm2 in deploy (run procs under aiag)</b> <span class="tag">med</span><div class="note">removes the manual `pm2 restart` after every deploy</div></li>
+    <li><b>Merge feat/r1.0-wave0-consolidated → master</b> <span class="tag">med</span></li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Вехи</div>
+  <h2>🏁 Checkpoints</h2>
+  <ul>
+    <li class="done"><b>R0 money path (Phase 15.1) live</b> <span class="mono">earlier</span> <span class="ok">✓ проверено</span></li>
+    <li class="done"><b>R1 Wave-0 money foundation (D-0 + D-1)</b> <span class="mono">2026-06-04</span> <span class="ok">✓ проверено</span></li>
+    <li class="done"><b>R1 Wave-1 monetization (publish / clone / rent / author income)</b> <span class="mono">2026-06-04</span> <span class="ok">✓ проверено</span></li>
+    <li class="done"><b>Creator economy + scheduled runs</b> <span class="mono">2026-06-04</span> <span class="ok">✓ проверено</span></li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Ассеты</div>
+  <h2>📦 Assets</h2>
+  <div class="files">
+    <a class="file" href="../DASHBOARD.html"><div class="t">board · live</div>Project dashboard</a>
+    <a class="file" href="../specs/STATUS.html"><div class="t">board · live</div>Living status (generated)</a>
+    <a class="file" href="../wireframes/tma/index.html"><div class="t">wireframe · live</div>TMA wireframes (dark)</a>
+    <a class="file" href="../wireframes/web/index.html"><div class="t">wireframe · live</div>Web wireframes (light Studio23)</a>
+    <a class="file" href="../wireframes/showcase.html"><div class="t">wireframe · live</div>Design showcase (matrix)</a>
+    <a class="file" href="../specs/2026-06-04-wave1-monetization-plan.md"><div class="t">spec · live</div>Wave-1 monetization plan</a>
+    <a class="file" href="../specs/2026-06-04-managed-hermes-spike-plan.md"><div class="t">spec · live</div>Managed-Hermes spike plan</a>
+    <a class="file" href="../specs/2026-06-03-gonka-grant-application.md"><div class="t">spec · live</div>Gonka grant application</a>
+    <a class="file" href="../specs/2026-06-02-WHAT-WE-ARE-BUILDING.md"><div class="t">spec · live</div>Canon (single source of product truth)</a>
+    <a class="file" href="video-v4/"><div class="t">video · draft</div>Video v4 (promo)</a>
+  </div>
 </section>
 
 <section style="border-bottom:none">
-  <div class="eyebrow">Нужно от тебя (когда будет удобно)</div>
-  <ul class="need">
-    <li><b>«Го» на ~16GB-бокс под управляемый Hermes</b> (платный, ежемесячно) → разблокирует настоящий рантайм Wave 3. Подниму через timeweb-mcp за минуту</li>
-    <li><b>Решение FD-2</b> — доход автора выводить наружу или только тратить внутри приложения?</li>
-    <li><b>Gonka: 5 задач</b> — кошелёк gonka1, Discord, ключ GonkaGate ($10-триал), решение FD-6 по комиссии, пост заявки</li>
-    <li><b>Jetton-кошелёк/конфиг</b> — для USDT/мульти-крипто пополнения</li>
-    <li><b>Референсы лиц</b> персонажей — скинешь, подставлю реальные портреты</li>
-  </ul>
-  <p class="meta">Ничего из этого не блокирует мою работу — веду дальше по дизайну/UX, эти решения подхвачу когда дашь.</p>
+  <p class="meta">Сгенерировано из <code>.planning/STATE.json</code> командой <code>node scripts/gen-state.mjs</code>. Не редактировать вручную — правь STATE.json.</p>
 </section>
 
 </div></body></html>

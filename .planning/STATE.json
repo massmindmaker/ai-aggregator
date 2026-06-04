@@ -1,0 +1,65 @@
+{
+  "_about": "SINGLE SOURCE OF TRUTH for AIAG project state. Edit THIS on every ship; then run `node scripts/gen-state.mjs` to regenerate docs/specs/STATUS.html (the living dashboard page). Never hand-edit STATUS.html. Point-in-time snapshots live in docs/specs/_archive/ and are NOT the source. Memory (memgraph/auto-memory/LightRAG-wiki) syncs FROM this file, never the reverse.",
+  "meta": {
+    "updated": "2026-06-04",
+    "branch": "feat/r1.0-wave0-consolidated",
+    "merged_to_master": false,
+    "dream_path": "4.7/5",
+    "prod": "ai-aggregator.ru (web, ₽) · TMA via @aiaggbot (crypto credits)",
+    "scores_108": { "tech": 50, "functional": 43, "design": 89, "note": "functional needs a formal re-score after the 2026-06-04 monetization shipping" }
+  },
+  "shipped": [
+    { "id": "d0-margin", "title": "D-0 — gateway returns realized margin", "date": "2026-06-04", "commit": "00bd2f3", "note": "worker bills off the gateway's authoritative margin. (USD-micro header emission still in backlog → worker falls back to estimate, never bills 0.)" },
+    { "id": "d1-ledger", "title": "D-1 — USD-credit ledger", "date": "2026-06-04", "commit": "341d56e", "migration": "0029", "note": "1 credit = 1 US cent (BIGINT); killed USD_TO_RUB=90; append-only tg_ledger_entries; settleRun atomic (guarded UPDATE…WHERE balance>=cost RETURNING + ledger co-committed). Gold-verified." },
+    { "id": "slice1-publish-clone", "title": "Wave-1 Slice 1 — publish / browse / clone-free", "date": "2026-06-04", "commit": "ca85b33", "migration": "0031", "note": "agent_templates has ZERO secret columns by design. Paid template → 402 (no free clone of paid)." },
+    { "id": "slice2-rent", "title": "Wave-1 Slice 2 — paid rent + author payout (0% AIAG)", "date": "2026-06-04", "commit": "a6e0499", "migration": "0032", "note": "whole rent in ONE sql.begin: debit renter → upsert-credit author 100% pass-through → 2 equal-and-opposite ledger entries → clone in-tx. uq_rental_active stops double-charge. Money-reviewed twice (split-tx HIGH fixed)." },
+    { "id": "slice3-income", "title": "Wave-1 Slice 3 — author income view", "date": "2026-06-04", "commit": "dca8540", "note": "read-only, scoped to authed author. Withdraw deferred on FD-2." },
+    { "id": "creator-economy", "title": "Creator economy — ratings + remix-lineage + sort", "date": "2026-06-04", "commit": "2f9035e", "migration": "0033", "note": "ratings eligibility-guarded (only cloned/rented can rate; create route strips client tpl: kind → server-trusted). catalog ?sort=trending|top|new. Review caught BLOCKER+HIGH+MED, all fixed." },
+    { "id": "scheduled-runs", "title": "Scheduled agent runs (self-running agent)", "date": "2026-06-04", "commit": "2955693", "migration": "0034", "note": "60s worker tick claims due schedules (gated on agents.status=active) → enqueues a normal budget-guarded run. No new billing. MUST-FIX (soft-deleted spend leak) fixed before deploy." },
+    { "id": "relabel", "title": "₽→кр relabel in the agents UI", "date": "2026-06-04", "commit": "6e32aa7", "note": "founder rule 'draw credits, not ₽' — no ₽ left in any TMA page." },
+    { "id": "provider-picker", "title": "Provider-picker (create + edit) — own key = 0 commission", "date": "2026-06-03", "note": "routes via external_openai branch; never sets agents.provider_id." },
+    { "id": "mcp-skills", "title": "MCP skills (create + edit) — remote Streamable-HTTP per agent", "date": "2026-06-03", "note": "safeFetch-guarded, 0₽, connect-per-run." },
+    { "id": "white-label", "title": "White-label hardening (kie/openrouter/groq/ollama + tools.ts)", "date": "2026-06-04", "note": "brand kept only in server logs." },
+    { "id": "security", "title": "Repo made PRIVATE + security review passed", "date": "2026-06-04", "note": "no secrets in git history; auth/money/SSRF posture solid." }
+  ],
+  "in_progress": [
+    { "id": "living-state-system", "title": "Living-state system (this file + gen-state + memory sync)", "note": "STATE.json single source → generates STATUS.html → syncs memory; archive snapshots; kill manual dashboard patching." }
+  ],
+  "blocked": [
+    { "id": "managed-hermes", "title": "Managed Hermes runtime (the real Wave 2/3 core)", "blocker": "needs a SEPARATE ~16GB VPS — the 2GB prod box hosts 0-1 instances (~300-600MB each)", "owner": "founder: provision the box", "doc": "docs/specs/2026-06-04-managed-hermes-spike-plan.md", "go_no_go": "idle RSS >800MB ⇒ shared multi-tenant not viable at $20 tier ⇒ stay connect-your-own-Hermes" }
+  ],
+  "decisions_pending": [
+    { "id": "FD-2", "question": "Author income — withdrawable OUT vs in-app-spend-only?", "blocks": "Slice-3 cash-out (currently in-app-spendable, withdraw = «скоро»)" },
+    { "id": "FD-6", "question": "GonkaGate 10% usage fee — absorb (margin hit) or surface in seeded price?", "blocks": "Gonka model price seeding" }
+  ],
+  "backlog": [
+    { "id": "gateway-usd-headers", "title": "Gateway emits USD-micro margin headers (finish D-0)", "risk": "low", "note": "worker falls back to estimate until then (never 0)." },
+    { "id": "jetton", "title": "Jetton / USDT multi-crypto top-up", "risk": "low", "needs": "founder jetton wallet config" },
+    { "id": "opaque-author", "title": "Opaque author handle instead of raw tg_user_id in the public catalog", "risk": "low", "note": "privacy, before public launch at scale" },
+    { "id": "rate-limit", "title": "Rate-limit publish / clone (anti-spam)", "risk": "low" },
+    { "id": "pm2-ownership", "title": "Automate pm2 in deploy (run procs under aiag)", "risk": "med", "note": "removes the manual `pm2 restart` after every deploy" },
+    { "id": "merge-master", "title": "Merge feat/r1.0-wave0-consolidated → master", "risk": "med" }
+  ],
+  "founder_tasks": [
+    { "id": "hermes-box", "title": "Provision ~16GB Hermes VPS (paid, recurring)", "status": "pending", "unblocks": "managed-hermes" },
+    { "id": "gonka", "title": "Gonka submission", "status": "in_progress", "provided": ["GNK wallet gonka1zxvamsaz7ksekrgw3n0p7upqd97z5e0zzr0yzc (2026-06-04)", "email massmindmaker@gmail.com (2026-06-04)"], "remaining": ["GonkaGate gp- key ($10 trial) — blocks the spike + live demo", "Discord handle", "FD-6 fee decision", "post the proposal"], "doc": "docs/specs/2026-06-03-gonka-grant-application.md" }
+  ],
+  "assets": [
+    { "name": "Project dashboard", "type": "board", "path": "docs/DASHBOARD.html", "status": "live" },
+    { "name": "Living status (generated)", "type": "board", "path": "docs/specs/STATUS.html", "status": "live", "generated_from": ".planning/STATE.json" },
+    { "name": "TMA wireframes (dark)", "type": "wireframe", "path": "docs/wireframes/tma/index.html", "status": "live" },
+    { "name": "Web wireframes (light Studio23)", "type": "wireframe", "path": "docs/wireframes/web/index.html", "status": "live" },
+    { "name": "Design showcase (matrix)", "type": "wireframe", "path": "docs/wireframes/showcase.html", "status": "live" },
+    { "name": "Wave-1 monetization plan", "type": "spec", "path": "docs/specs/2026-06-04-wave1-monetization-plan.md", "status": "live" },
+    { "name": "Managed-Hermes spike plan", "type": "spec", "path": "docs/specs/2026-06-04-managed-hermes-spike-plan.md", "status": "live" },
+    { "name": "Gonka grant application", "type": "spec", "path": "docs/specs/2026-06-03-gonka-grant-application.md", "status": "live" },
+    { "name": "Canon (single source of product truth)", "type": "spec", "path": "docs/specs/2026-06-02-WHAT-WE-ARE-BUILDING.md", "status": "live" },
+    { "name": "Video v4 (promo)", "type": "video", "path": "video-v4/", "status": "draft" }
+  ],
+  "checkpoints": [
+    { "milestone": "R0 money path (Phase 15.1) live", "date": "earlier", "verified": true },
+    { "milestone": "R1 Wave-0 money foundation (D-0 + D-1)", "date": "2026-06-04", "verified": true },
+    { "milestone": "R1 Wave-1 monetization (publish / clone / rent / author income)", "date": "2026-06-04", "verified": true },
+    { "milestone": "Creator economy + scheduled runs", "date": "2026-06-04", "verified": true }
+  ]
+}
