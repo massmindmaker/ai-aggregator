@@ -40,8 +40,11 @@ export default function TemplateDetailPage() {
   const [fetchErr, setFetchErr] = useState<string | null>(null);
   const [cloning, setCloning] = useState(false);
   const [cloneErr, setCloneErr] = useState<string | null>(null);
-  // Set when the clone route answers 402 — paid author-rent isn't built yet (Slice 2).
-  const [rentLocked, setRentLocked] = useState(false);
+  // Slice 2: paid author-rent. `renting` = request in flight; `insufficient` =
+  // the rent route answered 402 (top up first).
+  const [renting, setRenting] = useState(false);
+  const [rentErr, setRentErr] = useState<string | null>(null);
+  const [insufficient, setInsufficient] = useState(false);
 
   const load = useCallback(async () => {
     if (!id || !token) return;
@@ -69,7 +72,8 @@ export default function TemplateDetailPage() {
   }, [load]);
 
   const isPaid = template ? template.price_credits !== null : false;
-  const cloneDisabled = cloning || rentLocked || isPaid;
+  const priceNum = template && template.price_credits !== null ? Number(template.price_credits) : 0;
+  const cloneDisabled = cloning;
 
   async function handleClone() {
     if (!token || !id) return;
@@ -80,11 +84,6 @@ export default function TemplateDetailPage() {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.status === 402) {
-        // rent_not_available_yet — honest UI: paid rent is "скоро".
-        setRentLocked(true);
-        return;
-      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setCloneErr(body.error ?? `HTTP ${res.status}`);
@@ -100,6 +99,41 @@ export default function TemplateDetailPage() {
       setCloneErr(e instanceof Error ? e.message : 'clone_failed');
     } finally {
       setCloning(false);
+    }
+  }
+
+  // Slice 2: pay the author's exact rent → server settles atomically (debit
+  // renter / credit author, 0% AIAG) → clones the agent to us → we route to it.
+  async function handleRent() {
+    if (!token || !id) return;
+    setRenting(true);
+    setRentErr(null);
+    setInsufficient(false);
+    try {
+      const res = await fetch(`/tg/api/tma/templates/${id}/rent`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 402) {
+        // insufficient_balance — offer a top-up instead of a raw error.
+        setInsufficient(true);
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setRentErr(body.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      if (data.agent_id) {
+        router.push(`/agents/${data.agent_id}`);
+        return;
+      }
+      setRentErr('rent_failed');
+    } catch (e) {
+      setRentErr(e instanceof Error ? e.message : 'rent_failed');
+    } finally {
+      setRenting(false);
     }
   }
 
@@ -132,33 +166,41 @@ export default function TemplateDetailPage() {
               </div>
             </header>
 
-            {/* Clone CTA — the one primary action on this screen. */}
-            <button
-              type="button"
-              onClick={handleClone}
-              disabled={cloneDisabled || loading || !!error}
-              className="tma-btn tma-btn--primary"
-              title={
-                isPaid || rentLocked
-                  ? 'Платная аренда шаблонов появится позже'
-                  : undefined
-              }
-            >
-              {cloning
-                ? 'Клонирование…'
-                : isPaid || rentLocked
-                  ? 'Скоро: аренда'
-                  : 'Клонировать'}
-            </button>
+            {/* CTA — the one primary action on this screen. Paid templates rent
+                (pays the author the exact sum, 0% AIAG); free templates clone. */}
+            {isPaid ? (
+              <button
+                type="button"
+                onClick={handleRent}
+                disabled={renting || loading || !!error}
+                className="tma-btn tma-btn--primary"
+              >
+                {renting ? 'Аренда…' : `Арендовать за ${priceNum} кр`}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleClone}
+                disabled={cloneDisabled || loading || !!error}
+                className="tma-btn tma-btn--primary"
+              >
+                {cloning ? 'Клонирование…' : 'Клонировать'}
+              </button>
+            )}
 
-            {(isPaid || rentLocked) && (
+            {insufficient && (
               <div className="tma-card" style={{ padding: 14 }}>
                 <p className="tma-card-text">
-                  Автор задал цену аренды этого шаблона. Платная аренда ещё не
-                  запущена — пока можно клонировать только бесплатные шаблоны.
+                  Недостаточно кредитов для аренды ({priceNum} кр). Пополните
+                  баланс и попробуйте снова.
                 </p>
+                <Link href="/profile/topup" className="tma-btn tma-btn--ghost">
+                  Пополните баланс
+                </Link>
               </div>
             )}
+
+            {rentErr && <div className="tma-error">Ошибка: {rentErr}</div>}
 
             {!loading && error && (
               <p className="tma-card-text">
