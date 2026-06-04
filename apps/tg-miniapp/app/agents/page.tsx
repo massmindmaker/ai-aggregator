@@ -72,9 +72,12 @@ export default function AgentsPage() {
 
         {user && !error && (
           <>
-            <div className="tma-cta">
+            <div className="tma-cta" style={{ gap: 8 }}>
               <Link href="/agents/new" className="tma-btn tma-btn--primary">
                 + Создать агента
+              </Link>
+              <Link href="/schedules" className="tma-btn">
+                ⏰ Расписания
               </Link>
             </div>
 

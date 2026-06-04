@@ -226,19 +226,87 @@ export interface DueSchedule {
 }
 
 /**
- * Atomically claim every schedule due now: advance next_run_at by its interval
- * and stamp last_run_at, RETURNING the claimed rows. The guarded
+ * Atomically claim every schedule due now: advance next_run_at to its NEXT
+ * occurrence (per schedule_kind) and stamp last_run_at, RETURNING the claimed
+ * rows. The guarded
  * `UPDATE … WHERE enabled = true AND next_run_at <= now() RETURNING` IS the
  * double-fire guard — a second tick can't re-claim a row whose next_run_at this
  * statement already pushed into the future. Returns [] when nothing is due.
+ *
+ * next_run_at ADVANCE per kind (0035 named/kind-aware schedules):
+ *   'interval' → next_run_at + interval_minutes (unchanged from 0034).
+ *   'daily'    → the next Europe/Moscow wall-clock `at_time` STRICTLY after now().
+ *   'weekly'   → the next Europe/Moscow `weekday`@`at_time` STRICTLY after now()
+ *                (weekday 0=Sun..6=Sat — matches EXTRACT(DOW)).
+ *
+ * The next-occurrence math is pure SQL inside the SAME guarded UPDATE, so the
+ * atomic "claim advances next_run_at" property is never lost (no read-then-write
+ * window). All timezone arithmetic is anchored to Europe/Moscow, matching
+ * getOrResetDailyBucket's daily-reset tz so a "09:00 daily" run and the budget
+ * day boundary agree.
+ *
+ * EXISTS(active agent) gate + the enqueue-a-normal-run path (scheduler.ts) are
+ * unchanged → budget guards / settleRun / BYOK-zero all still apply. No billing.
  */
 export async function claimDueSchedules(): Promise<DueSchedule[]> {
   const rows = (await sql`
-    UPDATE agent_schedules
-       SET last_run_at = next_run_at,
-           next_run_at = next_run_at + (interval_minutes * INTERVAL '1 minute')
-     WHERE enabled = true
-       AND next_run_at <= now()
+    UPDATE agent_schedules s
+       SET last_run_at = now(),
+           next_run_at = CASE s.schedule_kind
+             -- interval: simple add, exactly as 0034.
+             WHEN 'interval' THEN
+               s.next_run_at + (s.interval_minutes * INTERVAL '1 minute')
+
+             -- daily: the next Europe/Moscow date carrying at_time that is > now().
+             -- 1. now_local = now() as a Moscow wall-clock timestamp (no tz).
+             -- 2. candidate = today_local@at_time; if already passed, +1 day.
+             -- 3. re-anchor the local wall-clock back to a real timestamptz.
+             WHEN 'daily' THEN
+               (
+                 (
+                   ((now() AT TIME ZONE 'Europe/Moscow')::date
+                     + s.at_time)
+                   + CASE
+                       WHEN ((now() AT TIME ZONE 'Europe/Moscow')::date + s.at_time)
+                              > (now() AT TIME ZONE 'Europe/Moscow')
+                       THEN INTERVAL '0 day'
+                       ELSE INTERVAL '1 day'
+                     END
+                 ) AT TIME ZONE 'Europe/Moscow'
+               )
+
+             -- weekly: next matching weekday@at_time (Moscow) strictly after now().
+             -- delta = (weekday - dow + 7) % 7; if delta=0 and time already passed
+             -- today, roll a full week (+7). dow/weekday: 0=Sun..6=Sat.
+             WHEN 'weekly' THEN
+               (
+                 (
+                   ((now() AT TIME ZONE 'Europe/Moscow')::date
+                     + s.at_time)
+                   + (
+                     (
+                       ((s.weekday
+                         - EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Moscow'))::int
+                         + 7) % 7)
+                       + CASE
+                           WHEN ((s.weekday
+                                  - EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Moscow'))::int
+                                  + 7) % 7) = 0
+                             AND ((now() AT TIME ZONE 'Europe/Moscow')::date + s.at_time)
+                                  <= (now() AT TIME ZONE 'Europe/Moscow')
+                           THEN 7
+                           ELSE 0
+                         END
+                     ) * INTERVAL '1 day'
+                   )
+                 ) AT TIME ZONE 'Europe/Moscow'
+               )
+
+             -- Unknown kind: push 1h so a bad row can't hot-loop the tick.
+             ELSE s.next_run_at + INTERVAL '1 hour'
+           END
+     WHERE s.enabled = true
+       AND s.next_run_at <= now()
        -- Only fire for a LIVE agent. The app convention is SOFT-delete
        -- (status='deleted'); the FK CASCADE only fires on a hard delete, so without
        -- this gate a soft-deleted agent's schedule would keep spending the owner's
@@ -246,9 +314,9 @@ export async function claimDueSchedules(): Promise<DueSchedule[]> {
        -- requires status='active' — the scheduled path must match it.
        AND EXISTS (
          SELECT 1 FROM agents a
-          WHERE a.id = agent_schedules.agent_id AND a.status = 'active'
+          WHERE a.id = s.agent_id AND a.status = 'active'
        )
-     RETURNING id::text, agent_id::text, tg_user_id::text, prompt
+     RETURNING s.id::text, s.agent_id::text, s.tg_user_id::text, s.prompt
   `) as unknown as DueSchedule[];
   return rows;
 }
