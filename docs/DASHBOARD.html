@@ -122,8 +122,10 @@ const TABS=[
    {t:'Архитектура (общая)',d:'Сервис-карта, 2 продукта, money-flow',p:'ARCHITECTURE.md',ty:'md'},
  ]},
  {id:'design',ic:'🎨',name:'Дизайн',cards:[
+   {t:'★ ЕДИНЫЙ дизайн-борд (SoT)',d:'ОДИН борт: мобильный+веб, тёмная/светлая, меню слева / 45 экранов справа. Заменяет разрозненные tma/web/showcase',p:'wireframes/design-board.html',ty:'html',star:1},
+   {t:'★ Design readiness (свежий)',d:'Консолидированная оценка: система 86 / shipped 64 / weighted ~72; супер­седит старые эвалы; топ-5 фиксов (карта-компонент, run-trace, shared-слой)',p:'specs/2026-06-04-design-readiness.md',ty:'md',star:1},
    {t:'DESIGN.md (токены SoT)',d:'Цвета/типографика/компоненты/анимации/логотип',p:'../DESIGN.md',ty:'md',star:1},
-   {t:'Оценка дизайна 108 v2',d:'89/108 — финальная, функция-честная',p:'specs/2026-06-03-design-eval-108-v2.html',ty:'html',star:1},
+   {t:'Оценка дизайна 108 v2 (устар.)',d:'89/108 = потолок SHOWCASE, не продукта → superseded design-readiness (~72). Держим как showcase-скор',p:'specs/2026-06-03-design-eval-108-v2.html',ty:'html'},
    {t:'План улучшений дизайна (108 + честность)',d:'Свежая критика 108 + план по блокам, обе темы + карта что работает/чего нет',p:'specs/2026-06-03-design-108-eval-and-improvement-plan.md',ty:'md',star:1},
    {t:'UX-критика',d:'Разбор по 12 измерениям',p:'specs/2026-06-03-aiag-ux-critique.html',ty:'html'},
    {t:'VoltAgent reuse',d:'Что переиспользовать (MIT), adopt/adapt/skip',p:'specs/2026-06-03-voltagent-design-reuse.md',ty:'md'},
@@ -136,6 +138,7 @@ const TABS=[
    {t:'Пайплайн портрет→видео→голос (R-12)',d:'4 стадии через Kie: лист → портрет → holo-карта → голос',p:'specs/research/R-12.md',ty:'md'},
  ]},
  {id:'arch',ic:'🏗️',name:'Архитектура / Research',cards:[
+   {t:'🔴 ★ App readiness (критическая, 2026-06-04)',d:'Code-grounded пере-оценка: func 52 / tech 55. НАШЛА: D-0 сломан (RUB≠USD-micro заголовки), mock-биллинг по дефолту, 0 тестов money-роутов. Топ-5 P0-фиксов',p:'specs/2026-06-04-readiness-assessment.md',ty:'md',star:1},
    {t:'SYNTHESIS (архрешения)',d:'D-0…D-14, порядок билда, founder-гейты, риски',p:'specs/research/SYNTHESIS.html',ty:'html',star:1},
    {t:'Backend gap',d:'Что не доделано (статус D-0…D-14)',p:'specs/2026-06-03-backend-gap.md',ty:'md'},
    {t:'USD-реестр D-1 — план',d:'Кредиты=центы (BIGINT), tg_ledger_entries, убить USD_TO_RUB; 0 балансов=дёшево сейчас',p:'specs/2026-06-03-usd-ledger-plan.md',ty:'md',star:1},
@@ -240,7 +243,8 @@ function renderArtifact(tab,path){
 }
 function overview(){const page=document.createElement('div');page.className='page';
   page.innerHTML='<div class="head"><div class="eyebrow">AIAG · единый дашборд</div><h1>Обзор проекта</h1><p class="lead">Один вход во всё. Слева — зоны (всегда видны). Клик по карточке открывает артефакт ЗДЕСЬ; «← Назад»/Esc/стрелка браузера возвращают. .md рендерятся красиво при запуске через serve.bat.</p></div>'
-   +'<div class="stats"><div class="stat"><div class="v" style="color:var(--good)">20</div><div class="k">shipped · проверено</div></div><div class="stat"><div class="v">50<small>/108</small></div><div class="k">тех-стек</div></div><div class="stat"><div class="v">43<small>/108</small></div><div class="k">функционал*</div></div><div class="stat"><div class="v" style="color:var(--accent)">89<small>/108</small></div><div class="k">дизайн v2</div></div></div>'
+   +'<div class="stats"><div class="stat"><div class="v" style="color:var(--good)">20</div><div class="k">shipped</div></div><div class="stat"><div class="v">55<small>/108</small></div><div class="k">тех-стек</div></div><div class="stat"><div class="v">52<small>/108</small></div><div class="k">функционал</div></div><div class="stat"><div class="v" style="color:var(--accent)">72<small>/108</small></div><div class="k">дизайн (readiness)</div></div></div>'
+   +'<div class="sec" style="color:var(--danger)">⚠️ Честность дашборда (readiness 2026-06-04)</div><ul class="facts"><li><b>D-0 маржа шлюза — СОБРАН, но НЕ подключён</b>: шлюз шлёт RUB-заголовки, воркер читает USD-micro → не совпадают → биллинг по ОЦЕНКЕ, не по реальной марже. <span class="pill p-rnd">P0-фикс</span></li><li><b>Mock-провайдер = дефолт</b> при отсутствии ключа и ВСЁ РАВНО биллит → загейтить за AIAG_FORCE_MOCK=1 <span class="pill p-rnd">P0</span></li><li>tg-miniapp money-роуты: <b>0 тестов</b> (topup/аренда/clone-of-paid) <span class="pill p-soon">P1</span></li><li>Дизайн 89 был потолком showcase, не продукта → честно ~72; shipped TMA 64 <span class="pill p-soon">пере-оценено</span></li></ul>'
    +'<div class="sec">Что ты можешь сделать прямо сейчас</div><ul class="facts done">'
      +'<li><b>Создать агента</b> — из 6 шаблонов или с нуля: имя, характер, модель, бюджет, 4 тула</li>'
      +'<li><b>Подключить своего Hermes</b> (или любой OpenAI-совместимый адрес + ключ) и общаться с ним</li>'
@@ -268,7 +272,7 @@ function overview(){const page=document.createElement('div');page.className='pag
      +'<li>Мульти-модель — картинка / голос / зрение <span class="pill p-soon">скоро</span></li>'
      +'<li>Управляемый Hermes на нашем облаке <span class="pill p-rnd">нужен ~16GB-бокс</span></li></ul>'
    +'<div class="sec">Два продукта</div><ul class="facts"><li><b>Aggregator (Web)</b> — маркет моделей, <b>рубли</b> <span class="pill p-live">live</span></li><li><b>TMA</b> — маркет агентов, <b>крипто-кредиты</b> <span class="pill p-live">Phase 15 + R0 live</span> · фокус</li></ul>'
-   +'<div class="sec">Money-path / бэкенд <span style="color:var(--good);font-size:11px">(2026-06-04 — всё LIVE + gold-проверено JWT)</span></div><ul class="facts done"><li>D-0 (маржа) + <b>D-1 USD-кредитный реестр</b> (₽ убит, аудит-журнал tg_ledger_entries) — live</li><li>Wave-1 монетизация: публикация → клон / <b>аренда</b> (автору 0%, всё в 1 транзакции) → доход автора — live</li><li>Креатор-экономика (рейтинги + ремикс + сортировка) + плановые запуски агента — live</li><li>Экраны 25/26/29/30 · Gonka-демо (:4000, реальный прогон) · TON top-up (testnet) · внутренний A2A — все live</li><li>Миграции 0029,0031-0037 накатаны на прод <span class="pill p-branch">feat/r1.0-wave0-consolidated</span> (не в master)</li></ul>'
+   +'<div class="sec">Money-path / бэкенд <span style="color:var(--good);font-size:11px">(2026-06-04 — всё LIVE + gold-проверено JWT)</span></div><ul class="facts done"><li>⚠️ <b>D-0 (маржа шлюза) — СОБРАН, но НЕ подключён</b> (RUB-заголовки ≠ USD-micro → биллинг по оценке; P0-фикс) · <b>D-1 USD-реестр</b> (₽ убит, tg_ledger_entries) — реально live ✓</li><li>Wave-1 монетизация: публикация → клон / <b>аренда</b> (автору 0%, всё в 1 транзакции) → доход автора — live</li><li>Креатор-экономика (рейтинги + ремикс + сортировка) + плановые запуски агента — live</li><li>Экраны 25/26/29/30 · Gonka-демо (:4000, реальный прогон) · TON top-up (testnet) · внутренний A2A — все live</li><li>Миграции 0029,0031-0037 накатаны на прод <span class="pill p-branch">feat/r1.0-wave0-consolidated</span> (не в master)</li></ul>'
    +'<div class="sec">Чек-лист действий (сохраняется)</div><div class="todo" id="todo"></div>'
    +'<div class="sec">GitHub · ветки</div><div class="links"><a href="'+REPO+'" target="_blank">репо</a><a href="'+REPO+'/tree/feat/r1.0-wave0-consolidated" target="_blank">feat/r1.0-wave0-consolidated</a><a href="'+REPO+'/tree/feat/wave0-d0-margin" target="_blank">feat/wave0-d0-margin</a><a href="'+REPO+'/tree/plan/15.1-r0-billing-identity" target="_blank">plan/15.1-r0</a><a href="https://ai-aggregator.ru" target="_blank">прод ↗</a></div>'
    +'<div class="sec">Быстрый доступ (флагманы)</div><div class="grid" id="qa"></div>';

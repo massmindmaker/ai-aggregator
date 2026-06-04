@@ -6,10 +6,10 @@
     "merged_to_master": false,
     "dream_path": "4.7/5",
     "prod": "ai-aggregator.ru (web, ₽) · TMA via @aiaggbot (crypto credits)",
-    "scores_108": { "tech": 50, "functional": 43, "design": 89, "note": "functional needs a formal re-score after the 2026-06-04 monetization shipping" }
+    "scores_108": { "tech": 55, "functional": 52, "design": 72, "note": "re-scored 2026-06-04 (critical readiness, code-grounded): func 43→52, tech 50→55, design = 86 system / 64 shipped / ~72 weighted (prior 89 was the showcase ceiling, NOT product readiness). Details: docs/specs/2026-06-04-readiness-assessment.md + 2026-06-04-design-readiness.md" }
   },
   "shipped": [
-    { "id": "d0-margin", "title": "D-0 — gateway returns realized margin", "date": "2026-06-04", "commit": "00bd2f3", "note": "worker bills off the gateway's authoritative margin. (USD-micro header emission still in backlog → worker falls back to estimate, never bills 0.)" },
+    { "id": "d0-margin", "title": "D-0 — gateway realized margin ⚠️ BUILT but NOT WIRED (header mismatch)", "date": "2026-06-04", "commit": "00bd2f3", "note": "HONEST (readiness 2026-06-04): gateway emits X-AIAG-Charged-Rub (rubles) while the worker reads x-aiag-charged-usd-micro → names NEVER match → billedByGateway ALWAYS false → worker bills off its OWN estimate PRICING table, NOT the gateway's realized margin. The worker test asserted a FABRICATED header so the break passed CI green. Billing still works (estimate, never 0) but realized margin is UNMEASURED. P0 fix = unify on USD-micro + a real gateway→worker contract test. Was overclaimed as 'live'." },
     { "id": "d1-ledger", "title": "D-1 — USD-credit ledger", "date": "2026-06-04", "commit": "341d56e", "migration": "0029", "note": "1 credit = 1 US cent (BIGINT); killed USD_TO_RUB=90; append-only tg_ledger_entries; settleRun atomic (guarded UPDATE…WHERE balance>=cost RETURNING + ledger co-committed). Gold-verified." },
     { "id": "slice1-publish-clone", "title": "Wave-1 Slice 1 — publish / browse / clone-free", "date": "2026-06-04", "commit": "ca85b33", "migration": "0031", "note": "agent_templates has ZERO secret columns by design. Paid template → 402 (no free clone of paid)." },
     { "id": "slice2-rent", "title": "Wave-1 Slice 2 — paid rent + author payout (0% AIAG)", "date": "2026-06-04", "commit": "a6e0499", "migration": "0032", "note": "whole rent in ONE sql.begin: debit renter → upsert-credit author 100% pass-through → 2 equal-and-opposite ledger entries → clone in-tx. uq_rental_active stops double-charge. Money-reviewed twice (split-tx HIGH fixed)." },
@@ -45,7 +45,9 @@
     { "id": "FD-6", "decision": "Gonka = 0% commission (BYO / pass-through) — the user pays Gonka directly, we don't tax it; matches the 'own provider = free' rule. We earn on the GRANT (paid in GNK), not on per-call Gonka margin. The GonkaGate platform fee only applies if we ever resell via our own key — deferred, not needed for the product.", "date": "2026-06-04" }
   ],
   "backlog": [
-    { "id": "gateway-usd-headers", "title": "Gateway emits USD-micro margin headers (finish D-0)", "risk": "low", "note": "worker falls back to estimate until then (never 0)." },
+    { "id": "d0-fix", "title": "🔴 P0: fix D-0 — gateway emits RUB headers, worker reads USD-micro (names mismatch → D-0 OFF)", "risk": "P0 money", "note": "the keystone is NOT wired: billedByGateway always false → estimates, not realized margin. Unify on USD-micro + a REAL gateway→worker contract test (current test asserts a fabricated header). Readiness 2026-06-04." },
+    { "id": "mock-billing", "title": "🔴 P0: mock-upstream is the DEFAULT on a missing key + still bills", "risk": "P0 money", "note": "registry.ts returns a deterministic stub that bills via estimate (we saw 'Mock reply to:' for Gonka pre-key). Gate behind AIAG_FORCE_MOCK=1 only. Readiness 2026-06-04." },
+    { "id": "money-tests", "title": "P1: tg-miniapp money routes have ZERO tests", "risk": "high", "note": "topup idempotency, rent payout (0% AIAG), clone-of-paid→402 untested. Readiness 2026-06-04." },
     { "id": "jetton", "title": "Jetton / USDT multi-crypto top-up", "risk": "low", "needs": "founder jetton wallet config" },
     { "id": "opaque-author", "title": "Opaque author handle instead of raw tg_user_id in the public catalog", "risk": "low", "note": "privacy, before public launch at scale" },
     { "id": "rate-limit", "title": "Rate-limit publish / clone (anti-spam)", "risk": "low" },
@@ -65,6 +67,9 @@
     { "name": "Web wireframes (light Studio23)", "type": "wireframe", "path": "docs/wireframes/web/index.html", "status": "live" },
     { "name": "Design showcase (matrix)", "type": "wireframe", "path": "docs/wireframes/showcase.html", "status": "live" },
     { "name": "Payment architecture (credit-hub)", "type": "wireframe", "path": "docs/wireframes/payment-architecture.html", "status": "live" },
+    { "name": "★ Unified design board (THE design SoT — mobile+web, dark+light, 45 screens)", "type": "wireframe", "path": "docs/wireframes/design-board.html", "status": "live" },
+    { "name": "★ App readiness assessment (critical, code-grounded)", "type": "spec", "path": "docs/specs/2026-06-04-readiness-assessment.md", "status": "live" },
+    { "name": "★ Design readiness (consolidated, supersedes old evals)", "type": "spec", "path": "docs/specs/2026-06-04-design-readiness.md", "status": "live" },
     { "name": "Tool-market + x402 plan", "type": "spec", "path": "docs/specs/2026-06-04-tool-market-x402-plan.md", "status": "live" },
     { "name": "Wave-1 monetization plan", "type": "spec", "path": "docs/specs/2026-06-04-wave1-monetization-plan.md", "status": "live" },
     { "name": "Managed-Hermes spike plan", "type": "spec", "path": "docs/specs/2026-06-04-managed-hermes-spike-plan.md", "status": "live" },
