@@ -1,7 +1,8 @@
-import { Worker } from 'bullmq';
+import { Worker, Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import http from 'node:http';
 import { runAgent } from './agent-runner.js';
+import { startScheduler } from './scheduler.js';
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
 const PORT = Number(process.env.PORT ?? 3101);
@@ -29,6 +30,13 @@ worker.on('failed', (job, err) => {
   console.error(`[agent-worker] ✗ job=${job?.id}: ${err.message}`);
 });
 
+// Scheduled self-running agents: a resident tick claims due agent_schedules and
+// enqueues NORMAL 'agent-run' jobs onto this same queue/connection, so every
+// scheduled run flows through runAgent() with the existing budget guard +
+// settleRun + BYOK-zero rule. No billing logic lives in the scheduler.
+const scheduleQueue = new Queue('agent-run', { connection });
+const scheduler = startScheduler(scheduleQueue);
+
 http
   .createServer((_req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -42,6 +50,8 @@ console.log('[agent-worker] listening on agent-run queue');
 
 async function shutdown(): Promise<void> {
   console.log('[agent-worker] shutting down…');
+  scheduler.stop();
+  await scheduleQueue.close();
   await worker.close();
   await connection.quit();
   process.exit(0);

@@ -209,6 +209,69 @@ export async function loadHistory(
   return rows.reverse();
 }
 
+// -- agent_schedules (scheduled self-running runs, migration 0034) ---------
+//
+// The scheduler tick claims due schedules with an ATOMIC guarded UPDATE …
+// RETURNING and, for each row, enqueues a NORMAL run through the existing money
+// path. The UPDATE is the double-fire guard: it advances next_run_at in the same
+// statement that reads the due rows, so a concurrent tick (another instance)
+// sees the advanced next_run_at and claims nothing. Pure scheduling — no billing
+// here; settleRun/budget guards run later inside runAgent().
+
+export interface DueSchedule {
+  id: string;
+  agent_id: string;
+  tg_user_id: string;
+  prompt: string;
+}
+
+/**
+ * Atomically claim every schedule due now: advance next_run_at by its interval
+ * and stamp last_run_at, RETURNING the claimed rows. The guarded
+ * `UPDATE … WHERE enabled = true AND next_run_at <= now() RETURNING` IS the
+ * double-fire guard — a second tick can't re-claim a row whose next_run_at this
+ * statement already pushed into the future. Returns [] when nothing is due.
+ */
+export async function claimDueSchedules(): Promise<DueSchedule[]> {
+  const rows = (await sql`
+    UPDATE agent_schedules
+       SET last_run_at = next_run_at,
+           next_run_at = next_run_at + (interval_minutes * INTERVAL '1 minute')
+     WHERE enabled = true
+       AND next_run_at <= now()
+       -- Only fire for a LIVE agent. The app convention is SOFT-delete
+       -- (status='deleted'); the FK CASCADE only fires on a hard delete, so without
+       -- this gate a soft-deleted agent's schedule would keep spending the owner's
+       -- credits on an agent they believe is gone. The manual /run route already
+       -- requires status='active' — the scheduled path must match it.
+       AND EXISTS (
+         SELECT 1 FROM agents a
+          WHERE a.id = agent_schedules.agent_id AND a.status = 'active'
+       )
+     RETURNING id::text, agent_id::text, tg_user_id::text, prompt
+  `) as unknown as DueSchedule[];
+  return rows;
+}
+
+/**
+ * Insert a pending agent_runs row for a scheduled fire — the SAME shape the TMA
+ * /run route inserts, so the worker's runAgent() path (budget guard + settleRun
+ * + BYOK-zero rule) applies identically. Returns the new run id, or null if the
+ * agent vanished (FK gone) — caller skips, never crashes the tick.
+ */
+export async function insertScheduledRun(
+  agentId: string,
+  tgUserId: string,
+  input: string,
+): Promise<string | null> {
+  const rows = (await sql`
+    INSERT INTO agent_runs (agent_id, tg_user_id, input, status)
+    VALUES (${agentId}::uuid, ${tgUserId}::bigint, ${input.slice(0, 16000)}, 'pending')
+    RETURNING id::text
+  `) as unknown as Array<{ id: string }>;
+  return rows[0]?.id ?? null;
+}
+
 // -- agent_memory (key-value store backing the `memory` tool) -------------
 
 export async function memorySet(

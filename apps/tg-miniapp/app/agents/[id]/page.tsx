@@ -42,6 +42,24 @@ interface Run {
   completed_at: string | null;
 }
 
+interface Schedule {
+  id: string;
+  agent_id: string;
+  prompt: string;
+  interval_minutes: number;
+  enabled: boolean;
+  next_run_at: string;
+  last_run_at: string | null;
+}
+
+// Interval presets (minutes). Floor is 15m — mirrors the API + migration CHECK.
+const SCHEDULE_INTERVALS: { value: number; label: string }[] = [
+  { value: 15, label: 'каждые 15 минут' },
+  { value: 60, label: 'каждый час' },
+  { value: 360, label: 'каждые 6 часов' },
+  { value: 1440, label: 'каждые 24 часа' },
+];
+
 export default function AgentDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -85,6 +103,14 @@ export default function AgentDetailPage() {
   const [mcpSel, setMcpSel] = useState('');
   const [mcpUrl, setMcpUrl] = useState('');
   const [mcpAuth, setMcpAuth] = useState('');
+
+  // ---- schedule (self-running agent) ----
+  const [schedule, setSchedule] = useState<Schedule | null>(null);
+  const [schPrompt, setSchPrompt] = useState('');
+  const [schInterval, setSchInterval] = useState(1440);
+  const [schEnabled, setSchEnabled] = useState(true);
+  const [schSaving, setSchSaving] = useState(false);
+  const [schErr, setSchErr] = useState<string | null>(null);
 
   const runActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
 
@@ -200,6 +226,77 @@ export default function AgentDetailPage() {
       .then((j) => setProviders(Array.isArray(j.providers) ? j.providers : []))
       .catch(() => {});
   }, [token]);
+
+  useEffect(() => {
+    if (!token || !id) return;
+    fetch(`/tg/api/tma/agents/${id}/schedule`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : { schedule: null }))
+      .then((j) => {
+        const s: Schedule | null = j.schedule ?? null;
+        setSchedule(s);
+        if (s) {
+          setSchPrompt(s.prompt);
+          setSchInterval(s.interval_minutes);
+          setSchEnabled(s.enabled);
+        }
+      })
+      .catch(() => {});
+  }, [token, id]);
+
+  async function handleSaveSchedule(e: React.FormEvent) {
+    e.preventDefault();
+    if (!token || !id || !schPrompt.trim()) return;
+    setSchSaving(true);
+    setSchErr(null);
+    try {
+      const res = await fetch(`/tg/api/tma/agents/${id}/schedule`, {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          prompt: schPrompt.trim(),
+          interval_minutes: schInterval,
+          enabled: schEnabled,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setSchErr(body.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      setSchedule(data.schedule ?? null);
+    } catch (err) {
+      setSchErr(err instanceof Error ? err.message : 'save_failed');
+    } finally {
+      setSchSaving(false);
+    }
+  }
+
+  async function handleDeleteSchedule() {
+    if (!token || !id) return;
+    setSchSaving(true);
+    setSchErr(null);
+    try {
+      const res = await fetch(`/tg/api/tma/agents/${id}/schedule`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setSchedule(null);
+        setSchPrompt('');
+        setSchEnabled(true);
+      } else {
+        setSchErr(`HTTP ${res.status}`);
+      }
+    } catch (err) {
+      setSchErr(err instanceof Error ? err.message : 'delete_failed');
+    } finally {
+      setSchSaving(false);
+    }
+  }
 
   useEffect(() => {
     const hasActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
@@ -415,6 +512,96 @@ export default function AgentDetailPage() {
               >
                 {agent.system_prompt}
               </p>
+            </section>
+
+            {/* Расписание — агент запускает сам себя по интервалу. Каждый запуск
+                списывается как обычный (в рамках дневного бюджета). */}
+            <section className="tma-card" style={{ padding: 16 }}>
+              <h2 className="tma-card-title">⏰ Расписание</h2>
+              <p className="tma-card-text tma-text-small">
+                Агент сам запускается по расписанию с этим заданием. Каждый запуск
+                тратит кредиты в рамках дневного лимита — как обычный запуск.
+              </p>
+
+              {schedule?.enabled && (
+                <p className="tma-card-text tma-text-small" style={{ marginTop: 4 }}>
+                  Активно ·{' '}
+                  {SCHEDULE_INTERVALS.find((i) => i.value === schedule.interval_minutes)?.label ??
+                    `каждые ${schedule.interval_minutes} мин`}{' '}
+                  · следующий запуск ~<code>{formatHHMM(schedule.next_run_at)}</code>
+                </p>
+              )}
+              {schedule && !schedule.enabled && (
+                <p className="tma-card-text tma-text-small" style={{ marginTop: 4 }}>
+                  Выключено.
+                </p>
+              )}
+
+              <form
+                onSubmit={handleSaveSchedule}
+                style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}
+              >
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-text">Задание для запуска</span>
+                  <textarea
+                    value={schPrompt}
+                    onChange={(e) => setSchPrompt(e.target.value)}
+                    rows={3}
+                    maxLength={16000}
+                    placeholder="Например: собери утренний дайджест новостей по теме X"
+                    style={{ ...editInputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+                  />
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-text">Частота</span>
+                  <select
+                    value={schInterval}
+                    onChange={(e) => setSchInterval(Number(e.target.value))}
+                    style={editInputStyle}
+                  >
+                    {SCHEDULE_INTERVALS.map((i) => (
+                      <option key={i.value} value={i.value}>
+                        {i.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={schEnabled}
+                    onChange={(e) => setSchEnabled(e.target.checked)}
+                  />
+                  <span className="tma-card-text">Включить расписание</span>
+                </label>
+
+                {schErr && <div className="tma-error">Ошибка: {schErr}</div>}
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {schedule && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteSchedule}
+                      className="tma-btn"
+                      disabled={schSaving}
+                    >
+                      Удалить
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="tma-btn tma-btn--primary"
+                    disabled={schSaving || !schPrompt.trim()}
+                    style={{ flex: 1 }}
+                  >
+                    {schSaving ? 'Сохранение…' : schedule ? 'Сохранить' : 'Создать расписание'}
+                  </button>
+                </div>
+              </form>
             </section>
 
             <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -758,6 +945,13 @@ export default function AgentDetailPage() {
       <BottomNav />
     </>
   );
+}
+
+/** Format an ISO timestamp as local HH:MM for the "next run ~HH:MM" hint. */
+function formatHHMM(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
 const editInputStyle: React.CSSProperties = {
