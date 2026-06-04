@@ -53,7 +53,7 @@ ON CONFLICT (slug) DO NOTHING;
 INSERT INTO model_upstreams (model_id, upstream_id, upstream_model_id, price_per_1k_input, price_per_1k_output)
 SELECT m.id, s.upstream_id, s.upstream_model_id, s.price_in, s.price_out
 FROM (VALUES
-  ('gonka/qwen3-235b', 'gonka', 'Qwen/Qwen3-235B-A22B', 0.20::numeric, 0.60::numeric)
+  ('gonka/qwen3-235b', 'gonka', 'qwen/qwen3-235b-a22b-instruct-2507-fp8', 0.20::numeric, 0.60::numeric)
 ) AS s(model_slug, upstream_id, upstream_model_id, price_in, price_out)
 JOIN models m ON m.slug = s.model_slug
 ON CONFLICT (model_id, upstream_id) DO NOTHING;
