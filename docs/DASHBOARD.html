@@ -5,183 +5,295 @@
 <title>AIAG — Project Dashboard</title>
 <style>
   :root{
-    --bg:#0a0a0b;--bg2:#111114;--surf:#18181b;--ink:#f4f4f5;--dim:#a1a1aa;--faint:#71717a;
-    --accent:#f59e0b;--good:#22c55e;--soon:#60a5fa;--rnd:#a78bfa;--red:#ef4444;--line:rgba(255,255,255,.08);
-    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;--sans:Inter,-apple-system,'Segoe UI',Roboto,system-ui,sans-serif;
+    --bg:#0a0a0b;--bg-elev:#111114;--bg-surface:#18181b;--ink:#f4f4f5;--ink-muted:#8b8b94;--ink-faint:#71717a;
+    --accent:#f59e0b;--accent-hover:#d97706;--accent-ink:#000;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);
+    --good:#22c55e;--soon:#7aa2f7;--danger:#ef4444;--radius:8px;
+    --sans:'Inter',-apple-system,'Segoe UI',Roboto,system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    --logo-mask:url('wireframes/assets/logo.png');
   }
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;padding:0 22px 110px}
-  .wrap{max-width:1000px;margin:0 auto}
-  a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
-  header{padding:52px 0 26px;border-bottom:1px solid var(--line)}
-  .kick{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
-  h1{font-size:38px;letter-spacing:-.02em;margin-bottom:10px}
-  .lead{color:var(--dim);max-width:74ch}
-  .pillrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
-  .pill{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:20px;padding:4px 11px;color:var(--dim);background:var(--bg2)}
-  .pill.hot{color:var(--accent);border-color:rgba(245,158,11,.4)}
-  section{padding:30px 0;border-bottom:1px solid var(--line)}
-  h2{font-size:20px;margin-bottom:4px}
-  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
-  .big-link{display:block;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;background:var(--bg2);padding:15px 17px;margin-top:12px}
-  .big-link .t{font-size:16px;font-weight:600;color:var(--ink)}
-  .big-link .d{font-size:13px;color:var(--dim);margin-top:2px}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
-  @media(max-width:720px){.grid{grid-template-columns:1fr}}
-  .card{border:1px solid var(--line);border-radius:10px;background:var(--surf);padding:14px 16px}
-  .card h3{font-size:13px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:9px}
-  ul{list-style:none;display:flex;flex-direction:column;gap:7px}
-  li{padding-left:18px;position:relative;color:var(--dim);font-size:14px}
-  li::before{content:"";position:absolute;left:0;top:8px;width:7px;height:7px;border-radius:50%;background:var(--good)}
-  li.now::before{background:var(--accent)}li.soon::before{background:var(--soon)}li.rnd::before{background:var(--rnd)}li.need::before{background:var(--red);border-radius:1px}
-  li b{color:var(--ink)}
-  .files{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
-  @media(max-width:720px){.files{grid-template-columns:1fr}}
-  .file{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:var(--bg2);font-size:14px;color:var(--ink)}
-  .file .ty{font-size:10px;color:var(--faint);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
-  code{font-family:var(--mono);font-size:12px;color:var(--accent);background:var(--bg2);padding:1px 5px;border-radius:4px}
-  .meta{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:10px}
-  .legend{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:10px}
-  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);height:100vh;overflow:hidden;display:flex;-webkit-font-smoothing:antialiased}
+  .sb{width:250px;flex:none;height:100vh;border-right:1px solid var(--line);background:var(--bg-elev);display:flex;flex-direction:column;padding:16px 12px}
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;cursor:pointer}
+  .mark{width:26px;height:26px;flex:none;background:var(--accent);-webkit-mask:var(--logo-mask) center/contain no-repeat;mask:var(--logo-mask) center/contain no-repeat}
+  .brand b{font-size:15px;letter-spacing:-.01em}.brand .sub{font-family:var(--mono);font-size:9px;color:var(--ink-faint);letter-spacing:.14em;text-transform:uppercase}
+  .search{display:flex;align-items:center;gap:8px;margin:0 4px 12px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-surface)}
+  .search input{flex:1;background:none;border:0;color:var(--ink);font:13px var(--sans);outline:none}.search input::placeholder{color:var(--ink-faint)}
+  .search .x{color:var(--ink-faint);cursor:pointer;font-size:14px;display:none}
+  .nav{display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1}
+  .nav button{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:none;border:0;color:var(--ink-muted);font:500 13.5px var(--sans);padding:10px 12px;border-radius:var(--radius);cursor:pointer;position:relative;transition:background .15s,color .15s}
+  .nav button:hover{background:var(--bg-surface);color:var(--ink)}
+  .nav button.on{background:rgba(245,158,11,.12);color:var(--accent)}
+  .nav button.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--accent)}
+  .nav .ic{width:18px;text-align:center;font-size:14px}.nav .ct{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink-faint)}
+  .sbfoot{padding:11px 10px 0;border-top:1px solid var(--line);font-family:var(--mono);font-size:10px;color:var(--ink-faint);line-height:1.7}
+  .sbfoot a{color:var(--ink-muted)} .srv{color:var(--good)} .srv.off{color:var(--ink-faint)}
+
+  .main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  .page{flex:1;overflow-y:auto;padding:28px 32px 60px}
+  .head{margin-bottom:16px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px}
+  h1{font-size:25px;letter-spacing:-.02em}
+  .lead{color:var(--ink-muted);font-size:14px;margin-top:8px;max-width:80ch}
+  .chips{display:flex;gap:8px;margin:14px 0 4px}
+  .chip{font:500 12px var(--sans);color:var(--ink-muted);background:var(--bg-surface);border:1px solid var(--line);border-radius:20px;padding:5px 13px;cursor:pointer}
+  .chip.on{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px;margin-top:12px}
+  .card{border:1px solid var(--line);border-radius:12px;background:var(--bg-surface);padding:15px 16px;cursor:pointer;transition:border-color .2s,transform .2s,box-shadow .2s}
+  .card:hover{border-color:rgba(245,158,11,.45);transform:translateY(-2px);box-shadow:0 10px 30px -16px rgba(245,158,11,.4)}
+  .card.star{border-color:rgba(245,158,11,.4)}
+  .card .t{font-size:14.5px;font-weight:600;display:flex;align-items:center;gap:7px}.card.star .t::after{content:"★";color:var(--accent);font-size:12px}
+  .card .d{font-size:12.5px;color:var(--ink-muted);margin-top:6px;line-height:1.5}
+  .card .meta{display:flex;align-items:center;gap:8px;margin-top:11px}
+  .badge{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:5px;border:1px solid var(--line);color:var(--ink-faint)}
+  .badge.html{color:var(--accent);border-color:rgba(245,158,11,.4)}.badge.md{color:var(--soon);border-color:rgba(122,162,247,.35)}
+  .zone-tag{font-family:var(--mono);font-size:9px;color:var(--ink-faint);margin-left:auto}.open-ext{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-faint)}.card:hover .open-ext{color:var(--accent)}
+
+  .artifact{flex:1;display:flex;flex-direction:column;min-height:0}
+  .abar{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--bg-elev);flex:none}
+  .abar .bk{background:var(--bg-surface);border:1px solid var(--line);color:var(--ink);font:600 12.5px var(--sans);padding:7px 13px;border-radius:8px;cursor:pointer}
+  .abar .bk:hover{border-color:var(--accent);color:var(--accent)}
+  .abar .vt{font-size:14px;font-weight:600}.abar .vp{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}.abar .sp{flex:1}
+  .abar .mini{background:none;border:1px solid var(--line);color:var(--ink-muted);font:500 12px var(--sans);padding:6px 11px;border-radius:7px;cursor:pointer}.abar .mini:hover{color:var(--ink);border-color:var(--accent)}
+  .artifact iframe{flex:1;width:100%;border:0;background:#fff;min-height:0}
+  /* markdown reader (served mode) */
+  .reader{flex:1;overflow-y:auto;padding:34px 40px 80px}
+  .reader .doc{max-width:860px;margin:0 auto;line-height:1.65;color:var(--ink-muted);font-size:15px}
+  .reader h1,.reader h2,.reader h3,.reader h4{color:var(--ink);letter-spacing:-.01em;margin:24px 0 10px;line-height:1.25}
+  .reader h1{font-size:28px}.reader h2{font-size:22px;border-bottom:1px solid var(--line);padding-bottom:6px}.reader h3{font-size:17px}.reader h4{font-size:14px;color:var(--ink-muted)}
+  .reader p{margin:10px 0}.reader strong{color:var(--ink)}.reader em{color:var(--ink)}
+  .reader a{color:var(--accent)}.reader ul,.reader ol{margin:10px 0 10px 22px}.reader li{margin:4px 0}
+  .reader code{font-family:var(--mono);font-size:12.5px;background:var(--bg-surface);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:oklch(.86 .1 75)}
+  .reader pre{background:var(--bg-surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;margin:12px 0}.reader pre code{border:0;background:none;padding:0;color:var(--ink-muted)}
+  .reader blockquote{border-left:3px solid var(--accent);background:var(--bg-surface);border-radius:0 8px 8px 0;padding:10px 16px;margin:12px 0;color:var(--ink-muted)}
+  .reader table{border-collapse:collapse;margin:14px 0;font-size:13.5px;width:100%}.reader th,.reader td{border:1px solid var(--line);padding:7px 11px;text-align:left}.reader th{color:var(--ink);background:var(--bg-surface);font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  .reader hr{border:0;border-top:1px solid var(--line);margin:22px 0}
+
+  .stats{display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 20px}
+  .stat{border:1px solid var(--line);border-radius:12px;background:var(--bg-surface);padding:13px 18px;min-width:124px}
+  .stat .v{font-family:var(--mono);font-size:23px}.stat .v small{font-size:12px;color:var(--ink-faint)}.stat .k{font-size:11px;color:var(--ink-faint);margin-top:3px;text-transform:uppercase;letter-spacing:.08em}
+  .sec{margin:24px 0 10px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);display:flex;align-items:center;gap:10px}.sec::after{content:"";flex:1;height:1px;background:var(--line)}
+  ul.facts{list-style:none;display:flex;flex-direction:column;gap:8px}
+  ul.facts li{padding-left:22px;position:relative;color:var(--ink-muted);font-size:13.5px}
+  ul.facts li::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--accent)}
+  ul.facts.done li::before{background:var(--good);border-color:var(--good)}ul.facts b{color:var(--ink)}
+  .pill{font-family:var(--mono);font-size:9.5px;padding:2px 7px;border-radius:5px;border:1px solid;margin-left:4px}.p-live{color:var(--good);border-color:rgba(34,197,94,.45)}.p-branch{color:var(--soon);border-color:rgba(122,162,247,.45)}.p-soon{color:var(--accent);border-color:rgba(245,158,11,.45)}.p-rnd{color:var(--ink-faint);border-color:var(--line-strong)}
+  /* persisted checklist */
+  .todo{display:flex;flex-direction:column;gap:7px}
+  .todo label{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;color:var(--ink-muted);cursor:pointer;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--bg-surface)}
+  .todo input{margin-top:2px;accent-color:var(--accent);width:15px;height:15px;flex:none}
+  .todo label.done span{color:var(--ink-faint);text-decoration:line-through}
+  .links{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .links a{font:500 12.5px var(--sans);color:var(--ink-muted);background:var(--bg-surface);border:1px solid var(--line);border-radius:8px;padding:7px 12px;text-decoration:none}
+  .links a:hover{color:var(--accent);border-color:var(--accent)}
+  .empty{color:var(--ink-faint);font-size:13px;padding:30px 0}
+  @media(max-width:780px){.sb{width:58px}.brand b,.brand .sub,.nav .lbl,.nav .ct,.sbfoot,.search input,.search .x{display:none}.search{justify-content:center}.nav button{justify-content:center}}
 </style>
 </head>
-<body><div class="wrap">
-
-<header>
-  <div class="kick">AIAG · project dashboard · 2026-06-04</div>
-  <h1>AI·Aggregator — хаб проекта</h1>
-  <p class="lead">Два продукта: <b>Web-агрегатор</b> (ai-aggregator.ru, ₽, RF) и <b>TMA</b> — маркетплейс AI-агентов в Telegram (крипто-кредиты). Эта страница — навигация; <b>живой статус генерируется из <code>.planning/STATE.json</code></b>.</p>
-  <div class="pillrow">
-    <span class="pill hot">19 shipped</span>
-    <span class="pill">ветка feat/r1.0-wave0-consolidated</span>
-    <span class="pill">не в master</span>
-    <span class="pill">dream-path 4.7/5</span>
-    <span class="pill">/108 · design 89 · tech 50 · func 43*</span>
-    <span class="pill">money-path LIVE</span>
-  </div>
-  <p class="meta">* functional ждёт пере-оценки после монетизации 2026-06-04.</p>
-</header>
-
-<section>
-  <div class="eyebrow">Источник правды</div>
-  <h2>🟢 Живой статус</h2>
-  <a class="big-link" href="specs/STATUS.html"><span class="t">→ STATUS.html (авто-генерируется из STATE.json)</span><div class="d">Единственный источник правды по состоянию: shipped / blocked / решения / бэклог / задачи основателя / чекпоинты. Правится через <code>STATE.json</code> + <code>node scripts/gen-state.mjs</code> — руками HTML не трогается.</div></a>
-</section>
-
-<section>
-  <div class="eyebrow">Что сделано — всё на проде, проверено</div>
-  <h2>✅ Shipped (19)</h2>
-  <div class="grid">
-    <div class="card"><h3>💰 Денежный фундамент</h3><ul>
-      <li><b>D-0</b> — шлюз отдаёт реальную маржу</li>
-      <li><b>D-1</b> — USD-кредит-леджер (1 кр = 1¢), атомарное <code>settleRun</code></li>
-    </ul></div>
-    <div class="card"><h3>🏪 Монетизация Wave-1</h3><ul>
-      <li>Публикация / клон / <b>платная аренда</b> (автор 100%, наш cut 0%)</li>
-      <li>Доход автора · рейтинги · remix-родословная · сортировки</li>
-    </ul></div>
-    <div class="card"><h3>📱 Экраны</h3><ul>
-      <li>25 — Расписания (cron, время суток)</li>
-      <li>26 — Канбан над connect-your-own-Hermes</li>
-      <li>29 — Маркет скиллов (SKILL.md)</li>
-    </ul></div>
-    <div class="card"><h3>🔌 Рельсы оплаты</h3><ul>
-      <li>🎯 <b>Gonka</b> — грант-дельверабл #1 (реальный прогон через <code>:4000</code>)</li>
-      <li>💎 <b>TON top-up</b> — live на testnet</li>
-      <li>Провайдер-пикер (свой ключ = 0 комиссии) · MCP-скиллы</li>
-    </ul></div>
-    <div class="card"><h3>✨ Продукт</h3><ul>
-      <li><b>Внутренний A2A</b> — агент нанимает агента (кредиты)</li>
-      <li>Коллекционные карточки агентов (per-hue)</li>
-    </ul></div>
-    <div class="card"><h3>🛡️ Инфра</h3><ul>
-      <li>White-label (бренд только в логах)</li>
-      <li>Репо приватное · security-аудит пройден</li>
-    </ul></div>
-  </div>
-</section>
-
-<section>
-  <div class="eyebrow">Куда движемся</div>
-  <h2>🗺️ Roadmap</h2>
-  <div class="grid">
-    <div class="card"><h3>Сейчас</h3><ul>
-      <li class="now"><b>MCP-OAuth (#30)</b> — агенты ↔ внешние сервисы через вход (собран, выкатывается)</li>
-    </ul></div>
-    <div class="card"><h3>Следующее</h3><ul>
-      <li class="soon">Skill-рецепты (последовательности тулзов)</li>
-      <li class="soon">Mainnet TON · run-trace UI</li>
-      <li class="soon">Настоящий x402 (когда придёт CDP-ключ)</li>
-    </ul></div>
-    <div class="card"><h3>На основателе</h3><ul>
-      <li class="need">CDP Secret API Key (друг регистрирует)</li>
-      <li class="need">~16GB сервер под Hermes</li>
-      <li class="need">Mainnet TON-кошелёк</li>
-      <li class="need">Решения: вывод автору (FD-2), цены/free-grant (FD-pricing)</li>
-    </ul></div>
-    <div class="card"><h3>Будущее / R&amp;D</h3><ul>
-      <li class="rnd">Управляемый Hermes (нужен бокс + свой контрол-плейн)</li>
-      <li class="rnd">Внешний A2A + ERC-8004 (агент платит агенту)</li>
-      <li class="rnd">Произвольные skill-скрипты (нужен gVisor-хост)</li>
-    </ul></div>
-  </div>
-  <div class="legend"><span><span class="dot" style="background:var(--good)"></span>live</span><span><span class="dot" style="background:var(--accent)"></span>сейчас</span><span><span class="dot" style="background:var(--soon)"></span>скоро</span><span><span class="dot" style="background:var(--rnd)"></span>R&amp;D</span><span><span class="dot" style="background:var(--red)"></span>нужен ты</span></div>
-</section>
-
-<section>
-  <div class="eyebrow">Разведка — «R&amp;D» ≠ «нельзя»</div>
-  <h2>🔬 Research (21 пункт)</h2>
-  <p class="lead" style="font-size:14px">R-01..R-12 (Hermes/Gonka/billing/runtime/MCP/tools/рынок) · R-14..R-18 (sandbox/skills-hub/обсервабилити/рынок/цены) · R-19..R-21 (MCP-OAuth/A2A/skill-exec) · Hermes-updates · финансовый слой. <b>Вывод:</b> у каждого R&amp;D-пункта есть рабочий слайс сейчас; крипто/песочница ждут инфры.</p>
-  <div class="files">
-    <a class="file" href="specs/research/2026-06-04-rnd-synthesis.md"><div class="ty">synthesis</div>R&amp;D-синтез (MCP-OAuth · A2A · skill-exec)</a>
-    <a class="file" href="specs/research/2026-06-04-research-synthesis.md"><div class="ty">synthesis</div>Ресёрч-синтез (Hermes · R-14..18)</a>
-    <a class="file" href="specs/research/2026-06-04-hermes-updates.md"><div class="ty">research</div>Hermes-updates (контрол-плейн всё ещё наш)</a>
-    <a class="file" href="specs/research/SYNTHESIS.html"><div class="ty">research</div>Большой синтез (12 пунктов, направление)</a>
-  </div>
-</section>
-
-<section>
-  <div class="eyebrow">Стратегия денег</div>
-  <h2>💳 Финансовый слой — кредит-хаб</h2>
-  <a class="big-link" href="wireframes/payment-architecture.html"><span class="t">→ payment-architecture.html</span><div class="d">Любой рельс (TON / USDC-Coinbase / крипто) → наш USD-кредит (адаптеры) → платим провайдерам (модели / тулзы / x402). Кредит-леджер = мост между чейнами. Фазы 1 (ядро, готово) → 2 (мульти-крипто + x402) → 3 (выплаты + внешний A2A).</div></a>
-  <a class="big-link" href="specs/2026-06-04-tool-market-x402-plan.md"><span class="t">→ tool-market + x402 план</span><div class="d">TON→кредиты→x402; что нужно от Coinbase (CDP Secret API Key); v1 (фикс-цена) / v2 (x402) / v3 (A2A).</div></a>
-</section>
-
-<section>
-  <div class="eyebrow">Интерфейсы</div>
-  <h2>🎨 Вайрфреймы + живой продукт</h2>
-  <div class="files">
-    <a class="file" href="wireframes/tma/index.html"><div class="ty">mobile · dark</div>TMA вайрфреймы</a>
-    <a class="file" href="wireframes/web/index.html"><div class="ty">web · light</div>Web вайрфреймы (Studio23)</a>
-    <a class="file" href="wireframes/showcase.html"><div class="ty">matrix</div>Дизайн-шоукейс (web/mobile × dark/light)</a>
-    <a class="file" href="https://t.me/aiaggbot"><div class="ty">live</div>Живой TMA — @aiaggbot</a>
-  </div>
-</section>
-
-<section>
-  <div class="eyebrow">Питч + документы</div>
-  <h2>📄 Docs</h2>
-  <div class="files">
-    <a class="file" href="specs/2026-06-03-aiag-pitch-deck.html"><div class="ty">pitch · 12 слайдов</div>Питч-дек (обновлён)</a>
-    <a class="file" href="specs/2026-06-03-aiag-onepager.html"><div class="ty">one-pager</div>One-pager</a>
-    <a class="file" href="specs/2026-06-03-gonka-grant-application.md"><div class="ty">grant</div>Заявка Gonka (дельверабл #1 ✓)</a>
-    <a class="file" href="specs/2026-06-02-WHAT-WE-ARE-BUILDING.md"><div class="ty">canon</div>Канон (источник правды по продукту)</a>
-    <a class="file" href="specs/2026-06-04-managed-hermes-spike-plan.md"><div class="ty">spec</div>Managed-Hermes спайк-план</a>
-    <a class="file" href="specs/2026-06-04-coinbase-cdp-setup-instruction.md"><div class="ty">howto</div>Инструкция CDP (для друга)</a>
-  </div>
-</section>
-
-<section style="border-bottom:none">
-  <div class="eyebrow">Вехи</div>
-  <h2>🏁 Checkpoints</h2>
-  <ul>
-    <li>R0 money-path (Phase 15.1) — live ✓</li>
-    <li>R1 Wave-0 фундамент (D-0 + D-1) — 2026-06-04 ✓</li>
-    <li>R1 Wave-1 монетизация (публикация / клон / аренда / доход автора) — 2026-06-04 ✓</li>
-    <li>Креатор-экономика + плановые запуски — 2026-06-04 ✓</li>
-    <li>Экраны 25/26/29 + Gonka-демо + TON-testnet + A2A — 2026-06-04 ✓</li>
-  </ul>
-  <p class="meta">Сгенерировано вручную как навигация-хаб. Состояние — в <a href="specs/STATUS.html">STATUS.html</a> (из STATE.json).</p>
-</section>
-
-</div></body></html>
+<body>
+<aside class="sb">
+  <div class="brand" onclick="go('overview')"><span class="mark"></span><div><b>AI·Aggregator</b><div class="sub">dashboard</div></div></div>
+  <div class="search"><span>🔎</span><input id="q" placeholder="поиск по всему…" autocomplete="off"><span class="x" id="qx">✕</span></div>
+  <nav class="nav" id="nav"></nav>
+  <div class="sbfoot">якоря: <a href="../CLAUDE.md" target="_blank">CLAUDE</a> · <a href="../DESIGN.md" target="_blank">DESIGN</a><br>
+    <span id="srv" class="srv off">file:// — запусти serve.bat для .md</span><br><span id="count"></span></div>
+</aside>
+<main class="main" id="main"></main>
+<script>
+const SERVED = location.protocol==='http:' || location.protocol==='https:';
+const REPO='https://github.com/massmindmaker/aiag-marketplace';
+const TABS=[
+ {id:'overview',ic:'📊',name:'Обзор',overview:true},
+ {id:'tma',ic:'🎴',name:'TMA · агенты',cards:[
+   {t:'Showcase (флагман)',d:'Веб+моб × тёмн+светл, реальные токены, честный по функциям',p:'wireframes/showcase.html',ty:'html',star:1},
+   {t:'Мобильный борд TMA',d:'45 артбордов, dark/amber, экраны+состояния',p:'wireframes/tma/index.html',ty:'html'},
+   {t:'Персонажи (видео-карты)',d:'Голографические карточки: Алиса/Ника/Нова',p:'wireframes/tma/characters-video.html',ty:'html'},
+   {t:'Product definition',d:'3 способа завести агента, спец, биллинг',p:'specs/2026-06-02-tma-product-definition.md',ty:'md'},
+   {t:'Монетизация',d:'Аренда автора (free/цена), AIAG 0% с аренды',p:'specs/2026-06-03-monetization.md',ty:'md'},
+   {t:'Provider-picker — ПОСТРОЕНО',d:'Свой провайдер+ключ=0 комиссии при создании агента; money-correct, проверено',p:'specs/2026-06-03-provider-picker-implemented.md',ty:'md',star:1},
+   {t:'User workflows',d:'14 джорни → функция → готовность + 10 расхождений',p:'specs/2026-06-03-user-workflows.md',ty:'md'},
+   {t:'Canon: что строим',d:'Единый источник правды по TMA',p:'specs/2026-06-02-WHAT-WE-ARE-BUILDING.md',ty:'md'},
+   {t:'Hermes explainer',d:'Hermes = рантайм, не модель; платежи',p:'specs/2026-06-02-hermes-core-and-payment-explainer.md',ty:'md'},
+   {t:'Hermes WebUI landscape',d:'Конкуренты-UI, позиционирование',p:'specs/2026-06-02-hermes-webui-landscape-and-tma-positioning.md',ty:'md'},
+ ]},
+ {id:'web',ic:'🌐',name:'Web · модели (₽)',cards:[
+   {t:'Web-борд (светлый)',d:'Studio23-тема, маркет моделей, ₽ — отдельный продукт',p:'wireframes/web/index.html',ty:'html'},
+   {t:'Product coherence map',d:'Где обещания ≠ реальность',p:'specs/2026-06-02-product-coherence-map.md',ty:'md'},
+   {t:'Архитектура (общая)',d:'Сервис-карта, 2 продукта, money-flow',p:'ARCHITECTURE.md',ty:'md'},
+ ]},
+ {id:'design',ic:'🎨',name:'Дизайн',cards:[
+   {t:'DESIGN.md (токены SoT)',d:'Цвета/типографика/компоненты/анимации/логотип',p:'../DESIGN.md',ty:'md',star:1},
+   {t:'Оценка дизайна 108 v2',d:'89/108 — финальная, функция-честная',p:'specs/2026-06-03-design-eval-108-v2.html',ty:'html',star:1},
+   {t:'План улучшений дизайна (108 + честность)',d:'Свежая критика 108 + план по блокам, обе темы + карта что работает/чего нет',p:'specs/2026-06-03-design-108-eval-and-improvement-plan.md',ty:'md',star:1},
+   {t:'UX-критика',d:'Разбор по 12 измерениям',p:'specs/2026-06-03-aiag-ux-critique.html',ty:'html'},
+   {t:'VoltAgent reuse',d:'Что переиспользовать (MIT), adopt/adapt/skip',p:'specs/2026-06-03-voltagent-design-reuse.md',ty:'md'},
+   {t:'ANIMATION.md',d:'Моушн-принципы, aiag-* библиотека',p:'ANIMATION.md',ty:'md'},
+ ]},
+ {id:'video',ic:'🎬',name:'Видео',cards:[
+   {t:'Видео-галерея (всё в одном)',d:'Промо-ролик + видео-карты персонажей + раскадровка + пайплайн',p:'wireframes/video.html',ty:'html',star:1},
+   {t:'Промо-ролик AIAG (финал v3)',d:'Встроен в галерею; исходники v1·v2·v3 в projects/hermes/aiag-promo/',p:'wireframes/assets/video/aiag-promo-v3.mp4',ty:'html'},
+   {t:'Видео-карты персонажей',d:'Голографические карточки: Алиса/Ника/Нова',p:'wireframes/tma/characters-video.html',ty:'html'},
+   {t:'Пайплайн портрет→видео→голос (R-12)',d:'4 стадии через Kie: лист → портрет → holo-карта → голос',p:'specs/research/R-12.md',ty:'md'},
+ ]},
+ {id:'arch',ic:'🏗️',name:'Архитектура / Research',cards:[
+   {t:'SYNTHESIS (архрешения)',d:'D-0…D-14, порядок билда, founder-гейты, риски',p:'specs/research/SYNTHESIS.html',ty:'html',star:1},
+   {t:'Backend gap',d:'Что не доделано (статус D-0…D-14)',p:'specs/2026-06-03-backend-gap.md',ty:'md'},
+   {t:'USD-реестр D-1 — план',d:'Кредиты=центы (BIGINT), tg_ledger_entries, убить USD_TO_RUB; 0 балансов=дёшево сейчас',p:'specs/2026-06-03-usd-ledger-plan.md',ty:'md',star:1},
+   {t:'Gateway build fix (ioredis)',d:'Корень крэша :4000 + фикс tsup external bullmq/ioredis',p:'specs/2026-06-03-gateway-build-fix.md',ty:'md'},
+   {t:'White-label fix (ошибки)',d:'6 утечек бренда в user-facing ошибках + точные правки',p:'specs/2026-06-03-white-label-fix.md',ty:'md'},
+   {t:'ARCHITECTURE.md',d:'Сервис-карта, топология, money-flow',p:'ARCHITECTURE.md',ty:'md'},
+   {t:'SECURITY.md',d:'Auth, секреты, billing-integrity',p:'../SECURITY.md',ty:'md'},
+   {t:'Research backlog',d:'P0→P2 что исследовать',p:'specs/RESEARCH-BACKLOG.html',ty:'html'},
+   {t:'Research R-01…R-12',d:'Полные находки (md, начни с R-01)',p:'specs/research/R-01.md',ty:'md'},
+   {t:'★ R&D-синтез 2026-06-04',d:'MCP-OAuth (#30) · внутренний A2A · исполнение skill-скриптов — что строится сейчас vs нужна инфра',p:'specs/research/2026-06-04-rnd-synthesis.md',ty:'md',star:1},
+   {t:'Ресёрч-синтез 2026-06-04',d:'Hermes-updates · R-14 sandbox · R-15 skills-hub · R-16 obs · R-17 рынок · R-18 цены',p:'specs/research/2026-06-04-research-synthesis.md',ty:'md'},
+   {t:'Hermes updates (свежий)',d:'Дашборд Hermes ЛОКАЛЬНЫЙ (не remote-API) → контрол-плейн всё ещё наш; cold-start быстрее',p:'specs/research/2026-06-04-hermes-updates.md',ty:'md'},
+   {t:'Tech-stack 108 eval',d:'Аудит стека (50/108)',p:'specs/2026-06-02-tma-tech-stack-108-eval.md',ty:'md'},
+   {t:'R1 verified plan',d:'R1-1…R1-8 план',p:'specs/2026-06-02-r1-verified-plan.md',ty:'md'},
+ ]},
+ {id:'deploy',ic:'🚀',name:'Деплой / CI-CD',cards:[
+   {t:'CI/CD план + чек-лист',d:'Build-on-runner, atomic swap, self-heal pm2; что нужно от founder',p:'specs/2026-06-03-cicd-plan.html',ty:'html',star:1},
+   {t:'Deploy/test readiness',d:'GO для Wave-0, runbook, capacity',p:'specs/2026-06-03-deploy-test-readiness.md',ty:'md'},
+ ]},
+ {id:'gonka',ic:'💸',name:'Gonka грант',cards:[
+   {t:'Чек-лист гранта',d:'Сделано / не сделано / нужно для подачи',p:'specs/2026-06-03-gonka-checklist.html',ty:'html',star:1},
+   {t:'План действий по Гонке (свежий)',d:'Что делаешь ТЫ (кошелёк/Discord/ключ) vs что строю Я (адаптер/спайк/демо) — критпуть к подаче',p:'specs/2026-06-03-gonka-action-plan.md',ty:'md',star:1},
+   {t:'Питч под Gonka',d:'10 слайдов: RU-спрос → в Gonka',p:'specs/2026-06-03-gonka-pitch.html',ty:'html'},
+   {t:'★ Заявка — дельверабл #1 GOLD',d:'Реальный прогон через :4000 (Qwen3-235B, OK, 15 tok). Кошелёк+email вписаны. Спайк p50=244ms/p95=941ms, 3 модели',p:'specs/2026-06-03-gonka-grant-application.md',ty:'md',star:1},
+ ]},
+ {id:'wave1',ic:'💎',name:'Монетизация (Wave-1) ✅',cards:[
+   {t:'★ Что выкачено 2026-06-04 (20 shipped)',d:'D-1 USD-реестр · Wave-1 (публикация/клон/аренда/доход автора) · креатор-экономика · экраны 25 расписания / 26 канбан / 29 скиллы · Gonka-демо (:4000) · TON-testnet · внутренний A2A · MCP-OAuth — ВСЁ live + gold-проверено JWT. Живой статус → план/STATUS',p:'specs/STATUS.html',ty:'html',star:1},
+   {t:'План монетизации (авторская аренда)',d:'3 среза: публикация → платная аренда (0% AIAG, атомарный settleRent) → доход автора. Модель данных + адверсариальные риски',p:'specs/2026-06-04-wave1-monetization-plan.md',ty:'md'},
+   {t:'★ Спайк-план управляемого Hermes',d:'Почему 2GB не тянет · какой ~16GB-бокс провизионить (+цена) · Phase-0 замер RAM · go/no-go 800MB · что строится без бокса',p:'specs/2026-06-04-managed-hermes-spike-plan.md',ty:'md',star:1},
+   {t:'★ Финансовый слой (кредит-хаб)',d:'Любой рельс (TON/USDC/крипто) → наш USD-кредит (адаптеры) → платим провайдерам. Схема + 3 фазы',p:'wireframes/payment-architecture.html',ty:'html',star:1},
+   {t:'Tool-market + x402 план',d:'TON→кредиты→x402; что нужно от Coinbase (CDP Secret API Key); v1 фикс-цена / v2 x402 / v3 A2A',p:'specs/2026-06-04-tool-market-x402-plan.md',ty:'md'},
+ ]},
+ {id:'pack',ic:'📣',name:'Упаковка',cards:[
+   {t:'One-pager',d:'Что строим + чек-лист упаковки',p:'specs/2026-06-03-aiag-onepager.html',ty:'html'},
+   {t:'★ Pitch deck (12 слайдов, обновлён)',d:'Credit-hub слайд, money-path live, Gonka дельверабл #1, honesty-слайд сверён со STATE',p:'specs/2026-06-03-aiag-pitch-deck.html',ty:'html',star:1},
+   {t:'Инструкция Coinbase CDP',d:'Для друга: завести CDP + Secret API Key (для x402, testnet бесплатно)',p:'specs/2026-06-04-coinbase-cdp-setup-instruction.md',ty:'md'},
+ ]},
+ {id:'plan',ic:'🗂️',name:'Планирование (GSD)',cards:[
+   {t:'Статус (живой)',d:'Что сделано, оценки, что дальше',p:'specs/STATUS.html',ty:'html',star:1},
+   {t:'ROADMAP',d:'Все фазы + milestone R1',p:'../.planning/ROADMAP.md',ty:'md'},
+   {t:'R1 milestone',d:'Money → providers → managed-Hermes',p:'../.planning/R1-MILESTONE.md',ty:'md'},
+   {t:'STATE',d:'Текущая позиция GSD',p:'../.planning/STATE.md',ty:'md'},
+   {t:'PROJECT',d:'Базовый контекст',p:'../.planning/PROJECT.md',ty:'md'},
+ ]},
+];
+const ALLCARDS=TABS.filter(t=>t.cards).flatMap(t=>t.cards.map(c=>({...c,zone:t.name,zoneId:t.id})));
+const TODOS=[
+ {k:'hermesbox',x:'РЕШЕНИЕ: поднять ~16GB VPS под управляемый Hermes (платный) → разблокирует настоящую Wave 3'},
+ {k:'fd2',x:'РЕШЕНИЕ FD-2: доход автора выводить наружу или только тратить внутри приложения?'},
+ {k:'fdprice',x:'РЕШЕНИЕ FD-pricing: free-grant новичку (ресёрч: 300 кр/$3) + наценка ×1.25?'},
+ {k:'gonka2',x:'Gonka: дельверабл #1 ЗАКРЫТ ✓ — осталось цена-за-токен из дашборда + подать заявку'},
+ {k:'rotategonka',x:'⚠️ Перевыпустить Gonka gp-ключ (вставлен в чат + на gateway env) → прислать новый'},
+ {k:'cdpkey',x:'Coinbase CDP Secret API Key (друг регистрирует) → настоящий x402 (testnet бесплатно)'},
+ {k:'tonmain',x:'Mainnet TON-кошелёк (UQ…/EQ…) → реальные деньги (TON top-up уже live на testnet)'},
+ {k:'mergemaster',x:'Решить: мержить feat/r1.0-wave0-consolidated в master'},
+ {k:'rotate',x:'Перевыпустить токены, вставленные в чат ранее (Timeweb, GitHub PAT, Gonka)'},
+];
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function mdToHtml(md){
+  md=md.replace(/\r\n/g,'\n');
+  const fences=[]; md=md.replace(/```([\s\S]*?)```/g,(m,c)=>{fences.push('<pre><code>'+esc(c.replace(/^\n/,''))+'</code></pre>');return ' F'+(fences.length-1)+' ';});
+  const lines=md.split('\n'); let out=[],i=0;
+  const inline=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/(^|[^*])\*([^*]+)\*/g,'$1<em>$2</em>').replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+  while(i<lines.length){
+    let l=lines[i];
+    if(/^ F\d+ $/.test(l.trim())){out.push(fences[+l.trim().match(/\d+/)[0]]);i++;continue;}
+    if(/^\s*$/.test(l)){i++;continue;}
+    let h=l.match(/^(#{1,4})\s+(.*)/); if(h){out.push('<h'+h[1].length+'>'+inline(h[2])+'</h'+h[1].length+'>');i++;continue;}
+    if(/^\s*([-*_])\1{2,}\s*$/.test(l)){out.push('<hr>');i++;continue;}
+    if(/^>\s?/.test(l)){let b=[];while(i<lines.length&&/^>\s?/.test(lines[i])){b.push(inline(lines[i].replace(/^>\s?/,'')));i++;}out.push('<blockquote>'+b.join('<br>')+'</blockquote>');continue;}
+    if(/^\s*\|.*\|\s*$/.test(l)){let rows=[];while(i<lines.length&&/^\s*\|.*\|\s*$/.test(lines[i])){rows.push(lines[i]);i++;}
+      const cells=r=>r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+      let html='<table>';rows.forEach((r,ri)=>{if(/^\s*\|?[\s:\-|]+\|?\s*$/.test(r))return;const tag=ri===0?'th':'td';html+='<tr>'+cells(r).map(c=>'<'+tag+'>'+inline(c)+'</'+tag+'>').join('')+'</tr>';});out.push(html+'</table>');continue;}
+    if(/^\s*([-*]|\d+\.)\s+/.test(l)){const ol=/^\s*\d+\./.test(l);let items=[];while(i<lines.length&&/^\s*([-*]|\d+\.)\s+/.test(lines[i])){items.push('<li>'+inline(lines[i].replace(/^\s*([-*]|\d+\.)\s+/,''))+'</li>');i++;}out.push((ol?'<ol>':'<ul>')+items.join('')+(ol?'</ol>':'</ul>'));continue;}
+    let para=[];while(i<lines.length&&!/^\s*$/.test(lines[i])&&!/^(#{1,4}\s|>\s?|\s*\||\s*([-*]|\d+\.)\s)/.test(lines[i])&&!/^ F/.test(lines[i].trim())){para.push(inline(lines[i]));i++;}
+    if(para.length)out.push('<p>'+para.join(' ')+'</p>');
+  }
+  return out.join('\n');
+}
+const main=document.getElementById('main'),nav=document.getElementById('nav'),qInput=document.getElementById('q'),qx=document.getElementById('qx');
+let filterTy='all';
+function go(tab,path){location.hash=path?tab+'::'+encodeURIComponent(path):tab;}
+function parseHash(){const raw=location.hash.slice(1);if(!raw)return{tab:'overview',path:null};const i=raw.indexOf('::');if(i<0)return{tab:(TABS.find(t=>t.id===raw)?raw:'overview'),path:null};return{tab:raw.slice(0,i),path:decodeURIComponent(raw.slice(i+2))};}
+function cardEl(c,showZone){const el=document.createElement('div');el.className='card'+(c.star?' star':'');const right=showZone?'<span class="zone-tag">'+c.zone+'</span>':'<span class="open-ext">открыть →</span>';el.innerHTML='<div class="t">'+c.t+'</div><div class="d">'+c.d+'</div><div class="meta"><span class="badge '+c.ty+'">'+c.ty+'</span>'+right+'</div>';el.onclick=()=>go(c.zoneId||parseHash().tab,c.p);return el;}
+function chipsEl(onpick){const ids=[['all','Все'],['html','html'],['md','md']];const w=document.createElement('div');w.className='chips';ids.forEach(([v,l])=>{const b=document.createElement('span');b.className='chip'+(filterTy===v?' on':'');b.textContent=l;b.onclick=()=>{filterTy=v;onpick();};w.appendChild(b);});return w;}
+function applyFilter(cards){return filterTy==='all'?cards:cards.filter(c=>c.ty===filterTy);}
+function renderArtifact(tab,path){
+  const card=ALLCARDS.find(c=>c.p===path)||{t:path.split('/').pop(),ty:path.endsWith('.html')?'html':'md',p:path};
+  main.innerHTML='';const a=document.createElement('div');a.className='artifact';
+  a.innerHTML='<div class="abar"><button class="bk" id="bk">← Назад к «'+((TABS.find(t=>t.id===tab)||{}).name||'зоне')+'»</button><span class="vt">'+card.t+'</span><span class="vp">'+path+'</span><span class="sp"></span><button class="mini" id="ifback">⟲ назад</button><button class="mini" id="ext">↗ вкладка</button></div>';
+  main.appendChild(a);
+  document.getElementById('bk').onclick=()=>go(tab);
+  document.getElementById('ext').onclick=()=>window.open(path,'_blank');
+  if(card.ty==='md'&&SERVED){
+    const r=document.createElement('div');r.className='reader';r.innerHTML='<div class="doc">загрузка…</div>';a.appendChild(r);
+    document.getElementById('ifback').style.display='none';
+    fetch(path).then(x=>x.text()).then(t=>{r.querySelector('.doc').innerHTML=mdToHtml(t);}).catch(e=>{r.querySelector('.doc').innerHTML='<p>не удалось загрузить — открой ↗ вкладка</p>';});
+  } else {
+    const f=document.createElement('iframe');f.id='vframe';f.src=path;a.appendChild(f);
+    document.getElementById('ifback').onclick=()=>{try{f.contentWindow.history.back();}catch(e){}};
+  }
+}
+function overview(){const page=document.createElement('div');page.className='page';
+  page.innerHTML='<div class="head"><div class="eyebrow">AIAG · единый дашборд</div><h1>Обзор проекта</h1><p class="lead">Один вход во всё. Слева — зоны (всегда видны). Клик по карточке открывает артефакт ЗДЕСЬ; «← Назад»/Esc/стрелка браузера возвращают. .md рендерятся красиво при запуске через serve.bat.</p></div>'
+   +'<div class="stats"><div class="stat"><div class="v" style="color:var(--good)">20</div><div class="k">shipped · проверено</div></div><div class="stat"><div class="v">50<small>/108</small></div><div class="k">тех-стек</div></div><div class="stat"><div class="v">43<small>/108</small></div><div class="k">функционал*</div></div><div class="stat"><div class="v" style="color:var(--accent)">89<small>/108</small></div><div class="k">дизайн v2</div></div></div>'
+   +'<div class="sec">Что ты можешь сделать прямо сейчас</div><ul class="facts done">'
+     +'<li><b>Создать агента</b> — из 6 шаблонов или с нуля: имя, характер, модель, бюджет, 4 тула</li>'
+     +'<li><b>Подключить своего Hermes</b> (или любой OpenAI-совместимый адрес + ключ) и общаться с ним</li>'
+     +'<li><b>Свой ключ/провайдер = бесплатно</b> — наценка только на наших моделях</li>'
+     +'<li><b>Запускать агента</b> и смотреть историю прогонов</li>'
+     +'<li><b>Пополнить баланс</b> через TON-кошелёк (в кредитах) · <b>лимит бюджета</b> на день/месяц</li>'
+     +'<li><b>Опубликовать</b> агента как шаблон, <b>клонировать</b> бесплатный или <b>арендовать</b> платный</li>'
+     +'<li>Поставить агенту <b>расписание</b> — он сам работает по таймеру (в рамках лимита)</li></ul>'
+   +'<div class="sec">Статус функций · твой целевой путь <span style="color:var(--ink-faint);font-size:11px">(обновлено 2026-06-04)</span></div><ul class="facts">'
+     +'<li>Подключить своего Hermes / провайдера и общаться <span class="pill p-live">работает</span></li>'
+     +'<li>Управлять агентом — промпт / модель / бюджет / MCP <span class="pill p-live">работает</span></li>'
+     +'<li>Привязать TON-кошелёк и пополнить (в кредитах) <span class="pill p-live">работает</span></li>'
+     +'<li>Привязать скилл / MCP-сервер к агенту <span class="pill p-live">работает</span></li>'
+     +'<li>Опубликовать агента как шаблон (free / за аренду) <span class="pill p-live">работает</span></li>'
+     +'<li><b>Клонировать бесплатный / арендовать платный</b> (автору 0% AIAG, атомарно) <span class="pill p-live">работает</span></li>'
+     +'<li>Доход автора · рейтинги · ремикс-генеалогия <span class="pill p-live">работает</span></li>'
+     +'<li>Плановые запуски агента (по расписанию, в рамках лимита) <span class="pill p-live">работает</span></li>'
+     +'<li><b>Расписания</b> — именованные, время суток / день недели (экран 25) <span class="pill p-live">работает</span></li>'
+     +'<li><b>Маркет скиллов</b> (экран 29) + MCP через <b>OAuth-вход</b> (экран 30) <span class="pill p-live">работает</span></li>'
+     +'<li><b>Агент нанимает агента</b> — внутренний A2A, в кредитах <span class="pill p-live">работает</span></li>'
+     +'<li><b>Канбан</b> над подключённым своим Hermes (экран 26) <span class="pill p-live">работает</span></li>'
+     +'<li><b>Gonka через наш шлюз :4000</b> — грант-дельверабл #1 <span class="pill p-live">работает</span></li>'
+     +'<li>Вывод дохода автора наружу <span class="pill p-soon">ждёт FD-2</span></li>'
+     +'<li>Настоящий x402 (внешние платные тулзы) <span class="pill p-rnd">нужен CDP-ключ</span></li>'
+     +'<li>Мульти-модель — картинка / голос / зрение <span class="pill p-soon">скоро</span></li>'
+     +'<li>Управляемый Hermes на нашем облаке <span class="pill p-rnd">нужен ~16GB-бокс</span></li></ul>'
+   +'<div class="sec">Два продукта</div><ul class="facts"><li><b>Aggregator (Web)</b> — маркет моделей, <b>рубли</b> <span class="pill p-live">live</span></li><li><b>TMA</b> — маркет агентов, <b>крипто-кредиты</b> <span class="pill p-live">Phase 15 + R0 live</span> · фокус</li></ul>'
+   +'<div class="sec">Money-path / бэкенд <span style="color:var(--good);font-size:11px">(2026-06-04 — всё LIVE + gold-проверено JWT)</span></div><ul class="facts done"><li>D-0 (маржа) + <b>D-1 USD-кредитный реестр</b> (₽ убит, аудит-журнал tg_ledger_entries) — live</li><li>Wave-1 монетизация: публикация → клон / <b>аренда</b> (автору 0%, всё в 1 транзакции) → доход автора — live</li><li>Креатор-экономика (рейтинги + ремикс + сортировка) + плановые запуски агента — live</li><li>Экраны 25/26/29/30 · Gonka-демо (:4000, реальный прогон) · TON top-up (testnet) · внутренний A2A — все live</li><li>Миграции 0029,0031-0037 накатаны на прод <span class="pill p-branch">feat/r1.0-wave0-consolidated</span> (не в master)</li></ul>'
+   +'<div class="sec">Чек-лист действий (сохраняется)</div><div class="todo" id="todo"></div>'
+   +'<div class="sec">GitHub · ветки</div><div class="links"><a href="'+REPO+'" target="_blank">репо</a><a href="'+REPO+'/tree/feat/r1.0-wave0-consolidated" target="_blank">feat/r1.0-wave0-consolidated</a><a href="'+REPO+'/tree/feat/wave0-d0-margin" target="_blank">feat/wave0-d0-margin</a><a href="'+REPO+'/tree/plan/15.1-r0-billing-identity" target="_blank">plan/15.1-r0</a><a href="https://ai-aggregator.ru" target="_blank">прод ↗</a></div>'
+   +'<div class="sec">Быстрый доступ (флагманы)</div><div class="grid" id="qa"></div>';
+  main.innerHTML='';main.appendChild(page);
+  const td=page.querySelector('#todo');TODOS.forEach(t=>{const done=localStorage.getItem('aiag_chk_'+t.k)==='1';const lb=document.createElement('label');if(done)lb.className='done';lb.innerHTML='<input type="checkbox" '+(done?'checked':'')+'><span>'+t.x+'</span>';lb.querySelector('input').onchange=e=>{localStorage.setItem('aiag_chk_'+t.k,e.target.checked?'1':'0');lb.classList.toggle('done',e.target.checked);};td.appendChild(lb);});
+  const qa=page.querySelector('#qa');ALLCARDS.filter(c=>c.star).forEach(c=>qa.appendChild(cardEl(c,true)));
+}
+function renderPage(tab){const t=TABS.find(x=>x.id===tab)||TABS[0];if(t.overview){overview();return;}
+  const page=document.createElement('div');page.className='page';page.innerHTML='<div class="head"><div class="eyebrow">'+t.ic+' '+t.name+'</div><h1>'+t.name+'</h1></div>';
+  page.appendChild(chipsEl(()=>renderPage(tab)));const g=document.createElement('div');g.className='grid';applyFilter(t.cards).forEach(c=>g.appendChild(cardEl(c,false)));page.appendChild(g);
+  main.innerHTML='';main.appendChild(page);}
+function renderSearch(q){const res=applyFilter(ALLCARDS.filter(c=>(c.t+' '+c.d+' '+c.zone).toLowerCase().includes(q)));
+  const page=document.createElement('div');page.className='page';page.innerHTML='<div class="head"><div class="eyebrow">поиск</div><h1>«'+q+'» — '+res.length+'</h1></div>';
+  page.appendChild(chipsEl(()=>renderSearch(q)));const g=document.createElement('div');g.className='grid';if(!res.length)g.innerHTML='<div class="empty">ничего не найдено</div>';res.forEach(c=>g.appendChild(cardEl(c,true)));page.appendChild(g);
+  main.innerHTML='';main.appendChild(page);}
+function render(){const q=qInput.value.trim().toLowerCase();qx.style.display=q?'inline':'none';const {tab,path}=parseHash();
+  [...nav.children].forEach(b=>b.classList.toggle('on',!q&&b.dataset.tab===tab));
+  if(q){renderSearch(q);return;} if(path)renderArtifact(tab,path);else renderPage(tab);
+  document.getElementById('count').textContent=ALLCARDS.length+' артефактов';}
+TABS.forEach(t=>{const b=document.createElement('button');b.dataset.tab=t.id;b.innerHTML='<span class="ic">'+t.ic+'</span><span class="lbl">'+t.name+'</span>'+(t.cards?'<span class="ct">'+t.cards.length+'</span>':'');b.onclick=()=>{qInput.value='';go(t.id);};nav.appendChild(b);});
+qInput.addEventListener('input',render);qx.onclick=()=>{qInput.value='';render();};
+window.addEventListener('hashchange',render);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(qInput.value){qInput.value='';render();}else{const {tab,path}=parseHash();if(path)go(tab);}}});
+const srv=document.getElementById('srv');if(SERVED){srv.textContent='✓ served — .md рендерятся';srv.className='srv';}
+render();
+</script>
+</body>
+</html>
