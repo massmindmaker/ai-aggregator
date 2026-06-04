@@ -158,6 +158,11 @@ const TABS=[
    {t:'Питч под Gonka',d:'10 слайдов: RU-спрос → в Gonka',p:'specs/2026-06-03-gonka-pitch.html',ty:'html'},
    {t:'Заявка (почти готова)',d:'3 деливерабла, метрики, реквизиты-placeholder',p:'specs/2026-06-03-gonka-grant-application.md',ty:'md'},
  ]},
+ {id:'wave1',ic:'💎',name:'Монетизация (Wave-1) ✅',cards:[
+   {t:'★ Что выкачено 2026-06-04',d:'D-1 USD-реестр · Wave-1 (публикация/клон/аренда/доход автора) · креатор-экономика (рейтинги+ремикс) · плановые запуски — ВСЁ live + gold-проверено JWT',p:'specs/2026-06-04-wave1-monetization-plan.md',ty:'md',star:1},
+   {t:'План монетизации (авторская аренда)',d:'3 среза: публикация → платная аренда (0% AIAG, атомарный settleRent) → доход автора. Модель данных + адверсариальные риски',p:'specs/2026-06-04-wave1-monetization-plan.md',ty:'md'},
+   {t:'★ Спайк-план управляемого Hermes',d:'Почему 2GB не тянет · какой ~16GB-бокс провизионить (+цена) · Phase-0 замер RAM · go/no-go 800MB · что строится без бокса',p:'specs/2026-06-04-managed-hermes-spike-plan.md',ty:'md',star:1},
+ ]},
  {id:'pack',ic:'📣',name:'Упаковка',cards:[
    {t:'One-pager',d:'Что строим + чек-лист упаковки',p:'specs/2026-06-03-aiag-onepager.html',ty:'html'},
    {t:'Pitch deck',d:'11 слайдов для инвестора/партнёра',p:'specs/2026-06-03-aiag-pitch-deck.html',ty:'html'},
@@ -172,13 +177,12 @@ const TABS=[
 ];
 const ALLCARDS=TABS.filter(t=>t.cards).flatMap(t=>t.cards.map(c=>({...c,zone:t.name,zoneId:t.id})));
 const TODOS=[
- {k:'wfscope',x:'gh workflow scope выдан (gh auth refresh -s workflow)'},
- {k:'secrets',x:'Подтверждены GitHub-секреты DEPLOY_SSH_KEY/HOST/USER + telegram-alert'},
- {k:'chown',x:'Разрешён chown agent-worker/tma → aiag (раннер пишет релизы)'},
- {k:'autodeploy',x:'Решено: авто-деплой на push в master (да/нет) + гейт на тестах'},
- {k:'gonka',x:'Gonka: GNK-кошелёк + Discord + email + спайк эндпоинта'},
- {k:'rotate',x:'Перевыпустить токены, вставленные в чат (Timeweb, GitHub PAT)'},
- {k:'wave0',x:'«Го» на возобновление деплоя Wave-0 (pm2 re-pin на current)'},
+ {k:'hermesbox',x:'РЕШЕНИЕ: поднять ~16GB VPS под управляемый Hermes (платный) → разблокирует настоящую Wave 3'},
+ {k:'fd2',x:'РЕШЕНИЕ FD-2: доход автора выводить наружу или только тратить внутри приложения?'},
+ {k:'gonka',x:'Gonka: 5 задач (кошелёк gonka1 + Discord + ключ GonkaGate $10 + FD-6 комиссия + пост заявки)'},
+ {k:'jetton',x:'Дать jetton-кошелёк/конфиг → USDT/мульти-крипто пополнение'},
+ {k:'mergemaster',x:'Решить: мержить feat/r1.0-wave0-consolidated в master'},
+ {k:'rotate',x:'Перевыпустить токены, вставленные в чат ранее (Timeweb, GitHub PAT)'},
 ];
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function mdToHtml(md){
@@ -233,17 +237,23 @@ function overview(){const page=document.createElement('div');page.className='pag
      +'<li><b>Подключить своего Hermes</b> (или любой OpenAI-совместимый адрес + ключ) и общаться с ним</li>'
      +'<li><b>Свой ключ/провайдер = бесплатно</b> — наценка только на наших моделях</li>'
      +'<li><b>Запускать агента</b> и смотреть историю прогонов</li>'
-     +'<li><b>Пополнить баланс</b> через TON-кошелёк · <b>лимит бюджета</b> агента на день/месяц</li></ul>'
-   +'<div class="sec">Статус функций · твой целевой путь</div><ul class="facts">'
-     +'<li>Подключить своего Hermes и общаться <span class="pill p-live">работает</span></li>'
-     +'<li>Управлять агентом — промпт / модель / бюджет <span class="pill p-live">работает</span></li>'
-     +'<li>Привязать TON-кошелёк и пополнить <span class="pill p-live">работает</span> <span style="color:var(--ink-faint);font-size:11px">валюта ₽→кредиты мигрирует</span></li>'
-     +'<li>Привязать скиллы / MCP-серверы <span class="pill p-rnd">R&amp;D</span></li>'
-     +'<li>Оплатить / арендовать агента в маркете <span class="pill p-soon">скоро</span></li>'
+     +'<li><b>Пополнить баланс</b> через TON-кошелёк (в кредитах) · <b>лимит бюджета</b> на день/месяц</li>'
+     +'<li><b>Опубликовать</b> агента как шаблон, <b>клонировать</b> бесплатный или <b>арендовать</b> платный</li>'
+     +'<li>Поставить агенту <b>расписание</b> — он сам работает по таймеру (в рамках лимита)</li></ul>'
+   +'<div class="sec">Статус функций · твой целевой путь <span style="color:var(--ink-faint);font-size:11px">(обновлено 2026-06-04)</span></div><ul class="facts">'
+     +'<li>Подключить своего Hermes / провайдера и общаться <span class="pill p-live">работает</span></li>'
+     +'<li>Управлять агентом — промпт / модель / бюджет / MCP <span class="pill p-live">работает</span></li>'
+     +'<li>Привязать TON-кошелёк и пополнить (в кредитах) <span class="pill p-live">работает</span></li>'
+     +'<li>Привязать скилл / MCP-сервер к агенту <span class="pill p-live">работает</span></li>'
+     +'<li>Опубликовать агента как шаблон (free / за аренду) <span class="pill p-live">работает</span></li>'
+     +'<li><b>Клонировать бесплатный / арендовать платный</b> (автору 0% AIAG, атомарно) <span class="pill p-live">работает</span></li>'
+     +'<li>Доход автора · рейтинги · ремикс-генеалогия <span class="pill p-live">работает</span></li>'
+     +'<li>Плановые запуски агента (по расписанию, в рамках лимита) <span class="pill p-live">работает</span></li>'
+     +'<li>Вывод дохода автора наружу <span class="pill p-soon">ждёт FD-2</span></li>'
      +'<li>Мульти-модель — картинка / голос / зрение <span class="pill p-soon">скоро</span></li>'
-     +'<li>Управляемый Hermes на нашем облаке <span class="pill p-rnd">R&amp;D</span></li></ul>'
+     +'<li>Управляемый Hermes на нашем облаке <span class="pill p-rnd">нужен ~16GB-бокс</span></li></ul>'
    +'<div class="sec">Два продукта</div><ul class="facts"><li><b>Aggregator (Web)</b> — маркет моделей, <b>рубли</b> <span class="pill p-live">live</span></li><li><b>TMA</b> — маркет агентов, <b>крипто-кредиты</b> <span class="pill p-live">Phase 15 + R0 live</span> · фокус</li></ul>'
-   +'<div class="sec">Money-path / бэкенд</div><ul class="facts done"><li>R0 (Phase 15.1) — money-path/gateway/auth — <b>live на проде</b></li><li>Wave-0 (safeFetch+DEFAULT_MODEL+D-0+CHARGE-0)+D-8 — консолидировано + type-clean, ждёт деплоя <span class="pill p-branch">feat/r1.0-wave0-consolidated</span></li><li>CI/CD yaml + ecosystem.config.cjs запушены <span class="pill p-branch">ветка</span></li></ul>'
+   +'<div class="sec">Money-path / бэкенд <span style="color:var(--good);font-size:11px">(2026-06-04 — всё LIVE + gold-проверено JWT)</span></div><ul class="facts done"><li>D-0 (маржа) + <b>D-1 USD-кредитный реестр</b> (₽ убит, аудит-журнал tg_ledger_entries) — live</li><li>Wave-1 монетизация: публикация → клон / <b>аренда</b> (автору 0%, всё в 1 транзакции) → доход автора — live</li><li>Креатор-экономика (рейтинги + ремикс + сортировка) + плановые запуски агента — live</li><li>Миграции 0029,0031-0034 накатаны на прод <span class="pill p-branch">feat/r1.0-wave0-consolidated</span> (не в master)</li></ul>'
    +'<div class="sec">Чек-лист действий (сохраняется)</div><div class="todo" id="todo"></div>'
    +'<div class="sec">GitHub · ветки</div><div class="links"><a href="'+REPO+'" target="_blank">репо</a><a href="'+REPO+'/tree/feat/r1.0-wave0-consolidated" target="_blank">feat/r1.0-wave0-consolidated</a><a href="'+REPO+'/tree/feat/wave0-d0-margin" target="_blank">feat/wave0-d0-margin</a><a href="'+REPO+'/tree/plan/15.1-r0-billing-identity" target="_blank">plan/15.1-r0</a><a href="https://ai-aggregator.ru" target="_blank">прод ↗</a></div>'
    +'<div class="sec">Быстрый доступ (флагманы)</div><div class="grid" id="qa"></div>';
