@@ -55,6 +55,14 @@ export default function AgentDetailPage() {
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // ---- publish-as-template ----
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishErr, setPublishErr] = useState<string | null>(null);
+  const [publishedId, setPublishedId] = useState<string | null>(null);
+  // Empty = free template (price_credits NULL). Else a positive integer (credits).
+  const [pPrice, setPPrice] = useState('');
+
   // ---- edit mode ----
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -245,6 +253,47 @@ export default function AgentDetailPage() {
     }
   }
 
+  async function handlePublish(e: React.FormEvent) {
+    e.preventDefault();
+    if (!token || !id) return;
+    setPublishing(true);
+    setPublishErr(null);
+    // Empty price → free template (NULL). Else a positive integer in credits.
+    let price: number | null = null;
+    const trimmed = pPrice.trim();
+    if (trimmed) {
+      const n = Number(trimmed);
+      if (!Number.isInteger(n) || n <= 0) {
+        setPublishErr('Цена — целое число кредитов больше нуля (или оставьте пусто)');
+        setPublishing(false);
+        return;
+      }
+      price = n;
+    }
+    try {
+      const res = await fetch(`/tg/api/tma/agents/${id}/publish`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ price_credits: price }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setPublishErr(body.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      setPublishedId(data.template_id ?? null);
+      setPublishOpen(false);
+    } catch (err) {
+      setPublishErr(err instanceof Error ? err.message : 'publish_failed');
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
@@ -288,6 +337,75 @@ export default function AgentDetailPage() {
             >
               {runActive ? 'Идёт запуск — редактирование недоступно' : '✎ Редактировать'}
             </button>
+
+            {/* Publish as a public template — shares the spec (no keys/data). */}
+            {publishedId ? (
+              <div className="tma-success">
+                Опубликовано как шаблон.{' '}
+                <Link
+                  href={`/templates/${publishedId}`}
+                  style={{ color: 'inherit', textDecoration: 'underline' }}
+                >
+                  Открыть
+                </Link>
+              </div>
+            ) : !publishOpen ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPublishErr(null);
+                  setPublishOpen(true);
+                }}
+                className="tma-btn"
+              >
+                ⤴ Опубликовать как шаблон
+              </button>
+            ) : (
+              <form onSubmit={handlePublish} className="tma-card" style={{ padding: 16 }}>
+                <h2 className="tma-card-title">Опубликовать как шаблон</h2>
+                <p className="tma-card-text tma-text-small">
+                  Поделитесь настройкой агента. Ключи, память и история не
+                  передаются — только спек.
+                </p>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-text">Цена аренды, кр (пусто = бесплатно)</span>
+                  <input
+                    type="number"
+                    value={pPrice}
+                    onChange={(ev) => setPPrice(ev.target.value)}
+                    min={1}
+                    step={1}
+                    placeholder="бесплатно"
+                    style={editInputStyle}
+                  />
+                </label>
+                {pPrice.trim() && (
+                  <p className="tma-card-text tma-text-small">
+                    Платная аренда появится позже — пока другие смогут клонировать
+                    только бесплатные шаблоны.
+                  </p>
+                )}
+                {publishErr && <div className="tma-error">Ошибка: {publishErr}</div>}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setPublishOpen(false)}
+                    className="tma-btn"
+                    disabled={publishing}
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="submit"
+                    className="tma-btn tma-btn--primary"
+                    disabled={publishing}
+                    style={{ flex: 1 }}
+                  >
+                    {publishing ? 'Публикация…' : 'Опубликовать'}
+                  </button>
+                </div>
+              </form>
+            )}
 
             <section className="tma-card">
               <h2 className="tma-card-title">System prompt</h2>
