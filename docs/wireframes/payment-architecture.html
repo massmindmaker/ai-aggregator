@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AIAG — финансовый слой (кредит-хаб)</title>
+<style>
+  :root{
+    --bg:#0a0a0b;--bg-elev:#111114;--bg-surface:#18181b;--ink:#f4f4f5;--ink-muted:#8b8b94;
+    --ink-faint:#71717a;--accent:#f59e0b;--accent-hover:#d97706;--line:rgba(255,255,255,.08);
+    --line-strong:rgba(255,255,255,.16);--success:#22c55e;--soon:#60a5fa;--danger:#ef4444;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;--sans:Inter,-apple-system,'Segoe UI',Roboto,system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;padding:0 24px 100px}
+  .wrap{max-width:1000px;margin:0 auto}
+  header{padding:56px 0 28px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  h1{font-size:38px;letter-spacing:-.02em;margin-bottom:12px}
+  .lead{color:var(--ink-muted);max-width:72ch}
+  section{padding:34px 0;border-bottom:1px solid var(--line)}
+  h2{font-size:21px;margin-bottom:8px}
+  h2 .n{font-family:var(--mono);color:var(--accent);font-size:14px;margin-right:8px}
+  .sub{color:var(--ink-muted);max-width:74ch;margin-bottom:18px}
+
+  /* ── hub diagram ───────────────────────────── */
+  .hub{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:center;margin-top:14px}
+  .rail{border:1px solid var(--line);border-radius:8px;background:var(--bg-surface);padding:12px 14px;margin-bottom:10px}
+  .rail .h{font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .rail .d{font-size:12.5px;color:var(--ink-faint);margin-top:2px}
+  .core{border:2px solid var(--accent);border-radius:14px;background:linear-gradient(160deg,#1a1408,#111114);padding:22px 18px;text-align:center;min-width:180px;box-shadow:0 0 40px rgba(245,158,11,.12)}
+  .core .t{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .core .big{font-size:26px;font-weight:700;margin:6px 0 2px}
+  .core .u{font-family:var(--mono);font-size:12px;color:var(--ink-muted)}
+  .colhead{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px}
+  .pill{font-family:var(--mono);font-size:9.5px;border:1px solid var(--line);border-radius:20px;padding:2px 8px;white-space:nowrap}
+  .live{color:var(--success);border-color:rgba(34,197,94,.4)}
+  .soon{color:var(--soon);border-color:rgba(96,165,250,.4)}
+  .arrow{color:var(--accent);font-family:var(--mono);font-size:13px;text-align:center;margin:-4px 0 8px}
+  @media(max-width:760px){.hub{grid-template-columns:1fr}.core{margin:6px 0}}
+
+  ul{list-style:none;display:flex;flex-direction:column;gap:11px;margin-top:8px}
+  li{padding-left:22px;position:relative;color:var(--ink-muted)}
+  li::before{content:"";position:absolute;left:0;top:9px;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--accent)}
+  li b{color:var(--ink)}
+  .mono{font-family:var(--mono)}
+  code{font-family:var(--mono);font-size:12.5px;color:var(--accent);background:var(--bg-surface);padding:1px 5px;border-radius:4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:10px;background:var(--bg-surface);padding:15px 16px}
+  .card .ph{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  .card h3{font-size:15px;margin-bottom:6px}
+  .card p{font-size:13px;color:var(--ink-muted)}
+  .flag{border-left:2px solid var(--danger);padding-left:14px;margin-top:12px;color:var(--ink-muted);font-size:13.5px}
+  .scn{border:1px solid var(--line);border-radius:8px;padding:13px 15px;margin-bottom:10px;background:var(--bg-elev)}
+  .scn .q{font-weight:600;font-size:14px}
+  .scn .a{font-size:13px;color:var(--ink-muted);margin-top:3px}
+  .tag-no{color:var(--ink-faint)} .tag-yes{color:var(--accent)}
+</style>
+</head>
+<body><div class="wrap">
+
+<header>
+  <div class="eyebrow">AIAG · финансовый слой · 2026-06-04</div>
+  <h1>Кредит-хаб</h1>
+  <p class="lead">Наш внутренний <b>кредит</b> (USD-пеггед, 1 кр = 1¢) — единая единица ценности. Вокруг него — <b>сменные адаптеры</b>, которые конвертируют ЛЮБОЙ платёжный рельс внутрь (приём) и наружу (выплата). Новый рельс = новый адаптер, не переписывание ядра. Та же логика, что наш провайдер-пикер для моделей — только для денег.</p>
+</header>
+
+<!-- ── 1. THE HUB ─────────────────────────────── -->
+<section>
+  <h2><span class="n">01</span>Схема: приём → кредиты → выплата</h2>
+  <p class="sub">Юзер никогда не видит ни TON, ни USDC, ни газа — он видит кредиты. Чейны прячутся в адаптерах.</p>
+  <div class="hub">
+    <div>
+      <div class="colhead">→ ON-RAMPS (приём)</div>
+      <div class="rail"><div class="h">TON / USDT-on-TON <span class="pill live">live·скоро</span></div><div class="d">Telegram-нативно, TON Connect</div></div>
+      <div class="rail"><div class="h">USDC (Coinbase) <span class="pill soon">потом</span></div><div class="d">USDC on Base, через CDP</div></div>
+      <div class="rail"><div class="h">ETH / SOL / BTC <span class="pill soon">потом</span></div><div class="d">через крипто-PSP</div></div>
+      <div class="rail"><div class="h">Карта / фиат <span class="pill soon">web</span></div><div class="d">для веб-агрегатора (₽)</div></div>
+    </div>
+    <div>
+      <div class="arrow">▶▶▶</div>
+      <div class="core">
+        <div class="t">AIAG CREDIT</div>
+        <div class="big">кр</div>
+        <div class="u">1 кр = 1¢ · append-only ledger · атомарно</div>
+      </div>
+      <div class="arrow">▶▶▶</div>
+    </div>
+    <div>
+      <div class="colhead">OFF-RAMPS (выплата) →</div>
+      <div class="rail"><div class="h">AI-модели <span class="pill live">live</span></div><div class="d">шлюз :4000 + наценка</div></div>
+      <div class="rail"><div class="h">Наши тулзы <span class="pill live">live</span></div><div class="d">image_gen = 8 кр/вызов</div></div>
+      <div class="rail"><div class="h">Внешние x402-тулзы <span class="pill soon">потом</span></div><div class="d">USDC-on-Base через Coinbase</div></div>
+      <div class="rail"><div class="h">Выплаты авторам <span class="pill soon">потом</span></div><div class="d">TON / USDC наружу</div></div>
+      <div class="rail"><div class="h">A2A (агент→агент) <span class="pill soon">R&D</span></div><div class="d">ERC-8004 + x402</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 2. 3 LAYERS ────────────────────────────── -->
+<section>
+  <h2><span class="n">02</span>Три слоя</h2>
+  <ul>
+    <li><b>ВХОД</b> — юзер → рельс (TON / USDC / …) → <b>кредиты</b>. Работа on-ramp-адаптеров.</li>
+    <li><b>ЕДИНИЦА</b> — всё считается в <b>наших кредитах</b>. Лимиты, бюджеты, ренты, наценка. Леджер = единственный источник правды (уже построен: <code>tg_ledger_entries</code>, атомарный <code>settleRun</code>).</li>
+    <li><b>ВЫХОД</b> — кредиты → off-ramp-адаптер платит провайдеру (модель / тулза / автор). Каждый mint и burn — запись в леджере.</li>
+  </ul>
+</section>
+
+<!-- ── 3. SCENARIOS ───────────────────────────── -->
+<section>
+  <h2><span class="n">03</span>Сценарии — где какой рельс</h2>
+  <div class="scn"><div class="q">1 · Пополнил и общается с агентом</div><div class="a">TON → 500 кр. Ответ = 2-5 кр (модель + наценка). <span class="tag-no">Coinbase не участвует.</span></div></div>
+  <div class="scn"><div class="q">2 · Агент генерит картинку (наша тулза)</div><div class="a">8 кр/вызов списали. <span class="tag-no">Coinbase не участвует.</span></div></div>
+  <div class="scn"><div class="q">3 · Арендовал шаблон у автора</div><div class="a">Рента 200 кр → автору 100% (наш cut 0%) + модель сверху. <span class="tag-no">Coinbase не участвует.</span></div></div>
+  <div class="scn"><div class="q">4 · Агент юзает ВНЕШНЮЮ x402-тулзу <span class="pill soon">будущее</span></div><div class="a">Тулза: «402, заплати 0.01 USDC» → <b>мы платим через Coinbase</b> → списываем ~1.25 кр. <span class="tag-yes">Единственный сценарий с Coinbase.</span></div></div>
+  <div class="scn"><div class="q">5 · Автор выводит заработок <span class="pill soon">будущее</span></div><div class="a">Кредиты → off-ramp → TON / USDC на его кошелёк (после FD-2). <span class="tag-yes">Выплата наружу.</span></div></div>
+</section>
+
+<!-- ── 4. PHASES ──────────────────────────────── -->
+<section>
+  <h2><span class="n">04</span>Как развивать — фазы</h2>
+  <div class="grid2">
+    <div class="card"><div class="ph">Фаза 1 · сейчас</div><h3>Ядро без крипто-сложности</h3><p>TON-вход → кредиты → внутренние выходы (модели + наши тулзы + маркет тулзов v1 в кредитах). Полноценное рабочее приложение. <b>~готово.</b></p></div>
+    <div class="card"><div class="ph">Фаза 2 · хаб открывается</div><h3>Мульти-крипто вход + x402 выход</h3><p>Coinbase x402 off-ramp (внешние тулзы) + USDC/мульти-крипто on-ramp. Кредит становится универсальным хабом. Сначала testnet (бесплатно).</p></div>
+    <div class="card"><div class="ph">Фаза 3 · двусторонне</div><h3>Выплаты + A2A</h3><p>Off-ramp выплаты авторам (TON/USDC наружу), агент платит агенту (x402 + ERC-8004). Хаб становится многосторонним.</p></div>
+    <div class="card"><div class="ph">Принцип</div><h3>Адаптеры, не хардкод</h3><p>Каждый рельс = маленький адаптер (quote / accept / pay / confirm). Добавить крипту = добавить адаптер. Ядро (леджер) не трогается.</p></div>
+  </div>
+</section>
+
+<!-- ── 5. PRINCIPLES ──────────────────────────── -->
+<section>
+  <h2><span class="n">05</span>Принципы финансового слоя</h2>
+  <ul>
+    <li><b>Кредит — единая единица</b> (USD-пеггед). Чейны не показываем юзеру никогда.</li>
+    <li><b>Адаптеры, а не вшитые рельсы.</b> Один интерфейс, много реализаций (как провайдер-пикер).</li>
+    <li><b>Леджер = источник правды.</b> Append-only, атомарно (guarded <code>UPDATE…WHERE…RETURNING</code>). Каждый вход/выход — запись.</li>
+    <li><b>Минимум кастоди.</b> Не строим свой фасилитатор/чейн там, где есть провайдер (Coinbase для x402, TON Connect для TON). Минимальные горячие балансы, managed-кошельки.</li>
+    <li><b>Пеггед + сверка.</b> Кредит = 1¢; регулярно сверяем леджер с реальными балансами рельсов (что заведено vs что должны).</li>
+  </ul>
+</section>
+
+<!-- ── 6. HONEST FLAGS ────────────────────────── -->
+<section style="border-bottom:none">
+  <h2><span class="n">06</span>Честные флаги</h2>
+  <div class="flag"><b>Комплаенс.</b> «Конвертировать любой рельс в кредиты и платить наружу» = по сути функция обмена/кастоди крипты → реальный регуляторный вес. По канону legal пока не факторим (иностранная сущность держит крипту/USDC) — но при масштабе это вернётся. Не игнорируем.</div>
+  <div class="flag"><b>Кастоди-риск растёт с хабом.</b> Чем больше рельсов и балансов — тем больше поверхность атаки. Минимальные горячие балансы, managed/кастодиальные провайдеры, НЕ горячий mainnet-кошелёк на 2GB-проде.</div>
+  <div class="flag"><b>Не строим то, что дают провайдеры.</b> Coinbase x402 (внешние тулзы), TON Connect (вход), крипто-PSP (мульти-крипто on-ramp). Мы — <b>леджер + адаптеры</b>, не банк.</div>
+  <p class="sub" style="margin-top:18px">Одной фразой: <b>кредит-хаб</b> = наш леджер в центре + сменные адаптеры приёма/выплаты по краям. Coinbase, TON, будущие крипты — просто адаптеры. Ядро живёт уже сегодня; рельсы добавляются по фазам, не переписывая середину.</p>
+</section>
+
+</div></body></html>

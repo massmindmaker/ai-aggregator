@@ -57,6 +57,8 @@
     { "name": "TMA wireframes (dark)", "type": "wireframe", "path": "docs/wireframes/tma/index.html", "status": "live" },
     { "name": "Web wireframes (light Studio23)", "type": "wireframe", "path": "docs/wireframes/web/index.html", "status": "live" },
     { "name": "Design showcase (matrix)", "type": "wireframe", "path": "docs/wireframes/showcase.html", "status": "live" },
+    { "name": "Payment architecture (credit-hub)", "type": "wireframe", "path": "docs/wireframes/payment-architecture.html", "status": "live" },
+    { "name": "Tool-market + x402 plan", "type": "spec", "path": "docs/specs/2026-06-04-tool-market-x402-plan.md", "status": "live" },
     { "name": "Wave-1 monetization plan", "type": "spec", "path": "docs/specs/2026-06-04-wave1-monetization-plan.md", "status": "live" },
     { "name": "Managed-Hermes spike plan", "type": "spec", "path": "docs/specs/2026-06-04-managed-hermes-spike-plan.md", "status": "live" },
     { "name": "Gonka grant application", "type": "spec", "path": "docs/specs/2026-06-03-gonka-grant-application.md", "status": "live" },
