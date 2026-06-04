@@ -29,9 +29,11 @@
     { "id": "managed-hermes", "title": "Managed Hermes runtime (the real Wave 2/3 core)", "blocker": "needs a SEPARATE ~16GB VPS — the 2GB prod box hosts 0-1 instances (~300-600MB each)", "owner": "founder: provision the box", "signal": "2026-06-04 — Hermes shipping a WEB ADMIN PANEL (`hermes dashboard`: MODELS/CRON/SKILLS/MCP/CONFIG/KEYS, CLI optional + shell-hooks in UI) — RESEARCH VERDICT (2026-06-04): the dashboard is LOCAL config (CLI-optional on the host), NOT a remote API; the control-plane gap is NOT closed — spike §4 (build our own host-side control-plane) stays mandatory. Hardware box still needed. (Tailwind: cold-start much faster in v0.15 → easier sleep/wake tier.)", "doc": "docs/specs/2026-06-04-managed-hermes-spike-plan.md", "go_no_go": "idle RSS >800MB ⇒ shared multi-tenant not viable at $20 tier ⇒ stay connect-your-own-Hermes" }
   ],
   "decisions_pending": [
-    { "id": "FD-2", "question": "Author income — withdrawable OUT vs in-app-spend-only?", "blocks": "Slice-3 cash-out (currently in-app-spendable, withdraw = «скоро»)" }
+    { "id": "FD-2", "question": "Author income — withdrawable OUT vs in-app-spend-only?", "blocks": "Slice-3 cash-out (currently in-app-spendable, withdraw = «скоро»)" },
+    { "id": "FD-pricing", "question": "Free-grant amount (research suggests 300 cr / $3 on first run) + markup (keep ×1.25?) — founder undecided", "blocks": "the activation / pricing launch" }
   ],
   "decisions_resolved": [
+    { "id": "FD-TON-wallets", "decision": "ADOPT the TON Agentic Wallets standard (provisional) for the agent budget-card / wallet layer rather than a fully custom enforcement — align future wallet work with TON's per-agent-funded-wallet + budget-cap + revocable primitive. Moat = curation / characters / open SPEC / author-rent, NOT 'agents spend crypto in TG'. The integration itself is a FUTURE build (TON SDK + the agentic-wallet primitive); the existing credit-ledger budget enforcement keeps working until then.", "date": "2026-06-04" },
     { "id": "FD-6", "decision": "Gonka = 0% commission (BYO / pass-through) — the user pays Gonka directly, we don't tax it; matches the 'own provider = free' rule. We earn on the GRANT (paid in GNK), not on per-call Gonka margin. The GonkaGate platform fee only applies if we ever resell via our own key — deferred, not needed for the product.", "date": "2026-06-04" }
   ],
   "backlog": [
