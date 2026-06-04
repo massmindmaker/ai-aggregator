@@ -323,7 +323,7 @@ export default function AgentDetailPage() {
               )}
               {agent.model_slug && (
                 <p className="tma-subtitle">
-                  <code>{agent.model_slug}</code> · {Number(agent.budget_rub_monthly).toFixed(0)} ₽/мес
+                  <code>{agent.model_slug}</code> · {Number(agent.budget_rub_monthly).toFixed(0)} кр/мес
                 </p>
               )}
             </header>
@@ -586,7 +586,7 @@ export default function AgentDetailPage() {
               </div>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span className="tma-card-text">Бюджет, ₽/мес</span>
+                <span className="tma-card-text">Бюджет, кр/мес</span>
                 <input
                   type="number"
                   value={eBudget}

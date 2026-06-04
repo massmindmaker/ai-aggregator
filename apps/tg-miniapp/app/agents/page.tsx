@@ -104,7 +104,7 @@ export default function AgentsPage() {
                         {a.name}
                       </h2>
                       <span className="tma-nft-supply">
-                        {Number(a.budget_rub_monthly).toFixed(0)} ₽/мес
+                        {Number(a.budget_rub_monthly).toFixed(0)} кр/мес
                       </span>
                     </div>
                     {a.description && <p className="tma-card-text">{a.description}</p>}

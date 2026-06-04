@@ -325,7 +325,7 @@ export default function NewAgentPage() {
               </div>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span className="tma-card-text">Бюджет, ₽/мес</span>
+                <span className="tma-card-text">Бюджет, кр/мес</span>
                 <input
                   type="number"
                   value={budget}
