@@ -46,7 +46,7 @@ interface RunRow {
 async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null> {
   const rows = (await sql`
     SELECT id::text, tg_user_id::text, template_kind, name, description,
-           system_prompt, tools, model_slug, budget_rub_monthly::text,
+           system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
            status, created_at, updated_at,
            connection_type, external_base_url, external_api_key_hint,
            external_model_slug,
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!agent) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   const runs = (await sql`
-    SELECT id::text, input, output, status, cost_rub::text, error,
+    SELECT id::text, input, output, status, cost_credits::text AS cost_rub, error,
            created_at, completed_at
     FROM agent_runs
     WHERE agent_id = ${params.id}::uuid
@@ -222,12 +222,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         system_prompt = ${systemPrompt},
         tools = ${sql.json(tools as never)},
         model_slug = ${modelSlug},
-        budget_rub_monthly = ${budget},
+        budget_credits_monthly = ${budget},
         updated_at = NOW()${setConn}${setMcp}
     WHERE id = ${params.id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
     RETURNING id::text, tg_user_id::text, template_kind, name, description,
-              system_prompt, tools, model_slug, budget_rub_monthly::text,
+              system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
               status, created_at, updated_at,
               connection_type, external_base_url, external_api_key_hint,
               external_model_slug,

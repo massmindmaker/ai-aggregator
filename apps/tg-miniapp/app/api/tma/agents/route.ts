@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   const rows = (await sql`
     SELECT id::text, tg_user_id::text, template_kind, name, description,
-           system_prompt, tools, model_slug, budget_rub_monthly::text,
+           system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
            status, created_at, updated_at
     FROM agents
     WHERE tg_user_id = ${tgUserId}::bigint
@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
   const ins = (await sql`
     INSERT INTO agents (
       tg_user_id, template_kind, name, description,
-      system_prompt, tools, model_slug, budget_rub_monthly,
+      system_prompt, tools, model_slug, budget_credits_monthly,
       connection_type, external_base_url, external_api_key_encrypted,
       external_api_key_hint, external_model_slug,
       mcp_endpoint_url, mcp_auth_encrypted
@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
       ${mcpAuthEncrypted}
     )
     RETURNING id::text, tg_user_id::text, template_kind, name, description,
-              system_prompt, tools, model_slug, budget_rub_monthly::text,
+              system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
               status, created_at, updated_at, connection_type,
               external_base_url, external_api_key_hint, external_model_slug
   `) as unknown as AgentRow[];
