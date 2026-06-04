@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
+import { AgentCard, hueFor } from '@/components/AgentCard';
 
 interface Template {
   id: string;
@@ -27,15 +27,6 @@ const SORTS: { key: SortMode; label: string }[] = [
   { key: 'top', label: 'Топ' },
 ];
 
-// Per-character accent hues (OKLCH) — the collectible-card signature (DESIGN.md).
-// Deterministic per template id so a card always wears the same colour.
-const HUES = [28, 235, 340, 165, 60, 290, 200, 130];
-function hueFor(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return HUES[h % HUES.length];
-}
-
 function priceLabel(price: string | null): string {
   if (price === null) return 'бесплатно';
   const n = Number(price);
@@ -43,9 +34,13 @@ function priceLabel(price: string | null): string {
   return `${n} кр`;
 }
 
-function monogram(name: string | null): string {
-  const t = (name ?? '?').trim();
-  return (t[0] ?? '?').toUpperCase();
+// Russian plural for «клон» (1 клон / 2 клона / 5 клонов).
+function cloneWord(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'клон';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'клона';
+  return 'клонов';
 }
 
 export default function TemplatesPage() {
@@ -86,7 +81,7 @@ export default function TemplatesPage() {
     <>
       <main className="tma-shell tma-shell--with-nav">
         <header className="tma-header">
-          <span className="tma-badge">ШАБЛОНЫ</span>
+          <span className="tma-eyebrow">Маркет</span>
           <h1 className="tma-title">Готовые агенты</h1>
           <p className="tma-subtitle">
             Клонируйте чужого агента себе. Настройки переносятся, ключи — нет.
@@ -110,79 +105,57 @@ export default function TemplatesPage() {
 
         {fetchErr && <div className="tma-error">Ошибка: {fetchErr}</div>}
 
-        {!templates && !fetchErr && <p className="tma-card-text">Загрузка…</p>}
+        {!templates && !fetchErr && (
+          <section className="tma-agent-grid" aria-hidden>
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="tma-agent-card tma-agent-card--skeleton">
+                <div className="tma-agent-portrait tma-skeleton" />
+                <div className="tma-agent-body">
+                  <div className="tma-skeleton tma-skeleton-line" />
+                  <div className="tma-skeleton tma-skeleton-line tma-skeleton-line--short" />
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
 
         {templates && templates.length === 0 && (
-          <section className="tma-card">
+          <section className="tma-card tma-empty">
+            <span className="tma-empty-glyph">✦</span>
             <h2 className="tma-card-title">Каталог пуст</h2>
             <p className="tma-card-text">
-              Скоро здесь появятся опубликованные агенты.
+              Здесь появятся опубликованные агенты. Опубликуйте своего первым —
+              откройте агента и нажмите «Опубликовать как шаблон».
             </p>
           </section>
         )}
 
         {templates && templates.length > 0 && (
-          <section className="tma-nft-grid">
-            {templates.map((t) => {
-              const hue = hueFor(t.id);
+          <section className="tma-agent-grid">
+            {templates.map((t, idx) => {
+              const hasRating = t.avg_rating !== null;
               return (
-                <Link key={t.id} href={`/templates/${t.id}`} className="tma-nft-card">
-                  <div
-                    className="tma-nft-image tma-nft-image--placeholder"
-                    style={{
-                      background: `linear-gradient(155deg, oklch(0.32 0.08 ${hue}), oklch(0.18 0.04 ${hue}))`,
-                      color: `oklch(0.92 0.10 ${hue})`,
-                      fontSize: 40,
-                      fontWeight: 700,
-                    }}
-                  >
-                    <span>{monogram(t.name)}</span>
-                  </div>
-                  <div className="tma-nft-body">
-                    <h3 className="tma-nft-name">{t.name ?? 'Без имени'}</h3>
-                    {t.description && (
-                      <p
-                        className="tma-card-text tma-text-small"
-                        style={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {t.description}
-                      </p>
-                    )}
-                    {t.model_slug && (
-                      <span className="tma-mono" style={{ wordBreak: 'break-all' }}>
-                        {t.model_slug}
-                      </span>
-                    )}
-                    <div className="tma-nft-meta">
-                      <span
-                        className={t.price_credits === null ? 'tma-nft-supply' : 'tma-nft-price'}
-                        style={
-                          t.price_credits !== null
-                            ? { fontVariantNumeric: 'tabular-nums' }
-                            : undefined
-                        }
-                      >
-                        {priceLabel(t.price_credits)}
-                      </span>
-                      {t.avg_rating !== null ? (
-                        <span className="tma-rating">
-                          <span className="tma-rating-star">★</span>
-                          <span className="tma-rating-value">{t.avg_rating}</span>
-                          {t.rating_count > 0 && (
-                            <span className="tma-rating-count">({t.rating_count})</span>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="tma-nft-supply">⧉ {t.clone_count}</span>
-                      )}
-                    </div>
-                  </div>
-                </Link>
+                <AgentCard
+                  key={t.id}
+                  href={`/templates/${t.id}`}
+                  hue={hueFor(t.id)}
+                  name={t.name}
+                  role={t.description}
+                  model={t.model_slug}
+                  metricLabel={priceLabel(t.price_credits)}
+                  metricAccent={t.price_credits !== null}
+                  rating={
+                    hasRating
+                      ? { value: t.avg_rating as string, count: t.rating_count }
+                      : null
+                  }
+                  countLabel={
+                    !hasRating
+                      ? `${t.clone_count} ${cloneWord(t.clone_count)}`
+                      : null
+                  }
+                  featured={sort === 'top' && idx === 0}
+                />
               );
             })}
           </section>

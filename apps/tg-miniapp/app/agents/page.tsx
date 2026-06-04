@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
+import { AgentCard, hueFor } from '@/components/AgentCard';
 
 interface Agent {
   id: string;
@@ -13,20 +14,6 @@ interface Agent {
   model_slug: string | null;
   budget_rub_monthly: string;
   created_at: string;
-}
-
-// Per-character accent hue (OKLCH) — the collectible-card signature (DESIGN.md /
-// PRODUCT.md): the agents catalog now speaks the SAME card language as /templates,
-// not faceless emoji rows ("два языка сшиты"). Deterministic per agent id.
-const HUES = [28, 235, 340, 165, 60, 290, 200, 130];
-function hueFor(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return HUES[h % HUES.length];
-}
-function monogram(name: string | null): string {
-  const t = (name ?? '?').trim();
-  return (t[0] ?? '?').toUpperCase();
 }
 
 export default function AgentsPage() {
@@ -57,14 +44,27 @@ export default function AgentsPage() {
     <>
       <main className="tma-shell tma-shell--with-nav">
         <header className="tma-header">
-          <span className="tma-badge">AIAG</span>
+          <span className="tma-eyebrow">Мои агенты</span>
           <h1 className="tma-title">Агенты</h1>
           <p className="tma-subtitle">
-            Создавайте AI-агентов под свои задачи. Шаблоны или с нуля.
+            Создавайте AI-агентов под свои задачи. Из шаблона или с нуля.
           </p>
         </header>
 
-        {loading && <p className="tma-card-text">Загрузка…</p>}
+        {loading && (
+          <section className="tma-agent-grid" aria-hidden>
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="tma-agent-card tma-agent-card--skeleton">
+                <div className="tma-agent-portrait tma-skeleton" />
+                <div className="tma-agent-body">
+                  <div className="tma-skeleton tma-skeleton-line" />
+                  <div className="tma-skeleton tma-skeleton-line tma-skeleton-line--short" />
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
+
         {!loading && error && (
           <div className="tma-card">
             <p className="tma-card-text">
@@ -79,70 +79,48 @@ export default function AgentsPage() {
           <>
             <div className="tma-cta" style={{ gap: 8 }}>
               <Link href="/agents/new" className="tma-btn tma-btn--primary">
-                + Создать агента
+                Создать агента
               </Link>
               <Link href="/schedules" className="tma-btn">
-                ⏰ Расписания
+                Расписания
               </Link>
             </div>
 
             {fetchErr && <div className="tma-error">Ошибка: {fetchErr}</div>}
 
             {agents && agents.length === 0 && (
-              <section className="tma-card">
+              <section className="tma-card tma-empty">
+                <span className="tma-empty-glyph">✦</span>
                 <h2 className="tma-card-title">Пока пусто</h2>
                 <p className="tma-card-text">
-                  Выберите шаблон или соберите своего агента с нуля.
+                  Выберите готовый шаблон в маркете или соберите своего агента
+                  с нуля — персона, модель, инструменты и расписание.
                 </p>
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <Link href="/agents/new" className="tma-btn tma-btn--primary">
+                    Собрать с нуля
+                  </Link>
+                  <Link href="/templates" className="tma-btn">
+                    Открыть шаблоны
+                  </Link>
+                </div>
               </section>
             )}
 
             {agents && agents.length > 0 && (
-              <section className="tma-nft-grid">
-                {agents.map((a) => {
-                  const hue = hueFor(a.id);
-                  return (
-                    <Link key={a.id} href={`/agents/${a.id}`} className="tma-nft-card">
-                      <div
-                        className="tma-nft-image tma-nft-image--placeholder"
-                        style={{
-                          background: `linear-gradient(155deg, oklch(0.32 0.08 ${hue}), oklch(0.18 0.04 ${hue}))`,
-                          color: `oklch(0.92 0.10 ${hue})`,
-                          fontSize: 40,
-                          fontWeight: 700,
-                        }}
-                      >
-                        <span>{monogram(a.name)}</span>
-                      </div>
-                      <div className="tma-nft-body">
-                        <h3 className="tma-nft-name">{a.name}</h3>
-                        {a.description && (
-                          <p
-                            className="tma-card-text tma-text-small"
-                            style={{
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            {a.description}
-                          </p>
-                        )}
-                        {a.model_slug && (
-                          <span className="tma-mono" style={{ wordBreak: 'break-all' }}>
-                            {a.model_slug}
-                          </span>
-                        )}
-                        <div className="tma-nft-meta">
-                          <span className="tma-nft-supply" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                            {Number(a.budget_rub_monthly).toFixed(0)} кр/мес
-                          </span>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
+              <section className="tma-agent-grid">
+                {agents.map((a, idx) => (
+                  <AgentCard
+                    key={a.id}
+                    href={`/agents/${a.id}`}
+                    hue={hueFor(a.id)}
+                    name={a.name}
+                    role={a.description}
+                    model={a.model_slug}
+                    metricLabel={`${Number(a.budget_rub_monthly).toFixed(0)} кр/мес`}
+                    featured={idx === 0 && agents.length > 1}
+                  />
+                ))}
               </section>
             )}
           </>

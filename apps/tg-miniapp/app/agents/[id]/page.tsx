@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
+import { hueFor } from '@/components/AgentCard';
+import { RunTrace } from '@/components/RunTrace';
 
 interface Agent {
   id: string;
@@ -464,17 +466,70 @@ export default function AgentDetailPage() {
 
         {agent && !editing && (
           <>
-            <header className="tma-header">
-              <h1 className="tma-title">{agent.name}</h1>
-              {agent.description && (
-                <p className="tma-subtitle">{agent.description}</p>
-              )}
+            {/* Hero — the collectible-character card + headline facts. */}
+            <section className="tma-detail-hero">
+              <div
+                className="tma-detail-portrait"
+                style={{
+                  background: `linear-gradient(155deg, oklch(0.34 0.09 ${hueFor(agent.id)}), oklch(0.17 0.045 ${hueFor(agent.id)}))`,
+                  color: `oklch(0.93 0.11 ${hueFor(agent.id)})`,
+                }}
+              >
+                {(agent.name?.trim()[0] ?? '?').toUpperCase()}
+              </div>
+              <div className="tma-detail-hero-body">
+                <h1 className="tma-title">{agent.name}</h1>
+                {agent.description && (
+                  <p className="tma-subtitle">{agent.description}</p>
+                )}
+                <div className="tma-chips" style={{ marginTop: 2 }}>
+                  <span
+                    className={
+                      agent.connection_type === 'external_openai'
+                        ? 'tma-pill tma-pill--ok'
+                        : 'tma-pill tma-pill--accent'
+                    }
+                  >
+                    {agent.connection_type === 'external_openai'
+                      ? 'свой провайдер · 0 комиссии'
+                      : 'наш шлюз · с наценкой'}
+                  </span>
+                  {agent.mcp_endpoint_url && (
+                    <span className="tma-pill tma-pill--muted">MCP подключён</span>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Spec strip — model + budget in one mono-numeric glance. */}
+            <section className="tma-spec">
               {agent.model_slug && (
-                <p className="tma-subtitle">
-                  <code>{agent.model_slug}</code> · {Number(agent.budget_rub_monthly).toFixed(0)} кр/мес
-                </p>
+                <div className="tma-spec-cell">
+                  <span className="tma-spec-label">Модель</span>
+                  <span className="tma-spec-value tma-mono" title={agent.model_slug}>
+                    {agent.model_slug}
+                  </span>
+                </div>
               )}
-            </header>
+              <div className="tma-spec-cell">
+                <span className="tma-spec-label">Бюджет</span>
+                <span className="tma-spec-value">
+                  <span className="tma-num">{Number(agent.budget_rub_monthly).toFixed(0)}</span> кр/мес
+                </span>
+              </div>
+              {Array.isArray(agent.tools) && (agent.tools as string[]).length > 0 && (
+                <div className="tma-spec-cell tma-spec-cell--wide">
+                  <span className="tma-spec-label">Инструменты</span>
+                  <div className="tma-chips">
+                    {(agent.tools as string[]).map((t) => (
+                      <span key={t} className="tma-chip">
+                        {AVAILABLE_TOOLS.find((x) => x.id === t)?.label ?? t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
 
             <button
               type="button"
@@ -483,7 +538,7 @@ export default function AgentDetailPage() {
               disabled={runActive}
               title={runActive ? 'Дождитесь завершения запуска' : undefined}
             >
-              {runActive ? 'Идёт запуск — редактирование недоступно' : '✎ Редактировать'}
+              {runActive ? 'Идёт запуск — редактирование недоступно' : 'Редактировать'}
             </button>
 
             {/* Канбан/swarm — read-only board of the user's connected Hermes.
@@ -665,37 +720,16 @@ export default function AgentDetailPage() {
             </section>
 
             <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <h2 className="tma-card-title">История</h2>
-              {runs.length === 0 && (
-                <p className="tma-card-text">
-                  Пока нет сообщений. Напишите первое ниже.
-                </p>
-              )}
-              {runs
-                .slice()
-                .reverse()
-                .map((r) => (
-                  <div key={r.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ ...bubbleStyle, alignSelf: 'flex-end', background: 'var(--accent)', color: 'var(--accent-ink)' }}>
-                      {r.input}
-                    </div>
-                    {r.output && (
-                      <div style={{ ...bubbleStyle, alignSelf: 'flex-start', background: 'var(--bg-elev)' }}>
-                        {r.output}
-                      </div>
-                    )}
-                    {!r.output && (r.status === 'pending' || r.status === 'running') && (
-                      <div style={{ ...bubbleStyle, alignSelf: 'flex-start', background: 'var(--bg-elev)', opacity: 0.6 }}>
-                        …думает
-                      </div>
-                    )}
-                    {r.error && (
-                      <div className="tma-error" style={{ alignSelf: 'flex-start' }}>
-                        {r.error}
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="tma-section-head">
+                <h2 className="tma-card-title">История запусков</h2>
+                {runs.length > 0 && (
+                  <span className="tma-section-sub">
+                    последние <span className="tma-num">{runs.length}</span> · цена в кредитах за каждый
+                  </span>
+                )}
+              </div>
+              {/* Run-trace: newest first, with per-run cost/duration/status. */}
+              <RunTrace runs={runs} />
             </section>
 
             <form onSubmit={handleSend} style={{ display: 'flex', gap: 8 }}>
@@ -729,8 +763,7 @@ export default function AgentDetailPage() {
               type="button"
               onClick={handleDelete}
               disabled={deleting}
-              className="tma-btn"
-              style={{ color: '#fca5a5' }}
+              className="tma-btn tma-btn--danger"
             >
               {deleting ? 'Удаление…' : 'Удалить агента'}
             </button>
@@ -1078,14 +1111,4 @@ const editInputStyle: React.CSSProperties = {
   color: 'var(--ink)',
   fontSize: 14,
   outline: 'none',
-};
-
-const bubbleStyle: React.CSSProperties = {
-  padding: '10px 14px',
-  borderRadius: 12,
-  maxWidth: '85%',
-  fontSize: 14,
-  lineHeight: 1.4,
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
 };

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
+import { hueFor } from '@/components/AgentCard';
 
 interface Template {
   id: string;
@@ -208,7 +209,18 @@ export default function TemplateDetailPage() {
 
         {template && (
           <>
-            <header className="tma-header">
+            <section className="tma-detail-hero">
+              <div
+                className="tma-detail-portrait"
+                style={{
+                  background: `linear-gradient(155deg, oklch(0.34 0.09 ${hueFor(template.id)}), oklch(0.17 0.045 ${hueFor(template.id)}))`,
+                  color: `oklch(0.93 0.11 ${hueFor(template.id)})`,
+                }}
+              >
+                {((template.name ?? '?').trim()[0] ?? '?').toUpperCase()}
+              </div>
+              <div className="tma-detail-hero-body">
+            <header className="tma-header" style={{ gap: 6 }}>
               <h1 className="tma-title">{template.name ?? 'Без имени'}</h1>
               {template.avg_rating !== null ? (
                 <span className="tma-rating">
@@ -241,6 +253,8 @@ export default function TemplateDetailPage() {
                 <span className="tma-mono">⧉ {template.clone_count} клонов</span>
               </div>
             </header>
+              </div>
+            </section>
 
             {/* CTA — the one primary action on this screen. Paid templates rent
                 (pays the author the exact sum, 0% AIAG); free templates clone. */}
@@ -313,11 +327,13 @@ export default function TemplateDetailPage() {
               <section className="tma-card">
                 <h2 className="tma-card-title">Что внутри</h2>
                 {tools.length > 0 && (
-                  <ul className="tma-list">
+                  <div className="tma-chips">
                     {tools.map((t, i) => (
-                      <li key={i}>{String(t)}</li>
+                      <span key={i} className="tma-chip">
+                        {String(t)}
+                      </span>
                     ))}
-                  </ul>
+                  </div>
                 )}
                 {template.mcp_endpoint_url && (
                   <p className="tma-card-text tma-text-small">
