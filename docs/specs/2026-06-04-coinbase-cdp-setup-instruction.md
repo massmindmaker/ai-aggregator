@@ -1,3 +1,19 @@
+# Coinbase CDP setup + key for x402 (instruction for a friend)
+
+> **EN — what to do:** Coinbase Developer Platform (CDP) is a **developer/API platform**, not
+> the regular exchange app. Free; no real money (we test on a free testnet).
+> 1. **`portal.cdp.coinbase.com`** → sign up (email or Coinbase login). If asked, create a
+>    project named `AIAG`. The **"Verify your business to go live with payments"** banner —
+>    **SKIP IT** (seller side only).
+> 2. Find **"API Keys"** (may be under "Coinbase APIs" or top-right account settings) →
+>    **Secret API Keys → Create** → name `aiag-x402`, type **Ed25519**. **Save BOTH** (the
+>    private key shows ONCE): **API Key ID** + **Private Key (Secret)**.
+> 3. (optional) **"Faucet"** → network **Base Sepolia** → claim free testnet ETH + USDC.
+> 4. Hand over the **API Key ID + Private Key** **securely** (password manager / encrypted
+>    note) — **NOT in an open chat**. They can spend money. ~5–10 min, no money needed.
+>
+> --- Russian version below ---
+
 # Инструкция: завести Coinbase CDP + ключ для x402 (для друга)
 
 **Цель:** создать аккаунт **Coinbase Developer Platform (CDP)** и **Secret API Key** — это
