@@ -137,6 +137,11 @@ export default function ProfilePage() {
               Пополнить
             </Link>
           </div>
+          <div className="tma-cta" style={{ marginTop: 8 }}>
+            <Link href="/profile/income" className="tma-btn">
+              Доход автора
+            </Link>
+          </div>
         </section>
 
         <section className="tma-card">
