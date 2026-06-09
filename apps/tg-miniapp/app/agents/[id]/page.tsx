@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
 import { hueFor } from '@/components/AgentCard';
 import { RunTrace } from '@/components/RunTrace';
+import { TransferPanel } from './TransferPanel';
 
 interface Agent {
   id: string;
@@ -25,6 +26,9 @@ interface Agent {
   mcp_auth_set?: boolean;
   mcp_oauth_set?: boolean;
   mcp_oauth_scope?: string | null;
+  transferable?: boolean;
+  transfer_price_credits?: string | null;
+  nft_address?: string | null;
 }
 
 // Tools implemented by the agent-worker (apps/agent-worker/src/tools.ts).
@@ -618,6 +622,15 @@ export default function AgentDetailPage() {
                 </div>
               </form>
             )}
+
+            <TransferPanel
+              agentId={id!}
+              isOwner={true}
+              transferable={!!agent.transferable}
+              transferPriceCredits={agent.transfer_price_credits ?? null}
+              token={token}
+              onChanged={load}
+            />
 
             <section className="tma-card">
               <h2 className="tma-card-title">System prompt</h2>
