@@ -319,8 +319,6 @@ Plans:
 - [x] 15.1-02-PLAN.md — TMA auth hardening: Next≥14.2.33 + nginx strip for CVE-2025-29927 + HS256-pinned jwtVerify + JWT denylist (R0-4), fail-hard TMA_JWT_SECRET (R0-5) [wave 1] — ✓ 2026-06-02
 - [x] 15.1-03-PLAN.md — Integration test of enqueue→worker→settle→balance-debit atomicity (R0-1/2/3) [wave 2, depends 15.1-01] — ✓ 2026-06-02
 
----
-
 ## Milestone: R1 — Money-correct foundation + providers + managed-Hermes test
 
 **Added:** 2026-06-03 — re-cut from `docs/specs/research/SYNTHESIS.md` (lead-architect synthesis of R-01..R-12 + adversarial reviews) and `docs/specs/2026-06-03-monetization.md`. Founder decisions: `CLAUDE.md` §"Founder decisions (2026-06-02/03)".
@@ -385,6 +383,29 @@ Plans:
   3. **D-14 character pipeline** — reference-sheet anchor → nano-banana-pro portrait → kling-2.6 ambient loop → ElevenLabs voice → optional Kling-Avatar talking card. Fix **three** input-shape gaps (image `image_input[]`, video `image_urls[]`+`sound`, audio remap); edit ONLY `api-gateway/src/upstreams/kie.ts`; gate the talking card behind a verified schema; re-host Kie assets to our S3/CDN; ship ambient first.
 **Founder gates:** **FD-2** (withdrawable credits — OPEN) gates author *cash-out/withdraw*; rent accrual ships regardless. **FD-3** (entity split / PD-localization) gates managed-Hermes for *real* users ($-billed compute on the foreign entity). **FD-4** (default `author_share_bps`) — N/A under the pass-through author-rent model but tunable if a platform fee is ever added. **FD-7** (talking-vs-ambient default, stock vs cloned voice — recommend ambient + stock + founder-owned faces).
 **Risks:** RK-1 (resident orchestrators 300–600 MB each — the 2 GB→18 GB box is the binding constraint; "needs a second/bigger box" is the honest answer), RK-4 (two-entity legal boundary), RK-6 (secrets isolation inside the agent boundary).
+
+### Phase 16: R1.4 — Передаваемый агент (iNFT-на-TON) 📋 PLANNED (4 plans, 2026-06-10)
+
+**Goal:** Одна механика — «передать право собственности на агента с переносом его зашифрованной памяти новому владельцу» — обслуживает И дарение/передачу, И продажу выращенного агента. Усиливает author-rent и коллекционные карточки; **НЕ спекулятивный токен**.
+**Depends on:** R1.3 creator-economy (publish/clone/author-rent + collectible cards) + R1.0 (D-0 margin / USD-ledger).
+**Research:** `docs/specs/research/2026-06-10-0g-inft-on-ton.md` (+ `.sources.json`). Вердикт: делаем TON-нативно off-chain; 0G НЕ используем.
+**Deliverables (предварительно — уточнить в discuss/plan):**
+  1. **Владение на TON** — TEP-62 NFT = свидетельство владельца, привязка к `agent_id`. **Только TON** (Telegram blockchain guidelines: TON-only / TON-Connect-only, иначе де-листинг).
+  2. **Передача с ре-шифрованием памяти** — при transfer backend расшифровывает память старым ключом и ре-шифрует на X25519-ключ нового владельца (derived из TON-кошелька); старый владелец теряет доступ. Память зашифрована в S3, не on-chain.
+  3. **Продажа за фикс-цену** — владелец/автор ставит цену; покупатель платит кредитами; AIAG 0% с суммы продавца (как author-rent), зарабатывает на моделях/инструментах/деплое. Без вторичного рынка / bonding-curve (анти-Virtuals).
+  4. **Дарение/передача 1:1** — та же механика без денег.
+**Founder gates:** **FD-2** (выводимость кредитов наружу) — для cash-out продавца; начисление кредитов работает и без неё. **FD-3** (two-entity) — крипто-передача на зарубежном юрлице.
+**Юр-якорь:** utility-право доступа (вне ЦФА 259-ФЗ), не торгуемая «инвестиция».
+**Risks:** Telegram TON-only (де-листинг при ETH/SOL); приватность памяти (backend = доверенная точка ре-шифрования — модель доверия выбрать в plan); риск смешения со спекуляцией (рамкуем как «вещь», не «долю»).
+
+**Plans:** 4 plans (planned 2026-06-10) — 4 waves
+Plans:
+- [ ] 16-01-PLAN.md — schema migration 0039 (transfer_charges + transferable/price/nft columns on agents)
+- [ ] 16-02-PLAN.md — make-transferable opt-in route (free DB flag + price) + detail GET surfaces transfer state
+- [ ] 16-03-PLAN.md — transfer/sale initiate (Startonus lazy mint + TON Connect) + atomic webhook finalizer (move/wipe/strip/payout)
+- [ ] 16-04-PLAN.md — TransferPanel UI (owner toggle + acquirer TON Connect, clone/rent-vs-transfer disambiguation)
+
+---
 
 ### Deferred / R&D (explicitly not in R1)
 
