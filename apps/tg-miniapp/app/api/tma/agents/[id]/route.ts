@@ -33,6 +33,10 @@ interface AgentRow {
   // Derived booleans — never the token. mcp_oauth_set = an agent_mcp_oauth row exists.
   mcp_oauth_set: boolean;
   mcp_oauth_scope: string | null;
+  // Transfer state (plan 16-02). nft_owner_wallet + memory_owner_key NOT exposed here.
+  transferable: boolean;
+  transfer_price_credits: string | null;
+  nft_address: string | null;
 }
 
 interface RunRow {
@@ -54,6 +58,9 @@ async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null>
            connection_type, external_base_url, external_api_key_hint,
            external_model_slug,
            mcp_endpoint_url,
+           transferable,
+           transfer_price_credits::text AS transfer_price_credits,
+           nft_address,
            (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
            (o.agent_id IS NOT NULL) AS mcp_oauth_set,
            o.scope AS mcp_oauth_scope
