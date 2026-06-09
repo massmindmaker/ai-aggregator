@@ -384,7 +384,7 @@ Plans:
 **Founder gates:** **FD-2** (withdrawable credits — OPEN) gates author *cash-out/withdraw*; rent accrual ships regardless. **FD-3** (entity split / PD-localization) gates managed-Hermes for *real* users ($-billed compute on the foreign entity). **FD-4** (default `author_share_bps`) — N/A under the pass-through author-rent model but tunable if a platform fee is ever added. **FD-7** (talking-vs-ambient default, stock vs cloned voice — recommend ambient + stock + founder-owned faces).
 **Risks:** RK-1 (resident orchestrators 300–600 MB each — the 2 GB→18 GB box is the binding constraint; "needs a second/bigger box" is the honest answer), RK-4 (two-entity legal boundary), RK-6 (secrets isolation inside the agent boundary).
 
-### Phase 16: R1.4 — Передаваемый агент (iNFT-на-TON) 📋 PLANNED (4 plans, 2026-06-10)
+### Phase 16: R1.4 — Передаваемый агент (iNFT-на-TON) ✓ CODE COMPLETE (5 plans, executed 2026-06-10; VPS deploy pending)
 
 **Goal:** Одна механика — «передать право собственности на агента с переносом его зашифрованной памяти новому владельцу» — обслуживает И дарение/передачу, И продажу выращенного агента. Усиливает author-rent и коллекционные карточки; **НЕ спекулятивный токен**.
 **Depends on:** R1.3 creator-economy (publish/clone/author-rent + collectible cards) + R1.0 (D-0 margin / USD-ledger).
@@ -398,12 +398,15 @@ Plans:
 **Юр-якорь:** utility-право доступа (вне ЦФА 259-ФЗ), не торгуемая «инвестиция».
 **Risks:** Telegram TON-only (де-листинг при ETH/SOL); приватность памяти (backend = доверенная точка ре-шифрования — модель доверия выбрать в plan); риск смешения со спекуляцией (рамкуем как «вещь», не «долю»).
 
-**Plans:** 4 plans (planned 2026-06-10) — 4 waves
+**Plans:** 5 plans (planned 2026-06-10, executed 2026-06-10) — 4 waves
 Plans:
-- [ ] 16-01-PLAN.md — schema migration 0039 (transfer_charges + transferable/price/nft columns on agents)
-- [ ] 16-02-PLAN.md — make-transferable opt-in route (free DB flag + price) + detail GET surfaces transfer state
-- [ ] 16-03-PLAN.md — transfer/sale initiate (Startonus lazy mint + TON Connect) + atomic webhook finalizer (move/wipe/strip/payout)
-- [ ] 16-04-PLAN.md — TransferPanel UI (owner toggle + acquirer TON Connect, clone/rent-vs-transfer disambiguation)
+- [x] 16-01-PLAN.md — schema migration 0039 (transfer_charges + transferable/price/nft columns on agents)
+- [x] 16-02-PLAN.md — make-transferable opt-in route + detail GET + PUBLIC transfer-offer read (acquirer delivery surface)
+- [x] 16-03-PLAN.md — transfer/sale initiate (Startonus lazy mint + TON Connect) + atomic idempotent webhook finalizer (move/wipe/strip/payout)
+- [x] 16-04-PLAN.md — TransferPanel UI (owner toggle+share / acquirer TON Connect) + owner page mount + PUBLIC offer page
+- [x] 16-05-PLAN.md — Startonus client rewrite to current live minter API (dependency of 16-03)
+
+**Execution notes (2026-06-10):** all 5 plans executed sequentially on `feat/r1.0-wave0-consolidated`; tg-miniapp typecheck 0 errors. Legacy speculative `nft/purchase` retired (410) per founder decision #4 to unblock the build (DEF-16-01 resolved). **VPS deploy pending** — see `16-04-SUMMARY.md` user_setup: hand-apply migration 0039, set Startonus + AGENT_MINT_FEE_TON env, nginx IP-allowlist for the webhook (CRITICAL — unsigned), rate-limit the public transfer-offer read, manual tma build.
 
 ---
 

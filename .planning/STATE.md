@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: MVP
-status: completed
-stopped_at: "Phase 15.1 COMPLETE. 15.1-03: 1 task commit (97afe5d) + SUMMARY. tsc clean; vitest skips 4 cleanly. VPS green run deferred."
-last_updated: "2026-06-09T22:56:51.749Z"
-last_activity: 2026-06-03 -- R1 milestone re-cut from research SYNTHESIS; focus set to R1.0
+status: phase-complete
+stopped_at: "Phase 16 (R1.4 transferable-agent iNFT) COMPLETE — all 5 plans executed, tg-miniapp typecheck 0 errors. VPS deploy + user_setup (migration 0039, Startonus env, nginx allowlist) deferred per no-local-runtime."
+last_updated: "2026-06-10T00:00:00.000Z"
+last_activity: 2026-06-10 -- Phase 16 (transferable-agent iNFT) executed: 5 plans, code complete, awaiting VPS deploy
 progress:
   total_phases: 21
-  completed_phases: 2
-  total_plans: 15
-  completed_plans: 10
-  percent: 67
+  completed_phases: 3
+  total_plans: 20
+  completed_plans: 15
+  percent: 75
 ---
 
 # Project State
@@ -21,14 +21,15 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-04-26)
 
 **Core value:** Any AI model. One API. Payment in ₽.
-**Current focus:** R1.0 — Money-correctness foundation (D-0 gateway-returns-margin)
+**Current focus:** Phase 16 (R1.4 transferable-agent iNFT) — CODE COMPLETE, awaiting VPS deploy
 
 ## Current Position
 
 Milestone: R1 — Money-correct foundation + providers + managed-Hermes test (re-cut 2026-06-03 from `docs/specs/research/SYNTHESIS.md`)
-Phase: R1.0 — Money-correctness foundation — IN PROGRESS (on branch)
-Status: R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identity`
-Last activity: 2026-06-03 -- R1 milestone re-cut from research SYNTHESIS; focus set to R1.0
+Phase: 16 — R1.4 Transferable Agent (iNFT-on-TON) — ✓ COMPLETE (5/5 plans, code; VPS deploy pending)
+Plan: 5 of 5 complete
+Status: Phase 16 code complete on `feat/r1.0-wave0-consolidated`; tg-miniapp typecheck 0 errors. Deploy = migration 0039 + Startonus env + nginx webhook allowlist + manual tma build (see 16-04-SUMMARY user_setup).
+Last activity: 2026-06-10 -- Phase 16 executed (transfer schema + Startonus client + routes + UI)
 
 **R1.0 item status:**
 
