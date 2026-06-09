@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-03T14:34:26.324Z",
+  "timestamp": "2026-06-09T23:03:41.055Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -231,14 +231,70 @@
       "path": ".planning/HANDOFF.json"
     },
     {
-      "status": "??",
-      "path": ".planning/.continue-here.md"
+      "status": "M",
+      "path": ".planning/STATE.md"
+    },
+    {
+      "status": "M",
+      "path": ".planning/phases/16-r1-4-transferable-agent-inft/16-02-PLAN.md"
+    },
+    {
+      "status": "M",
+      "path": ".planning/phases/16-r1-4-transferable-agent-inft/16-04-PLAN.md"
+    },
+    {
+      "status": "M",
+      "path": "CLAUDE.md"
     },
     {
       "status": "??",
-      "path": ".serena/memories/aiag_session_2026_06_03_driver_handoff.md"
+      "path": ".claude/settings.json"
+    },
+    {
+      "status": "??",
+      "path": ".planning/phases/16-r1-4-transferable-agent-inft/.gitkeep"
+    },
+    {
+      "status": "??",
+      "path": ".planning/phases/16-r1-4-transferable-agent-inft/16-PATTERNS.md"
+    },
+    {
+      "status": "??",
+      "path": ".planning/phases/16-r1-4-transferable-agent-inft/CONTEXT.md"
+    },
+    {
+      "status": "??",
+      "path": "AGENTS.md"
+    },
+    {
+      "status": "??",
+      "path": "_artcheck/"
+    },
+    {
+      "status": "??",
+      "path": "docs/ARCHITECTURE-AUDIT-2026-06-10.md"
+    },
+    {
+      "status": "??",
+      "path": "docs/_dash_utf8.tmp"
+    },
+    {
+      "status": "??",
+      "path": "docs/specs/_review/"
+    },
+    {
+      "status": "??",
+      "path": "docs/specs/research/2026-06-10-0g-inft-on-ton.md"
+    },
+    {
+      "status": "??",
+      "path": "docs/specs/research/2026-06-10-0g-inft-on-ton.sources.json"
+    },
+    {
+      "status": "??",
+      "path": "graphify-out/"
     }
   ],
   "next_action": "R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identity`",
-  "context_notes": "Status: R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identity`\n\nStopped at: R0 (Phase 15.1) COMPLETE on branch plan/15.1-r0-billing-identity. Re-cut the R1 milestone into ROADMAP.md from SYNTHESIS.md (Waves 0-3, D-0..D-14, FD-1..FD-8) + monetization.md. Current focus = R1.0 money-correctness foundation (D-0 in progress on branch; D-7/D-8/DEFAULT_MODEL done on branch).\n\nRecent commits:\nbf954e8 feat(dashboard): single project hub v2 — persistent sidebar (no more trap), hash-routing (back/esc/reload), global search, type filter, served-mode markdown rendering + serve.bat, cockpit checklist (localStorage) + GitHub links; archive superseded dupes\nf3af3fa ci(deploy): rebuilt pipeline — build-all-on-runner (kills 2GB OOM), atomic current-swap, self-heal pm2 (reload||restart||startOrReload ecosystem-on-current), per-app matrix preserving web/TMA split, gated migrations\n874840f feat(cicd): ecosystem.config.cjs (current-symlink pm2) + CI/CD plan; design: showcase v2 (function-honest 89/108) + eval; readiness/workflows/backend-gap/gonka/voltagent docs\n9771582 docs(session): design system + wireframes + specs + memory + R1 planning\n7a3560c fix(15.1-03): match settleRun integration test to live prod schema (green 4/4)"
+  "context_notes": "Status: R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identity`\n\nStopped at: Phase 15.1 COMPLETE. 15.1-03: 1 task commit (97afe5d) + SUMMARY. tsc clean; vitest skips 4 cleanly. VPS green run deferred.\n\nRecent commits:\n27e706b fix(16): revise transfer plan for corrected Startonus API (one shared collection, new client)\n9a9f5f0 docs(16): create R1.4 transferable-agent phase plan (4 plans, 4 waves)\nf8b93d5 fix(tma P0): client-side root redirect — server redirect dropped the Telegram launch hash\n2223839 feat(gonka): add gonka/kimi-k2.6 (moonshotai/kimi-k2.6) as a routable model\n67d55c3 fix(tma P0): load the Telegram WebApp SDK — auth was dead inside Telegram"
 }

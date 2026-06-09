@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: MVP
-status: executing
-stopped_at: "R0 (Phase 15.1) COMPLETE on branch plan/15.1-r0-billing-identity. Re-cut the R1 milestone into ROADMAP.md from SYNTHESIS.md (Waves 0-3, D-0..D-14, FD-1..FD-8) + monetization.md. Current focus = R1.0 money-correctness foundation (D-0 in progress on branch; D-7/D-8/DEFAULT_MODEL done on branch)."
-last_updated: "2026-06-03T00:00:00Z"
+status: completed
+stopped_at: "Phase 15.1 COMPLETE. 15.1-03: 1 task commit (97afe5d) + SUMMARY. tsc clean; vitest skips 4 cleanly. VPS green run deferred."
+last_updated: "2026-06-09T22:56:51.749Z"
 last_activity: 2026-06-03 -- R1 milestone re-cut from research SYNTHESIS; focus set to R1.0
 progress:
-  total_phases: 16
-  completed_phases: 1
-  total_plans: 10
-  completed_plans: 9
-  percent: 90
+  total_phases: 21
+  completed_phases: 2
+  total_plans: 15
+  completed_plans: 10
+  percent: 67
 ---
 
 # Project State
@@ -31,6 +31,7 @@ Status: R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identit
 Last activity: 2026-06-03 -- R1 milestone re-cut from research SYNTHESIS; focus set to R1.0
 
 **R1.0 item status:**
+
 - ✓ **D-7 `safeFetch` egress guard** — done on branch (shipped with R0).
 - ✓ **D-8 initData hardening** (timingSafeEqual + 600s expiry + Redis nonce) — done on branch.
 - ✓ **DEFAULT_MODEL registry fix** — done.
@@ -95,6 +96,7 @@ Phase 15.1 (2026-06-02):
 
 ### Roadmap Evolution
 
+- 2026-06-10: **Phase 16 (R1.4) — Передаваемый агент (iNFT-на-TON)** added (end of milestone R1). Founder decisions: gift+sell in one mechanic · transfer agent WITHOUT personal history · opt-in TON mint. TON-native off-chain (TEP-62 + backend re-key), 0G rejected. Discuss-output: `.planning/phases/16-r1-4-transferable-agent-inft/CONTEXT.md`. Research: `docs/specs/research/2026-06-10-0g-inft-on-ton.md`. GSD machinery fixed 2026-06-10: the transient `phase_found:false` was self-inflicted (a malformed add-phase entry inserted before `## Milestone: R1` broke milestone-scoping) — resolved by cleaning the ROADMAP entry; resolver now resolves 14/15/16. Also installed 33 `gsd-*.md` into `~/.claude/get-shit-done/agents/` → `agents_installed:true`. `/gsd:plan-phase 16` now runs.
 - 2026-06-02: Phase 15 (Telegram Mini App) added to ROADMAP.md — was shipped (commit 88f5eab) but never documented in the roadmap.
 - 2026-06-02: Phase **15.1** inserted after Phase 15: **R0 — TMA billing + identity truth** (emergency fixes from the 50/108 tech-stack eval) — **URGENT**. SOT: `docs/specs/2026-06-02-tma-tech-remediation-roadmap.md`.
 - 2026-06-03: **Milestone R1 re-cut** into ROADMAP.md from `docs/specs/research/SYNTHESIS.md` (lead-architect synthesis of R-01..R-12 + adversarial reviews, build order Waves 0-3, decisions D-0..D-14, founder gates FD-1..FD-8) + `docs/specs/2026-06-03-monetization.md`. R0 (Phase 15.1) marked the completed predecessor. Phases R1.0 (money foundation) → R1.1 (deposits + tool money) → R1.2 (jetton + runtime + delivery) → R1.3 (managed-Hermes test + creator economy). Brief: `.planning/R1-MILESTONE.md`.
@@ -174,4 +176,4 @@ Resume file: None — Phase 15.1 complete. Next: merge `plan/15.1-r0-billing-ide
 
 **VPS production:** `5.129.200.99` (Timeweb ru-1, Ubuntu 24.04, 2GB RAM). SSH `aiag-vps`. PG 16.13 + Redis 7 + Nginx + certbot + Node 24 + Bun + pm2. БД `aiag` (26 tables applied). HTTPS active on apex `ai-aggregator.ru`.
 
-**Planned Phase:** 15.1 (R0: TMA billing + identity truth) — 3 plans — 2026-06-02T09:35:47.541Z
+**Planned Phase:** 16 (R1.4 Transferable Agent (iNFT-on-TON)) — 5 plans — 2026-06-09T22:56:51.736Z
