@@ -74,7 +74,7 @@
 1. ✅ **TMA currency = crypto credits (USDT/TON); ₽ removed from TMA.** Code migration pending (`tg_user_balances` → crypto-credit unit). Draw all TMA mockups in crypto.
 2. ✅ **Managed Hermes runtime = R&D, deferred.** Live path = connect-your-own-Hermes. No managed-Hermes dashboard in shippable product.
 3. ✅ **Wireframes in two layers:** Board A = honest shippable now (hide unbuilt); Board B = full roadmap vision (separate).
-4. ✅ **NFT: REMOVE** (founder 2026-06-03) — removed from the product/wireframes; Startonus mint code to be retired. Do not surface NFT anywhere.
+4. ✅ **NFT: REMOVE as speculation** (founder 2026-06-03) — no tradable-agent / NFT-marketplace framing; do not surface NFT-as-investment anywhere. ⚠️ **PARTIAL REVERSAL (founder 2026-06-10):** ONE narrow, opt-in use is back — a **transferable agent** (gift+sell one instance in a single mechanic, transfer WITHOUT personal history, **opt-in** TON mint). Implemented as TON-native iNFT (TEP-62 + backend re-key, Startonus mint reused; 0G rejected). This is the ONLY sanctioned NFT surface → Phase 16 (R1.4). Still no NFT speculation/marketplace. Plan: `.planning/phases/16-r1-4-transferable-agent-inft/`.
 5. ✅ **Currency = multi-crypto (TON + others); Stars deferred (ignore now); legal not factored now.** USD-pegged credit (synthesis D-1).
 6. ✅ **Managed-Hermes: build on ~18GB VPS (shared) for test → tier later** (dedicated for high-payers, shared for ~$20-tier).
 7. ✅ **Monetization = author-rent model:** author publishes a template **free** OR sets a **price** (e.g. monthly rent). The user pays model usage (AIAG markup) + deploy + **the author's exact set sum**; **NO % commission on author rent** — author receives the sum they set; AIAG earns on model markup + tools + deploy. Detail: `docs/specs/2026-06-03-monetization.md`.
@@ -82,3 +82,13 @@
 9. ✅ **Direction confirmed** by the 12-item research (`docs/specs/research/SYNTHESIS.html`); **fix money-path first** (D-0: gateway must return realized margin).
 
 Detailed product definition reflecting these: `docs/specs/2026-06-02-tma-product-definition.md`. Research synthesis: `docs/specs/research/SYNTHESIS.html`.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
