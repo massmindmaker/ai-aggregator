@@ -3,6 +3,7 @@ import IORedis from 'ioredis';
 import http from 'node:http';
 import { runAgent } from './agent-runner.js';
 import { startScheduler } from './scheduler.js';
+import { startTopupReconciler } from './topup-reconciler.js';
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
 const PORT = Number(process.env.PORT ?? 3101);
@@ -37,6 +38,11 @@ worker.on('failed', (job, err) => {
 const scheduleQueue = new Queue('agent-run', { connection });
 const scheduler = startScheduler(scheduleQueue);
 
+// R2.1-A1: server-side TON top-up reconciler — credits paid-but-unmatched topups
+// even when the user closed the Mini App (the route's client poll is the fast
+// path; this sweep is the safety net). Идемпотентен с клиентским поллом.
+const topupReconciler = startTopupReconciler();
+
 http
   .createServer((_req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -51,6 +57,7 @@ console.log('[agent-worker] listening on agent-run queue');
 async function shutdown(): Promise<void> {
   console.log('[agent-worker] shutting down…');
   scheduler.stop();
+  topupReconciler.stop();
   await scheduleQueue.close();
   await worker.close();
   await connection.quit();
