@@ -47,10 +47,11 @@ function monogram(title: string): string {
   return (t[0] ?? '?').toUpperCase();
 }
 
-const STATUS_LABEL: Record<SkillCard['status'], string> = {
-  live: 'live',
-  soon: 'скоро',
-  rnd: 'R&D',
+// Status pill = icon + word, never colour alone (DESIGN.md).
+const STATUS_PILL: Record<SkillCard['status'], { cls: string; label: string }> = {
+  live: { cls: 'tma-pill--accent', label: '● live' },
+  soon: { cls: 'tma-pill--muted', label: '◷ скоро' },
+  rnd: { cls: 'tma-pill--muted', label: '⚗ R&D' },
 };
 
 type Filter = 'all' | 'tool' | 'doc' | 'mcp';
@@ -224,13 +225,16 @@ export default function SkillsPage() {
         )}
 
         {skills && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div
+            className="aiag-stagger"
+            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
             {visible.map((s) => {
               const hue = hueFor(s.id);
               const installable = s.kind === 'tool' || s.kind === 'doc';
               const isOpen = openId === s.id;
               return (
-                <section key={s.id} className="tma-card">
+                <section key={s.id} className="tma-card aiag-glow-hover">
                   <div className="tma-row" style={{ alignItems: 'flex-start', gap: 12 }}>
                     <div
                       aria-hidden="true"
@@ -255,14 +259,8 @@ export default function SkillsPage() {
                         <h2 className="tma-card-title" style={{ margin: 0 }}>
                           {s.title}
                         </h2>
-                        <span
-                          className="tma-mono tma-text-small"
-                          style={{
-                            opacity: s.status === 'live' ? 1 : 0.6,
-                            color: s.status === 'live' ? 'var(--accent)' : 'var(--ink-muted)',
-                          }}
-                        >
-                          {STATUS_LABEL[s.status]}
+                        <span className={`tma-pill ${STATUS_PILL[s.status].cls}`}>
+                          {STATUS_PILL[s.status].label}
                         </span>
                       </div>
                       <p className="tma-mono tma-text-small" style={{ opacity: 0.6 }}>

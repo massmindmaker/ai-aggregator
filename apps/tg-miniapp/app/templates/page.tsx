@@ -131,7 +131,7 @@ export default function TemplatesPage() {
         )}
 
         {templates && templates.length > 0 && (
-          <section className="tma-agent-grid">
+          <section className="tma-agent-grid aiag-stagger">
             {templates.map((t, idx) => {
               const hasRating = t.avg_rating !== null;
               return (

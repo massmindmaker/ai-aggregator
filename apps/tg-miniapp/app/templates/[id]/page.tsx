@@ -74,7 +74,7 @@ export default function TemplateDetailPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 404) {
-        setFetchErr('Шаблон не найден');
+        setFetchErr('not_found');
         return;
       }
       if (!res.ok) {
@@ -197,6 +197,9 @@ export default function TemplateDetailPage() {
   }
 
   const tools = Array.isArray(template?.tools) ? (template!.tools as unknown[]) : [];
+  const skills = Array.isArray(template?.suggested_skills)
+    ? (template!.suggested_skills as unknown[])
+    : [];
 
   return (
     <>
@@ -205,7 +208,36 @@ export default function TemplateDetailPage() {
           ← К шаблонам
         </Link>
 
-        {fetchErr && <div className="tma-error">{fetchErr}</div>}
+        {/* 404: a dead link must not look like a crash — honest card + way out. */}
+        {fetchErr === 'not_found' ? (
+          <section className="tma-card">
+            <h2 className="tma-card-title">Шаблон не найден</h2>
+            <p className="tma-card-text">
+              Возможно, автор снял его с публикации или ссылка устарела.
+            </p>
+            <Link href="/templates" className="tma-btn tma-btn--ghost" style={{ marginTop: 8 }}>
+              К каталогу шаблонов
+            </Link>
+          </section>
+        ) : (
+          fetchErr && <div className="tma-error">Ошибка: {fetchErr}</div>
+        )}
+
+        {/* Outside Telegram the authed fetch never runs — say so instead of a
+            blank screen. */}
+        {!template && !fetchErr && !loading && error && (
+          <section className="tma-card">
+            <h2 className="tma-card-title">Откройте через @aiag_bot</h2>
+            <p className="tma-card-text">
+              Карточка шаблона доступна только в Telegram Mini App.
+            </p>
+          </section>
+        )}
+
+        {/* Loading: auth handshake or template fetch in flight. */}
+        {!template && !fetchErr && (loading || (!error && !!token)) && (
+          <p className="tma-card-text">Загрузка…</p>
+        )}
 
         {template && (
           <>
@@ -323,7 +355,7 @@ export default function TemplateDetailPage() {
               </section>
             )}
 
-            {(tools.length > 0 || template.mcp_endpoint_url) && (
+            {(tools.length > 0 || skills.length > 0 || template.mcp_endpoint_url) && (
               <section className="tma-card">
                 <h2 className="tma-card-title">Что внутри</h2>
                 {tools.length > 0 && (
@@ -334,6 +366,22 @@ export default function TemplateDetailPage() {
                       </span>
                     ))}
                   </div>
+                )}
+                {skills.length > 0 && (
+                  <>
+                    <p className="tma-card-text tma-text-small" style={{ marginTop: 8 }}>
+                      Навыки
+                    </p>
+                    <div className="tma-chips">
+                      {skills.map((s, i) => (
+                        <span key={i} className="tma-chip">
+                          {typeof s === 'string'
+                            ? s
+                            : String((s as { name?: unknown })?.name ?? '')}
+                        </span>
+                      ))}
+                    </div>
+                  </>
                 )}
                 {template.mcp_endpoint_url && (
                   <p className="tma-card-text tma-text-small">

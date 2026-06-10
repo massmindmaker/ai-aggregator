@@ -515,8 +515,10 @@ code {
   color: inherit;
   display: flex;
   flex-direction: column;
-  transition: border-color 160ms ease, transform 160ms ease,
-    box-shadow 160ms ease;
+  /* Canonical motion curve (DESIGN.md) — same glow behaviour as .aiag-glow-hover. */
+  transition: border-color 240ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 240ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 240ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .tma-agent-card:hover,
@@ -959,24 +961,152 @@ code {
   color: var(--ink-faint);
 }
 
-/* Pulse dot for active runs (aiag-pulse-dot). */
-.aiag-pulse-dot {
-  animation: aiag-pulse 1.4s ease-in-out infinite;
+/* ═══════════════════════════════════════════════════════════════════════════
+ * aiag-* motion library — ported from apps/web/src/app/globals.css (DESIGN.md
+ * SoT). Rules: transform/opacity only, ease cubic-bezier(.23,1,.32,1),
+ * no bounce. Full prefers-reduced-motion off-switch at the end of this file.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes aiag-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-@keyframes aiag-pulse {
+.aiag-fade-up {
+  animation: aiag-fade-up 600ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* Stagger fade-up for grid/list children (first render). */
+.aiag-stagger > * {
+  opacity: 0;
+  animation: aiag-fade-up 600ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+.aiag-stagger > *:nth-child(1) { animation-delay: 40ms; }
+.aiag-stagger > *:nth-child(2) { animation-delay: 110ms; }
+.aiag-stagger > *:nth-child(3) { animation-delay: 180ms; }
+.aiag-stagger > *:nth-child(4) { animation-delay: 250ms; }
+.aiag-stagger > *:nth-child(5) { animation-delay: 320ms; }
+.aiag-stagger > *:nth-child(6) { animation-delay: 390ms; }
+.aiag-stagger > *:nth-child(7) { animation-delay: 460ms; }
+.aiag-stagger > *:nth-child(8) { animation-delay: 530ms; }
+.aiag-stagger > *:nth-child(9) { animation-delay: 600ms; }
+.aiag-stagger > *:nth-child(n + 10) { animation-delay: 670ms; }
+
+/* Amber glow ring on hover (cards). Same effect as .tma-agent-card:hover. */
+.aiag-glow-hover {
+  transition: box-shadow 240ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 240ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.aiag-glow-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4),
+    0 8px 32px rgba(245, 158, 11, 0.08);
+}
+
+/* Shimmer skeleton loader. */
+@keyframes aiag-shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+.aiag-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-elev) 0%,
+    rgba(245, 158, 11, 0.06) 50%,
+    var(--bg-elev) 100%
+  );
+  background-size: 200% 100%;
+  animation: aiag-shimmer 1.8s linear infinite;
+  border-radius: 4px;
+}
+
+/* Pulse dot for live indicators (active runs, streaming). The ::after ring
+ * pings (scale + fade) over the dot's own background. :where() keeps
+ * specificity at 0 so already-positioned dots (.tma-trace-dot is absolute)
+ * keep their positioning. */
+@keyframes aiag-pulse-dot {
   0%,
   100% {
+    transform: scale(1);
     opacity: 1;
   }
   50% {
-    opacity: 0.35;
+    transform: scale(1.6);
+    opacity: 0;
   }
 }
 
+:where(.aiag-pulse-dot) {
+  position: relative;
+}
+.aiag-pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: aiag-pulse-dot 1.8s ease-out infinite;
+}
+
+/* Conic spin ring for featured/premium cards (DESIGN.md aiag-featured-ring). */
+@keyframes aiag-conic-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.aiag-featured-ring {
+  position: relative;
+  isolation: isolate;
+}
+.aiag-featured-ring::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(245, 158, 11, 0) 0deg,
+    rgba(245, 158, 11, 0.8) 60deg,
+    rgba(245, 158, 11, 0) 120deg,
+    rgba(245, 158, 11, 0) 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: aiag-conic-spin 8s linear infinite;
+  z-index: -1;
+}
+
+/* Full reduced-motion off-switch for the aiag-* library (DESIGN.md rule). */
 @media (prefers-reduced-motion: reduce) {
-  .aiag-pulse-dot {
-    animation: none;
+  .aiag-fade-up,
+  .aiag-skeleton,
+  .aiag-pulse-dot::after,
+  .aiag-featured-ring::before {
+    animation: none !important;
+  }
+  .aiag-stagger > * {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+  .aiag-glow-hover {
+    transition: none !important;
+  }
+  .aiag-glow-hover:hover {
+    transform: none !important;
   }
 }
 

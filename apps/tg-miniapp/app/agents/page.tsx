@@ -113,7 +113,7 @@ export default function AgentsPage() {
             )}
 
             {agents && agents.length > 0 && (
-              <section className="tma-agent-grid">
+              <section className="tma-agent-grid aiag-stagger">
                 {agents.map((a, idx) => (
                   <AgentCard
                     key={a.id}

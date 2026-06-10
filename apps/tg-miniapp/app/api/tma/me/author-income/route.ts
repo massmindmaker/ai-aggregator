@@ -27,6 +27,14 @@ interface TemplateRow {
   earned_credits: string;
 }
 
+interface IncomeEntryRow {
+  id: string;
+  template_name: string | null;
+  kind: string;
+  amount_credits: string;
+  created_at: string;
+}
+
 export async function GET(req: NextRequest) {
   const authorId = req.headers.get('x-tma-user-id');
   if (!authorId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -41,6 +49,37 @@ export async function GET(req: NextRequest) {
         AND kind = 'rent_credit'
     `) as unknown as Array<{ total_income_credits: string }>;
     const total_income_credits = incomeRows[0]?.total_income_credits ?? '0';
+
+    // This calendar month's earnings (server time, month boundary in UTC — good
+    // enough for a display figure; the ledger stays the source of truth).
+    const monthRows = (await sql`
+      SELECT COALESCE(SUM(delta_credits), 0)::text AS month_income_credits
+      FROM tg_ledger_entries
+      WHERE tg_user_id = ${authorId}::bigint
+        AND kind = 'rent_credit'
+        AND created_at >= date_trunc('month', NOW())
+    `) as unknown as Array<{ month_income_credits: string }>;
+    const month_income_credits = monthRows[0]?.month_income_credits ?? '0';
+
+    // Recent income entries: every 'rent_credit' that landed on THIS author,
+    // resolved back to the template via charge → rental (LEFT JOINs — a deleted
+    // template must not hide the money row). No renter PII is selected.
+    const recent_entries = (await sql`
+      SELECT le.id::text AS id,
+             t.name AS template_name,
+             le.kind,
+             le.delta_credits::text AS amount_credits,
+             le.created_at
+      FROM tg_ledger_entries le
+      LEFT JOIN rent_charges rc
+        ON le.ref_kind = 'rent_charge' AND rc.id = le.ref_id
+      LEFT JOIN template_rentals tr ON tr.id = rc.rental_id
+      LEFT JOIN agent_templates t ON t.id = tr.template_id
+      WHERE le.tg_user_id = ${authorId}::bigint
+        AND le.kind = 'rent_credit'
+      ORDER BY le.created_at DESC
+      LIMIT 20
+    `) as unknown as IncomeEntryRow[];
 
     // Current spendable balance (income is spendable in-app now). Scoped:
     // WHERE tg_user_id = author.
@@ -80,8 +119,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       total_income_credits,
+      month_income_credits,
       spendable_credits,
       templates,
+      recent_entries,
     });
   } catch (e) {
     // Return a real error (NOT a zeroed 200) — a transient DB failure must show the
