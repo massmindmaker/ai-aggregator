@@ -84,6 +84,25 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const agent = await loadAgent(params.id, tgUserId);
   if (!agent) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
+  // R2.1-A4: model rate for the pre-send cost hint (AIAG path only — BYOK is 0).
+  // model_upstreams prices are in RUB per 1K tokens (web-product unit, seeds
+  // 0004/0006); credits are US cents → ×100/USD_TO_RUB. Same constant family as
+  // the worker's billing fallback. Display-only — settle stays authoritative.
+  let modelRate: { in_per_1m_credits: string; out_per_1m_credits: string } | null = null;
+  if (agent.connection_type === 'aiag' && agent.model_slug) {
+    const rub = Number(process.env.USD_TO_RUB ?? '90');
+    const rate = (await sql`
+      SELECT ROUND(mu.price_per_1k_input  * mu.markup * 1000 * 100 / ${rub}, 2)::text AS in_per_1m_credits,
+             ROUND(mu.price_per_1k_output * mu.markup * 1000 * 100 / ${rub}, 2)::text AS out_per_1m_credits
+      FROM models m
+      JOIN model_upstreams mu ON mu.model_id = m.id AND mu.enabled = true
+      WHERE m.slug = ${agent.model_slug}
+      ORDER BY mu.price_per_1k_input ASC, mu.created_at ASC
+      LIMIT 1
+    `) as unknown as Array<{ in_per_1m_credits: string; out_per_1m_credits: string }>;
+    modelRate = rate[0] ?? null;
+  }
+
   const runs = (await sql`
     SELECT id::text, input, output, status, cost_credits::text AS cost_rub, error,
            created_at, completed_at
@@ -93,7 +112,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     LIMIT 20
   `) as unknown as RunRow[];
 
-  return NextResponse.json({ agent, runs });
+  return NextResponse.json({ agent, runs, model_rate: modelRate });
 }
 
 interface PatchBody {

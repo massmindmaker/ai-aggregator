@@ -78,6 +78,11 @@ export default function AgentDetailPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
   const [input, setInput] = useState('');
+  // R2.1-A4: модельный тариф для подсказки цены ДО отправки (null = BYOK/нет данных).
+  const [modelRate, setModelRate] = useState<{
+    in_per_1m_credits: string;
+    out_per_1m_credits: string;
+  } | null>(null);
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -267,6 +272,7 @@ export default function AgentDetailPage() {
       const data = await res.json();
       setAgent(data.agent);
       setRuns(data.runs ?? []);
+      setModelRate(data.model_rate ?? null);
     } catch (e) {
       setFetchErr(e instanceof Error ? e.message : 'fetch_failed');
     }
@@ -734,16 +740,38 @@ export default function AgentDetailPage() {
 
             <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="tma-section-head">
-                <h2 className="tma-card-title">История запусков</h2>
+                <h2 className="tma-card-title">Диалог</h2>
                 {runs.length > 0 && (
                   <span className="tma-section-sub">
-                    последние <span className="tma-num">{runs.length}</span> · цена в кредитах за каждый
+                    агент помнит последние <span className="tma-num">10</span> сообщений · цена за каждый ответ
                   </span>
                 )}
               </div>
               {/* Run-trace: newest first, with per-run cost/duration/status. */}
               <RunTrace runs={runs} />
             </section>
+
+            {/* R2.1-B7: живой статус вместо тишины после 202 (поллинг уже идёт). */}
+            {runActive && (
+              <div
+                className="tma-card-text tma-text-small"
+                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                role="status"
+              >
+                <span
+                  className="aiag-pulse-dot"
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--accent)',
+                    position: 'relative',
+                    display: 'inline-block',
+                  }}
+                />
+                Агент работает… ответ появится здесь, уведомление придёт в чат бота.
+              </div>
+            )}
 
             <form onSubmit={handleSend} style={{ display: 'flex', gap: 8 }}>
               <input
@@ -771,6 +799,21 @@ export default function AgentDetailPage() {
                 {sending ? '…' : '→'}
               </button>
             </form>
+
+            {/* R2.1-A4: честная цена ДО отправки — тариф из реестра, не выдумка. */}
+            {agent.connection_type !== 'aiag' ? (
+              <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
+                Свой провайдер: <span className="tma-mono">0</span> комиссии, платите
+                напрямую своему провайдеру.
+              </p>
+            ) : modelRate ? (
+              <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
+                От <span className="tma-mono">1</span> кр за прогон · тариф модели:{' '}
+                <span className="tma-mono">↓{modelRate.in_per_1m_credits}</span> /{' '}
+                <span className="tma-mono">↑{modelRate.out_per_1m_credits}</span> кр за 1M
+                токенов · итог по факту ответа.
+              </p>
+            ) : null}
 
             <button
               type="button"
