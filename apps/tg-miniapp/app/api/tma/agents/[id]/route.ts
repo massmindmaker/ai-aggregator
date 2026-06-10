@@ -20,6 +20,9 @@ interface AgentRow {
   tools: unknown;
   model_slug: string | null;
   budget_rub_monthly: string;
+  // Daily spend cap (credits) — the worker's getOrResetDailyBucket guard column
+  // (migration 0020, renamed daily_budget_rub → daily_budget_credits in 0029).
+  daily_budget_credits: string;
   status: string;
   created_at: string;
   updated_at: string;
@@ -54,6 +57,7 @@ async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null>
   const rows = (await sql`
     SELECT id::text, tg_user_id::text, template_kind, name, description,
            system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
+           daily_budget_credits::text,
            status, created_at, updated_at,
            connection_type, external_base_url, external_api_key_hint,
            external_model_slug,
@@ -122,6 +126,8 @@ interface PatchBody {
   tools?: unknown[];
   model_slug?: string;
   budget_rub_monthly?: number;
+  // C10: daily spend cap, integer credits (the worker's daily guard column).
+  daily_budget_credits?: number;
   // Connection editing (opt-in). provider_id → BYOK via catalog (external_openai,
   // 0 commission). reset_connection → back to the AIAG gateway. Neither → unchanged.
   provider_id?: string;
@@ -167,6 +173,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     typeof body.budget_rub_monthly === 'number' && body.budget_rub_monthly >= 0
       ? body.budget_rub_monthly
       : Number(existing.budget_rub_monthly);
+  // C10: daily budget — integer credits, 1..1_000_000 (BIGINT column, worker
+  // daily guard). Out-of-range/non-integer → keep the existing value.
+  const dailyBudget =
+    typeof body.daily_budget_credits === 'number' &&
+    Number.isInteger(body.daily_budget_credits) &&
+    body.daily_budget_credits >= 1 &&
+    body.daily_budget_credits <= 1_000_000
+      ? body.daily_budget_credits
+      : Number(existing.daily_budget_credits);
 
   // ---- Connection editing (opt-in) ----
   // Mirrors the create route: BYOK via the catalog routes through external_openai
@@ -257,11 +272,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         tools = ${sql.json(tools as never)},
         model_slug = ${modelSlug},
         budget_credits_monthly = ${budget},
+        daily_budget_credits = ${dailyBudget},
         updated_at = NOW()${setConn}${setMcp}
     WHERE id = ${params.id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
     RETURNING id::text, tg_user_id::text, template_kind, name, description,
               system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
+              daily_budget_credits::text,
               status, created_at, updated_at,
               connection_type, external_base_url, external_api_key_hint,
               external_model_slug,

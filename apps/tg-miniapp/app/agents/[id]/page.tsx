@@ -17,6 +17,7 @@ interface Agent {
   system_prompt: string;
   model_slug: string | null;
   budget_rub_monthly: string;
+  daily_budget_credits?: string;
   tools: unknown;
   connection_type?: string;
   external_base_url?: string | null;
@@ -30,6 +31,15 @@ interface Agent {
   transfer_price_credits?: string | null;
   nft_address?: string | null;
 }
+
+// C11: проверенные MCP-пресеты (2026-06). Клик заполняет URL эндпоинта;
+// авторизация — через существующий OAuth/токен-флоу. Ручной ввод остаётся.
+const MCP_PRESETS: { label: string; url: string }[] = [
+  { label: 'Notion', url: 'https://mcp.notion.com/mcp' },
+  { label: 'GitHub', url: 'https://api.githubcopilot.com/mcp/' },
+  { label: 'Linear', url: 'https://mcp.linear.app/sse' },
+  { label: 'Sentry', url: 'https://mcp.sentry.dev/mcp' },
+];
 
 // Tools implemented by the agent-worker (apps/agent-worker/src/tools.ts).
 const AVAILABLE_TOOLS: { id: string; label: string }[] = [
@@ -103,6 +113,8 @@ export default function AgentDetailPage() {
   const [eSystemPrompt, setESystemPrompt] = useState('');
   const [eModelSlug, setEModelSlug] = useState('');
   const [eBudget, setEBudget] = useState(0);
+  // C10: дневной бюджет (кр) — worker-гард daily_budget_credits.
+  const [eDailyBudget, setEDailyBudget] = useState(0);
   const [eTools, setETools] = useState<string[]>([]);
   // connection editing
   const [providers, setProviders] = useState<
@@ -139,6 +151,7 @@ export default function AgentDetailPage() {
     setESystemPrompt(agent.system_prompt);
     setEModelSlug(agent.model_slug ?? '');
     setEBudget(Number(agent.budget_rub_monthly));
+    setEDailyBudget(Number(agent.daily_budget_credits ?? '10000'));
     setETools(Array.isArray(agent.tools) ? (agent.tools as string[]) : []);
     setConnSel('');
     setConnKey('');
@@ -172,6 +185,7 @@ export default function AgentDetailPage() {
           system_prompt: eSystemPrompt.trim(),
           model_slug: eModelSlug.trim(),
           budget_rub_monthly: eBudget,
+          daily_budget_credits: Math.round(eDailyBudget),
           tools: eTools,
           // Connection change is opt-in: 'aiag' → back to gateway; a provider id →
           // BYOK (external_openai, 0 commission); '' → leave connection untouched.
@@ -929,8 +943,28 @@ export default function AgentDetailPage() {
                   onChange={(e) => setEBudget(Number(e.target.value))}
                   min={0}
                   step={100}
+                  className="tma-mono"
                   style={editInputStyle}
                 />
+              </label>
+
+              {/* C10: дневной лимит — атомарный гард воркера (daily_budget_credits). */}
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span className="tma-card-text">Дневной бюджет, кр</span>
+                <input
+                  type="number"
+                  value={eDailyBudget}
+                  onChange={(e) => setEDailyBudget(Number(e.target.value))}
+                  min={1}
+                  max={1000000}
+                  step={50}
+                  className="tma-mono"
+                  style={editInputStyle}
+                />
+                <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>
+                  Жёсткий потолок трат за день. Запуски сверх лимита блокируются до
+                  следующих суток.
+                </span>
               </label>
 
               <div
@@ -1047,6 +1081,39 @@ export default function AgentDetailPage() {
                 </label>
                 {mcpSel === 'set' && (
                   <>
+                    {/* C11: пресеты — клик заполняет URL (и URL для OAuth-входа ниже). */}
+                    <div className="tma-chips">
+                      {MCP_PRESETS.map((p) => (
+                        <button
+                          key={p.label}
+                          type="button"
+                          className="tma-chip"
+                          onClick={() => {
+                            setMcpUrl(p.url);
+                            setOauthUrl(p.url);
+                          }}
+                          style={{
+                            cursor: 'pointer',
+                            ...(mcpUrl === p.url
+                              ? { borderColor: 'var(--accent)', color: 'var(--accent)' }
+                              : {}),
+                          }}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="tma-chip"
+                        onClick={() => setMcpUrl('')}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        Свой URL
+                      </button>
+                    </div>
+                    <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.6, margin: 0 }}>
+                      Подключение через OAuth провайдера. Список пресетов проверен 2026-06.
+                    </p>
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <span className="tma-card-text">URL</span>
                       <input

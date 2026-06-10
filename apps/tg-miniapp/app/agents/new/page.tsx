@@ -498,6 +498,30 @@ export default function NewAgentPage() {
                   Подключи внешний MCP-сервер (https) — его инструменты станут доступны агенту.
                   Только удалённый Streamable-HTTP. Вызовы бесплатны (0 комиссии).
                 </p>
+                {/* C11: проверенные пресеты (2026-06) — клик заполняет URL; ручной ввод остаётся. */}
+                <div className="tma-chips" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {[
+                    { label: 'Notion', url: 'https://mcp.notion.com/mcp' },
+                    { label: 'GitHub', url: 'https://api.githubcopilot.com/mcp/' },
+                    { label: 'Linear', url: 'https://mcp.linear.app/sse' },
+                    { label: 'Sentry', url: 'https://mcp.sentry.dev/mcp' },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      className="tma-chip"
+                      onClick={() => setMcpUrl(p.url)}
+                      style={{
+                        cursor: 'pointer',
+                        ...(mcpUrl === p.url
+                          ? { borderColor: 'var(--accent)', color: 'var(--accent)' }
+                          : {}),
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <span className="tma-card-text">URL</span>
                   <input
