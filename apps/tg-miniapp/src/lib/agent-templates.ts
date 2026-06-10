@@ -24,7 +24,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'Структурируй: заголовок → лид → факты → CTA.',
     ].join('\n'),
     suggestedTools: ['web_search'],
-    defaultModelSlug: 'anthropic/claude-3.5-sonnet',
+    defaultModelSlug: 'anthropic/claude-sonnet-4-6',
   },
   {
     kind: 'coder',
@@ -38,7 +38,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'Если видишь баг — объясняй root cause, а не симптом.',
     ].join('\n'),
     suggestedTools: ['web_search', 'code_interpreter'],
-    defaultModelSlug: 'anthropic/claude-3.5-sonnet',
+    defaultModelSlug: 'anthropic/claude-sonnet-4-6',
   },
   {
     kind: 'analyst',
@@ -66,7 +66,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'Финальный вывод — структурированная сводка с уровнем уверенности.',
     ].join('\n'),
     suggestedTools: ['web_search'],
-    defaultModelSlug: 'nousresearch/hermes-4-405b',
+    defaultModelSlug: 'openai/gpt-4o-mini',
   },
   {
     kind: 'marketer',
@@ -80,7 +80,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'Контекст РФ: VK Ads, TG, OK, Дзен — не Facebook/Google.',
     ].join('\n'),
     suggestedTools: ['web_search'],
-    defaultModelSlug: 'anthropic/claude-3.5-sonnet',
+    defaultModelSlug: 'anthropic/claude-sonnet-4-6',
   },
   {
     kind: 'personal',
@@ -94,7 +94,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'Резюмируй договорённости в конце разговора.',
     ].join('\n'),
     suggestedTools: ['web_search', 'memory'],
-    defaultModelSlug: 'anthropic/claude-3.5-sonnet',
+    defaultModelSlug: 'anthropic/claude-sonnet-4-6',
   },
 ];
 
