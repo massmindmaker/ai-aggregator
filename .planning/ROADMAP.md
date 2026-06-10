@@ -408,6 +408,16 @@ Plans:
 
 **Execution notes (2026-06-10):** all 5 plans executed sequentially on `feat/r1.0-wave0-consolidated`; tg-miniapp typecheck 0 errors. Legacy speculative `nft/purchase` retired (410) per founder decision #4 to unblock the build (DEF-16-01 resolved). **VPS deploy pending** — see `16-04-SUMMARY.md` user_setup: hand-apply migration 0039, set Startonus + AGENT_MINT_FEE_TON env, nginx IP-allowlist for the webhook (CRITICAL — unsigned), rate-limit the public transfer-offer read, manual tma build.
 
+### Phase 17: R2.1 Полная доработка TMA — все экраны, воркфлоу и дизайн до «работает чётко»
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 16
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 17 to break down)
+
 ---
 
 ### Deferred / R&D (explicitly not in R1)
