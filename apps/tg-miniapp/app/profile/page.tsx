@@ -2,7 +2,12 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { TonConnectButton, useTonAddress, useTonWallet } from '@tonconnect/ui-react';
+import {
+  TonConnectButton,
+  useTonAddress,
+  useTonConnectUI,
+  useTonWallet,
+} from '@tonconnect/ui-react';
 import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -43,23 +48,71 @@ export default function ProfilePage() {
   const { token, loading: authLoading, error: authError } = useAuth();
   const userAddress = useTonAddress();
   const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
   const [wallets, setWallets] = useState<WalletRow[]>([]);
   const [balance, setBalance] = useState<string>('0');
   const [topups, setTopups] = useState<TopupRow[]>([]);
   const [linkError, setLinkError] = useState<string | null>(null);
 
-  // Auto-link wallet on connect.
+  // R2.1-A2: before the wallet connects, arm TON Connect with OUR ton_proof
+  // challenge so the wallet signs it at connect time. Without this the link
+  // stays advisory (is_verified=false), as before.
+  useEffect(() => {
+    if (!token || userAddress) return; // proof is only obtainable at connect time
+    tonConnectUI.setConnectRequestParameters({ state: 'loading' });
+    fetch('/tg/api/tma/wallet/proof-payload', {
+      headers: { authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((j: { payload?: string }) => {
+        if (j?.payload) {
+          tonConnectUI.setConnectRequestParameters({
+            state: 'ready',
+            value: { tonProof: j.payload },
+          });
+        } else {
+          tonConnectUI.setConnectRequestParameters(null);
+        }
+      })
+      .catch(() => tonConnectUI.setConnectRequestParameters(null));
+  }, [token, userAddress, tonConnectUI]);
+
+  // Auto-link wallet on connect — with the signed ton_proof when the wallet
+  // returned one (then the server verifies strictly and sets is_verified).
   useEffect(() => {
     if (!token || !userAddress) return;
-    const publicKey =
-      (wallet?.account as { publicKey?: string } | undefined)?.publicKey ?? null;
+    const acct = wallet?.account as
+      | { publicKey?: string; walletStateInit?: string }
+      | undefined;
+    const tonProofItem = (
+      wallet as unknown as {
+        connectItems?: {
+          tonProof?: {
+            proof?: {
+              timestamp: number;
+              domain: { lengthBytes: number; value: string };
+              payload: string;
+              signature: string;
+            };
+          };
+        };
+      }
+    )?.connectItems?.tonProof;
+    const proof = tonProofItem?.proof ?? null;
+
     fetch('/tg/api/tma/wallet/link', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ address: userAddress, public_key: publicKey }),
+      body: JSON.stringify({
+        address: userAddress,
+        public_key: acct?.publicKey ?? null,
+        ...(proof && acct?.walletStateInit
+          ? { wallet_state_init: acct.walletStateInit, proof }
+          : {}),
+      }),
     })
       .then((r) => r.json())
       .then(() => refreshWallets())
@@ -98,7 +151,15 @@ export default function ProfilePage() {
   if (authLoading) {
     return (
       <main className="tma-shell tma-shell--with-nav">
-        <p className="tma-card-text">Загрузка…</p>
+        <section className="tma-card" aria-hidden>
+          <div className="aiag-skeleton" style={{ height: 14, width: '40%' }} />
+          <div className="aiag-skeleton" style={{ height: 24, width: '60%' }} />
+          <div className="aiag-skeleton" style={{ height: 44, width: '50%' }} />
+        </section>
+        <section className="tma-card" aria-hidden>
+          <div className="aiag-skeleton" style={{ height: 14, width: '50%' }} />
+          <div className="aiag-skeleton" style={{ height: 14, width: '70%' }} />
+        </section>
         <BottomNav />
       </main>
     );
@@ -127,7 +188,7 @@ export default function ProfilePage() {
           </p>
         </header>
 
-        <section className="tma-card">
+        <section className="tma-card aiag-fade-up">
           <div className="tma-row">
             <span className="tma-card-text">Баланс</span>
             <span className="tma-mono">{fmtCredits(balance)} cr</span>
@@ -175,7 +236,15 @@ export default function ProfilePage() {
             {wallets.map((w) => (
               <div className="tma-row" key={w.id}>
                 <span className="tma-mono">{shortAddr(w.address)}</span>
-                <span className="tma-card-text">
+                <span
+                  className="tma-card-text"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                >
+                  <span
+                    className={`tma-pill ${w.is_verified ? 'tma-pill--ok' : 'tma-pill--muted'}`}
+                  >
+                    {w.is_verified ? '✓ проверен' : '◷ без подписи'}
+                  </span>
                   {new Date(w.linked_at).toLocaleDateString('ru-RU')}
                 </span>
               </div>
@@ -191,8 +260,25 @@ export default function ProfilePage() {
             topups.map((t) => (
               <div className="tma-row" key={t.id}>
                 <span className="tma-mono">{fmtCredits(t.amount_credits)} cr</span>
-                <span className="tma-card-text">
-                  {t.status === 'confirmed' ? '✓' : t.status === 'pending' ? '…' : t.status}{' '}
+                <span
+                  className="tma-card-text"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                >
+                  <span
+                    className={`tma-pill ${
+                      t.status === 'confirmed'
+                        ? 'tma-pill--ok'
+                        : t.status === 'pending'
+                          ? 'tma-pill--run'
+                          : 'tma-pill--muted'
+                    }`}
+                  >
+                    {t.status === 'confirmed'
+                      ? '✓ зачислено'
+                      : t.status === 'pending'
+                        ? '◷ ожидает'
+                        : `✕ ${t.status}`}
+                  </span>
                   {new Date(t.created_at).toLocaleDateString('ru-RU')}
                 </span>
               </div>
