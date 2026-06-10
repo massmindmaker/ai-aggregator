@@ -142,7 +142,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const publicBase = process.env.PUBLIC_BASE_URL ?? 'https://app.ai-aggregator.ru';
-  const callbackUrl = `${publicBase}/tg/api/tma/agents/transfer/webhook`;
+  // T-16-09: append the shared webhook secret so the (unsigned) Startonus callback
+  // can be authenticated — see the webhook route's token check.
+  const webhookToken = process.env.TRANSFER_WEBHOOK_SECRET;
+  const callbackUrl = `${publicBase}/tg/api/tma/agents/transfer/webhook${webhookToken ? `?token=${encodeURIComponent(webhookToken)}` : ''}`;
   // WHITE-LABEL: nftData.image MUST be a URL on OUR domain/CDN — never an upstream
   // provider image host. No portrait column exists yet → deterministic monogram on
   // our own domain.

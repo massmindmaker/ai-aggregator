@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'node:crypto';
 import postgres from 'postgres';
 
 export const runtime = 'nodejs';
@@ -55,6 +56,20 @@ interface ChargeRow {
  * kind). White-label: the minter brand never appears in any response.
  */
 export async function POST(req: NextRequest) {
+  // T-16-09: Startonus does NOT sign webhooks and publishes no fixed egress IPs.
+  // We build the callbackUrl ourselves, so we embed a shared secret (?token=…) and
+  // verify it constant-time BEFORE any DB work. This closes the self-settle hole
+  // (the charge UUID is returned to the acquirer, so it is not a secret). If the
+  // secret is unconfigured the check is skipped (fail-open only when unset).
+  const WEBHOOK_SECRET = process.env.TRANSFER_WEBHOOK_SECRET;
+  if (WEBHOOK_SECRET) {
+    const got = Buffer.from(req.nextUrl.searchParams.get('token') ?? '');
+    const want = Buffer.from(WEBHOOK_SECRET);
+    if (got.length !== want.length || !timingSafeEqual(got, want)) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
+  }
+
   let body: TransferCallback;
   try {
     body = (await req.json()) as TransferCallback;
