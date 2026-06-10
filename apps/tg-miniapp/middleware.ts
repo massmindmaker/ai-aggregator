@@ -22,11 +22,19 @@ export async function middleware(req: NextRequest) {
   //   /api/tma/nft/webhook      — Startonus callback (protected via nginx IP-allowlist)
   //   /api/tma/mcp-oauth/callback — OAuth redirect target (no TMA JWT in the
   //                                 system browser; trust = single-use `state`)
+  //   /api/tma/agents/.../transfer-offer — public acquirer offer read (the gift
+  //                                 recipient/buyer is NOT the owner and has no token;
+  //                                 non-sensitive SELECT + transferable-only filter)
+  //   /api/tma/agents/transfer/webhook — Startonus mint callback (unsigned external
+  //                                 caller, no TMA JWT; protected via nginx IP-allowlist
+  //                                 + unguessable charge UUID + seller-guarded settle)
   if (
     path.startsWith('/api/tma/auth/') ||
     path === '/api/tma/nft/collections' ||
     path === '/api/tma/nft/webhook' ||
     path === '/api/tma/mcp-oauth/callback' ||
+    path === '/api/tma/agents/transfer/webhook' ||
+    (path.startsWith('/api/tma/agents/') && path.endsWith('/transfer-offer')) ||
     path.startsWith('/api/tma/marketplace')
   ) {
     return NextResponse.next();
