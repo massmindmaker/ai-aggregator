@@ -18,8 +18,6 @@ export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   // Public endpoints (no JWT required):
   //   /api/tma/auth/*           — verify endpoint
-  //   /api/tma/nft/collections  — public catalog
-  //   /api/tma/nft/webhook      — Startonus callback (protected via nginx IP-allowlist)
   //   /api/tma/mcp-oauth/callback — OAuth redirect target (no TMA JWT in the
   //                                 system browser; trust = single-use `state`)
   //   /api/tma/agents/.../transfer-offer — public acquirer offer read (the gift
@@ -30,8 +28,6 @@ export async function middleware(req: NextRequest) {
   //                                 + unguessable charge UUID + seller-guarded settle)
   if (
     path.startsWith('/api/tma/auth/') ||
-    path === '/api/tma/nft/collections' ||
-    path === '/api/tma/nft/webhook' ||
     path === '/api/tma/mcp-oauth/callback' ||
     path === '/api/tma/agents/transfer/webhook' ||
     (path.startsWith('/api/tma/agents/') && path.endsWith('/transfer-offer')) ||

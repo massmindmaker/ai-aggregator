@@ -157,7 +157,16 @@ export default function AgentKanbanPage() {
           >
             SWARM · READ-ONLY
           </p>
-          <h1 className="tma-title">Канбан</h1>
+          <h1 className="tma-title">
+            Канбан{' '}
+            {/* Honest status pill — icon + word, never colour alone (DESIGN.md). */}
+            <span
+              className="tma-pill tma-pill--muted"
+              style={{ verticalAlign: 'middle' }}
+            >
+              ⚗ R&amp;D · только просмотр
+            </span>
+          </h1>
           <p className="tma-subtitle">
             Доска задач вашего подключённого Hermes. Только просмотр — задачами
             управляет сам Hermes.
