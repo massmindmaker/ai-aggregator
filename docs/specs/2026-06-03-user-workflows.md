@@ -1,5 +1,14 @@
 # TMA — User Workflows → Function → Readiness map (2026-06-03)
 
+> ⚠️ **УСТАРЕЛО ЧАСТИЧНО (поправка 2026-06-12).** Этот документ помечает `NOT-BUILT` /
+> `BRANCH` многое, что **с тех пор ПОСТРОЕНО**: templates marketplace + publish/clone/rent
+> (author-rent), provider-picker e2e, MCP + OAuth, schedules, kanban (read-only),
+> transfer/iNFT (Phase 16), серверный реконсилер пополнений, строгий ton-proof,
+> D-1 ₽→USD-credits, DEFAULT_MODEL-фикс (gpt-4o-mini), call_agent (A2A). **Не доверять
+> readiness-тегам ниже без сверки** с актуальной картой `docs/specs/2026-06-12-forensic-audit.md`
+> (раздел «задумано vs реально vs забыто»). Реально ещё забыто/не построено: мультимодель
+> per-role, run-trace ledger, AI-builder «из слов», предсказание цены до запуска, free-first-run.
+
 **Purpose:** Enumerate EVERY AIAG-TMA user workflow and map each step, screen-by-screen, to the
 exact Hermes/backend function it calls — and whether that function actually exists. So the design
 matches functions exactly (no decorative buttons that imply capabilities the backend cannot do).

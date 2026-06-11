@@ -56,11 +56,12 @@
 ## Money path status
 - **R0 (Phase 15.1) COMPLETE + LIVE on prod:** worker money path, gateway routing, auth hardening (Next 14.2.33 CVE, HS256 pin, nginx strip), settleRun atomicity (integration test 4/4 green).
 - Branch `plan/15.1-r0-billing-identity` — **NOT merged to master.**
-- `AIAG_GATEWAY_KEY` minted + live. **Latent bug:** `DEFAULT_MODEL = nousresearch/hermes-4-405b` is not in the gateway registry (400 "Unknown model"); no current victims (0 agents on prod).
+- `AIAG_GATEWAY_KEY` minted + live. `DEFAULT_MODEL` = `openai/gpt-4o-mini` (registered; the old hermes-4-405b "Unknown model" bug is FIXED, commit c8c4ed0). Rule: new default/template slugs must be in the prod `models` table or they silently fall back to OpenRouter (margin leak).
+- ⚠️ **Wave-0/R1/Phase16/17 are LIVE on `feat/r1.0-wave0-consolidated`** (D-0 margin, D-1 USD credits, author-rent, provider-picker, MCP+OAuth, reconciler, transfer-iNFT, hub redesign). Older docs that say these are "not-built" LIE IN THE MINUS — verify against `docs/specs/2026-06-12-forensic-audit.md` before trusting any "not-built" status.
 
-## Latest critical scores (108-point scale = 12 dims × 9)
-- Tech stack **50/108** · Functional **43/108** · UX **59/108**.
-- Worst dims: billing integrity, provider routing, auth, observability, testing, compliance.
+## Latest critical scores (forensic audit 2026-06-12, see `docs/specs/2026-06-12-forensic-audit.md`)
+- TMA: **продукт 58 · UX 42 (worst) · дизайн 63 · полнота-vs-интент 55** /108.
+- Worst now: navigation duplicates (/templates under 4 names), money-display ×100, Potemkin showcases, docs-lie-in-minus. Forgotten core: multimodel per-role, run-trace ledger, AI-builder, free-first-run.
 
 ## Memory map (where context lives — query these, don't re-derive)
 - **THIS file** = always-loaded anchor.

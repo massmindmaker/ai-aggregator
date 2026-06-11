@@ -7,10 +7,11 @@ invariants live in `/SECURITY.md`; topology in `/docs/ARCHITECTURE.md`. Read bot
 - `src/agent-runner.ts` is the **agent runtime today**: a *stateless* BullMQ→gateway loop.
   There is no managed Hermes, no per-user process, no memory between runs. Do not write
   code that assumes a persistent runtime exists (see reality table in `/CLAUDE.md`).
-- **`DEFAULT_MODEL` must exist in the gateway model registry** (`:4000`). Latent bug:
-  current default `nousresearch/hermes-4-405b` is NOT registered → gateway 400 "Unknown
-  model". Harmless only because there are 0 agents on prod. Fix the default OR register
-  the slug before any agent relies on it.
+- **`DEFAULT_MODEL` must exist in the gateway model registry** (`:4000`). ✅ FIXED
+  (2026-06-10, commit c8c4ed0): default is now `openai/gpt-4o-mini` (registered). The old
+  bug (`nousresearch/hermes-4-405b` → gateway 400 "Unknown model") is gone. Rule still
+  holds: any new DEFAULT_MODEL / template slug MUST be in the prod `models` table — an
+  unregistered slug silently falls back to OpenRouter, bypassing markup (margin leak).
 - **Commission rule (enforced in code, do not soften):** AIAG-supplied model routed via
   `:4000` → debit balance + apply markup. User's own key / BYOK / external provider →
   charge **ZERO** (the `if (isExternal) return` short-circuit). See `/SECURITY.md`.
