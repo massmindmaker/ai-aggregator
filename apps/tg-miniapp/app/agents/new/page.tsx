@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
+import { hueFor } from '@/components/AgentCard';
 import { AGENT_TEMPLATES, getTemplate } from '@/lib/agent-templates';
 
 // Tools actually implemented by the agent-worker (apps/agent-worker/src/tools.ts).
@@ -16,6 +17,38 @@ const AVAILABLE_TOOLS: { id: string; label: string; hint: string }[] = [
 ];
 const AVAILABLE_TOOL_IDS = new Set(AVAILABLE_TOOLS.map((t) => t.id));
 
+// P1-7: progressive disclosure — collapsed section with a one-line summary in
+// the header. transform/opacity only (DESIGN.md motion rules).
+function Accordion({
+  title,
+  summary,
+  pill,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  summary: string;
+  pill?: React.ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={`tma-acc${open ? ' tma-acc--open' : ''}`}>
+      <button type="button" className="tma-acc-head" onClick={onToggle} aria-expanded={open}>
+        <span className="tma-acc-chev" aria-hidden>
+          ›
+        </span>
+        <span className="tma-acc-title">{title}</span>
+        {pill}
+        <span className="tma-acc-summary">{summary}</span>
+      </button>
+      {open && <div className="tma-acc-body">{children}</div>}
+    </section>
+  );
+}
+
 export default function NewAgentPage() {
   const router = useRouter();
   const { user, token, loading, error } = useAuth();
@@ -24,9 +57,19 @@ export default function NewAgentPage() {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [modelSlug, setModelSlug] = useState('');
   const [tools, setTools] = useState<string[]>([]);
+  // Primary spend control = daily cap in credits (worker's daily guard column,
+  // default 10000 = $100); monthly stays as a secondary line in the accordion.
+  const [dailyBudget, setDailyBudget] = useState(10000);
   const [budget, setBudget] = useState(1000);
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
+
+  // Accordion open-state (multiple can be open).
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const toggle = (k: string) => setOpen((p) => ({ ...p, [k]: !p[k] }));
+
+  // Model registry for the picker (free-form slug lives only inside BYOK).
+  const [models, setModels] = useState<{ slug: string; name: string }[]>([]);
 
   // "Свой агент" — Path 1 (external OpenAI-compatible endpoint)
   const [useExternal, setUseExternal] = useState(false);
@@ -117,12 +160,27 @@ export default function NewAgentPage() {
     }
   }, [pickedKind]);
 
-  // Load the BYOK provider catalog once authenticated.
+  // Load the BYOK provider catalog + model registry once authenticated.
   useEffect(() => {
     if (!token) return;
     fetch('/tg/api/tma/providers', { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : { providers: [] }))
       .then((j) => setProviders(Array.isArray(j.providers) ? j.providers : []))
+      .catch(() => {});
+    fetch('/tg/api/tma/marketplace', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : { models: [] }))
+      .then((j) =>
+        setModels(
+          Array.isArray(j.models)
+            ? j.models
+                .filter((m: { slug?: unknown }) => typeof m.slug === 'string' && m.slug)
+                .map((m: { slug: string; name?: string }) => ({
+                  slug: m.slug,
+                  name: m.name || m.slug,
+                }))
+            : [],
+        ),
+      )
       .catch(() => {});
   }, [token]);
 
@@ -144,6 +202,7 @@ export default function NewAgentPage() {
           system_prompt: systemPrompt.trim(),
           model_slug: modelSlug.trim() || undefined,
           tools,
+          daily_budget_credits: dailyBudget,
           budget_rub_monthly: budget,
           mcp_endpoint_url: mcpUrl.trim() || undefined,
           mcp_auth: mcpAuth.trim() || undefined,
@@ -178,6 +237,22 @@ export default function NewAgentPage() {
   const isCustomProvider =
     providers.find((p) => p.id === providerId)?.requiresBaseUrl ?? false;
 
+  // Summary lines for collapsed accordions.
+  const promptTrimmed = systemPrompt.trim();
+  const promptSummary = promptTrimmed
+    ? promptTrimmed.slice(0, 40) + (promptTrimmed.length > 40 ? '…' : '')
+    : 'пусто';
+  const toolsSummary = tools.length
+    ? AVAILABLE_TOOLS.filter((t) => tools.includes(t.id))
+        .map((t) => t.label.toLowerCase())
+        .join(', ')
+    : 'без инструментов';
+  const providerSummary =
+    useExternal && providerId
+      ? (providers.find((p) => p.id === providerId)?.name ?? 'свой провайдер')
+      : 'AIAG';
+  const mcpBudgetSummary = `${mcpUrl.trim() ? 'MCP подключён' : 'без MCP'} · ${dailyBudget} кр/день`;
+
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
@@ -202,32 +277,38 @@ export default function NewAgentPage() {
               <h1 className="tma-title">Выберите шаблон</h1>
               <p className="tma-subtitle">Стартовая конфигурация — потом всё можно поправить.</p>
             </header>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 12,
-              }}
-            >
-              {AGENT_TEMPLATES.map((t) => (
-                <button
-                  key={t.kind}
-                  type="button"
-                  onClick={() => setPickedKind(t.kind)}
-                  className="tma-card"
-                  style={{
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    border: '1px solid var(--line)',
-                  }}
-                >
-                  <div style={{ fontSize: 28 }}>{t.emoji}</div>
-                  <h2 className="tma-card-title">{t.name}</h2>
-                  <p className="tma-card-text" style={{ fontSize: 12 }}>
-                    {t.description}
-                  </p>
-                </button>
-              ))}
+            {/* P1-7: карточный язык каталога (tma-agent-card), не emoji-плитки. */}
+            <div className="tma-agent-grid">
+              {AGENT_TEMPLATES.map((t) => {
+                const hue = hueFor(t.kind);
+                return (
+                  <button
+                    key={t.kind}
+                    type="button"
+                    onClick={() => setPickedKind(t.kind)}
+                    className="tma-agent-card tma-tpl-card"
+                  >
+                    <div
+                      className="tma-agent-portrait"
+                      style={{
+                        background: `linear-gradient(155deg, oklch(0.34 0.09 ${hue}), oklch(0.17 0.045 ${hue}))`,
+                        color: `oklch(0.93 0.11 ${hue})`,
+                      }}
+                    >
+                      <span className="tma-agent-monogram">
+                        {(t.name[0] ?? '?').toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="tma-agent-body">
+                      <h2 className="tma-agent-name">{t.name}</h2>
+                      <p className="tma-agent-role">{t.description}</p>
+                      <span className="tma-agent-model" title={t.defaultModelSlug}>
+                        {t.defaultModelSlug}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </>
         )}
@@ -235,7 +316,7 @@ export default function NewAgentPage() {
         {user && !error && pickedKind && (
           <>
             <header className="tma-header">
-              <h1 className="tma-title">{getTemplate(pickedKind)?.emoji} Новый агент</h1>
+              <h1 className="tma-title">Новый агент</h1>
               <p className="tma-subtitle">Шаблон: {getTemplate(pickedKind)?.name}</p>
             </header>
 
@@ -256,102 +337,87 @@ export default function NewAgentPage() {
               </label>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span className="tma-card-text">System prompt</span>
-                <textarea
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  required
-                  rows={8}
-                  maxLength={8000}
-                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-                />
-              </label>
-
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span className="tma-card-text">Модель</span>
-                <input
-                  type="text"
+                <select
                   value={modelSlug}
                   onChange={(e) => setModelSlug(e.target.value)}
-                  placeholder="anthropic/claude-3.5-sonnet"
                   style={inputStyle}
-                />
-              </label>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span className="tma-card-text">Инструменты</span>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                    border: '1px solid var(--line)',
-                    borderRadius: 8,
-                    padding: 12,
-                    background: 'var(--bg-surface)',
-                  }}
                 >
-                  {AVAILABLE_TOOLS.map((tool) => {
-                    const checked = tools.includes(tool.id);
-                    return (
-                      <label
-                        key={tool.id}
-                        style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) =>
-                            setTools((prev) =>
-                              e.target.checked
-                                ? [...prev, tool.id]
-                                : prev.filter((t) => t !== tool.id),
-                            )
-                          }
-                          style={{ marginTop: 2 }}
-                        />
-                        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <span className="tma-card-text" style={{ fontWeight: 600 }}>
-                            {tool.label}
-                          </span>
-                          <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.65 }}>
-                            {tool.hint}
-                          </span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span className="tma-card-text">Бюджет, кр/мес</span>
-                <input
-                  type="number"
-                  value={budget}
-                  onChange={(e) => setBudget(Number(e.target.value))}
-                  min={0}
-                  step={100}
-                  style={inputStyle}
-                  disabled={useExternal}
-                />
-                {useExternal && (
-                  <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>
-                    Не применяется для своего агента — оплата у твоего провайдера.
-                  </span>
-                )}
+                  {!modelSlug && <option value="">— выберите модель —</option>}
+                  {modelSlug && !models.some((m) => m.slug === modelSlug) && (
+                    <option value={modelSlug}>{modelSlug}</option>
+                  )}
+                  {models.map((m) => (
+                    <option key={m.slug} value={m.slug}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
               </label>
 
-              <div
-                style={{
-                  border: '1px solid var(--line)',
-                  borderRadius: 8,
-                  padding: 12,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12,
-                  background: 'var(--bg-surface)',
-                }}
+              <Accordion
+                title="Инструкция"
+                summary={promptSummary}
+                open={!!open.prompt}
+                onToggle={() => toggle('prompt')}
+              >
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-text">Инструкция агента</span>
+                  <textarea
+                    value={systemPrompt}
+                    onChange={(e) => setSystemPrompt(e.target.value)}
+                    required
+                    rows={8}
+                    maxLength={8000}
+                    style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+                  />
+                </label>
+              </Accordion>
+
+              <Accordion
+                title="Инструменты"
+                summary={toolsSummary}
+                open={!!open.tools}
+                onToggle={() => toggle('tools')}
+              >
+                {AVAILABLE_TOOLS.map((tool) => {
+                  const checked = tools.includes(tool.id);
+                  return (
+                    <label
+                      key={tool.id}
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) =>
+                          setTools((prev) =>
+                            e.target.checked
+                              ? [...prev, tool.id]
+                              : prev.filter((t) => t !== tool.id),
+                          )
+                        }
+                        style={{ marginTop: 2 }}
+                      />
+                      <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span className="tma-card-text" style={{ fontWeight: 600 }}>
+                          {tool.label}
+                        </span>
+                        <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.65 }}>
+                          {tool.hint}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </Accordion>
+
+              <Accordion
+                title="Свой провайдер"
+                summary={providerSummary}
+                pill={<span className="tma-pill-free">0 комиссии</span>}
+                open={!!open.provider}
+                onToggle={() => toggle('provider')}
               >
                 <label
                   style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
@@ -365,13 +431,13 @@ export default function NewAgentPage() {
                     }}
                   />
                   <span className="tma-card-text" style={{ fontWeight: 600 }}>
-                    🌐 Свой провайдер / ключ — 0 комиссии
+                    Подключить свой провайдер / ключ
                   </span>
                 </label>
                 <p className="tma-card-text" style={{ fontSize: 12, opacity: 0.75, marginTop: -6 }}>
                   Выбери провайдера и принеси свой ключ (OpenAI, Anthropic, OpenRouter,
                   DeepSeek… или «Custom» — любой OpenAI-совместимый URL: Ollama, vLLM,
-                  твой Hermes за прокси). Свой ключ — комиссия 0.
+                  твой Hermes за прокси). Платишь напрямую своему провайдеру.
                 </p>
 
                 {useExternal && (
@@ -412,7 +478,7 @@ export default function NewAgentPage() {
                       </label>
                     )}
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <span className="tma-card-text">API key</span>
+                      <span className="tma-card-text">Ключ API</span>
                       <input
                         type="password"
                         value={extApiKey}
@@ -439,9 +505,6 @@ export default function NewAgentPage() {
                         Если пусто — используется поле «Модель» выше.
                       </span>
                     </label>
-                    <span className="tma-card-text" style={{ fontSize: 11, color: '#22c55e' }}>
-                      Свой ключ — комиссия 0. Платишь напрямую своему провайдеру.
-                    </span>
                     <button
                       type="button"
                       onClick={handleTest}
@@ -458,7 +521,10 @@ export default function NewAgentPage() {
                     {testResult?.ok && (
                       <div
                         className="tma-card"
-                        style={{ background: 'rgba(34,197,94,0.12)', borderColor: '#22c55e' }}
+                        style={{
+                          background: 'rgba(34,197,94,0.12)',
+                          borderColor: 'var(--success)',
+                        }}
                       >
                         <p className="tma-card-text">
                           ✓ Endpoint работает{' '}
@@ -478,25 +544,20 @@ export default function NewAgentPage() {
                     )}
                   </>
                 )}
-              </div>
+              </Accordion>
 
-              <div
-                style={{
-                  border: '1px solid var(--line)',
-                  borderRadius: 8,
-                  padding: 12,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 10,
-                  background: 'var(--bg-surface)',
-                }}
+              <Accordion
+                title="MCP и бюджет"
+                summary={mcpBudgetSummary}
+                open={!!open.mcp}
+                onToggle={() => toggle('mcp')}
               >
                 <span className="tma-card-text" style={{ fontWeight: 600 }}>
-                  🧩 MCP-сервер (скиллы) — опционально
+                  MCP-сервер (скиллы) — опционально
                 </span>
                 <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -6 }}>
                   Подключи внешний MCP-сервер (https) — его инструменты станут доступны агенту.
-                  Только удалённый Streamable-HTTP. Вызовы бесплатны (0 комиссии).
+                  Только удалённый Streamable-HTTP. Вызовы бесплатны.
                 </p>
                 {/* C11: проверенные пресеты (2026-06) — клик заполняет URL; ручной ввод остаётся. */}
                 <div className="tma-chips" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -545,7 +606,40 @@ export default function NewAgentPage() {
                     />
                   </label>
                 )}
-              </div>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-text">Дневной бюджет, кр</span>
+                  <input
+                    type="number"
+                    value={dailyBudget}
+                    onChange={(e) => setDailyBudget(Number(e.target.value))}
+                    min={1}
+                    max={1000000}
+                    step={100}
+                    style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                    disabled={useExternal}
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-text" style={{ opacity: 0.75 }}>
+                    Месячный бюджет, кр
+                  </span>
+                  <input
+                    type="number"
+                    value={budget}
+                    onChange={(e) => setBudget(Number(e.target.value))}
+                    min={0}
+                    step={100}
+                    style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                    disabled={useExternal}
+                  />
+                </label>
+                {useExternal && (
+                  <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>
+                    Бюджеты не применяются для своего провайдера — оплата у твоего провайдера.
+                  </span>
+                )}
+              </Accordion>
 
               {submitErr && <div className="tma-error">Ошибка: {submitErr}</div>}
 

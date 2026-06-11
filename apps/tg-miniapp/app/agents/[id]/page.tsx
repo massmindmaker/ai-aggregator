@@ -79,6 +79,16 @@ const SCHEDULE_INTERVALS: { value: number; label: string }[] = [
   { value: 1440, label: 'каждые 24 часа' },
 ];
 
+// P1-6: локальная сегментация перегруженной страницы (useState, без роутинга).
+type TabKey = 'dialog' | 'settings' | 'monetize' | 'schedule';
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'dialog', label: 'Диалог' },
+  { key: 'settings', label: 'Настройки' },
+  { key: 'monetize', label: 'Монетизация' },
+  { key: 'schedule', label: 'Расписание' },
+];
+
 export default function AgentDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -86,6 +96,10 @@ export default function AgentDetailPage() {
   const { token, loading, error } = useAuth();
 
   const [agent, setAgent] = useState<Agent | null>(null);
+  // P1-6: активный сегмент страницы («Диалог» по умолчанию).
+  const [tab, setTab] = useState<TabKey>('dialog');
+  // P1-6: реестр моделей (prod-таблица models) для пикера в настройках.
+  const [models, setModels] = useState<{ slug: string; name: string }[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -307,6 +321,24 @@ export default function AgentDetailPage() {
       .catch(() => {});
   }, [token]);
 
+  // P1-6: реестр моделей для пикера (slug обязан существовать в шлюзе —
+  // незарегистрированный слаг = утечка маржи, см. находку c8c4ed0).
+  useEffect(() => {
+    if (!token) return;
+    fetch('/tg/api/tma/marketplace', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : { models: [] }))
+      .then((j) => setModels(Array.isArray(j.models) ? j.models : []))
+      .catch(() => {});
+  }, [token]);
+
+  // P1-6: форма настроек видна сразу в сегменте «Настройки» — инициализируем
+  // state редактирования при входе (и переинициализируем после сохранения/сброса).
+  useEffect(() => {
+    if (tab !== 'settings' || !agent || editing) return;
+    startEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, agent, editing]);
+
   useEffect(() => {
     if (!token || !id) return;
     fetch(`/tg/api/tma/agents/${id}/schedule`, { headers: { Authorization: `Bearer ${token}` } })
@@ -492,7 +524,7 @@ export default function AgentDetailPage() {
 
         {fetchErr && <div className="tma-error">{fetchErr}</div>}
 
-        {agent && !editing && (
+        {agent && (
           <>
             {/* Hero — the collectible-character card + headline facts. */}
             <section className="tma-detail-hero">
@@ -529,7 +561,24 @@ export default function AgentDetailPage() {
               </div>
             </section>
 
+            {/* P1-6: сегмент-контрол — страница разбита на 4 локальных сегмента. */}
+            <div className="tma-segment tma-segment--fit" role="tablist" aria-label="Разделы агента">
+              {TABS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.key}
+                  className={`tma-segment-btn${tab === t.key ? ' is-active' : ''}`}
+                  onClick={() => setTab(t.key)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
             {/* Spec strip — model + budget in one mono-numeric glance. */}
+            {tab === 'dialog' && (
             <section className="tma-spec">
               {agent.model_slug && (
                 <div className="tma-spec-cell">
@@ -558,26 +607,11 @@ export default function AgentDetailPage() {
                 </div>
               )}
             </section>
-
-            <button
-              type="button"
-              onClick={startEdit}
-              className="tma-btn"
-              disabled={runActive}
-              title={runActive ? 'Дождитесь завершения запуска' : undefined}
-            >
-              {runActive ? 'Идёт запуск — редактирование недоступно' : 'Редактировать'}
-            </button>
-
-            {/* Канбан/swarm — read-only board of the user's connected Hermes.
-                Only meaningful for an external_openai (connect-your-own-Hermes)
-                agent; the page itself shows an honest empty state otherwise. */}
-            {agent.connection_type === 'external_openai' && (
-              <Link href={`/agents/${id}/kanban`} className="tma-btn">
-                ▤ Канбан (swarm)
-              </Link>
             )}
 
+            {/* === Сегмент «Монетизация»: публикация шаблона + трансфер === */}
+            {tab === 'monetize' && (
+            <>
             {/* Publish as a public template — shares the spec (no keys/data). */}
             {publishedId ? (
               <div className="tma-success">
@@ -656,19 +690,13 @@ export default function AgentDetailPage() {
               token={token}
               onChanged={load}
             />
+            </>
+            )}
 
-            <section className="tma-card">
-              <h2 className="tma-card-title">System prompt</h2>
-              <p
-                className="tma-card-text"
-                style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}
-              >
-                {agent.system_prompt}
-              </p>
-            </section>
-
+            {/* === Сегмент «Расписание» === */}
             {/* Расписание — агент запускает сам себя по интервалу. Каждый запуск
                 списывается как обычный (в рамках дневного бюджета). */}
+            {tab === 'schedule' && (
             <section className="tma-card" style={{ padding: 16 }}>
               <h2 className="tma-card-title">⏰ Расписание</h2>
               <p className="tma-card-text tma-text-small">
@@ -756,7 +784,11 @@ export default function AgentDetailPage() {
                 </div>
               </form>
             </section>
+            )}
 
+            {/* === Сегмент «Диалог»: лента запусков + композер === */}
+            {tab === 'dialog' && (
+            <>
             <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="tma-section-head">
                 <h2 className="tma-card-title">Диалог</h2>
@@ -850,24 +882,23 @@ export default function AgentDetailPage() {
               </p>
             ) : null}
 
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="tma-btn tma-btn--danger"
-            >
-              {deleting ? 'Удаление…' : 'Удалить агента'}
-            </button>
+            {/* Канбан/swarm — read-only board of the user's connected Hermes.
+                Only meaningful for an external_openai (connect-your-own-Hermes)
+                agent; the page itself shows an honest empty state otherwise. */}
+            {agent.connection_type === 'external_openai' && (
+              <Link href={`/agents/${id}/kanban`} className="tma-btn">
+                ▤ Канбан (swarm)
+              </Link>
+            )}
+            </>
+            )}
           </>
         )}
 
-        {agent && editing && (
+        {/* === Сегмент «Настройки»: форма видна сразу (editing инициализирует
+            startEdit() при входе в сегмент), удаление — в самом конце. === */}
+        {agent && tab === 'settings' && editing && (
           <>
-            <header className="tma-header">
-              <h1 className="tma-title">Редактирование</h1>
-              <p className="tma-subtitle">{agent.name}</p>
-            </header>
-
             <form
               onSubmit={handleSaveEdit}
               style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
@@ -907,15 +938,30 @@ export default function AgentDetailPage() {
                 />
               </label>
 
+              {/* P1-6: модель — пикер из реестра вместо свободного текста
+                  (незарегистрированный слаг = 400 в шлюзе + утечка маржи).
+                  Свободный ввод слага остаётся только в BYOK-блоке ниже. */}
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span className="tma-card-text">Модель</span>
-                <input
-                  type="text"
+                <select
                   value={eModelSlug}
                   onChange={(e) => setEModelSlug(e.target.value)}
-                  placeholder="anthropic/claude-3.5-sonnet"
+                  className="tma-mono"
                   style={editInputStyle}
-                />
+                >
+                  <option value="">— не выбрана —</option>
+                  {models.map((m) => (
+                    <option key={m.slug} value={m.slug}>
+                      {m.name} · {m.slug}
+                    </option>
+                  ))}
+                  {eModelSlug && !models.some((m) => m.slug === eModelSlug) && (
+                    <option value={eModelSlug}>
+                      {eModelSlug}
+                      {models.length > 0 ? ' (вне реестра)' : ''}
+                    </option>
+                  )}
+                </select>
               </label>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1214,24 +1260,37 @@ export default function AgentDetailPage() {
               {editErr && <div className="tma-error">Ошибка: {editErr}</div>}
 
               <div style={{ display: 'flex', gap: 8 }}>
+                {/* «Сбросить» возвращает форму к сохранённым значениям:
+                    editing=false → эффект входа в сегмент вызовет startEdit(). */}
                 <button
                   type="button"
                   onClick={() => setEditing(false)}
                   className="tma-btn"
                   disabled={saving}
                 >
-                  Отмена
+                  Сбросить
                 </button>
                 <button
                   type="submit"
                   className="tma-btn tma-btn--primary"
-                  disabled={saving}
+                  disabled={saving || runActive}
+                  title={runActive ? 'Дождитесь завершения запуска' : undefined}
                   style={{ flex: 1 }}
                 >
-                  {saving ? 'Сохранение…' : 'Сохранить'}
+                  {saving ? 'Сохранение…' : runActive ? 'Идёт запуск…' : 'Сохранить'}
                 </button>
               </div>
             </form>
+
+            {/* Опасная зона — в самом конце настроек, вне общего потока. */}
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="tma-btn tma-btn--danger"
+            >
+              {deleting ? 'Удаление…' : 'Удалить агента'}
+            </button>
           </>
         )}
       </main>

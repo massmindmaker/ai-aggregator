@@ -19,6 +19,7 @@ interface AgentRow {
   tools: unknown;
   model_slug: string | null;
   budget_rub_monthly: string;
+  daily_budget_credits?: string;
   status: string;
   created_at: string;
   updated_at: string;
@@ -49,6 +50,9 @@ interface CreateBody {
   tools?: unknown[];
   model_slug?: string;
   budget_rub_monthly?: number;
+  // P1-7: daily spend cap, integer credits (the worker's daily guard column).
+  // Mirrors the PATCH validation in [id]/route.ts: int 1..1_000_000.
+  daily_budget_credits?: number;
   // "Свой агент" (Path 1, OpenAI-compatible external endpoint)
   connection_type?: 'aiag' | 'external_openai';
   external_base_url?: string;
@@ -93,6 +97,15 @@ export async function POST(req: NextRequest) {
     typeof body.budget_rub_monthly === 'number' && body.budget_rub_monthly >= 0
       ? body.budget_rub_monthly
       : 1000;
+  // P1-7: daily budget — integer credits, 1..1_000_000 (BIGINT column, worker
+  // daily guard). Out-of-range/non-integer → the column default (10000 = $100).
+  const dailyBudget =
+    typeof body.daily_budget_credits === 'number' &&
+    Number.isInteger(body.daily_budget_credits) &&
+    body.daily_budget_credits >= 1 &&
+    body.daily_budget_credits <= 1_000_000
+      ? body.daily_budget_credits
+      : 10_000;
 
   // ---- Provider / "Свой агент" (BYOK → external OpenAI-compatible upstream) ----
   // BOTH the catalog picker (provider_id) and the legacy raw endpoint
@@ -171,6 +184,7 @@ export async function POST(req: NextRequest) {
     INSERT INTO agents (
       tg_user_id, template_kind, name, description,
       system_prompt, tools, model_slug, budget_credits_monthly,
+      daily_budget_credits,
       connection_type, external_base_url, external_api_key_encrypted,
       external_api_key_hint, external_model_slug,
       mcp_endpoint_url, mcp_auth_encrypted
@@ -184,6 +198,7 @@ export async function POST(req: NextRequest) {
       ${sql.json(tools as never)},
       ${modelSlug},
       ${budget},
+      ${dailyBudget},
       ${connectionType},
       ${externalBaseUrl},
       ${externalApiKeyEncrypted},
@@ -194,6 +209,7 @@ export async function POST(req: NextRequest) {
     )
     RETURNING id::text, tg_user_id::text, template_kind, name, description,
               system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
+              daily_budget_credits::text,
               status, created_at, updated_at, connection_type,
               external_base_url, external_api_key_hint, external_model_slug
   `) as unknown as AgentRow[];
