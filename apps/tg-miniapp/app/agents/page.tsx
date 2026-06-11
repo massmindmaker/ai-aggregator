@@ -399,7 +399,6 @@ export default function AgentsHubPage() {
                         Готовый агент в пару тапов
                       </span>
                     </span>
-                    <span className="tma-pill tma-pill--accent">рекомендуем</span>
                   </Link>
                   <Link href="/agents/new" className="tma-hub-path">
                     <span className="tma-hub-path-body">
@@ -422,7 +421,7 @@ export default function AgentsHubPage() {
 
               {agents && agents.length > 0 && (
                 <div className="tma-agent-grid aiag-stagger">
-                  {agents.map((a) => (
+                  {agents.filter((a) => a.id !== pinned?.id).map((a) => (
                     <AgentCard
                       key={a.id}
                       href={`/agents/${a.id}`}
@@ -439,71 +438,67 @@ export default function AgentsHubPage() {
               )}
             </section>
 
-            {/* ── Блок 5: шаблоны недели ── */}
-            <section className="tma-hub-section">
-              <div className="tma-section-head">
-                <h2 className="tma-hub-h2">Шаблоны недели</h2>
-                <Link href="/templates" className="tma-hub-link">
-                  Все →
-                </Link>
-              </div>
+            {/* ── Блок 5: шаблоны недели ── скрыт целиком при 0 шаблонов (#4) ── */}
+            {!(weekly && weekly.length === 0) && (
+              <section className="tma-hub-section">
+                <div className="tma-section-head">
+                  <h2 className="tma-hub-h2">Шаблоны недели</h2>
+                  <Link href="/templates" className="tma-hub-link">
+                    Все →
+                  </Link>
+                </div>
 
-              {weekly === null && !weeklyErr && (
-                <div className="tma-hub-rail" aria-hidden>
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="tma-hub-rail-item">
-                      <div className="tma-agent-card tma-agent-card--skeleton">
-                        <div className="tma-agent-portrait tma-skeleton" />
-                        <div className="tma-agent-body">
-                          <div className="tma-skeleton tma-skeleton-line" />
-                          <div className="tma-skeleton tma-skeleton-line tma-skeleton-line--short" />
+                {weekly === null && !weeklyErr && (
+                  <div className="tma-hub-rail" aria-hidden>
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="tma-hub-rail-item">
+                        <div className="tma-agent-card tma-agent-card--skeleton">
+                          <div className="tma-agent-portrait tma-skeleton" />
+                          <div className="tma-agent-body">
+                            <div className="tma-skeleton tma-skeleton-line" />
+                            <div className="tma-skeleton tma-skeleton-line tma-skeleton-line--short" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
 
-              {weeklyErr && (
-                <p className="tma-card-text">Не удалось загрузить витрину.</p>
-              )}
+                {weeklyErr && (
+                  <p className="tma-card-text">Не удалось загрузить витрину.</p>
+                )}
 
-              {weekly && weekly.length === 0 && (
-                <p className="tma-card-text">
-                  Каталог пока пуст. Опубликуйте своего агента первым.
-                </p>
-              )}
+                {weekly && weekly.length > 0 && (
+                  <div className="tma-hub-rail">
+                    {weekly.map((t, idx) => (
+                      <div key={t.id} className="tma-hub-rail-item">
+                        <AgentCard
+                          href={`/templates/${t.id}`}
+                          hue={hueFor(t.id)}
+                          name={t.name}
+                          role={t.description}
+                          model={t.model_slug}
+                          metricLabel={priceMetric(t.price_credits)}
+                          metricAccent={t.price_credits !== null}
+                          rating={
+                            t.avg_rating !== null
+                              ? { value: t.avg_rating, count: t.rating_count }
+                              : null
+                          }
+                          countLabel={
+                            t.avg_rating === null ? `${t.clone_count} клонов` : null
+                          }
+                          featured={idx === 0}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
-              {weekly && weekly.length > 0 && (
-                <div className="tma-hub-rail">
-                  {weekly.map((t, idx) => (
-                    <div key={t.id} className="tma-hub-rail-item">
-                      <AgentCard
-                        href={`/templates/${t.id}`}
-                        hue={hueFor(t.id)}
-                        name={t.name}
-                        role={t.description}
-                        model={t.model_slug}
-                        metricLabel={priceMetric(t.price_credits)}
-                        metricAccent={t.price_credits !== null}
-                        rating={
-                          t.avg_rating !== null
-                            ? { value: t.avg_rating, count: t.rating_count }
-                            : null
-                        }
-                        countLabel={
-                          t.avg_rating === null ? `${t.clone_count} клонов` : null
-                        }
-                        featured={idx === 0}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* ── Блок 6: баннер ── */}
-            {!bannerHidden && (
+            {/* ── Блок 6: баннер «опубликуй» — только авторам (#23) ── */}
+            {isAuthor && !bannerHidden && (
               <div className="tma-hub-banner">
                 <span className="tma-hub-banner-icon">
                   <HubIcon d={ICONS.income} />
@@ -546,16 +541,8 @@ export default function AgentsHubPage() {
             </Link>
             <span className="tma-sheet-section">Подключения</span>
             <Link href="/agents/new" className="tma-sheet-row" onClick={() => setSheet(null)}>
-              <span>Мой Hermes</span>
-              <span className="tma-pill tma-pill--ok">● live</span>
-            </Link>
-            <Link href="/agents/new" className="tma-sheet-row" onClick={() => setSheet(null)}>
-              <span>Провайдеры и BYOK</span>
-              <span className="tma-pill tma-pill--ok">● live</span>
-            </Link>
-            <Link href="/agents/new" className="tma-sheet-row" onClick={() => setSheet(null)}>
-              <span>MCP серверы</span>
-              <span className="tma-pill tma-pill--ok">● live</span>
+              <span>Создать агента</span>
+              <span className="tma-hub-link">→</span>
             </Link>
             <span className="tma-sheet-section">R&D</span>
             <div className="tma-sheet-row tma-sheet-row--static">

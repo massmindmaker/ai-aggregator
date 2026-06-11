@@ -83,8 +83,8 @@ export default function TemplatesPage() {
     <>
       <main className="tma-shell tma-shell--with-nav">
         <header className="tma-header">
-          <span className="tma-eyebrow">Маркет</span>
-          <h1 className="tma-title">Готовые агенты</h1>
+          <span className="tma-eyebrow">Шаблоны</span>
+          <h1 className="tma-title">Шаблоны</h1>
           <p className="tma-subtitle">
             Клонируйте чужого агента себе. Настройки переносятся, ключи — нет.
           </p>

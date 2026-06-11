@@ -7,7 +7,7 @@ import Link from 'next/link';
 export type CatalogSection = 'agents' | 'models' | 'skills';
 
 const SECTIONS: { key: CatalogSection; href: string; label: string }[] = [
-  { key: 'agents', href: '/templates', label: 'Агенты' },
+  { key: 'agents', href: '/templates', label: 'Шаблоны' },
   { key: 'models', href: '/market', label: 'Модели' },
   { key: 'skills', href: '/skills', label: 'Скиллы' },
 ];
