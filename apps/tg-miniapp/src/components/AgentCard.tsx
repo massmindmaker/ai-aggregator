@@ -28,6 +28,32 @@ function monogram(name: string | null): string {
   return (t[0] ?? '?').toUpperCase();
 }
 
+// ── Holo-tilt (R2-design) ────────────────────────────────────────────────────
+// Палец/курсор водит блик и фольгу (--holo-x/y) и слегка наклоняет карту
+// (--holo-rx/ry). DeviceOrientation в Telegram WebView ненадёжен — поэтому
+// touch/pointer; без взаимодействия CSS сам «дышит» (aiag-holo-drift).
+function holoMove(e: React.PointerEvent<HTMLAnchorElement>) {
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) return;
+  const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+  el.dataset.holoLive = '1';
+  el.style.setProperty('--holo-x', `${(x * 100).toFixed(1)}%`);
+  el.style.setProperty('--holo-y', `${(y * 100).toFixed(1)}%`);
+  el.style.setProperty('--holo-rx', `${((y - 0.5) * -7).toFixed(2)}deg`);
+  el.style.setProperty('--holo-ry', `${((x - 0.5) * 7).toFixed(2)}deg`);
+}
+
+function holoReset(e: React.PointerEvent<HTMLAnchorElement>) {
+  const el = e.currentTarget;
+  delete el.dataset.holoLive;
+  el.style.removeProperty('--holo-x');
+  el.style.removeProperty('--holo-y');
+  el.style.removeProperty('--holo-rx');
+  el.style.removeProperty('--holo-ry');
+}
+
 export interface AgentCardProps {
   href: string;
   hue: number;
@@ -64,6 +90,9 @@ export function AgentCard({
     <Link
       href={href}
       className={`tma-agent-card${featured ? ' tma-agent-card--featured' : ''}`}
+      onPointerMove={holoMove}
+      onPointerLeave={holoReset}
+      onPointerCancel={holoReset}
     >
       <div
         className="tma-agent-portrait"

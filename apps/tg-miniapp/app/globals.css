@@ -524,9 +524,81 @@ code {
 .tma-agent-card:hover,
 .tma-agent-card:focus-visible {
   border-color: rgba(245, 158, 11, 0.4);
-  transform: translateY(-2px);
+  transform: translateY(-2px) perspective(700px) rotateX(var(--holo-rx, 0deg))
+    rotateY(var(--holo-ry, 0deg));
   box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.18),
     0 8px 24px -12px rgba(245, 158, 11, 0.4);
+}
+
+/* === Holographic collectible layer (R2-design) ===================
+ * Слои на портрете: ::before = фольга-радуга (color-dodge), ::after = блик.
+ * Позиция слоёв ведётся CSS-переменными --holo-x/--holo-y (ставит JS по
+ * touch/pointer), тилт карточки — --holo-rx/--holo-ry. Без взаимодействия
+ * фольга медленно «дышит» (aiag-holo-drift). transform/opacity/bg-position
+ * only; полный выключатель в prefers-reduced-motion. */
+.tma-agent-card {
+  transform: perspective(700px) rotateX(var(--holo-rx, 0deg))
+    rotateY(var(--holo-ry, 0deg));
+}
+.tma-agent-portrait::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    115deg,
+    rgba(255, 119, 115, 0.55) 0%,
+    rgba(255, 237, 95, 0.5) 8%,
+    rgba(168, 255, 95, 0.45) 16%,
+    rgba(131, 255, 247, 0.5) 24%,
+    rgba(120, 148, 255, 0.55) 32%,
+    rgba(216, 117, 255, 0.5) 40%,
+    rgba(255, 119, 115, 0.55) 48%
+  );
+  background-size: 320% 320%;
+  background-position: var(--holo-x, 50%) var(--holo-y, 50%);
+  mix-blend-mode: color-dodge;
+  opacity: 0.16;
+  filter: saturate(1.4) contrast(1.05);
+}
+.tma-agent-portrait::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--holo-x, 50%) var(--holo-y, 35%),
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.1) 26%,
+    transparent 56%
+  );
+  mix-blend-mode: overlay;
+  opacity: 0.35;
+}
+@keyframes aiag-holo-drift {
+  0% { background-position: 18% 32%; }
+  50% { background-position: 82% 68%; }
+  100% { background-position: 18% 32%; }
+}
+/* Дышит только пока юзер не взаимодействует (нет --holo-live). */
+.tma-agent-card:not([data-holo-live]) .tma-agent-portrait::before {
+  animation: aiag-holo-drift 8s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tma-agent-card,
+  .tma-agent-card:hover,
+  .tma-agent-card:focus-visible {
+    transform: none !important;
+  }
+  .tma-agent-portrait::before {
+    animation: none !important;
+    opacity: 0.08;
+  }
+  .tma-agent-portrait::after {
+    opacity: 0.12;
+  }
 }
 
 /* Featured = 2px amber ring (DESIGN.md aiag-featured-ring). */
