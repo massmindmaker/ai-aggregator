@@ -1,6 +1,7 @@
 import postgres from 'postgres';
 import Link from 'next/link';
 import { BottomNav } from '@/components/BottomNav';
+import { CatalogNav } from '@/components/CatalogNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,10 +42,12 @@ export default async function MarketPage() {
     <>
       <main className="tma-shell tma-shell--with-nav">
         <header className="tma-header">
-          <span className="tma-badge">МАРКЕТ</span>
+          <span className="tma-eyebrow">Маркет</span>
           <h1 className="tma-title">Модели</h1>
           <p className="tma-subtitle">Подключите модель к агенту в один клик.</p>
         </header>
+
+        <CatalogNav active="models" />
 
         {models.length === 0 ? (
           <section className="tma-card">

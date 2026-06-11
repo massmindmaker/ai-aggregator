@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
+import { CatalogNav } from '@/components/CatalogNav';
 
 // Screen 29 «Маркет скиллов» v1. A "skill" = a built-in tool, a knowledge/
 // instruction doc, or a (own-key) MCP server — a relabel of primitives we
@@ -184,13 +185,15 @@ export default function SkillsPage() {
     <>
       <main className="tma-shell tma-shell--with-nav">
         <header className="tma-header">
-          <span className="tma-badge">СКИЛЛЫ</span>
-          <h1 className="tma-title">Маркет скиллов</h1>
+          <span className="tma-eyebrow">Маркет</span>
+          <h1 className="tma-title">Скиллы</h1>
           <p className="tma-subtitle">
             Скилл — это набор возможностей агента: инструмент, знание-инструкция или
             свой MCP-сервер. Добавьте скилл агенту в один тап.
           </p>
         </header>
+
+        <CatalogNav active="skills" />
 
         <div className="tma-segment" role="tablist" aria-label="Тип скилла">
           {FILTERS.map((f) => (

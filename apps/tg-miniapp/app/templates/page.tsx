@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
+import { CatalogNav } from '@/components/CatalogNav';
 import { AgentCard, hueFor } from '@/components/AgentCard';
 
 interface Template {
@@ -88,6 +89,8 @@ export default function TemplatesPage() {
             Клонируйте чужого агента себе. Настройки переносятся, ключи — нет.
           </p>
         </header>
+
+        <CatalogNav active="agents" />
 
         <div className="tma-segment" role="tablist" aria-label="Сортировка">
           {SORTS.map((s) => (

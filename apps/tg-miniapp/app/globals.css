@@ -1789,3 +1789,14 @@ code {
   padding: 6px 8px;
   white-space: nowrap;
 }
+
+/* === P1-10: Маркет — сегмент-навигатор каталогов (Агенты | Модели | Скиллы) === */
+/* Сегменты — ссылки (Link), а не кнопки: снимаем ссылочные дефолты,
+   остальное наследуется от .tma-segment / .tma-segment-btn. */
+.tma-catalog-nav .tma-segment-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  text-align: center;
+}

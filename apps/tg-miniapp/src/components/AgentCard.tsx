@@ -58,6 +58,10 @@ export interface AgentCardProps {
   href: string;
   hue: number;
   name: string | null;
+  /** Портрет персонажа (webp) — рендерится вместо монограммы; фольга поверх. */
+  portraitImage?: string | null;
+  /** Видео-луп персонажа (mp4, без звука) — poster = portraitImage. */
+  portraitVideo?: string | null;
   /** Role/persona one-liner (description). Clamped to 2 lines. */
   role?: string | null;
   /** Main model slug, rendered in mono. */
@@ -74,10 +78,28 @@ export interface AgentCardProps {
   featured?: boolean;
 }
 
+const mediaStyle: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover',
+  zIndex: 0, // фольга (::before z1) и блик (::after z2) ложатся ПОВЕРХ медиа
+};
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
 export function AgentCard({
   href,
   hue,
   name,
+  portraitImage,
+  portraitVideo,
   role,
   model,
   metricLabel,
@@ -86,6 +108,7 @@ export function AgentCard({
   countLabel,
   featured = false,
 }: AgentCardProps) {
+  const playVideo = !!portraitVideo && !prefersReducedMotion();
   return (
     <Link
       href={href}
@@ -101,7 +124,23 @@ export function AgentCard({
           color: `oklch(0.93 0.11 ${hue})`,
         }}
       >
-        <span className="tma-agent-monogram">{monogram(name)}</span>
+        {playVideo ? (
+          <video
+            src={portraitVideo as string}
+            poster={portraitImage ?? undefined}
+            autoPlay
+            muted
+            loop
+            playsInline
+            style={mediaStyle}
+            aria-hidden
+          />
+        ) : portraitImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={portraitImage} alt="" style={mediaStyle} aria-hidden />
+        ) : (
+          <span className="tma-agent-monogram">{monogram(name)}</span>
+        )}
         {featured && <span className="tma-agent-featured-tag">★ топ</span>}
       </div>
       <div className="tma-agent-body">

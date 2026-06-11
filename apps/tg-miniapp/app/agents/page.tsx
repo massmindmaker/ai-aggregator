@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
 import { AgentCard, hueFor } from '@/components/AgentCard';
+import { characterFor } from '@/lib/characters';
 import { fmtCredits } from '@/lib/credits';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -342,9 +343,19 @@ export default function AgentsHubPage() {
                   style={{
                     background: `linear-gradient(155deg, oklch(0.34 0.09 ${hueFor(pinned.id)}), oklch(0.17 0.045 ${hueFor(pinned.id)}))`,
                     color: `oklch(0.93 0.11 ${hueFor(pinned.id)})`,
+                    overflow: 'hidden',
                   }}
                 >
-                  {(pinned.name.trim()[0] ?? '?').toUpperCase()}
+                  {characterFor(pinned.template_kind)?.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={characterFor(pinned.template_kind)!.image}
+                      alt=""
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    (pinned.name.trim()[0] ?? '?').toUpperCase()
+                  )}
                 </span>
                 <span className="tma-hub-pinned-body">
                   <span className="tma-hub-pinned-name">{pinned.name}</span>
@@ -417,6 +428,8 @@ export default function AgentsHubPage() {
                       href={`/agents/${a.id}`}
                       hue={hueFor(a.id)}
                       name={a.name}
+                      portraitImage={characterFor(a.template_kind)?.image}
+                      portraitVideo={characterFor(a.template_kind)?.video}
                       role={a.description}
                       model={a.model_slug}
                       metricLabel={`${Number(a.budget_rub_monthly).toFixed(0)} кр/мес`}
