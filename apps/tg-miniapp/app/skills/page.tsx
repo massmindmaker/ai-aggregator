@@ -185,7 +185,7 @@ export default function SkillsPage() {
     <>
       <main className="tma-shell tma-shell--with-nav">
         <header className="tma-header">
-          <span className="tma-eyebrow">Маркет</span>
+          <span className="tma-eyebrow">Каталог</span>
           <h1 className="tma-title">Скиллы</h1>
           <p className="tma-subtitle">
             Скилл — это набор возможностей агента: инструмент, знание-инструкция или

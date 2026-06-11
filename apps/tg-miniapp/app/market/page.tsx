@@ -42,7 +42,7 @@ export default async function MarketPage() {
     <>
       <main className="tma-shell tma-shell--with-nav">
         <header className="tma-header">
-          <span className="tma-eyebrow">Маркет</span>
+          <span className="tma-eyebrow">Каталог</span>
           <h1 className="tma-title">Модели</h1>
           <p className="tma-subtitle">Подключите модель к агенту в один клик.</p>
         </header>
