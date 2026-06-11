@@ -28,6 +28,23 @@ interface TopupRow {
   confirmed_at: string | null;
 }
 
+interface LedgerRow {
+  id: string;
+  kind: string;
+  delta_credits: string;
+  created_at: string;
+}
+
+// P1-9: русские подписи видов движения (леджер D-1).
+const LEDGER_LABEL: Record<string, string> = {
+  topup: 'Пополнение',
+  run_debit: 'Прогон агента',
+  rent_debit: 'Аренда шаблона',
+  rent_credit: 'Доход с аренды',
+  transfer_debit: 'Покупка агента',
+  transfer_credit: 'Продажа агента',
+};
+
 function shortAddr(a: string): string {
   if (a.length <= 12) return a;
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -52,6 +69,7 @@ export default function ProfilePage() {
   const [wallets, setWallets] = useState<WalletRow[]>([]);
   const [balance, setBalance] = useState<string>('0');
   const [topups, setTopups] = useState<TopupRow[]>([]);
+  const [ledger, setLedger] = useState<LedgerRow[]>([]);
   const [linkError, setLinkError] = useState<string | null>(null);
 
   // R2.1-A2: before the wallet connects, arm TON Connect with OUR ton_proof
@@ -141,10 +159,21 @@ export default function ProfilePage() {
     setTopups(j.topups ?? []);
   }
 
+  async function refreshLedger() {
+    if (!token) return;
+    const r = await fetch('/tg/api/tma/ledger', {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return;
+    const j = (await r.json()) as { entries: LedgerRow[] };
+    setLedger(j.entries ?? []);
+  }
+
   useEffect(() => {
     if (!token) return;
     refreshWallets();
     refreshTopups();
+    refreshLedger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -252,37 +281,60 @@ export default function ProfilePage() {
           </section>
         )}
 
-        <section className="tma-card">
-          <h2 className="tma-card-title">История пополнений</h2>
-          {topups.length === 0 ? (
-            <p className="tma-card-text">Пока пусто.</p>
-          ) : (
-            topups.map((t) => (
+        {/* P1-9: единая лента движения средств (леджер D-1). Подтверждённые
+            пополнения живут в леджере (kind=topup) — отдельно показываем только
+            НЕзачисленные топапы (ожидает/expired), чтобы не дублировать. */}
+        <section className="tma-card" id="история">
+          <h2 className="tma-card-title">История средств</h2>
+          {topups
+            .filter((t) => t.status !== 'confirmed')
+            .map((t) => (
               <div className="tma-row" key={t.id}>
-                <span className="tma-mono">{fmtCredits(t.amount_credits)} кр</span>
+                <span className="tma-mono">+{fmtCredits(t.amount_credits)} кр</span>
                 <span
                   className="tma-card-text"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
                 >
                   <span
                     className={`tma-pill ${
-                      t.status === 'confirmed'
-                        ? 'tma-pill--ok'
-                        : t.status === 'pending'
-                          ? 'tma-pill--run'
-                          : 'tma-pill--muted'
+                      t.status === 'pending' ? 'tma-pill--run' : 'tma-pill--muted'
                     }`}
                   >
-                    {t.status === 'confirmed'
-                      ? '✓ зачислено'
-                      : t.status === 'pending'
-                        ? '◷ ожидает'
-                        : `✕ ${t.status}`}
+                    {t.status === 'pending' ? '◷ ожидает' : `✕ ${t.status}`}
                   </span>
                   {new Date(t.created_at).toLocaleDateString('ru-RU')}
                 </span>
               </div>
-            ))
+            ))}
+          {ledger.length === 0 && topups.length === 0 ? (
+            <p className="tma-card-text">
+              Пока пусто. Пополните баланс и запустите агента.
+            </p>
+          ) : (
+            ledger.map((e) => {
+              const delta = Number(e.delta_credits);
+              const positive = delta > 0;
+              return (
+                <div className="tma-row" key={e.id}>
+                  <span
+                    className="tma-mono"
+                    style={{ color: positive ? 'var(--success)' : 'var(--ink)' }}
+                  >
+                    {positive ? '+' : '−'}
+                    {fmtCredits(String(Math.abs(delta)))} кр
+                  </span>
+                  <span
+                    className="tma-card-text"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                  >
+                    {LEDGER_LABEL[e.kind] ?? e.kind}
+                    <span className="tma-text-small" style={{ color: 'var(--ink-faint)' }}>
+                      {new Date(e.created_at).toLocaleDateString('ru-RU')}
+                    </span>
+                  </span>
+                </div>
+              );
+            })
           )}
         </section>
       </main>
