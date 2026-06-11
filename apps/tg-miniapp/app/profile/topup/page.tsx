@@ -102,7 +102,7 @@ export default function TopupPage() {
       return;
     }
     if (!Number.isFinite(amount) || amount < MIN || amount > MAX) {
-      setErrorMsg(`Сумма должна быть от ${fmtCredits(MIN)} до ${fmtCredits(MAX)} cr`);
+      setErrorMsg(`Сумма должна быть от ${fmtCredits(MIN)} до ${fmtCredits(MAX)} кр`);
       return;
     }
 
@@ -177,7 +177,7 @@ export default function TopupPage() {
                 className={`tma-btn ${amount === p ? 'tma-btn--primary' : ''}`}
                 onClick={() => setAmount(p)}
               >
-                {fmtCredits(p)} cr
+                {fmtCredits(p)} кр
               </button>
             ))}
           </div>
@@ -219,7 +219,7 @@ export default function TopupPage() {
             </>
           ) : status === 'confirmed' ? (
             <div className="tma-success">
-              ✓ Зачислено {init ? fmtCredits(init.amount_credits) : '0.00'} cr на ваш баланс.
+              ✓ Зачислено {init ? fmtCredits(init.amount_credits) : '0,00'} кр на ваш баланс.
               <div className="tma-cta" style={{ marginTop: 12 }}>
                 <Link href="/profile" className="tma-btn tma-btn--primary">
                   В профиль
@@ -242,7 +242,7 @@ export default function TopupPage() {
               {status === 'awaiting_signature' && 'Подтвердите в кошельке…'}
               {status === 'submitted' && 'Отправлено, ждём блок…'}
               {status === 'polling' && 'Ждём подтверждения сети…'}
-              {(status === 'idle' || status === 'error') && `Оплатить ${fmtCredits(amount)} cr`}
+              {(status === 'idle' || status === 'error') && `Оплатить ${fmtCredits(amount)} кр`}
             </button>
           )}
 

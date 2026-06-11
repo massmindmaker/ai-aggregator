@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
 import { hueFor } from '@/components/AgentCard';
 import { RunTrace } from '@/components/RunTrace';
+import { fmtCredits, parseCreditsInput } from '@/lib/credits';
 import { TransferPanel } from './TransferPanel';
 
 interface Agent {
@@ -94,6 +95,8 @@ export default function AgentDetailPage() {
     out_per_1m_credits: string;
   } | null>(null);
   const [sending, setSending] = useState(false);
+  // P0-3: ошибка отправки живёт У КОМПОЗЕРА, а не в шапке страницы.
+  const [sendErr, setSendErr] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // ---- publish-as-template ----
@@ -397,10 +400,11 @@ export default function AgentDetailPage() {
       });
       if (res.ok) {
         setInput('');
+        setSendErr(null);
         await load();
       } else {
         const body = await res.json().catch(() => ({}));
-        setFetchErr(body.error ?? `HTTP ${res.status}`);
+        setSendErr(body.error ?? `HTTP ${res.status}`);
       }
     } finally {
       setSending(false);
@@ -432,17 +436,17 @@ export default function AgentDetailPage() {
     if (!token || !id) return;
     setPublishing(true);
     setPublishErr(null);
-    // Empty price → free template (NULL). Else a positive integer in credits.
+    // P0-1: цена вводится в КРЕДИТАХ (дробь допустима) → храним центы.
     let price: number | null = null;
     const trimmed = pPrice.trim();
     if (trimmed) {
-      const n = Number(trimmed);
-      if (!Number.isInteger(n) || n <= 0) {
-        setPublishErr('Цена — целое число кредитов больше нуля (или оставьте пусто)');
+      const parsed = parseCreditsInput(trimmed, 1000);
+      if (parsed === undefined || parsed === null) {
+        setPublishErr('Цена — число от 0,01 до 1 000 кр (или оставьте пусто)');
         setPublishing(false);
         return;
       }
-      price = n;
+      price = parsed;
     }
     try {
       const res = await fetch(`/tg/api/tma/agents/${id}/publish`, {
@@ -604,13 +608,14 @@ export default function AgentDetailPage() {
                   передаются — только спек.
                 </p>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span className="tma-card-text">Цена аренды, кр (пусто = бесплатно)</span>
+                  <span className="tma-card-text">Цена аренды, кр/мес (пусто = бесплатно)</span>
                   <input
                     type="number"
                     value={pPrice}
                     onChange={(ev) => setPPrice(ev.target.value)}
-                    min={1}
-                    step={1}
+                    min={0.01}
+                    max={1000}
+                    step={0.01}
                     placeholder="бесплатно"
                     style={editInputStyle}
                   />
@@ -814,6 +819,22 @@ export default function AgentDetailPage() {
               </button>
             </form>
 
+            {/* P0-3: ошибка отправки — рядом с инпутом, с действием. */}
+            {sendErr && (
+              <div className="tma-error" style={{ marginTop: 0 }}>
+                {sendErr === 'insufficient_balance' ? (
+                  <>
+                    Недостаточно кредитов для запуска.{' '}
+                    <Link href="/profile/topup" style={{ color: 'var(--accent)' }}>
+                      Пополнить баланс
+                    </Link>
+                  </>
+                ) : (
+                  <>Не удалось отправить: {sendErr}</>
+                )}
+              </div>
+            )}
+
             {/* R2.1-A4: честная цена ДО отправки — тариф из реестра, не выдумка. */}
             {agent.connection_type !== 'aiag' ? (
               <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
@@ -823,8 +844,8 @@ export default function AgentDetailPage() {
             ) : modelRate ? (
               <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
                 От <span className="tma-mono">1</span> кр за прогон · тариф модели:{' '}
-                <span className="tma-mono">↓{modelRate.in_per_1m_credits}</span> /{' '}
-                <span className="tma-mono">↑{modelRate.out_per_1m_credits}</span> кр за 1M
+                <span className="tma-mono">↓{fmtCredits(modelRate.in_per_1m_credits)}</span> /{' '}
+                <span className="tma-mono">↑{fmtCredits(modelRate.out_per_1m_credits)}</span> кр за 1M
                 токенов · итог по факту ответа.
               </p>
             ) : null}
@@ -887,7 +908,7 @@ export default function AgentDetailPage() {
               </label>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span className="tma-card-text">Модель (slug OpenRouter)</span>
+                <span className="tma-card-text">Модель</span>
                 <input
                   type="text"
                   value={eModelSlug}

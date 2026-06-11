@@ -191,7 +191,7 @@ export default function ProfilePage() {
         <section className="tma-card aiag-fade-up">
           <div className="tma-row">
             <span className="tma-card-text">Баланс</span>
-            <span className="tma-mono">{fmtCredits(balance)} cr</span>
+            <span className="tma-mono">{fmtCredits(balance)} кр</span>
           </div>
           <div className="tma-cta" style={{ marginTop: 12 }}>
             <Link href="/profile/topup" className="tma-btn tma-btn--primary">
@@ -259,7 +259,7 @@ export default function ProfilePage() {
           ) : (
             topups.map((t) => (
               <div className="tma-row" key={t.id}>
-                <span className="tma-mono">{fmtCredits(t.amount_credits)} cr</span>
+                <span className="tma-mono">{fmtCredits(t.amount_credits)} кр</span>
                 <span
                   className="tma-card-text"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}

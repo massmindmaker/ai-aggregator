@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
+import { fmtCredits, parseCreditsInput } from '@/lib/credits';
 
 // TransferPanel — owner controls + acquirer TON Connect initiate.
 //
@@ -70,15 +71,16 @@ function OwnerControls({
     }
     setSaving(true);
     setErr(null);
+    // P0-1: ввод в КРЕДИТАХ (дробь допустима) → хранение в центах.
     let price: number | null = null;
     if (enable && priceInput.trim()) {
-      const n = Number(priceInput.trim());
-      if (!Number.isInteger(n) || n <= 0 || n > 100_000) {
-        setErr('Цена — целое число от 1 до 100 000 кр (или оставьте пусто для дарения).');
+      const parsed = parseCreditsInput(priceInput, 1000);
+      if (parsed === undefined || parsed === null) {
+        setErr('Цена — число от 0,01 до 1 000 кр (или оставьте пусто для дарения).');
         setSaving(false);
         return;
       }
-      price = n;
+      price = parsed;
     }
     try {
       const res = await fetch(`/tg/api/tma/agents/${agentId}/make-transferable`, {
@@ -134,9 +136,9 @@ function OwnerControls({
               type="number"
               value={priceInput}
               onChange={(e) => setPriceInput(e.target.value)}
-              min={1}
-              max={100000}
-              step={1}
+              min={0.01}
+              max={1000}
+              step={0.01}
               placeholder="бесплатно / дарение"
               style={editInputStyle}
             />
@@ -158,7 +160,7 @@ function OwnerControls({
             {transferPriceCredits ? (
               <span className="tma-card-text tma-text-small">
                 цена:{' '}
-                <span className="tma-mono">{transferPriceCredits}</span> кр
+                <span className="tma-mono">{fmtCredits(transferPriceCredits)}</span> кр
               </span>
             ) : (
               <span className="tma-card-text tma-text-small">только дарение</span>
@@ -236,7 +238,7 @@ function AcquirerInitiate({
   const ctaLabel =
     transferPriceCredits == null
       ? `Принять в дар (минт ~${mintDisplay} TON)`
-      : `Купить за ${transferPriceCredits} кр + минт ~${mintDisplay} TON`;
+      : `Купить за ${fmtCredits(transferPriceCredits)} кр + минт ~${mintDisplay} TON`;
 
   async function handleAcquire() {
     if (!userAddress) return;

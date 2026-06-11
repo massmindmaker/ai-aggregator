@@ -27,11 +27,12 @@ interface Template {
   created_at: string;
 }
 
+// P0-1: хранение = центы, дисплей = кр (÷100) — как кошелёк/RunTrace.
 function priceLabel(price: string | null): string {
   if (price === null) return 'бесплатно';
   const n = Number(price);
   if (!Number.isFinite(n)) return 'бесплатно';
-  return `${n} кр`;
+  return `${(n / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} кр`;
 }
 
 // Russian plural for «оценка» (1 оценка / 2 оценки / 5 оценок).
@@ -297,7 +298,7 @@ export default function TemplateDetailPage() {
                 disabled={renting || loading || !!error}
                 className="tma-btn tma-btn--primary"
               >
-                {renting ? 'Аренда…' : `Арендовать за ${priceNum} кр`}
+                {renting ? 'Аренда…' : `Арендовать за ${priceLabel(String(priceNum))}`}
               </button>
             ) : (
               <button
@@ -313,7 +314,7 @@ export default function TemplateDetailPage() {
             {insufficient && (
               <div className="tma-card" style={{ padding: 14 }}>
                 <p className="tma-card-text">
-                  Недостаточно кредитов для аренды ({priceNum} кр). Пополните
+                  Недостаточно кредитов для аренды ({priceLabel(String(priceNum))}). Пополните
                   баланс и попробуйте снова.
                 </p>
                 <Link href="/profile/topup" className="tma-btn tma-btn--ghost">

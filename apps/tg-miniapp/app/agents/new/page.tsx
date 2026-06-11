@@ -268,7 +268,7 @@ export default function NewAgentPage() {
               </label>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span className="tma-card-text">Модель (slug OpenRouter)</span>
+                <span className="tma-card-text">Модель</span>
                 <input
                   type="text"
                   value={modelSlug}

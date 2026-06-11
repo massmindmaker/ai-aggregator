@@ -27,11 +27,12 @@ const SORTS: { key: SortMode; label: string }[] = [
   { key: 'top', label: 'Топ' },
 ];
 
+// P0-1: хранение = центы, дисплей = кр (÷100) — как кошелёк/RunTrace.
 function priceLabel(price: string | null): string {
   if (price === null) return 'бесплатно';
   const n = Number(price);
   if (!Number.isFinite(n)) return 'бесплатно';
-  return `${n} кр`;
+  return `${(n / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} кр`;
 }
 
 // Russian plural for «клон» (1 клон / 2 клона / 5 клонов).

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import postgres from 'postgres';
 import { notFound } from 'next/navigation';
 import { BottomNav } from '@/components/BottomNav';
+import { fmtCredits } from '@/lib/credits';
 import { TransferPanel } from '../TransferPanel';
 
 export const dynamic = 'force-dynamic';
@@ -73,7 +74,7 @@ export default async function AgentOfferPage({
           <div className="tma-row">
             <span className="tma-card-text">{isGift ? 'Передаётся' : 'Цена'}</span>
             <span className="tma-price-strong">
-              {isGift ? 'в дар' : <><span className="tma-mono">{offer.transfer_price_credits}</span> кр</>}
+              {isGift ? 'в дар' : <><span className="tma-mono">{fmtCredits(offer.transfer_price_credits)}</span> кр</>}
             </span>
           </div>
           <div className="tma-row">
