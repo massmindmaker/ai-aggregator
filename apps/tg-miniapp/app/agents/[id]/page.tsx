@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
 import { hueFor } from '@/components/AgentCard';
 import { RunTrace } from '@/components/RunTrace';
+import { Icon, ICONS } from '@/components/Icon';
 import { fmtCredits, parseCreditsInput } from '@/lib/credits';
 import { TransferPanel } from './TransferPanel';
 
@@ -591,7 +592,8 @@ export default function AgentDetailPage() {
               <div className="tma-spec-cell">
                 <span className="tma-spec-label">Бюджет</span>
                 <span className="tma-spec-value">
-                  <span className="tma-num">{Number(agent.budget_rub_monthly).toFixed(0)}</span> кр/мес
+                  {/* #3: бюджет хранится в центах → показываем ÷100 через общий fmtCredits. */}
+                  <span className="tma-num">{fmtCredits(agent.budget_rub_monthly)}</span> кр/мес
                 </span>
               </div>
               {Array.isArray(agent.tools) && (agent.tools as string[]).length > 0 && (
@@ -630,9 +632,10 @@ export default function AgentDetailPage() {
                   setPublishErr(null);
                   setPublishOpen(true);
                 }}
-                className="tma-btn"
+                className="tma-btn tma-btn--primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
               >
-                ⤴ Опубликовать как шаблон
+                <Icon d={ICONS.publish} /> Опубликовать как шаблон
               </button>
             ) : (
               <form onSubmit={handlePublish} className="tma-card" style={{ padding: 16 }}>
@@ -651,7 +654,7 @@ export default function AgentDetailPage() {
                     max={1000}
                     step={0.01}
                     placeholder="бесплатно"
-                    style={editInputStyle}
+                    className="tma-input"
                   />
                 </label>
                 {pPrice.trim() && (
@@ -698,7 +701,9 @@ export default function AgentDetailPage() {
                 списывается как обычный (в рамках дневного бюджета). */}
             {tab === 'schedule' && (
             <section className="tma-card" style={{ padding: 16 }}>
-              <h2 className="tma-card-title">⏰ Расписание</h2>
+              <h2 className="tma-card-title tma-title-icon">
+                <Icon d={ICONS.clock} /> Расписание
+              </h2>
               <p className="tma-card-text tma-text-small">
                 Агент сам запускается по расписанию с этим заданием. Каждый запуск
                 тратит кредиты в рамках дневного лимита — как обычный запуск.
@@ -730,7 +735,8 @@ export default function AgentDetailPage() {
                     rows={3}
                     maxLength={16000}
                     placeholder="Например: собери утренний дайджест новостей по теме X"
-                    style={{ ...editInputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+                    className="tma-input"
+                    style={{ resize: 'vertical', fontFamily: 'inherit' }}
                   />
                 </label>
 
@@ -739,7 +745,7 @@ export default function AgentDetailPage() {
                   <select
                     value={schInterval}
                     onChange={(e) => setSchInterval(Number(e.target.value))}
-                    style={editInputStyle}
+                    className="tma-input"
                   >
                     {SCHEDULE_INTERVALS.map((i) => (
                       <option key={i.value} value={i.value}>
@@ -790,14 +796,13 @@ export default function AgentDetailPage() {
             {tab === 'dialog' && (
             <>
             <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className="tma-section-head">
-                <h2 className="tma-card-title">Диалог</h2>
-                {runs.length > 0 && (
-                  <span className="tma-section-sub">
-                    агент помнит последние <span className="tma-num">10</span> сообщений · цена за каждый ответ
-                  </span>
-                )}
-              </div>
+              {/* #17: заголовок «Диалог» убран — сегмент-таб уже подписывает секцию.
+                  Оставлена только поясняющая строка про память/цену. */}
+              {runs.length > 0 && (
+                <span className="tma-section-sub">
+                  агент помнит последние <span className="tma-num">10</span> сообщений · цена за каждый ответ
+                </span>
+              )}
               {/* Run-trace: newest first, with per-run cost/duration/status. */}
               <RunTrace runs={runs} />
             </section>
@@ -831,23 +836,17 @@ export default function AgentDetailPage() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Сообщение агенту…"
                 disabled={sending}
-                style={{
-                  flex: 1,
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  border: '1px solid var(--line)',
-                  background: 'var(--bg-surface)',
-                  color: 'var(--ink)',
-                  fontSize: 14,
-                  outline: 'none',
-                }}
+                className="tma-input"
+                style={{ flex: 1 }}
               />
               <button
                 type="submit"
                 disabled={sending || !input.trim()}
                 className="tma-btn tma-btn--primary"
+                aria-label="Отправить"
+                style={{ display: 'inline-flex', alignItems: 'center' }}
               >
-                {sending ? '…' : '→'}
+                {sending ? '…' : <Icon d={ICONS.send} />}
               </button>
             </form>
 
@@ -886,8 +885,12 @@ export default function AgentDetailPage() {
                 Only meaningful for an external_openai (connect-your-own-Hermes)
                 agent; the page itself shows an honest empty state otherwise. */}
             {agent.connection_type === 'external_openai' && (
-              <Link href={`/agents/${id}/kanban`} className="tma-btn">
-                ▤ Канбан (swarm)
+              <Link
+                href={`/agents/${id}/kanban`}
+                className="tma-btn"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+              >
+                <Icon d={ICONS.board} /> Канбан (swarm)
               </Link>
             )}
             </>
@@ -911,7 +914,7 @@ export default function AgentDetailPage() {
                   onChange={(e) => setEName(e.target.value)}
                   required
                   maxLength={200}
-                  style={editInputStyle}
+                  className="tma-input"
                 />
               </label>
 
@@ -922,7 +925,7 @@ export default function AgentDetailPage() {
                   value={eDescription}
                   onChange={(e) => setEDescription(e.target.value)}
                   maxLength={500}
-                  style={editInputStyle}
+                  className="tma-input"
                 />
               </label>
 
@@ -934,7 +937,8 @@ export default function AgentDetailPage() {
                   required
                   rows={8}
                   maxLength={8000}
-                  style={{ ...editInputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+                  className="tma-input"
+                  style={{ resize: 'vertical', fontFamily: 'inherit' }}
                 />
               </label>
 
@@ -946,8 +950,7 @@ export default function AgentDetailPage() {
                 <select
                   value={eModelSlug}
                   onChange={(e) => setEModelSlug(e.target.value)}
-                  className="tma-mono"
-                  style={editInputStyle}
+                  className="tma-input tma-mono"
                 >
                   <option value="">— не выбрана —</option>
                   {models.map((m) => (
@@ -1010,8 +1013,7 @@ export default function AgentDetailPage() {
                   onChange={(e) => setEBudget(Number(e.target.value))}
                   min={0}
                   step={100}
-                  className="tma-mono"
-                  style={editInputStyle}
+                  className="tma-input tma-mono"
                 />
               </label>
 
@@ -1025,8 +1027,7 @@ export default function AgentDetailPage() {
                   min={1}
                   max={1000000}
                   step={50}
-                  className="tma-mono"
-                  style={editInputStyle}
+                  className="tma-input tma-mono"
                 />
                 <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>
                   Жёсткий потолок трат за день. Запуски сверх лимита блокируются до
@@ -1059,7 +1060,7 @@ export default function AgentDetailPage() {
                   <select
                     value={connSel}
                     onChange={(e) => setConnSel(e.target.value)}
-                    style={editInputStyle}
+                    className="tma-input"
                   >
                     <option value="">— не менять —</option>
                     <option value="aiag">Наш шлюз (с наценкой)</option>
@@ -1080,7 +1081,7 @@ export default function AgentDetailPage() {
                           value={connUrl}
                           onChange={(e) => setConnUrl(e.target.value)}
                           placeholder="https://example.com/v1"
-                          style={editInputStyle}
+                          className="tma-input"
                         />
                       </label>
                     )}
@@ -1092,7 +1093,7 @@ export default function AgentDetailPage() {
                         onChange={(e) => setConnKey(e.target.value)}
                         placeholder="sk-…"
                         autoComplete="off"
-                        style={editInputStyle}
+                        className="tma-input"
                       />
                     </label>
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1102,7 +1103,7 @@ export default function AgentDetailPage() {
                         value={connModel}
                         onChange={(e) => setConnModel(e.target.value)}
                         placeholder="gpt-4o"
-                        style={editInputStyle}
+                        className="tma-input"
                       />
                     </label>
                   </>
@@ -1120,8 +1121,11 @@ export default function AgentDetailPage() {
                   background: 'var(--bg-surface)',
                 }}
               >
-                <span className="tma-card-text" style={{ fontWeight: 600 }}>
-                  🧩 MCP-сервер (скиллы)
+                <span
+                  className="tma-card-text"
+                  style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Icon d={ICONS.puzzle} /> MCP-сервер (скиллы)
                 </span>
                 <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -4 }}>
                   Сейчас:{' '}
@@ -1139,7 +1143,7 @@ export default function AgentDetailPage() {
                   <select
                     value={mcpSel}
                     onChange={(e) => setMcpSel(e.target.value)}
-                    style={editInputStyle}
+                    className="tma-input"
                   >
                     <option value="">— не менять —</option>
                     <option value="set">Задать новый MCP-сервер</option>
@@ -1188,7 +1192,7 @@ export default function AgentDetailPage() {
                         value={mcpUrl}
                         onChange={(e) => setMcpUrl(e.target.value)}
                         placeholder="https://mcp.example.com/mcp"
-                        style={editInputStyle}
+                        className="tma-input"
                       />
                     </label>
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1199,7 +1203,7 @@ export default function AgentDetailPage() {
                         onChange={(e) => setMcpAuth(e.target.value)}
                         placeholder="Bearer …"
                         autoComplete="off"
-                        style={editInputStyle}
+                        className="tma-input"
                       />
                     </label>
                   </>
@@ -1231,7 +1235,7 @@ export default function AgentDetailPage() {
                       value={oauthUrl}
                       onChange={(e) => setOauthUrl(e.target.value)}
                       placeholder="https://mcp.example.com/mcp"
-                      style={editInputStyle}
+                      className="tma-input"
                     />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1242,7 +1246,7 @@ export default function AgentDetailPage() {
                       onChange={(e) => setOauthClientId(e.target.value)}
                       placeholder="client_id"
                       autoComplete="off"
-                      style={editInputStyle}
+                      className="tma-input"
                     />
                   </label>
                   {oauthErr && <div className="tma-error">Ошибка: {oauthErr}</div>}
@@ -1306,12 +1310,3 @@ function formatHHMM(iso: string): string {
   return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
-const editInputStyle: React.CSSProperties = {
-  padding: '10px 12px',
-  borderRadius: 8,
-  border: '1px solid var(--line)',
-  background: 'var(--bg-surface)',
-  color: 'var(--ink)',
-  fontSize: 14,
-  outline: 'none',
-};

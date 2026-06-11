@@ -1,5 +1,7 @@
 'use client';
 
+import { fmtCredits } from '@/lib/credits';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // RunTrace — the "what did my agent do" surface (DESIGN.md signature component).
 // A vertical step timeline of past runs; each step carries a status pill and a
@@ -41,12 +43,8 @@ function statusMeta(status: string): { label: string; tone: Tone } {
   }
 }
 
-function fmtCredits(raw: string): string {
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n === 0) return '0';
-  // Sub-credit costs keep two decimals; whole costs stay clean.
-  return n < 1 ? n.toFixed(2) : n.toFixed(n % 1 === 0 ? 0 : 2);
-}
+// КАНОН: cost_rub приходит в ЦЕНТАХ США (D-1). Показ = центы ÷ 100 через общий
+// lib/credits.fmtCredits — локальная копия без ÷100 врала в 100× (баг #3 аудита).
 
 function fmtDuration(start: string, end: string | null): string | null {
   if (!end) return null;

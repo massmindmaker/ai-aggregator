@@ -359,6 +359,35 @@ code {
   line-height: 1.5;
 }
 
+/* #16: единый стиль инпута (был продублирован inline как inputStyle/editInputStyle
+   в [id] и new). bg-surface + 1px line + amber focus-ring (DESIGN.md). */
+.tma-input {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-surface);
+  color: var(--ink);
+  font-size: 14px;
+  outline: none;
+}
+.tma-input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.32);
+}
+
+/* #16: success-карточка с токеном вместо захардкоженного rgba(34,197,94…). */
+.tma-success-box {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: var(--success);
+}
+
+/* #15/#17: заголовок с outline-иконкой — единый строй секций. */
+.tma-title-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* === Sort segment (catalog) === */
 .tma-segment {
   display: inline-flex;

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
 import { hueFor } from '@/components/AgentCard';
+import { Icon, ICONS } from '@/components/Icon';
 import { AGENT_TEMPLATES, getTemplate } from '@/lib/agent-templates';
 
 // Tools actually implemented by the agent-worker (apps/agent-worker/src/tools.ts).
@@ -332,7 +333,7 @@ export default function NewAgentPage() {
                   onChange={(e) => setName(e.target.value)}
                   required
                   maxLength={200}
-                  style={inputStyle}
+                  className="tma-input"
                 />
               </label>
 
@@ -341,7 +342,7 @@ export default function NewAgentPage() {
                 <select
                   value={modelSlug}
                   onChange={(e) => setModelSlug(e.target.value)}
-                  style={inputStyle}
+                  className="tma-input"
                 >
                   {!modelSlug && <option value="">— выберите модель —</option>}
                   {modelSlug && !models.some((m) => m.slug === modelSlug) && (
@@ -369,7 +370,8 @@ export default function NewAgentPage() {
                     required
                     rows={8}
                     maxLength={8000}
-                    style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+                    className="tma-input"
+                    style={{ resize: 'vertical', fontFamily: 'inherit' }}
                   />
                 </label>
               </Accordion>
@@ -450,7 +452,7 @@ export default function NewAgentPage() {
                           setProviderId(e.target.value);
                           setTestResult(null);
                         }}
-                        style={inputStyle}
+                        className="tma-input"
                         required={useExternal}
                       >
                         <option value="">— выбери провайдера —</option>
@@ -472,7 +474,7 @@ export default function NewAgentPage() {
                             setTestResult(null);
                           }}
                           placeholder="https://example.com/v1"
-                          style={inputStyle}
+                          className="tma-input"
                           required={isCustomProvider}
                         />
                       </label>
@@ -487,7 +489,7 @@ export default function NewAgentPage() {
                           setTestResult(null);
                         }}
                         placeholder="sk-…"
-                        style={inputStyle}
+                        className="tma-input"
                         autoComplete="off"
                         required={useExternal}
                       />
@@ -499,7 +501,7 @@ export default function NewAgentPage() {
                         value={extModelSlug}
                         onChange={(e) => setExtModelSlug(e.target.value)}
                         placeholder="например: llama-3.3-70b или gpt-4o"
-                        style={inputStyle}
+                        className="tma-input"
                       />
                       <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>
                         Если пусто — используется поле «Модель» выше.
@@ -519,15 +521,12 @@ export default function NewAgentPage() {
                       {testing ? 'Проверяю…' : 'Проверить соединение'}
                     </button>
                     {testResult?.ok && (
-                      <div
-                        className="tma-card"
-                        style={{
-                          background: 'rgba(34,197,94,0.12)',
-                          borderColor: 'var(--success)',
-                        }}
-                      >
-                        <p className="tma-card-text">
-                          ✓ Endpoint работает{' '}
+                      <div className="tma-card tma-success-box">
+                        <p
+                          className="tma-card-text"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <Icon d={ICONS.check} size={14} /> Endpoint работает{' '}
                           {testResult.model_count != null
                             ? `(моделей: ${testResult.model_count})`
                             : ''}
@@ -590,7 +589,7 @@ export default function NewAgentPage() {
                     value={mcpUrl}
                     onChange={(e) => setMcpUrl(e.target.value)}
                     placeholder="https://mcp.example.com/mcp"
-                    style={inputStyle}
+                    className="tma-input"
                   />
                 </label>
                 {mcpUrl.trim() && (
@@ -602,7 +601,7 @@ export default function NewAgentPage() {
                       onChange={(e) => setMcpAuth(e.target.value)}
                       placeholder="Bearer …"
                       autoComplete="off"
-                      style={inputStyle}
+                      className="tma-input"
                     />
                   </label>
                 )}
@@ -616,7 +615,7 @@ export default function NewAgentPage() {
                     min={1}
                     max={1000000}
                     step={100}
-                    style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                    className="tma-input tma-mono"
                     disabled={useExternal}
                   />
                 </label>
@@ -630,7 +629,7 @@ export default function NewAgentPage() {
                     onChange={(e) => setBudget(Number(e.target.value))}
                     min={0}
                     step={100}
-                    style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                    className="tma-input tma-mono"
                     disabled={useExternal}
                   />
                 </label>
@@ -669,13 +668,3 @@ export default function NewAgentPage() {
     </>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: '10px 12px',
-  borderRadius: 8,
-  border: '1px solid var(--line)',
-  background: 'var(--bg-surface)',
-  color: 'var(--ink)',
-  fontSize: 14,
-  outline: 'none',
-};
