@@ -1224,3 +1224,439 @@ code {
 .tma-fork-glyph {
   color: var(--accent);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Главный экран-хаб (/agents) — спека 2026-06-11.
+ * Блоки: баланс-хедер · сетка 2×4 · pinned-агент · ленты · баннер · bottom-sheet.
+ * Tokens only; transform/opacity-анимации; один амбер-primary («Пополнить»).
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* === Блок 1: баланс-хедер === */
+.tma-hub-balance {
+  gap: 10px;
+}
+
+.tma-hub-balance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tma-hub-sum {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ink);
+  text-decoration: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-hub-sum-unit {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  margin-left: 6px;
+}
+
+.tma-hub-sum-skeleton {
+  height: 38px;
+  width: 60%;
+  border-radius: 6px;
+}
+
+.tma-hub-eye {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--ink-faint);
+  padding: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+}
+
+.tma-hub-eye:hover {
+  color: var(--ink-muted);
+}
+
+.tma-btn--block {
+  display: block;
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+}
+
+.tma-hub-income {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--success);
+  text-decoration: none;
+}
+
+/* === Блок 2: сетка функций 2×4 === */
+.tma-hub-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px 8px;
+}
+
+.tma-hub-cell {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tma-hub-cell-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tma-hub-cell:active .tma-hub-cell-icon {
+  transform: scale(0.94);
+}
+
+.tma-hub-cell-label {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+/* === Блок 3: закреплённый агент === */
+.tma-hub-pinned {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 14px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.tma-hub-pinned-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex: none;
+}
+
+.tma-hub-pinned-avatar--sm {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.tma-hub-pinned-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-hub-pinned-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-hub-pinned-model {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-hub-pinned-chat {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+}
+
+/* === Блоки 4–5: секции лент === */
+.tma-hub-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tma-hub-h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.tma-hub-count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.tma-hub-link {
+  font-size: 13px;
+  color: var(--ink-muted);
+  text-decoration: none;
+}
+
+.tma-hub-link:hover {
+  color: var(--ink);
+}
+
+/* Горизонтальная лента scroll-snap (~2.2 карточки в вьюпорте). */
+.tma-hub-rail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  margin: 0 -20px;
+  padding: 2px 20px 6px;
+  scrollbar-width: none;
+}
+
+.tma-hub-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.tma-hub-rail-item {
+  flex: 0 0 168px;
+  scroll-snap-align: start;
+  display: flex;
+}
+
+.tma-hub-rail-item > * {
+  width: 100%;
+}
+
+/* Пути «Получить агента» (empty-state блока 4). */
+.tma-hub-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tma-hub-path {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.tma-hub-path-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tma-hub-path-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tma-hub-path-sub {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* === Блок 6: баннер-слот === */
+.tma-hub-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.tma-hub-banner-icon {
+  color: var(--accent);
+  display: inline-flex;
+  flex: none;
+}
+
+.tma-hub-banner-text {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+  text-decoration: none;
+}
+
+.tma-hub-banner-text:hover {
+  color: var(--ink);
+}
+
+.tma-hub-banner-close {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 15px;
+  line-height: 1;
+  flex: none;
+}
+
+/* === Bottom-sheet (хаб: «Ещё», выбор агента) === */
+.tma-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.55);
+  animation: tma-sheet-fade 200ms ease;
+}
+
+.tma-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 61;
+  max-width: 640px;
+  margin: 0 auto;
+  max-height: 75vh;
+  overflow-y: auto;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  padding: 8px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  /* Heavy shadow допустим ТОЛЬКО на модалках/шитах (DESIGN.md). */
+  box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.5);
+  animation: tma-sheet-up 240ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes tma-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes tma-sheet-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-sheet,
+  .tma-sheet-scrim {
+    animation: none;
+  }
+}
+
+.tma-sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  margin: 6px auto 14px;
+}
+
+.tma-sheet-title {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.tma-sheet-section {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 14px 0 4px;
+}
+
+.tma-sheet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 2px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tma-sheet-row:last-child {
+  border-bottom: none;
+}
+
+.tma-sheet-row--static {
+  cursor: default;
+  color: var(--ink-muted);
+}
+
+.tma-sheet-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
