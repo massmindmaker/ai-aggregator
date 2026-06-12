@@ -50,7 +50,11 @@ code {
 }
 
 .tma-shell {
-  min-height: 100vh;
+  /* A5: svh устойчивее vh при появлении/скрытии адресной строки в WebView. */
+  min-height: 100svh;
+  /* A4: clip не создаёт stacking context (в отличие от hidden) — глушим
+     горизонтальный скролл от случайных широких потомков. */
+  overflow-x: clip;
   padding: calc(32px + env(safe-area-inset-top, 0px)) 20px 64px;
   max-width: 640px;
   margin: 0 auto;
@@ -1391,6 +1395,16 @@ code {
   color: var(--ink-muted);
 }
 
+/* A3: на узких экранах поджимаем сетку функций, чтобы 4 колонки не резались. */
+@media (max-width: 380px) {
+  .tma-hub-grid {
+    gap: 12px 4px;
+  }
+  .tma-hub-cell-label {
+    font-size: 10px;
+  }
+}
+
 /* === Блок 3: закреплённый агент === */
 .tma-hub-pinned {
   display: flex;
@@ -1832,6 +1846,20 @@ code {
   flex: 1 1 auto;
   padding: 6px 8px;
   white-space: nowrap;
+}
+
+/* A1: fade-намёк справа — видно, что сегменты прокручиваются за край.
+   sticky-псевдоэлемент остаётся у правого края при overflow. */
+.tma-segment--fit::after {
+  content: '';
+  position: sticky;
+  right: 0;
+  align-self: stretch;
+  flex: none;
+  width: 24px;
+  margin-left: -24px;
+  background: linear-gradient(90deg, transparent, var(--bg-surface));
+  pointer-events: none;
 }
 
 /* === P1-10: Маркет — сегмент-навигатор каталогов (Агенты | Модели | Скиллы) === */

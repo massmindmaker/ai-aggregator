@@ -113,6 +113,8 @@ export default function AgentDetailPage() {
   // P0-3: ошибка отправки живёт У КОМПОЗЕРА, а не в шапке страницы.
   const [sendErr, setSendErr] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // K1: confirm-sheet вместо window.confirm() — confirm не работает в Telegram iOS WebView.
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   // ---- publish-as-template ----
   const [publishOpen, setPublishOpen] = useState(false);
@@ -332,13 +334,8 @@ export default function AgentDetailPage() {
       .catch(() => {});
   }, [token]);
 
-  // P1-6: форма настроек видна сразу в сегменте «Настройки» — инициализируем
-  // state редактирования при входе (и переинициализируем после сохранения/сброса).
-  useEffect(() => {
-    if (tab !== 'settings' || !agent || editing) return;
-    startEdit();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, agent, editing]);
+  // K2a: сегмент «Настройки» по умолчанию READ-ONLY. Авто-startEdit() убран —
+  // форма редактирования открывается только по кнопке «Редактировать».
 
   useEffect(() => {
     if (!token || !id) return;
@@ -446,7 +443,7 @@ export default function AgentDetailPage() {
 
   async function handleDelete() {
     if (!token || !id) return;
-    if (!confirm('Удалить агента? Действие необратимо.')) return;
+    setDeleteConfirm(false);
     setDeleting(true);
     try {
       const res = await fetch(`/tg/api/tma/agents/${id}`, {
@@ -829,15 +826,26 @@ export default function AgentDetailPage() {
               </div>
             )}
 
-            <form onSubmit={handleSend} style={{ display: 'flex', gap: 8 }}>
-              <input
-                type="text"
+            <form onSubmit={handleSend} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              {/* K2b: textarea с автовысотой. Enter = отправка, Shift+Enter = перенос. */}
+              <textarea
+                rows={1}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onInput={(e) => {
+                  e.currentTarget.style.height = 'auto';
+                  e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 120) + 'px';
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                }}
                 placeholder="Сообщение агенту…"
                 disabled={sending}
                 className="tma-input"
-                style={{ flex: 1 }}
+                style={{ flex: 1, resize: 'none', overflow: 'hidden', maxHeight: 120 }}
               />
               <button
                 type="submit"
@@ -898,8 +906,92 @@ export default function AgentDetailPage() {
           </>
         )}
 
-        {/* === Сегмент «Настройки»: форма видна сразу (editing инициализирует
-            startEdit() при входе в сегмент), удаление — в самом конце. === */}
+        {/* === Сегмент «Настройки»: READ-ONLY вид + кнопка «Редактировать». === */}
+        {agent && tab === 'settings' && !editing && (
+          <>
+            <section className="tma-spec">
+              <div className="tma-spec-cell tma-spec-cell--wide">
+                <span className="tma-spec-label">Имя</span>
+                <span className="tma-spec-value">{agent.name}</span>
+              </div>
+              {agent.description && (
+                <div className="tma-spec-cell tma-spec-cell--wide">
+                  <span className="tma-spec-label">Описание</span>
+                  <span className="tma-spec-value">{agent.description}</span>
+                </div>
+              )}
+              <div className="tma-spec-cell tma-spec-cell--wide">
+                <span className="tma-spec-label">Модель</span>
+                <span className="tma-spec-value tma-mono" title={agent.model_slug ?? ''}>
+                  {agent.model_slug || '— не выбрана —'}
+                </span>
+              </div>
+              <div className="tma-spec-cell">
+                <span className="tma-spec-label">Подключение</span>
+                <span className="tma-spec-value">
+                  {agent.connection_type === 'external_openai'
+                    ? 'свой провайдер · 0 комиссии'
+                    : 'наш шлюз · с наценкой'}
+                </span>
+              </div>
+              <div className="tma-spec-cell">
+                <span className="tma-spec-label">Бюджет</span>
+                <span className="tma-spec-value">
+                  <span className="tma-num">{fmtCredits(agent.budget_rub_monthly)}</span> кр/мес
+                </span>
+              </div>
+              <div className="tma-spec-cell">
+                <span className="tma-spec-label">Дневной лимит</span>
+                <span className="tma-spec-value">
+                  <span className="tma-num">
+                    {fmtCredits(agent.daily_budget_credits ?? '0')}
+                  </span>{' '}
+                  кр/день
+                </span>
+              </div>
+              {Array.isArray(agent.tools) && (agent.tools as string[]).length > 0 && (
+                <div className="tma-spec-cell tma-spec-cell--wide">
+                  <span className="tma-spec-label">Инструменты</span>
+                  <div className="tma-chips">
+                    {(agent.tools as string[]).map((t) => (
+                      <span key={t} className="tma-chip">
+                        {AVAILABLE_TOOLS.find((x) => x.id === t)?.label ?? t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {agent.mcp_endpoint_url && (
+                <div className="tma-spec-cell tma-spec-cell--wide">
+                  <span className="tma-spec-label">MCP-сервер</span>
+                  <span className="tma-spec-value tma-mono" title={agent.mcp_endpoint_url}>
+                    {agent.mcp_endpoint_url}
+                  </span>
+                </div>
+              )}
+            </section>
+
+            <button
+              type="button"
+              onClick={startEdit}
+              className="tma-btn tma-btn--primary"
+            >
+              Редактировать
+            </button>
+
+            {/* Опасная зона — в самом конце настроек. */}
+            <button
+              type="button"
+              onClick={() => setDeleteConfirm(true)}
+              disabled={deleting}
+              className="tma-btn tma-btn--danger"
+            >
+              {deleting ? 'Удаление…' : 'Удалить агента'}
+            </button>
+          </>
+        )}
+
+        {/* === Сегмент «Настройки»: форма редактирования (editing===true). === */}
         {agent && tab === 'settings' && editing && (
           <>
             <form
@@ -1264,15 +1356,14 @@ export default function AgentDetailPage() {
               {editErr && <div className="tma-error">Ошибка: {editErr}</div>}
 
               <div style={{ display: 'flex', gap: 8 }}>
-                {/* «Сбросить» возвращает форму к сохранённым значениям:
-                    editing=false → эффект входа в сегмент вызовет startEdit(). */}
+                {/* «Отмена» закрывает форму → возврат к READ-ONLY виду настроек. */}
                 <button
                   type="button"
                   onClick={() => setEditing(false)}
                   className="tma-btn"
                   disabled={saving}
                 >
-                  Сбросить
+                  Отмена
                 </button>
                 <button
                   type="submit"
@@ -1285,19 +1376,45 @@ export default function AgentDetailPage() {
                 </button>
               </div>
             </form>
-
-            {/* Опасная зона — в самом конце настроек, вне общего потока. */}
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="tma-btn tma-btn--danger"
-            >
-              {deleting ? 'Удаление…' : 'Удалить агента'}
-            </button>
           </>
         )}
       </main>
+
+      {/* K1: bottom-sheet подтверждения удаления (window.confirm не работает в TG iOS). */}
+      {deleteConfirm && (
+        <div className="tma-sheet-scrim" onClick={() => setDeleteConfirm(false)}>
+          <div
+            className="tma-sheet"
+            role="dialog"
+            aria-label="Удалить агента?"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="tma-sheet-handle" />
+            <h3 className="tma-sheet-title">Удалить агента?</h3>
+            <p className="tma-card-text">Действие необратимо.</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(false)}
+                className="tma-btn"
+                disabled={deleting}
+                style={{ flex: 1 }}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="tma-btn tma-btn--danger"
+                disabled={deleting}
+                style={{ flex: 1 }}
+              >
+                {deleting ? 'Удаление…' : 'Удалить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <BottomNav />
     </>
   );
