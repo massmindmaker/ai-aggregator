@@ -23,20 +23,36 @@ interface AgentRow {
   status: string;
   created_at: string;
   updated_at: string;
+  // Инбокс-превью: последний запуск агента (LEFT JOIN LATERAL agent_runs).
+  last_output?: string | null;
+  last_at?: string | null;
+  last_status?: string | null;
 }
 
 export async function GET(req: NextRequest) {
   const tgUserId = req.headers.get('x-tma-user-id');
   if (!tgUserId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
+  // Инбокс-лента: к каждому агенту цепляем его последний запуск (вывод, время,
+  // статус) через LEFT JOIN LATERAL, и сортируем по «последней активности»
+  // (последний запуск ИЛИ дата создания), чтобы свежие диалоги были сверху.
   const rows = (await sql`
-    SELECT id::text, tg_user_id::text, template_kind, name, description,
-           system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
-           status, created_at, updated_at
-    FROM agents
-    WHERE tg_user_id = ${tgUserId}::bigint
-      AND status != 'deleted'
-    ORDER BY created_at DESC
+    SELECT a.id::text, a.tg_user_id::text, a.template_kind, a.name, a.description,
+           a.system_prompt, a.tools, a.model_slug,
+           a.budget_credits_monthly::text AS budget_rub_monthly,
+           a.status, a.created_at, a.updated_at,
+           r.output AS last_output, r.created_at AS last_at, r.status AS last_status
+    FROM agents a
+    LEFT JOIN LATERAL (
+      SELECT output, created_at, status
+      FROM agent_runs
+      WHERE agent_id = a.id
+      ORDER BY created_at DESC
+      LIMIT 1
+    ) r ON true
+    WHERE a.tg_user_id = ${tgUserId}::bigint
+      AND a.status != 'deleted'
+    ORDER BY COALESCE(r.created_at, a.created_at) DESC
   `) as unknown as AgentRow[];
 
   return NextResponse.json({ agents: rows });
