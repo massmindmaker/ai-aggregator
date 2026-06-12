@@ -11,25 +11,37 @@ interface Item {
   match?: string[];
 }
 
-// Outline SVG paths (24×24 viewbox)
+// Outline SVG paths (24×24 viewbox). Redesign-A: 5 табов.
 const ITEMS: Item[] = [
   {
     href: '/agents',
     label: 'Агенты',
-    iconPath: 'M12 2a3 3 0 013 3v1h2a2 2 0 012 2v3h1v4h-1v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3H4v-4h1V8a2 2 0 012-2h2V5a3 3 0 013-3z M9 13h.01 M15 13h.01', // robot
+    iconPath: 'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z', // chat-bubble
+    match: ['/agents'],
   },
   {
-    // P1-10: «Каталог» = хаб каталогов, дефолт-сегмент — шаблоны (/templates).
-    // Скиллы переехали в сегменты внутри хаба.
-    href: '/templates',
-    label: 'Каталог',
-    iconPath: 'M3 7l9 4 9-4-9-4-9 4z M3 7v10l9 4 9-4V7 M12 11v10', // box
-    match: ['/templates', '/market', '/skills'],
+    href: '/market',
+    label: 'Маркет',
+    iconPath: 'M3 5h7v7H3V5z M14 5h7v7h-7V5z M3 16h7v3H3v-3z M14 16h7v3h-7v-3z', // cards/grid
+    match: ['/market'],
   },
   {
-    href: '/profile',
-    label: 'Профиль',
+    href: '/dashboard',
+    label: 'Дэшборд',
+    iconPath: 'M3 21h18 M6 21V11 M11 21V5 M16 21v-7 M21 21V9', // chart
+    match: ['/dashboard'],
+  },
+  {
+    href: '/wallet',
+    label: 'Кошелёк',
+    iconPath: 'M3 7a2 2 0 012-2h12a2 2 0 012 2v2h2v6h-2v2a2 2 0 01-2 2H5a2 2 0 01-2-2V7z M19 9h-4a3 3 0 000 6h4', // wallet
+    match: ['/wallet'],
+  },
+  {
+    href: '/account',
+    label: 'Аккаунт',
     iconPath: 'M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 4-7 8-7s8 3 8 7', // user
+    match: ['/account'],
   },
 ];
 
