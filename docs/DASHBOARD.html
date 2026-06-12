@@ -127,6 +127,9 @@ const TABS=[
    {t:'★ Дизайн-борд (SoT) — обновлён под redesign-A',d:'5 табов, дом=инбокс, Маркет=персонажи, +Дэшборд/Кошелёк/Аккаунт, баннер. Каноничный визуальный источник правды',p:'wireframes/design-board.html',ty:'html',star:1},
    {t:'🔴 ★ РАЗРЫВ: дизайнборд (SoT) vs построено (2026-06-12)',d:'«Два разных приложения» (основатель прав). КОРЕНЬ: дизайнборд задаёт дом = ЛЕНТА КАРТОЧЕК-ПЕРСОНАЖЕЙ (характер+статы+автор), а я перестроил его в БИРЖЕВОЙ ХАБ по аудиту Bybit/Binance — выкинул сигнатуру PRODUCT.md. Карточка выхолощена до функц-плитки (анти-референс). ~80% экранов есть как роуты, но не попадают в канон. РАЗВИЛКА за основателем: вернуть канон / узаконить хаб / гибрид (рекоменд.)',p:'specs/2026-06-12-designboard-vs-built-gap.md',ty:'md',star:1},
    {t:'🔴 ★ ФОРЕНЗИК-АУДИТ (2026-06-12) — продукт/UX/дизайн/полнота',d:'5 агентов. Подтвердил жалобу основателя с цифрами: ПРОДУКТ 58 · UX 42 (самая больная) · ДИЗАЙН 63 · ПОЛНОТА 55 /108. Топ-косяки: /templates под 4 именами + «Агенты» в 2 места; деньги-каша «купи-что» + «Арендовать» рядом с «появится позже»; цена/бюджет ×100 (центы как кредиты); потёмкинская витрина шаблонов (0 на проде). Память ВРЁТ В МИНУС: author-rent/MCP/реконсилер построены, а доки помечают not-built. Тихо забыто из канона: мультимодель, run-trace, AI-builder, free-run',p:'specs/2026-06-12-forensic-audit.md',ty:'md',star:1},
+   {t:'UI-критика 108 + план улучшений (2026-06-12) — Binance/Bybit-ремесло',d:'Свежий проход после redesign-A. Сейчас: продукт 65 / UX 52 (worst) / дизайн 70 / полнота 57 / адаптивность 50 / анимация 55. Binance/Bybit как референс КАЧЕСТВА (плотность данных, mono-цифры, скорость табов, микроанимация) — без биржевого каркаса на Агентах/Маркете. План: быстрые победы + К1 confirm-в-iOS-фикс + адаптивность safe-area + анимация aiag-* + character-card сигнатура + забытое ядро (мультимодель/AI-builder/free-run/run-trace)',p:'specs/2026-06-12-ui-critique-108-improvement-plan.md',ty:'md',star:1},
+   {t:'Модель продукта + Hermes-маппинг + IA-редизайн + 108 (2026-06-12)',d:'СИНТЕЗ 3 ресёрчей. Ответы основателю: шаблон/наём/клон (клон=всё твоё, спек без ключей, память с нуля); наём и клон-агента-напрямую в коде НЕТ. Hermes ПОПРАВКИ: есть REST API (/api/model/set), модели=1 главная+11 aux (image/voice=тулсеты не слоты), kanban+run-trace богатые→проксировать. 108: продукт 55/UX 37/дизайн 67/полнота 48 + подробность-функций 7/27 (худшее, всё в 1450-строчной странице). IA: Агенты→Нанять/Мои/Создать, Маркет→5 разделов, Досье агента. 3 решения основателя: наём vs переименовать, cloneable, курс-на-Hermes',p:'specs/2026-06-12-product-model-hermes-IA-synthesis.md',ty:'md',star:1},
+   {t:'Wireframe-борд: недостающие экраны (18) — наём/развёртывание/память (2026-06-12)',d:'Ч/б навигируемый борд под модель основателя: создатель РАЗВОРАЧИВАЕТ Hermes-инстанс, другие НАНИМАЮТ отдельный инстанс с общими скиллами + персональной памятью. 18 артбордов: AI-builder, конструктор спека, развёртывание-инстанса, здоровье агента, публикация, НАНЯТЬ, провижн, ДОСЬЕ-НАНЯТОГО, онбординг/free-run, Маркет-разделы Скиллы/MCP/Тузы/Базы, управление памятью, MCP/BYOK-подключения, модалки. Открыть: docs/wireframes/missing-screens/index.html. Спека: specs/2026-06-12-missing-screens-wireframes-design.md',p:'wireframes/missing-screens/index.html',ty:'html',star:1},
    {t:'★ Дизайн-фит аудит + бенчмарки бирж (2026-06-11) — P0+P1 ВНЕДРЕНЫ',d:'Фит был 48/108. ЗАДЕПЛОЕНО 11.06 (релизы 9a315a4+5fd5b83+ec6f013): хаб (баланс+сетка 2x4+pinned+витрина шаблонов) · голо-карточки · единицы кредитов · white-label+пикер модели из реестра · сегменты страницы агента · аккордеоны создания · история средств (леджер). Осталось: P1-10 IA маркета (решение основателя) + P2-хвосты',p:'specs/2026-06-11-design-audit-bench.md',ty:'md',star:1},
    {t:'★ ЕДИНЫЙ дизайн-борд (SoT)',d:'ОДИН борт: мобильный+веб, тёмная/светлая, меню слева / 45 экранов справа. Заменяет разрозненные tma/web/showcase',p:'wireframes/design-board.html',ty:'html',star:1},
    {t:'★ Design readiness (свежий)',d:'Консолидированная оценка: система 86 / shipped 64 / weighted ~72; супер­седит старые эвалы; топ-5 фиксов (карта-компонент, run-trace, shared-слой)',p:'specs/2026-06-04-design-readiness.md',ty:'md',star:1},
@@ -208,12 +211,12 @@ const TODOS=[
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function mdToHtml(md){
   md=md.replace(/\r\n/g,'\n');
-  const fences=[]; md=md.replace(/```([\s\S]*?)```/g,(m,c)=>{fences.push('<pre><code>'+esc(c.replace(/^\n/,''))+'</code></pre>');return ' F'+(fences.length-1)+' ';});
+  const fences=[]; md=md.replace(/```([\s\S]*?)```/g,(m,c)=>{fences.push('<pre><code>'+esc(c.replace(/^\n/,''))+'</code></pre>');return 'F'+(fences.length-1)+'';});
   const lines=md.split('\n'); let out=[],i=0;
   const inline=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/(^|[^*])\*([^*]+)\*/g,'$1<em>$2</em>').replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
   while(i<lines.length){
     let l=lines[i];
-    if(/^ F\d+ $/.test(l.trim())){out.push(fences[+l.trim().match(/\d+/)[0]]);i++;continue;}
+    if(/^F\d+$/.test(l.trim())){out.push(fences[+l.trim().match(/\d+/)[0]]);i++;continue;}
     if(/^\s*$/.test(l)){i++;continue;}
     let h=l.match(/^(#{1,4})\s+(.*)/); if(h){out.push('<h'+h[1].length+'>'+inline(h[2])+'</h'+h[1].length+'>');i++;continue;}
     if(/^\s*([-*_])\1{2,}\s*$/.test(l)){out.push('<hr>');i++;continue;}
@@ -222,7 +225,7 @@ function mdToHtml(md){
       const cells=r=>r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
       let html='<table>';rows.forEach((r,ri)=>{if(/^\s*\|?[\s:\-|]+\|?\s*$/.test(r))return;const tag=ri===0?'th':'td';html+='<tr>'+cells(r).map(c=>'<'+tag+'>'+inline(c)+'</'+tag+'>').join('')+'</tr>';});out.push(html+'</table>');continue;}
     if(/^\s*([-*]|\d+\.)\s+/.test(l)){const ol=/^\s*\d+\./.test(l);let items=[];while(i<lines.length&&/^\s*([-*]|\d+\.)\s+/.test(lines[i])){items.push('<li>'+inline(lines[i].replace(/^\s*([-*]|\d+\.)\s+/,''))+'</li>');i++;}out.push((ol?'<ol>':'<ul>')+items.join('')+(ol?'</ol>':'</ul>'));continue;}
-    let para=[];while(i<lines.length&&!/^\s*$/.test(lines[i])&&!/^(#{1,4}\s|>\s?|\s*\||\s*([-*]|\d+\.)\s)/.test(lines[i])&&!/^ F/.test(lines[i].trim())){para.push(inline(lines[i]));i++;}
+    let para=[];while(i<lines.length&&!/^\s*$/.test(lines[i])&&!/^(#{1,4}\s|>\s?|\s*\||\s*([-*]|\d+\.)\s)/.test(lines[i])&&!/^F/.test(lines[i].trim())){para.push(inline(lines[i]));i++;}
     if(para.length)out.push('<p>'+para.join(' ')+'</p>');
   }
   return out.join('\n');

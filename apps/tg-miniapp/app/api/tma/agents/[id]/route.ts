@@ -40,6 +40,9 @@ interface AgentRow {
   transferable: boolean;
   transfer_price_credits: string | null;
   nft_address: string | null;
+  // Direct-clone opt-in (2026-06-12): owner allows others to clone this agent's
+  // spec via POST …/agents/[id]/clone. Spec-only; no secrets/memory copied.
+  cloneable: boolean;
 }
 
 interface RunRow {
@@ -67,6 +70,7 @@ async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null>
            agents.transferable,
            agents.transfer_price_credits::text AS transfer_price_credits,
            agents.nft_address,
+           agents.cloneable,
            (agents.mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
            (o.agent_id IS NOT NULL) AS mcp_oauth_set,
            o.scope AS mcp_oauth_scope
@@ -143,6 +147,8 @@ interface PatchBody {
   mcp_endpoint_url?: string;
   mcp_auth?: string;
   reset_mcp?: boolean;
+  // Direct-clone opt-in toggle (2026-06-12). Spec-data column only, no money path.
+  cloneable?: boolean;
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -184,6 +190,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     body.daily_budget_credits <= 1_000_000
       ? body.daily_budget_credits
       : Number(existing.daily_budget_credits);
+
+  // Direct-clone opt-in: only a boolean flips it; anything else keeps the current value.
+  const cloneable =
+    typeof body.cloneable === 'boolean' ? body.cloneable : existing.cloneable;
 
   // ---- Connection editing (opt-in) ----
   // Mirrors the create route: BYOK via the catalog routes through external_openai
@@ -275,6 +285,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         model_slug = ${modelSlug},
         budget_credits_monthly = ${budget},
         daily_budget_credits = ${dailyBudget},
+        cloneable = ${cloneable},
         updated_at = NOW()${setConn}${setMcp}
     WHERE id = ${params.id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
@@ -285,6 +296,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
               connection_type, external_base_url, external_api_key_hint,
               external_model_slug,
               mcp_endpoint_url,
+              cloneable,
               (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
               EXISTS (SELECT 1 FROM agent_mcp_oauth o WHERE o.agent_id = agents.id) AS mcp_oauth_set,
               (SELECT o.scope FROM agent_mcp_oauth o WHERE o.agent_id = agents.id) AS mcp_oauth_scope

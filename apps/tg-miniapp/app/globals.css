@@ -2302,3 +2302,98 @@ code {
   display: flex;
   flex-direction: column;
 }
+
+/* === Market: листинг рядов (Скиллы / MCP) + сетка-карточки (Тузы) ===
+   Переиспользует токены/пилюли; добавляет только структуру ряда. */
+.tma-mkt-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tma-mkt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.tma-mkt-row-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--ink-muted);
+}
+
+.tma-mkt-row-body {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tma-mkt-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tma-mkt-row-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.tma-mkt-row-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.tma-mkt-row-cta {
+  flex: none;
+  align-self: center;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+/* Карточка-туз: иконка+статус в шапке, далее заголовок/описание/пример. */
+.tma-mkt-tool {
+  gap: 8px;
+  padding: 16px;
+}
+
+/* Честная плашка раздела (◷ скоро/фаза). */
+.tma-mkt-note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+.tma-mkt-note--link {
+  display: block;
+  padding: 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+.tma-mkt-note--link:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}

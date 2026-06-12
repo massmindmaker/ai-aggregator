@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIAG TMA — Недостающие экраны · Wireframe</title>
+<link rel="stylesheet" href="styles/wireframe.css">
+</head>
+<body>
+<div class="board-wrap">
+
+  <!-- ============ SIDEBAR NAV ============ -->
+  <aside class="board-nav">
+    <h1>AIAG TMA</h1>
+    <div class="sub">Недостающие экраны · ч/б · v0.1</div>
+
+    <div class="grp">Создание / развёртывание</div>
+    <a href="#s-01"><span class="num-badge">01</span>AI-builder «из слов»</a>
+    <a href="#s-02"><span class="num-badge">02</span>Конструктор спека</a>
+    <a href="#s-03"><span class="num-badge">★03</span>Развёртывание инстанса</a>
+    <a href="#s-04"><span class="num-badge">04</span>Здоровье агента</a>
+    <a href="#s-05"><span class="num-badge">05</span>Публикация в Маркет</a>
+
+    <div class="grp">Наём</div>
+    <a href="#s-06"><span class="num-badge">★06</span>Нанять агента</a>
+    <a href="#s-07"><span class="num-badge">07</span>Провижн инстанса</a>
+    <a href="#s-08"><span class="num-badge">★08</span>Досье нанятого</a>
+    <a href="#s-09"><span class="num-badge">09</span>Онбординг / free-run</a>
+
+    <div class="grp">Маркет-разделы</div>
+    <a href="#s-10"><span class="num-badge">★10</span>Маркет · Скиллы</a>
+    <a href="#s-11"><span class="num-badge">★11</span>Маркет · MCP-серверы</a>
+    <a href="#s-12"><span class="num-badge">★12</span>Маркет · Тузы</a>
+    <a href="#s-13"><span class="num-badge">13</span>Маркет · Базы знаний</a>
+
+    <div class="grp">Память / подключения</div>
+    <a href="#s-14"><span class="num-badge">★14</span>Управление памятью</a>
+    <a href="#s-15"><span class="num-badge">15</span>Подключить MCP-токен</a>
+    <a href="#s-16"><span class="num-badge">16</span>Подключить свой ключ</a>
+
+    <div class="grp">Модалки</div>
+    <a href="#s-17"><span class="num-badge">17</span>Модалка «Нанять»</a>
+    <a href="#s-18"><span class="num-badge">18</span>Модалка «Очистить»</a>
+  </aside>
+
+  <!-- ============ BOARD ============ -->
+  <main class="board">
+    <header>
+      <div class="eyebrow">TMA · marketplace AI-агентов · недостающие экраны</div>
+      <h2>AIAG TMA — недостающие экраны</h2>
+      <p>Ч/б технический каркас 18 экранов, которых нет в существующем борде (инбокс/маркет-агенты/кошелёк/дэшборд есть в <code>design-board.html</code>). Модель: создатель <b>разворачивает</b> Hermes-инстанс → другие <b>нанимают</b> его (каждый наём = отдельный инстанс с тем же набором скиллов, но персональной изолированной памятью). Клон = свой спек без ключей + память с нуля. Mobile-first 390×844 + desktop 1200 для конструктора и здоровья. Числа/курсы/ID — моноширинным.</p>
+      <div class="legend">
+        <span><i style="background:repeating-linear-gradient(45deg,#efefef,#efefef 5px,#f7f7f7 5px,#f7f7f7 10px)"></i> плейсхолдер</span>
+        <span><i style="border-style:dashed"></i> зона / реквизиты</span>
+        <span><i style="background:#171717;border-color:#171717"></i> primary action</span>
+        <span>★ — ядро (детально)</span>
+      </div>
+    </header>
+
+    <!-- ======================================================= -->
+    <!-- ФЛОУ A — СОЗДАНИЕ / РАЗВЁРТЫВАНИЕ -->
+    <!-- ======================================================= -->
+    <section class="flow">
+      <h3>A · Создание / развёртывание <small>— создатель разворачивает живой Hermes-инстанс</small></h3>
+      <div class="boards">
+
+        <!-- 01 · AI-builder «из слов» -->
+        <figure class="artboard" id="s-01">
+          <figcaption><b>01</b>AI-builder «из слов» <span class="tag">новое</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Собрать агента</span><span class="badge dash">R&D</span></div>
+            <div class="wf-scroll pad">
+              <div class="eyebrow">шаг 1 · опиши словами</div>
+              <div class="field lg" style="height:96px;align-items:flex-start;margin-top:8px">
+                <span class="ph">Напиши, что должен делать агент. Напр.: «бот-аналитик крипты, ищет новости, считает доходность, отвечает кратко»…</span>
+              </div>
+              <div class="chips" style="margin-top:10px">
+                <span class="chip">аналитик</span><span class="chip">ассистент</span>
+                <span class="chip">копирайтер</span><span class="chip">саппорт</span>
+              </div>
+              <button class="btn primary block" style="margin-top:12px">Сгенерировать спек ✦</button>
+
+              <hr class="div">
+              <div class="eyebrow">шаг 2 · превью спека</div>
+              <div class="card" style="margin-top:8px">
+                <div class="cb">
+                  <div class="row between"><span class="label">Имя</span><span class="num">Нова</span></div>
+                  <hr class="thin" style="margin:8px 0">
+                  <div class="label">Персона</div>
+                  <div class="cap">Сухой крипто-аналитик. Без воды, цифры в монопро…</div>
+                  <hr class="thin" style="margin:8px 0">
+                  <div class="row between"><span class="label">Чат-модель</span><span class="num">gpt-4o-mini</span></div>
+                  <div class="label" style="margin-top:8px">Инструменты</div>
+                  <div class="chips" style="margin-top:6px">
+                    <span class="chip on">web_search</span><span class="chip on">calc</span><span class="chip on">memory</span>
+                  </div>
+                </div>
+              </div>
+              <div class="row" style="margin-top:10px;gap:8px">
+                <button class="btn ghost grow">Править вручную</button>
+              </div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <button class="btn primary block">Развернуть агента →</button>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 02 · Конструктор спека — desktop -->
+        <figure class="artboard" id="s-02">
+          <figcaption><b>02</b>Конструктор спека агента <span class="tag">desktop</span></figcaption>
+          <div class="wf wf-desktop"><div class="wf-screen">
+            <div class="topnav"><span class="logo">AI<b class="muted">·Aggregator</b></span><nav><span>Агенты</span><span class="on">Конструктор</span><span>Маркет</span></nav><div class="right"><span class="badge">черновик</span><span class="btn primary sm">Развернуть</span></div></div>
+            <div class="wf-scroll" style="padding:28px 32px;display:flex;gap:24px">
+              <!-- левая колонка -->
+              <div style="flex:1.3;display:flex;flex-direction:column;gap:18px">
+                <div class="card"><div class="ch">Личность · SOUL.md</div><div class="cb">
+                  <div class="field lg" style="height:90px;align-items:flex-start"><span class="ph">Кто этот агент, как говорит, чего избегает… (free text, как SOUL.md в Hermes)</span></div>
+                </div></div>
+
+                <div class="card"><div class="ch">Модели</div><div class="cb">
+                  <span class="input-label">Чат-модель (главная)</span>
+                  <div class="field"><span class="val">openai/gpt-4o-mini</span><span class="caret">▾</span></div>
+                  <hr class="div">
+                  <div class="row between"><span class="label">Расширенные aux-слоты</span><span class="muted">▸ vision · compression · web_extract</span></div>
+                  <div class="cap muted" style="margin-top:6px">Коллапс. 11 aux-слотов Hermes. image_gen / voice — это тузы, не слоты модели.</div>
+                </div></div>
+
+                <div class="card"><div class="ch">Скиллы / Тузы</div><div class="cb">
+                  <div class="opt on"><span class="rd"></span><span class="tx grow">web_search <span class="muted">— поиск в вебе</span></span><span class="badge">live</span></div>
+                  <div class="opt on"><span class="rd"></span><span class="tx grow">calc <span class="muted">— калькулятор</span></span><span class="badge">live</span></div>
+                  <div class="opt"><span class="rd"></span><span class="tx grow">image_gen <span class="muted">— генерация картинок</span></span><span class="badge dash">скоро</span></div>
+                  <div class="opt on"><span class="rd"></span><span class="tx grow">memory <span class="muted">— долгая память</span></span><span class="badge">live</span></div>
+                </div></div>
+              </div>
+              <!-- правая колонка -->
+              <div style="flex:.8;display:flex;flex-direction:column;gap:18px">
+                <div class="card"><div class="ch">MCP-серверы</div><div class="cb">
+                  <div class="kv"><span class="k">Notion</span><span class="v">подключён ✓</span></div>
+                  <div class="kv"><span class="k">GitHub</span><span class="v muted">—</span></div>
+                  <button class="btn ghost block sm" style="margin-top:10px">+ Добавить MCP</button>
+                </div></div>
+
+                <div class="card"><div class="ch">Память</div><div class="cb">
+                  <div class="opt on"><span class="rd"></span><span class="tx grow">Включить память</span></div>
+                  <span class="input-label" style="margin-top:10px">Лимит фактов</span>
+                  <div class="field"><span class="val">2000</span><span class="unit">шт</span></div>
+                  <div class="cap muted" style="margin-top:6px">Hermes: MEMORY.md + FTS5 (текст, не вектор).</div>
+                </div></div>
+
+                <div class="card soft"><div class="cb">
+                  <div class="eyebrow">итог</div>
+                  <div class="kv"><span class="k">Тузов</span><span class="v">3</span></div>
+                  <div class="kv"><span class="k">MCP</span><span class="v">1</span></div>
+                  <div class="kv"><span class="k">Оценка RAM</span><span class="v">~420 МБ</span></div>
+                </div></div>
+              </div>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 02b · Конструктор — mobile -->
+        <figure class="artboard">
+          <figcaption><b>02</b>Конструктор спека <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Конструктор</span><span class="badge">черновик</span></div>
+            <div class="wf-scroll pad">
+              <div class="tabline" style="margin-bottom:12px">
+                <span class="t on">Личность</span><span class="t">Модели</span><span class="t">Тузы</span><span class="t">MCP</span><span class="t">Память</span>
+              </div>
+              <span class="input-label">Личность · SOUL.md</span>
+              <div class="field lg" style="height:120px;align-items:flex-start"><span class="ph">Кто агент, как говорит, чего избегает…</span></div>
+              <hr class="div">
+              <span class="input-label">Чат-модель</span>
+              <div class="field"><span class="val">gpt-4o-mini</span><span class="caret">▾</span></div>
+              <div class="card soft" style="margin-top:10px"><div class="cb">
+                <div class="row between"><span class="label">aux-слоты модели</span><span class="muted">▸ vision · compress…</span></div>
+              </div></div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <button class="btn primary block">Развернуть агента</button>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- ★03 · Развёртывание инстанса -->
+        <figure class="artboard" id="s-03">
+          <figcaption><b>★03</b>Развёртывание инстанса <span class="tag">новое</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="title">Разворачиваю «Нова»</span></div>
+            <div class="wf-scroll pad">
+              <div class="stepper" style="margin:8px 0 24px">
+                <div class="st done"><div class="dot">✓</div><div class="cap">Спек</div></div>
+                <div class="st done"><div class="dot">✓</div><div class="cap">Инстанс</div></div>
+                <div class="st now"><div class="dot">3</div><div class="cap">Скиллы</div></div>
+                <div class="st"><div class="dot">4</div><div class="cap">Готов</div></div>
+              </div>
+
+              <div class="card"><div class="ch">лог развёртывания</div><div class="cb" style="font-family:var(--mono);font-size:11px;line-height:1.9;color:var(--body)">
+                <div>[00:01] готовлю спек… ok</div>
+                <div>[00:03] hermes profile: nova-7f2 … ok</div>
+                <div>[00:06] поднимаю инстанс на VPS … ok</div>
+                <div>[00:09] порт <span style="color:var(--ink)">:8642</span> слушает … ok</div>
+                <div>[00:11] подключаю web_search … <span style="color:var(--ink)">…</span></div>
+              </div></div>
+
+              <div class="card soft" style="margin-top:14px"><div class="cb">
+                <div class="eyebrow">ресурсы инстанса</div>
+                <div class="kv"><span class="k">RAM</span><span class="v">418 МБ</span></div>
+                <div class="kv"><span class="k">Порт</span><span class="v">8642</span></div>
+                <div class="kv"><span class="k">Профиль</span><span class="v">nova-7f2</span></div>
+                <div class="kv"><span class="k">Аптайм</span><span class="v">00:00:11</span></div>
+              </div></div>
+
+              <div class="warn" style="margin-top:14px"><span class="ic">i</span><span>Инстанс крутится на нашем VPS. Один профиль Hermes — своя память и порты.</span></div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <button class="btn primary block">Открыть агента →</button>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 04 · Здоровье — desktop -->
+        <figure class="artboard" id="s-04">
+          <figcaption><b>04</b>Здоровье моего агента <span class="tag">desktop</span></figcaption>
+          <div class="wf wf-desktop"><div class="wf-screen">
+            <div class="topnav"><span class="logo">AI<b class="muted">·Aggregator</b></span><nav><span class="on">Агенты</span><span>Маркет</span><span>Кошелёк</span></nav><div class="right"><span class="badge"><span class="star"></span>online</span></div></div>
+            <div class="wf-scroll" style="padding:28px 32px">
+              <div class="row between" style="margin-bottom:20px">
+                <div class="row"><span class="ava lg"></span><div class="col"><span class="h-md">Нова</span><span class="cap muted">профиль <span class="num">nova-7f2</span> · :8642</span></div></div>
+                <div class="row" style="gap:8px"><button class="btn ghost sm">Логи</button><button class="btn ghost sm">Рестарт</button></div>
+              </div>
+              <div class="row" style="gap:18px;align-items:stretch">
+                <div class="card grow"><div class="cb"><div class="eyebrow">статус</div><div class="h-lg num">online</div><div class="cap muted">аптайм <span class="num">14д 06:21</span></div></div></div>
+                <div class="card grow"><div class="cb"><div class="eyebrow">нанят раз</div><div class="h-lg num">128</div><div class="cap muted up">+12 за неделю</div></div></div>
+                <div class="card grow"><div class="cb"><div class="eyebrow">нагрузка</div><div class="h-lg num">37%</div><div class="cap muted">RAM 418 МБ</div></div></div>
+                <div class="card grow"><div class="cb"><div class="eyebrow">доход</div><div class="h-lg num">2 940 кр</div><div class="cap muted">рента + прогоны</div></div></div>
+              </div>
+              <div class="card" style="margin-top:18px"><div class="ch">последние прогоны</div><div class="cb">
+                <table class="tbl">
+                  <thead><tr><th>сессия</th><th>наниматель</th><th class="n">токенов</th><th class="n">стоимость</th><th class="n">статус</th></tr></thead>
+                  <tbody>
+                    <tr><td class="num">s-9a1</td><td>@user_402</td><td class="n">3 120</td><td class="n">1.40 кр</td><td class="n">ok</td></tr>
+                    <tr><td class="num">s-9a0</td><td>@user_118</td><td class="n">880</td><td class="n">0.31 кр</td><td class="n">ok</td></tr>
+                    <tr><td class="num">s-99f</td><td>@user_077</td><td class="n">5 410</td><td class="n">2.05 кр</td><td class="n">ok</td></tr>
+                  </tbody>
+                </table>
+              </div></div>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 04b · Здоровье — mobile -->
+        <figure class="artboard">
+          <figcaption><b>04</b>Здоровье агента <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Нова · здоровье</span><span class="badge"><span class="star"></span>online</span></div>
+            <div class="wf-scroll pad">
+              <div class="row" style="gap:10px">
+                <div class="card soft grow"><div class="cb"><div class="eyebrow">аптайм</div><div class="h-md num">14д</div></div></div>
+                <div class="card soft grow"><div class="cb"><div class="eyebrow">нанят</div><div class="h-md num">128</div></div></div>
+              </div>
+              <div class="row" style="gap:10px;margin-top:10px">
+                <div class="card soft grow"><div class="cb"><div class="eyebrow">нагрузка</div><div class="h-md num">37%</div></div></div>
+                <div class="card soft grow"><div class="cb"><div class="eyebrow">доход</div><div class="h-md num">2 940 кр</div></div></div>
+              </div>
+              <div class="card" style="margin-top:12px"><div class="cb">
+                <div class="kv"><span class="k">Профиль</span><span class="v">nova-7f2</span></div>
+                <div class="kv"><span class="k">Порт</span><span class="v">8642</span></div>
+                <div class="kv"><span class="k">RAM</span><span class="v">418 МБ</span></div>
+              </div></div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <div class="row" style="gap:8px"><button class="btn ghost grow">Логи</button><button class="btn grow">Рестарт</button></div>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 05 · Публикация в Маркет -->
+        <figure class="artboard" id="s-05">
+          <figcaption><b>05</b>Публикация в Маркет <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Опубликовать «Нова»</span></div>
+            <div class="wf-scroll pad">
+              <div class="opt on"><span class="rd"></span><span class="tx grow">Сделать нанимаемым <span class="muted">— другие смогут нанять</span></span></div>
+              <hr class="div">
+              <span class="input-label">Цена аренды</span>
+              <div class="seg" style="margin-bottom:10px"><span class="s">Бесплатно</span><span class="s on">N кр / мес</span></div>
+              <div class="field"><span class="val">200</span><span class="unit">кр / мес</span></div>
+              <div class="cap muted" style="margin-top:6px">Вы получаете ровно эту сумму. AIAG берёт 0% с ренты, зарабатывает на моделях.</div>
+              <hr class="div">
+              <div class="opt on"><span class="rd"></span><span class="tx grow">Разрешить клон <span class="muted">— скопировать спек без ключей</span></span></div>
+
+              <div class="card" style="margin-top:16px"><div class="ch">превью карточки</div><div class="cb">
+                <div class="row" style="gap:12px"><span class="ava lg"></span><div class="col grow"><span class="h-md">Нова</span><span class="cap muted">крипто-аналитик · @you</span><div class="chips" style="margin-top:6px"><span class="chip">web_search</span><span class="chip">calc</span></div></div></div>
+                <hr class="thin" style="margin:12px 0">
+                <div class="row between"><span class="num muted">★ 4.9 · 128 наймов</span><span class="num">200 кр/мес</span></div>
+              </div></div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <button class="btn primary block">Опубликовать</button>
+            </div>
+          </div></div>
+        </figure>
+
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- ФЛОУ B — НАЁМ -->
+    <!-- ======================================================= -->
+    <section class="flow">
+      <h3>B · Наём <small>— каждый наём = отдельный инстанс, та же спека, своя изолированная память</small></h3>
+      <div class="boards">
+
+        <!-- ★06 · Нанять агента -->
+        <figure class="artboard" id="s-06">
+          <figcaption><b>★06</b>Нанять агента <span class="tag">новое</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Нанять агента</span></div>
+            <div class="wf-scroll pad">
+              <div class="row" style="gap:12px"><span class="ava lg"></span><div class="col grow"><span class="h-md">Нова</span><span class="cap muted">крипто-аналитик · от @maker_ai</span><div class="row" style="gap:8px;margin-top:4px"><span class="num muted">★ 4.9</span><span class="num muted">128 наймов</span></div></div></div>
+
+              <div class="card" style="margin-top:16px"><div class="ch">что получаешь</div><div class="cb">
+                <div class="opt on" style="border:0;padding:7px 0"><span class="rd"></span><span class="tx">Те же скиллы: <b>web_search · calc · memory</b></span></div>
+                <div class="opt on" style="border:0;padding:7px 0"><span class="rd"></span><span class="tx">Своя <b>изолированная память</b> — с нуля</span></div>
+                <div class="opt on" style="border:0;padding:7px 0"><span class="rd"></span><span class="tx">Своя история диалога</span></div>
+                <div class="opt on" style="border:0;padding:7px 0"><span class="rd"></span><span class="tx">Спек создателя — <b>read-only</b></span></div>
+              </div></div>
+
+              <div class="escrow" style="margin-top:14px"><span class="lock">🔒</span><span class="t"><b>Изоляция гарантирована</b>Создатель не видит твою память и диалоги. Отдельный инстанс <span class="num">(agent_id + ты)</span>.</span></div>
+
+              <div class="card soft" style="margin-top:14px"><div class="cb">
+                <div class="kv"><span class="k">Аренда автору</span><span class="v">200 кр / мес</span></div>
+                <div class="kv"><span class="k">Развёртывание инстанса</span><span class="v">10 кр</span></div>
+                <div class="kv total"><span class="k">Сейчас</span><span class="v">210 кр</span></div>
+              </div></div>
+              <div class="cap muted" style="margin-top:6px">Модели тарифицируются отдельно по мере использования.</div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <button class="btn primary block">Нанять · 210 кр</button>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 07 · Провижн инстанса -->
+        <figure class="artboard" id="s-07">
+          <figcaption><b>07</b>Провижн моего инстанса <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="title">Создаём твой инстанс</span></div>
+            <div class="wf-scroll pad center" style="justify-content:center;display:flex;flex-direction:column;gap:18px">
+              <div class="stepper">
+                <div class="st done"><div class="dot">✓</div><div class="cap">Оплата</div></div>
+                <div class="st now"><div class="dot">2</div><div class="cap">Инстанс</div></div>
+                <div class="st"><div class="dot">3</div><div class="cap">Готов</div></div>
+              </div>
+              <div class="img" style="width:80px;height:80px;border-radius:50%;margin:8px auto"></div>
+              <div class="h-md center">Поднимаем «Нова» для тебя…</div>
+              <div class="cap muted center">Свой профиль <span class="num">nova-u402</span> · чистая память</div>
+              <div class="card soft" style="margin-top:6px"><div class="cb">
+                <div class="kv"><span class="k">Профиль</span><span class="v">nova-u402</span></div>
+                <div class="kv"><span class="k">Память</span><span class="v">пустая · твоя</span></div>
+                <div class="kv"><span class="k">Статус</span><span class="v">подключаю скиллы…</span></div>
+              </div></div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <button class="btn ghost block">Готов · открыть чат</button>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- ★08 · Досье нанятого инстанса -->
+        <figure class="artboard" id="s-08">
+          <figcaption><b>★08</b>Досье нанятого инстанса <span class="tag">новое</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Нова <span class="muted" style="font-size:12px">(нанят)</span></span><span class="icon">⋯</span></div>
+            <div class="wf-scroll">
+              <div class="pad" style="padding-bottom:0">
+                <div class="row" style="gap:10px"><span class="ava"></span><div class="col grow"><span class="h-md" style="font-size:15px">Нова</span><span class="cap muted">нанят у @maker_ai · профиль <span class="num">nova-u402</span></span></div><span class="badge"><span class="star"></span>online</span></div>
+                <div class="tabline" style="margin-top:14px">
+                  <span class="t on">Чат</span><span class="t">Память</span><span class="t">Спек (read-only)</span>
+                </div>
+              </div>
+              <div class="pad chat" style="gap:10px">
+                <div class="b sys">сессия начата · память пустая (твоя)</div>
+                <div class="b">Привет! Я Нова. Память пока чистая — расскажи, что отслеживать.<div class="ts">09:40</div></div>
+                <div class="b me">Следи за TON и USDT, кратко.<div class="ts">09:41</div></div>
+                <div class="b">Записал в память: интерес — TON, USDT. <span class="num">[memory+2]</span><div class="ts">09:41</div></div>
+              </div>
+              <div class="card soft" style="margin:0 16px 12px"><div class="cb">
+                <div class="row between"><span class="label">Спек</span><span class="badge dash">read-only создателя</span></div>
+                <div class="row between" style="margin-top:6px"><span class="label">Память</span><span class="badge">твоя · 2 факта</span></div>
+                <button class="btn ghost block sm" style="margin-top:10px">Подключить свои ключи (BYOK)</button>
+              </div></div>
+            </div>
+            <div class="chatbar"><span class="f">Сообщение…</span><button class="btn sm">↑</button></div>
+          </div></div>
+        </figure>
+
+        <!-- 09 · Онбординг / free-first-run -->
+        <figure class="artboard" id="s-09">
+          <figcaption><b>09</b>Онбординг / free-first-run <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="title">Знакомство</span><span class="muted" style="font-size:12px">1 / 3</span></div>
+            <div class="wf-scroll pad">
+              <div class="stepper" style="margin:6px 0 22px">
+                <div class="st now"><div class="dot">1</div><div class="cap">Что это</div></div>
+                <div class="st"><div class="dot">2</div><div class="cap">Найди</div></div>
+                <div class="st"><div class="dot">3</div><div class="cap">Запуск</div></div>
+              </div>
+              <div class="img" style="height:180px;border-radius:12px"></div>
+              <div class="eyebrow" style="margin-top:16px">шаг 1</div>
+              <div class="h-lg" style="margin-top:4px">Агент — это не бот, а персонаж</div>
+              <p class="cap" style="margin-top:8px">У него лицо, характер, набор навыков и память. Живёт в Telegram, работает сам.</p>
+              <div class="card soft" style="margin-top:14px"><div class="cb">
+                <div class="row"><span class="badge"><span class="v"></span></span><span class="cap grow">Найди или наними готового</span></div>
+                <hr class="thin" style="margin:8px 0">
+                <div class="row"><span class="badge"><span class="v"></span></span><span class="cap grow">Первый запуск <b>бесплатно</b></span></div>
+              </div></div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <div class="row" style="gap:8px"><button class="btn ghost grow">Пропустить</button><button class="btn primary grow">Далее →</button></div>
+            </div>
+          </div></div>
+        </figure>
+
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- ФЛОУ C — МАРКЕТ-РАЗДЕЛЫ -->
+    <!-- ======================================================= -->
+    <section class="flow">
+      <h3>C · Маркет-разделы <small>— 5 настоящих разделов вместо одного чипа</small></h3>
+      <div class="boards">
+
+        <!-- ★10 · Маркет · Скиллы -->
+        <figure class="artboard" id="s-10">
+          <figcaption><b>★10</b>Маркет · Скиллы <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="title">Маркет</span><span class="icon">⌕</span></div>
+            <div class="wf-scroll">
+              <div class="pad-x" style="padding-top:10px"><div class="seg ghost"><span class="s">Агенты</span><span class="s on">Скиллы</span><span class="s">MCP</span><span class="s">Тузы</span><span class="s">Базы</span></div></div>
+              <div style="margin-top:8px">
+                <div class="order-row"><div class="top"><span class="img" style="width:34px;height:34px;border-radius:8px"></span><span class="name grow">web_search</span><span class="badge">live</span></div><div class="meta" style="margin-top:4px">Поиск в интернете и извлечение фактов</div></div>
+                <div class="order-row"><div class="top"><span class="img" style="width:34px;height:34px;border-radius:8px"></span><span class="name grow">calc</span><span class="badge">live</span></div><div class="meta" style="margin-top:4px">Точные вычисления, проценты, доходность</div></div>
+                <div class="order-row"><div class="top"><span class="img" style="width:34px;height:34px;border-radius:8px"></span><span class="name grow">image_gen</span><span class="badge dash">скоро</span></div><div class="meta" style="margin-top:4px">Генерация изображений (тулсет)</div></div>
+                <div class="order-row"><div class="top"><span class="img" style="width:34px;height:34px;border-radius:8px"></span><span class="name grow">memory</span><span class="badge">live</span></div><div class="meta" style="margin-top:4px">Долговременная память агента (FTS5)</div></div>
+                <div class="scrollnote">↓ ещё 6 скиллов…</div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><div class="ic"></div>Агенты</div>
+              <div class="tab on"><div class="ic"></div>Маркет</div>
+              <div class="tab"><div class="ic"></div>Кошелёк</div>
+              <div class="tab"><div class="ic"></div>Ещё</div>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- ★11 · Маркет · MCP-серверы -->
+        <figure class="artboard" id="s-11">
+          <figcaption><b>★11</b>Маркет · MCP-серверы <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="title">Маркет</span><span class="icon">⌕</span></div>
+            <div class="wf-scroll">
+              <div class="pad-x" style="padding-top:10px"><div class="seg ghost"><span class="s">Агенты</span><span class="s">Скиллы</span><span class="s on">MCP</span><span class="s">Тузы</span><span class="s">Базы</span></div></div>
+              <div class="pad">
+                <div class="card" style="margin-bottom:10px"><div class="cb"><div class="row"><span class="img" style="width:36px;height:36px;border-radius:8px"></span><div class="col grow" style="margin-left:10px"><span class="name" style="font-weight:600">Notion</span><span class="meta muted" style="font-size:11px">База знаний, заметки, задачи</span></div><button class="btn ghost sm">Подключить</button></div></div></div>
+                <div class="card" style="margin-bottom:10px"><div class="cb"><div class="row"><span class="img" style="width:36px;height:36px;border-radius:8px"></span><div class="col grow" style="margin-left:10px"><span class="name" style="font-weight:600">GitHub</span><span class="meta muted" style="font-size:11px">Репозитории, issues, PR</span></div><button class="btn ghost sm">Подключить</button></div></div></div>
+                <div class="card" style="margin-bottom:10px"><div class="cb"><div class="row"><span class="img" style="width:36px;height:36px;border-radius:8px"></span><div class="col grow" style="margin-left:10px"><span class="name" style="font-weight:600">Linear</span><span class="meta muted" style="font-size:11px">Трекер задач</span></div><button class="btn ghost sm">Подключить</button></div></div></div>
+                <div class="card"><div class="cb"><div class="row"><span class="img" style="width:36px;height:36px;border-radius:8px"></span><div class="col grow" style="margin-left:10px"><span class="name" style="font-weight:600">Sentry</span><span class="meta muted" style="font-size:11px">Ошибки и мониторинг</span></div><button class="btn ghost sm">Подключить</button></div></div></div>
+                <button class="btn ghost block" style="margin-top:12px">+ Свой MCP-сервер</button>
+              </div>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><div class="ic"></div>Агенты</div>
+              <div class="tab on"><div class="ic"></div>Маркет</div>
+              <div class="tab"><div class="ic"></div>Кошелёк</div>
+              <div class="tab"><div class="ic"></div>Ещё</div>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- ★12 · Маркет · Тузы -->
+        <figure class="artboard" id="s-12">
+          <figcaption><b>★12</b>Маркет · Тузы <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="title">Маркет</span><span class="icon">⌕</span></div>
+            <div class="wf-scroll">
+              <div class="pad-x" style="padding-top:10px"><div class="seg ghost"><span class="s">Агенты</span><span class="s">Скиллы</span><span class="s">MCP</span><span class="s on">Тузы</span><span class="s">Базы</span></div></div>
+              <div class="pad" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="card"><div class="cb"><span class="img" style="width:36px;height:36px;border-radius:8px"></span><div class="name" style="font-weight:600;margin-top:8px">web_extract</div><div class="meta muted" style="font-size:11px;margin-top:2px">«вытяни цены с сайта X»</div><span class="badge" style="margin-top:8px">live</span></div></div>
+                <div class="card"><div class="cb"><span class="img" style="width:36px;height:36px;border-radius:8px"></span><div class="name" style="font-weight:600;margin-top:8px">browser</div><div class="meta muted" style="font-size:11px;margin-top:2px">«зайди и нажми кнопку»</div><span class="badge" style="margin-top:8px">live</span></div></div>
+                <div class="card"><div class="cb"><span class="img" style="width:36px;height:36px;border-radius:8px"></span><div class="name" style="font-weight:600;margin-top:8px">image_gen</div><div class="meta muted" style="font-size:11px;margin-top:2px">«нарисуй обложку»</div><span class="badge dash" style="margin-top:8px">paid · скоро</span></div></div>
+                <div class="card"><div class="cb"><span class="img" style="width:36px;height:36px;border-radius:8px"></span><div class="name" style="font-weight:600;margin-top:8px">tts / voice</div><div class="meta muted" style="font-size:11px;margin-top:2px">«озвучь ответ»</div><span class="badge dash" style="margin-top:8px">paid · скоро</span></div></div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><div class="ic"></div>Агенты</div>
+              <div class="tab on"><div class="ic"></div>Маркет</div>
+              <div class="tab"><div class="ic"></div>Кошелёк</div>
+              <div class="tab"><div class="ic"></div>Ещё</div>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 13 · Маркет · Базы знаний -->
+        <figure class="artboard" id="s-13">
+          <figcaption><b>13</b>Маркет · Базы знаний <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="title">Маркет</span><span class="icon">⌕</span></div>
+            <div class="wf-scroll">
+              <div class="pad-x" style="padding-top:10px"><div class="seg ghost"><span class="s">Агенты</span><span class="s">Скиллы</span><span class="s">MCP</span><span class="s">Тузы</span><span class="s on">Базы</span></div></div>
+              <div class="pad center" style="display:flex;flex-direction:column;justify-content:center;height:480px;gap:14px">
+                <div class="badge dash" style="margin:0 auto">◷ скоро · фаза 3</div>
+                <div class="h-md">Базы знаний</div>
+                <p class="cap muted" style="max-width:280px;margin:0 auto">Загрузишь PDF, доки и ссылки — агент будет отвечать строго по твоим материалам. Привязка к памяти инстанса, изоляция на нанимателя.</p>
+                <button class="btn ghost" style="margin:6px auto">Уведомить о запуске</button>
+              </div>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><div class="ic"></div>Агенты</div>
+              <div class="tab on"><div class="ic"></div>Маркет</div>
+              <div class="tab"><div class="ic"></div>Кошелёк</div>
+              <div class="tab"><div class="ic"></div>Ещё</div>
+            </div>
+          </div></div>
+        </figure>
+
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- ФЛОУ D — ПАМЯТЬ / ПОДКЛЮЧЕНИЯ -->
+    <!-- ======================================================= -->
+    <section class="flow">
+      <h3>D · Память / подключения <small>— память инстанса, MCP-токен, BYOK</small></h3>
+      <div class="boards">
+
+        <!-- ★14 · Управление памятью -->
+        <figure class="artboard" id="s-14">
+          <figcaption><b>★14</b>Управление памятью агента <span class="tag">новое</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Память · Нова</span><span class="badge">42 факта</span></div>
+            <div class="wf-scroll">
+              <div class="pad" style="padding-bottom:0">
+                <div class="field"><span class="ph">⌕ Поиск по памяти…</span></div>
+                <div class="cap muted" style="margin-top:8px">Память этого инстанса. Изолирована — создатель не видит.</div>
+              </div>
+              <div style="margin-top:6px">
+                <div class="order-row"><div class="row between"><span class="meta grow" style="font-size:12.5px">Интересы: TON, USDT, краткость</span><button class="btn ghost sm">забыть</button></div><div class="rep">обновлено 09:41 · src: chat</div></div>
+                <div class="order-row"><div class="row between"><span class="meta grow" style="font-size:12.5px">Часовой пояс пользователя: UTC+3</span><button class="btn ghost sm">забыть</button></div><div class="rep">обновлено вчера · src: chat</div></div>
+                <div class="order-row"><div class="row between"><span class="meta grow" style="font-size:12.5px">Формат отчёта: таблица, без воды</span><button class="btn ghost sm">забыть</button></div><div class="rep">обновлено 2д назад · src: chat</div></div>
+                <div class="order-row"><div class="row between"><span class="meta grow" style="font-size:12.5px">Портфель: 60% TON / 40% USDT</span><button class="btn ghost sm">забыть</button></div><div class="rep">обновлено 3д назад · src: chat</div></div>
+                <div class="scrollnote">↓ ещё 38 фактов…</div>
+              </div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <button class="btn danger block">Очистить всю память</button>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 15 · Подключить MCP-токен -->
+        <figure class="artboard" id="s-15">
+          <figcaption><b>15</b>Подключить MCP-токен <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Подключить MCP</span></div>
+            <div class="wf-scroll pad">
+              <span class="input-label">MCP-сервер</span>
+              <div class="field"><span class="val">Notion</span><span class="caret">▾</span></div>
+              <span class="input-label" style="margin-top:14px">Токен доступа</span>
+              <div class="field"><span class="ph">secret_••••••••••••</span></div>
+              <div class="cap muted" style="margin-top:6px">Токен шифруется (AES-256-GCM). Показываем только last4.</div>
+
+              <div class="card soft" style="margin-top:16px"><div class="cb">
+                <div class="kv"><span class="k">Сервер</span><span class="v">Notion (HTTP)</span></div>
+                <div class="kv"><span class="k">Токен</span><span class="v">···· a91f</span></div>
+                <div class="kv"><span class="k">Статус</span><span class="v">не проверен</span></div>
+              </div></div>
+              <div class="warn" style="margin-top:12px"><span class="ic">i</span><span>После клона MCP-токен пустой — нужно подключить свой.</span></div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <div class="row" style="gap:8px"><button class="btn ghost grow">Проверить</button><button class="btn primary grow">Сохранить</button></div>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 16 · Подключить свой ключ (BYOK) -->
+        <figure class="artboard" id="s-16">
+          <figcaption><b>16</b>Подключить свой ключ (BYOK) <span class="tag">mobile</span></figcaption>
+          <div class="wf wf-mobile"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Свой ключ</span></div>
+            <div class="wf-scroll pad">
+              <div class="escrow" style="margin-bottom:14px"><span class="lock">₽0</span><span class="t"><b>Свой ключ = 0 комиссии</b>Платишь напрямую провайдеру, AIAG не берёт наценку.</span></div>
+              <span class="input-label">Провайдер</span>
+              <div class="seg ghost" style="margin-bottom:14px"><span class="s on">OpenRouter</span><span class="s">Gonka</span><span class="s">Свой</span></div>
+              <span class="input-label">API-ключ</span>
+              <div class="field"><span class="ph">sk-or-••••••••••••••••</span></div>
+              <div class="card soft" style="margin-top:14px"><div class="cb">
+                <div class="kv"><span class="k">Провайдер</span><span class="v">OpenRouter</span></div>
+                <div class="kv"><span class="k">Ключ</span><span class="v">···· 4f7c</span></div>
+                <div class="kv"><span class="k">Проверка</span><span class="v">✓ валиден</span></div>
+              </div></div>
+            </div>
+            <div class="pad" style="border-top:1px solid var(--hairline)">
+              <div class="row" style="gap:8px"><button class="btn ghost grow">Проверить</button><button class="btn primary grow">Сохранить</button></div>
+            </div>
+          </div></div>
+        </figure>
+
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- ФЛОУ E — МОДАЛКИ -->
+    <!-- ======================================================= -->
+    <section class="flow">
+      <h3>E · Модалки <small>— оверлеи поверх затемнённого экрана</small></h3>
+      <div class="boards">
+
+        <!-- 17 · Модалка «Нанять» -->
+        <figure class="artboard" id="s-17">
+          <figcaption><b>17</b>Модалка «Нанять» <span class="tag">sheet</span></figcaption>
+          <div class="wf wf-mobile modal-host"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Нова</span></div>
+            <div class="wf-scroll pad">
+              <div class="sk w60" style="margin-bottom:10px"></div><div class="sk w100" style="margin-bottom:8px"></div><div class="sk w80"></div>
+            </div>
+            <div class="scrim"></div>
+            <div class="sheet">
+              <div class="grab"></div>
+              <div class="h-md">Нанять «Нова»</div>
+              <div class="cap muted" style="margin-top:4px">Отдельный инстанс для тебя</div>
+              <div class="card soft" style="margin-top:14px"><div class="cb">
+                <div class="opt on" style="border:0;padding:6px 0"><span class="rd"></span><span class="tx">Та же спека и скиллы создателя</span></div>
+                <div class="opt on" style="border:0;padding:6px 0"><span class="rd"></span><span class="tx">Своя <b>память с нуля</b></span></div>
+                <div class="opt on" style="border:0;padding:6px 0"><span class="rd"></span><span class="tx">Своя история диалога</span></div>
+              </div></div>
+              <div class="kv total" style="margin-top:12px"><span class="k">К оплате</span><span class="v">210 кр</span></div>
+              <button class="btn primary block" style="margin-top:12px">Подтвердить · 210 кр</button>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 18 · Модалка «Очистить память» -->
+        <figure class="artboard" id="s-18">
+          <figcaption><b>18</b>Модалка «Очистить память» <span class="tag">dialog</span></figcaption>
+          <div class="wf wf-mobile modal-host"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="back">‹</span><span class="title">Память · Нова</span></div>
+            <div class="wf-scroll pad">
+              <div class="sk w80" style="margin-bottom:10px"></div><div class="sk w100" style="margin-bottom:8px"></div><div class="sk w60"></div>
+            </div>
+            <div class="scrim"></div>
+            <div class="dialog">
+              <div class="warn" style="border:0;padding:0;margin-bottom:12px"><span class="ic">⚠</span><span class="h-md">Очистить всю память?</span></div>
+              <p class="cap muted">Все <span class="num">42</span> факта инстанса <span class="num">nova-u402</span> будут удалены безвозвратно. Спек и скиллы останутся.</p>
+              <div class="row" style="gap:8px;margin-top:18px"><button class="btn ghost grow">Отмена</button><button class="btn danger grow">Очистить</button></div>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 17b · мини-оверлей «Развернуть инстанс» -->
+        <figure class="artboard">
+          <figcaption><b>17+</b>Оверлей «Развернуть инстанс» <span class="tag">sheet</span></figcaption>
+          <div class="wf wf-mobile modal-host"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="title">Конструктор</span></div>
+            <div class="wf-scroll pad"><div class="sk w100" style="margin-bottom:8px"></div><div class="sk w60"></div></div>
+            <div class="scrim"></div>
+            <div class="sheet">
+              <div class="grab"></div>
+              <div class="h-md">Развернуть «Нова»</div>
+              <div class="stepper" style="margin:16px 0 10px">
+                <div class="st done"><div class="dot">✓</div><div class="cap">Спек</div></div>
+                <div class="st now"><div class="dot">2</div><div class="cap">Инстанс</div></div>
+                <div class="st"><div class="dot">3</div><div class="cap">Готов</div></div>
+              </div>
+              <div class="card soft"><div class="cb" style="font-family:var(--mono);font-size:11px;line-height:1.8;color:var(--body)">
+                <div>hermes profile: nova-7f2 … ok</div>
+                <div>порт :8642 … <span style="color:var(--ink)">слушает</span></div>
+              </div></div>
+            </div>
+          </div></div>
+        </figure>
+
+        <!-- 16b · мини-оверлей «Подключить ключ» -->
+        <figure class="artboard">
+          <figcaption><b>16+</b>Оверлей «Подключить ключ» <span class="tag">dialog</span></figcaption>
+          <div class="wf wf-mobile modal-host"><div class="wf-screen">
+            <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+            <div class="appbar"><span class="title">Нова · конфиг</span></div>
+            <div class="wf-scroll pad"><div class="sk w80" style="margin-bottom:8px"></div><div class="sk w100"></div></div>
+            <div class="scrim"></div>
+            <div class="dialog">
+              <div class="h-md">Свой ключ модели</div>
+              <div class="cap muted" style="margin-top:4px">0 комиссии — платишь провайдеру</div>
+              <span class="input-label" style="margin-top:14px">API-ключ</span>
+              <div class="field"><span class="ph">sk-or-••••••••</span></div>
+              <div class="row" style="gap:8px;margin-top:16px"><button class="btn ghost grow">Отмена</button><button class="btn primary grow">Сохранить</button></div>
+            </div>
+          </div></div>
+        </figure>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+</body>
+</html>

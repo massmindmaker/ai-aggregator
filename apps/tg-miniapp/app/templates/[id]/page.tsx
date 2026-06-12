@@ -205,8 +205,8 @@ export default function TemplateDetailPage() {
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
-        <Link href="/templates" className="tma-back-link">
-          ← К шаблонам
+        <Link href="/market" className="tma-back-link">
+          ← К маркету
         </Link>
 
         {/* 404: a dead link must not look like a crash — honest card + way out. */}
@@ -216,8 +216,8 @@ export default function TemplateDetailPage() {
             <p className="tma-card-text">
               Возможно, автор снял его с публикации или ссылка устарела.
             </p>
-            <Link href="/templates" className="tma-btn tma-btn--ghost" style={{ marginTop: 8 }}>
-              К каталогу шаблонов
+            <Link href="/market" className="tma-btn tma-btn--ghost" style={{ marginTop: 8 }}>
+              К маркету
             </Link>
           </section>
         ) : (

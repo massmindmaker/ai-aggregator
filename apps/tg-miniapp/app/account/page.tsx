@@ -5,22 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
+import { fmtCredits } from '@/lib/credits';
 
 interface IncomeResp {
   total_income_credits: string;
   month_income_credits?: string;
   templates: { id: string }[];
-}
-
-// D-1: balances/amounts are integer US cents (1 credit = $0.01). Display as
-// "N.NN кр" — never expose the raw integer. JetBrains/mono via .tma-mono.
-function fmtCredits(s: string): string {
-  const cents = Number(s);
-  if (!Number.isFinite(cents)) return s;
-  return (cents / 100).toLocaleString('ru-RU', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 }
 
 // Best-effort token wipe. The JWT lives in Telegram CloudStorage under

@@ -159,8 +159,8 @@ export default function TopupPage() {
     <>
       <main className="tma-shell tma-shell--with-nav">
         <header className="tma-header">
-          <Link href="/profile" className="tma-card-text">
-            ← Профиль
+          <Link href="/wallet" className="tma-card-text">
+            ← К кошельку
           </Link>
           <h1 className="tma-title">Пополнение через TON</h1>
           <p className="tma-subtitle">
@@ -221,8 +221,8 @@ export default function TopupPage() {
             <div className="tma-success">
               ✓ Зачислено {init ? fmtCredits(init.amount_credits) : '0,00'} кр на ваш баланс.
               <div className="tma-cta" style={{ marginTop: 12 }}>
-                <Link href="/profile" className="tma-btn tma-btn--primary">
-                  В профиль
+                <Link href="/wallet" className="tma-btn tma-btn--primary">
+                  К кошельку
                 </Link>
               </div>
             </div>

@@ -33,6 +33,7 @@ interface Agent {
   transferable?: boolean;
   transfer_price_credits?: string | null;
   nft_address?: string | null;
+  cloneable?: boolean;
 }
 
 // C11: проверенные MCP-пресеты (2026-06). Клик заполняет URL эндпоинта;
@@ -95,7 +96,7 @@ type TabKey = 'dialog' | 'settings' | 'monetize' | 'schedule';
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'dialog', label: 'Диалог' },
   { key: 'settings', label: 'Настройки' },
-  { key: 'monetize', label: 'Монетизация' },
+  { key: 'monetize', label: 'Публикация' },
   { key: 'schedule', label: 'Расписание' },
 ];
 
@@ -132,6 +133,10 @@ export default function AgentDetailPage() {
   const [publishedId, setPublishedId] = useState<string | null>(null);
   // Empty = free template (price_credits NULL). Else a positive integer (credits).
   const [pPrice, setPPrice] = useState('');
+
+  // ---- direct-clone opt-in (2026-06-12) ----
+  const [cloneSaving, setCloneSaving] = useState(false);
+  const [cloneErr, setCloneErr] = useState<string | null>(null);
 
   // ---- edit mode ----
   const [editing, setEditing] = useState(false);
@@ -517,6 +522,34 @@ export default function AgentDetailPage() {
     }
   }
 
+  // Toggle direct-clone opt-in (PATCH cloneable). Spec-data only, no money path.
+  async function handleToggleCloneable(next: boolean) {
+    if (!token || !id || cloneSaving) return;
+    haptic.impact('light');
+    setCloneSaving(true);
+    setCloneErr(null);
+    try {
+      const res = await fetch(`/tg/api/tma/agents/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ cloneable: next }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setCloneErr(body.error ?? `HTTP ${res.status}`);
+        haptic.notify('error');
+        return;
+      }
+      const data = await res.json();
+      if (data.agent) setAgent(data.agent);
+    } catch (err) {
+      setCloneErr(err instanceof Error ? err.message : 'save_failed');
+      haptic.notify('error');
+    } finally {
+      setCloneSaving(false);
+    }
+  }
+
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
@@ -569,6 +602,29 @@ export default function AgentDetailPage() {
                   </span>
                   {agent.mcp_endpoint_url && (
                     <span className="tma-pill tma-pill--muted">MCP подключён</span>
+                  )}
+                </div>
+                {/* Метрик-стрип (mono): прогоны · бюджет/мес · последний запуск.
+                    runs ограничены 20 последними (см. роут LIMIT 20) → показываем
+                    «20+» при переполнении, чтобы число не врало. */}
+                <div className="tma-spec" style={{ marginTop: 8 }}>
+                  <div className="tma-spec-cell">
+                    <span className="tma-spec-label">Прогонов</span>
+                    <span className="tma-spec-value">
+                      <span className="tma-num">{runs.length >= 20 ? '20+' : runs.length}</span>
+                    </span>
+                  </div>
+                  <div className="tma-spec-cell">
+                    <span className="tma-spec-label">Бюджет</span>
+                    <span className="tma-spec-value">
+                      <span className="tma-num">{fmtCredits(agent.budget_rub_monthly)}</span> кр/мес
+                    </span>
+                  </div>
+                  {runs[0] && (
+                    <div className="tma-spec-cell">
+                      <span className="tma-spec-label">Последний запуск</span>
+                      <span className="tma-spec-value tma-mono">{formatRunAt(runs[0].created_at)}</span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -666,13 +722,20 @@ export default function AgentDetailPage() {
                     max={1000}
                     step={0.01}
                     placeholder="бесплатно"
-                    className="tma-input"
+                    className="tma-input tma-mono"
                   />
                 </label>
-                {pPrice.trim() && (
+                {/* P6: аренда работает (API /rent) — показываем честный итог цены,
+                    без «появится позже». */}
+                {pPrice.trim() ? (
                   <p className="tma-card-text tma-text-small">
-                    Платная аренда появится позже — пока другие смогут клонировать
-                    только бесплатные шаблоны.
+                    Платный шаблон: арендатор платит вам{' '}
+                    <span className="tma-mono">{pPrice.trim()}</span> кр/мес. Сумму
+                    получаете полностью — AIAG берёт <span className="tma-mono">0</span> с аренды.
+                  </p>
+                ) : (
+                  <p className="tma-card-text tma-text-small">
+                    Бесплатный шаблон: другие смогут клонировать настройку без оплаты автору.
                   </p>
                 )}
                 {publishErr && <div className="tma-error">Ошибка: {publishErr}</div>}
@@ -696,6 +759,41 @@ export default function AgentDetailPage() {
                 </div>
               </form>
             )}
+
+            {/* Прямое клонирование — разрешить другим клонировать настройку
+                этого агента по ссылке (без ключей, памяти и истории — только спек). */}
+            <div className="tma-card" style={{ padding: 16 }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  cursor: cloneSaving ? 'default' : 'pointer',
+                }}
+              >
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="tma-card-title" style={{ margin: 0 }}>
+                    Разрешить клонирование
+                  </span>
+                  <span className="tma-card-text tma-text-small">
+                    Другие смогут клонировать настройку этого агента. Передаётся только
+                    спек — ключи, память и история остаются у вас.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={!!agent.cloneable}
+                  disabled={cloneSaving}
+                  onChange={(e) => handleToggleCloneable(e.target.checked)}
+                />
+              </label>
+              {cloneErr && (
+                <div className="tma-error" style={{ marginTop: 8 }}>
+                  Ошибка: {cloneErr}
+                </div>
+              )}
+            </div>
 
             <TransferPanel
               agentId={id!}
@@ -904,18 +1002,16 @@ export default function AgentDetailPage() {
               </p>
             ) : null}
 
-            {/* Канбан/swarm — read-only board of the user's connected Hermes.
-                Only meaningful for an external_openai (connect-your-own-Hermes)
-                agent; the page itself shows an honest empty state otherwise. */}
-            {agent.connection_type === 'external_openai' && (
-              <Link
-                href={`/agents/${id}/kanban`}
-                className="tma-btn"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
-              >
-                <Icon d={ICONS.board} /> Канбан (swarm)
-              </Link>
-            )}
+            {/* P3: Канбан/swarm — доступен ВСЕГДА. Сам /kanban показывает честный
+                empty-state для не-Hermes агентов, поэтому условие по connection_type
+                убрано (раньше ссылка пряталась для всех, кроме external_openai). */}
+            <Link
+              href={`/agents/${id}/kanban`}
+              className="tma-btn"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            >
+              <Icon d={ICONS.board} /> Канбан (swarm)
+            </Link>
             </>
             )}
           </>
@@ -976,14 +1072,29 @@ export default function AgentDetailPage() {
                   </div>
                 </div>
               )}
-              {agent.mcp_endpoint_url && (
-                <div className="tma-spec-cell tma-spec-cell--wide">
-                  <span className="tma-spec-label">MCP-сервер</span>
-                  <span className="tma-spec-value tma-mono" title={agent.mcp_endpoint_url}>
-                    {agent.mcp_endpoint_url}
-                  </span>
-                </div>
-              )}
+              {/* P12: статус MCP виден ВСЕГДА (иконка + слово, не цвет один).
+                  Подключён = есть URL; способ авторизации (OAuth/токен) уточняется. */}
+              <div className="tma-spec-cell tma-spec-cell--wide">
+                <span className="tma-spec-label">MCP</span>
+                <span className="tma-spec-value">
+                  {agent.mcp_endpoint_url ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span
+                        className="tma-pill tma-pill--ok"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      >
+                        <Icon d={ICONS.check} /> подключён
+                        {agent.mcp_oauth_set ? ' (OAuth)' : agent.mcp_auth_set ? ' (токен)' : ''}
+                      </span>
+                      <span className="tma-mono" title={agent.mcp_endpoint_url}>
+                        {agent.mcp_endpoint_url}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="tma-pill tma-pill--muted">✗ не настроен</span>
+                  )}
+                </span>
+              </div>
             </section>
 
             <button
@@ -1443,5 +1554,17 @@ function formatHHMM(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Compact local "ДД.ММ HH:MM" for the header metric strip (last run). */
+function formatRunAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 

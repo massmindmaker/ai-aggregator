@@ -88,10 +88,11 @@ export default async function MarketDetailPage({
     <>
       <main className="tma-shell tma-shell--with-nav">
         <Link href="/market" className="tma-back-link">
-          ← Назад
+          ← К маркету
         </Link>
 
         <header className="tma-header">
+          <span className="tma-eyebrow">Модель</span>
           <span className="tma-badge">{model.type?.toUpperCase() ?? 'MODEL'}</span>
           <h1 className="tma-title">{model.name}</h1>
           <p className="tma-subtitle" style={{ wordBreak: 'break-all' }}>
