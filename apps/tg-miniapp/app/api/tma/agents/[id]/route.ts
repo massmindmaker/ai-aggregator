@@ -57,17 +57,17 @@ interface RunRow {
 
 async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null> {
   const rows = (await sql`
-    SELECT id::text, tg_user_id::text, template_kind, name, description,
-           system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
-           daily_budget_credits::text,
-           status, created_at, updated_at,
-           connection_type, external_base_url, external_api_key_hint,
-           external_model_slug,
-           mcp_endpoint_url,
-           transferable,
-           transfer_price_credits::text AS transfer_price_credits,
-           nft_address,
-           (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
+    SELECT agents.id::text, agents.tg_user_id::text, agents.template_kind, agents.name, agents.description,
+           agents.system_prompt, agents.tools, agents.model_slug, agents.budget_credits_monthly::text AS budget_rub_monthly,
+           agents.daily_budget_credits::text,
+           agents.status, agents.created_at, agents.updated_at,
+           agents.connection_type, agents.external_base_url, agents.external_api_key_hint,
+           agents.external_model_slug,
+           agents.mcp_endpoint_url,
+           agents.transferable,
+           agents.transfer_price_credits::text AS transfer_price_credits,
+           agents.nft_address,
+           (agents.mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
            (o.agent_id IS NOT NULL) AS mcp_oauth_set,
            o.scope AS mcp_oauth_scope
     FROM agents
