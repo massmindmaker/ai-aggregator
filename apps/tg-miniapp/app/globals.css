@@ -2087,3 +2087,22 @@ code {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* === Market segment-bar: locked operator segments (Task-4) ===
+   Наследует .tma-segment-btn; добавляет «заблокировано» (оператор-only). */
+.tma-segment-btn.is-locked {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  opacity: 0.6;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* === Market grid cell wrapper (Task-4) ===
+   Обёртка ячейки в .tma-agent-grid: карточка + инлайновая заметка
+   «недостаточно средств» под ней. */
+.cc-cell {
+  display: flex;
+  flex-direction: column;
+}
