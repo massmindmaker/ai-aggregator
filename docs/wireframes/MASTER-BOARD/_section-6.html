@@ -1,6 +1,52 @@
 <section id="sec-states" class="board-sec">
-  <h3>6 · Модалки, состояния и мелкие элементы <small>— оверлеи .modal-host/.scrim/.sheet/.dialog · пустые/ошибки/загрузка · тосты · библиотека status-pill</small></h3>
+  <h3>6 · Модалки, состояния и мелкие элементы <small>— легенда статусов · оверлеи .modal-host/.scrim/.sheet/.dialog · пустые/ошибки/загрузка · ошибка деплоя инстанса · тосты · библиотека status-pill</small></h3>
   <div class="boards">
+
+    <!-- ============================================================ -->
+    <!-- 00 · ЛЕГЕНДА СТАТУСОВ — что значит каждый badge -->
+    <!-- ============================================================ -->
+    <figure class="artboard" id="st-00">
+      <figcaption><b>00</b>Легенда статусов <span class="tag">badge-словарь</span></figcaption>
+      <div class="wf wf-mobile" style="height:auto;min-height:560px"><div class="wf-screen" style="position:relative">
+        <div class="appbar"><span class="title">Легенда статусов</span></div>
+        <div class="wf-scroll pad">
+          <div class="warn" style="margin-bottom:14px"><span class="ic">!</span><span>Статус-бейдж = <b>иконка + слово</b>, никогда не один цвет. Эти 5 значений описывают <b>зрелость фичи</b> на бордах. Честность обязательна: не помечать not-built как live.</span></div>
+
+          <!-- Live -->
+          <div class="card" style="margin-bottom:10px"><div class="cb" style="padding:12px 14px">
+            <div class="row" style="gap:10px;align-items:center;margin-bottom:6px"><span class="badge"><span class="v"></span>Live</span><span class="cap" style="font-weight:600">построено и работает на проде</span></div>
+            <p class="cap muted">Реальный код, задеплоен, можно показывать как есть. Пример: agent CRUD, кошелёк, пополнение TON, author-rent, MCP, реконсилер.</p>
+          </div></div>
+
+          <!-- Partial -->
+          <div class="card" style="margin-bottom:10px"><div class="cb" style="padding:12px 14px">
+            <div class="row" style="gap:10px;align-items:center;margin-bottom:6px"><span class="badge">◐ Partial</span><span class="cap" style="font-weight:600">частично построено</span></div>
+            <p class="cap muted">Ядро есть, но с оговорками/дырами. Пример: канбан (read-only через BYO-Hermes), run-trace (sub-cards есть, полной persistence нет).</p>
+          </div></div>
+
+          <!-- Скоро -->
+          <div class="card" style="margin-bottom:10px"><div class="cb" style="padding:12px 14px">
+            <div class="row" style="gap:10px;align-items:center;margin-bottom:6px"><span class="badge dash">◷ Скоро</span><span class="cap" style="font-weight:600">в плане, скоро будет</span></div>
+            <p class="cap muted">Решено делать, не построено. UI может показывать заглушку с честной меткой. Пример: cash-out наружу (FD-2), другие крипто-валюты.</p>
+          </div></div>
+
+          <!-- R&D -->
+          <div class="card" style="margin-bottom:10px"><div class="cb" style="padding:12px 14px">
+            <div class="row" style="gap:10px;align-items:center;margin-bottom:6px"><span class="badge dash">⚗ R&amp;D</span><span class="cap" style="font-weight:600">исследование / инфра-блок</span></div>
+            <p class="cap muted">Изучается, есть блокер (напр. нужен 4-8GB VPS). Пример: managed-Hermes provisioning + config-дашборд, Hermes-proxy control-plane.</p>
+          </div></div>
+
+          <!-- ПРОЕКТ -->
+          <div class="card" style="margin-bottom:10px"><div class="cb" style="padding:12px 14px">
+            <div class="row" style="gap:10px;align-items:center;margin-bottom:6px"><span class="badge dash">◳ ПРОЕКТ</span><span class="cap" style="font-weight:600">спроектировано, но не построено</span></div>
+            <p class="cap muted">Есть дизайн/спека, кода нет. На бордах = макет будущего экрана. Пример: <b>наём / agent_sessions</b>, <b>Hermes-provisioning инстанса</b>, мультимодель per-role.</p>
+          </div></div>
+
+          <hr class="div">
+          <div class="warn"><span class="ic">!</span><span>Точность по канону §8: мульти-крипто топ-ап = <b>НЕТ</b> (в коде только нативный TON); наём = <b>ПРОЕКТ</b>; Hermes-provisioning = <b>ПРОЕКТ / R&amp;D-инфра-блок</b>.</span></div>
+        </div>
+      </div></div>
+    </figure>
 
     <!-- ============================================================ -->
     <!-- 41 · ВСЕ МОДАЛКИ-ПОДТВЕРЖДЕНИЯ — мини-сетка диалогов -->
@@ -145,7 +191,7 @@
             <p class="cap muted center" style="max-width:230px;margin:0 auto">Наними готового из каталога или собери своего. Первый запуск ничего не стоит.</p>
             <div class="col" style="gap:8px;margin-top:6px"><button class="btn primary block">Нанять из каталога</button><button class="btn ghost block">Создать своего</button></div>
           </div>
-          <div class="tabbar"><div class="tab on"><div class="ic"></div>Агенты</div><div class="tab"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+          <div class="tabbar"><div class="tab on"><div class="ic"></div>Мои</div><div class="tab"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Аккаунт</div><div class="tab"><div class="ic"></div>Ещё</div></div>
         </div></div>
 
         <!-- B · нет шаблонов (поиск пуст) -->
@@ -160,7 +206,7 @@
               <div class="col" style="gap:8px;margin-top:4px"><button class="btn ghost block">Сбросить поиск</button><button class="btn primary block">Собрать агента</button></div>
             </div>
           </div>
-          <div class="tabbar"><div class="tab"><div class="ic"></div>Агенты</div><div class="tab on"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+          <div class="tabbar"><div class="tab"><div class="ic"></div>Мои</div><div class="tab on"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Аккаунт</div><div class="tab"><div class="ic"></div>Ещё</div></div>
         </div></div>
 
         <!-- C · нет истории прогонов -->
@@ -213,7 +259,7 @@
             <div class="badge dash" style="margin:0 auto"><span class="num">ERR_NETWORK</span></div>
             <button class="btn primary" style="margin:4px auto">↻ Повторить</button>
           </div>
-          <div class="tabbar"><div class="tab"><div class="ic"></div>Агенты</div><div class="tab on"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+          <div class="tabbar"><div class="tab"><div class="ic"></div>Мои</div><div class="tab on"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Аккаунт</div><div class="tab"><div class="ic"></div>Ещё</div></div>
         </div></div>
 
         <!-- C · HTTP 500 -->
@@ -227,6 +273,49 @@
             <button class="btn primary" style="margin:4px auto">↻ Повторить</button>
           </div>
           <div class="chatbar"><span class="f">Сообщение…</span><button class="btn sm">↑</button></div>
+        </div></div>
+
+      </div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- 45b · ОШИБКА ДЕПЛОЯ ИНСТАНСА — hermes profile create зафейлился -->
+    <!-- ============================================================ -->
+    <figure class="artboard" id="st-45b">
+      <figcaption><b>45b</b>Ошибка деплоя инстанса <span class="tag">ПРОЕКТ · provisioning</span></figcaption>
+      <div class="row" style="gap:24px;align-items:flex-start">
+
+        <!-- A · provisioning в процессе (шаги) -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="back">‹</span><span class="title">Деплой · Нова</span></div>
+          <div class="wf-scroll pad">
+            <div class="badge dash" style="margin-bottom:14px">◳ ПРОЕКТ · Hermes-provisioning (инфра-блок)</div>
+            <div class="cap muted" style="margin-bottom:12px">Поднимаем инстанс агента: профиль Hermes + конфиг + ключ gateway.</div>
+            <div class="card"><div class="cb" style="padding:12px 14px">
+              <div class="kv" style="padding:7px 0"><span class="k">Профиль агента</span><span class="v"><span class="badge"><span class="v"></span>готов</span></span></div>
+              <div class="kv" style="padding:7px 0"><span class="k">Патч base_url → gateway</span><span class="v"><span class="badge"><span class="v"></span>готов</span></span></div>
+              <div class="kv" style="padding:7px 0"><span class="k"><span class="num">hermes profile create</span></span><span class="v"><span class="badge">⟳ выполняется</span></span></div>
+              <div class="kv" style="padding:7px 0"><span class="k">Запуск рантайма :8642</span><span class="v muted">◷ в очереди</span></div>
+            </div></div>
+            <div class="cap muted center" style="margin-top:14px num">~15-40 сек</div>
+          </div>
+        </div></div>
+
+        <!-- B · provisioning ЗАФЕЙЛИЛСЯ → retry -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="back">‹</span><span class="title">Деплой · Нова</span></div>
+          <div class="wf-scroll pad">
+            <div class="warn" style="border:0;padding:0;margin-bottom:10px"><span class="ic">⚠</span><span class="h-md" style="font-size:15px">Не удалось поднять инстанс</span></div>
+            <p class="cap muted">Команда <span class="num">hermes profile create</span> завершилась с ошибкой. Деньги не списаны — инстанс не запущен.</p>
+            <div class="card soft" style="margin-top:12px"><div class="cb" style="padding:12px 14px">
+              <div class="kv" style="padding:6px 0"><span class="k">Профиль агента</span><span class="v"><span class="badge"><span class="v"></span>готов</span></span></div>
+              <div class="kv" style="padding:6px 0"><span class="k"><span class="num">hermes profile create</span></span><span class="v"><span class="badge dash">✕ error</span></span></div>
+            </div></div>
+            <div class="req" style="margin-top:12px"><span class="k">код</span><span class="v">EPROVISION · req_7c4d2</span><span class="copy">копир.</span></div>
+            <div class="cap muted" style="margin-top:10px">Частая причина: на VPS нет места под профиль (RAM/диск). Hermes-рантайму нужен отдельный 4-8GB бокс.</div>
+            <button class="btn primary block" style="margin-top:14px">↻ Повторить деплой</button>
+            <button class="btn ghost block" style="margin-top:8px">Написать в поддержку</button>
+          </div>
         </div></div>
 
       </div>
@@ -252,7 +341,7 @@
             </div>
             <div class="scrollnote">aiag-skeleton · shimmer</div>
           </div>
-          <div class="tabbar"><div class="tab on"><div class="ic"></div>Агенты</div><div class="tab"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+          <div class="tabbar"><div class="tab on"><div class="ic"></div>Мои</div><div class="tab"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Аккаунт</div><div class="tab"><div class="ic"></div>Ещё</div></div>
         </div></div>
 
         <!-- B · скелетон карточек (грид) -->
@@ -264,7 +353,7 @@
             <div class="card"><div class="cb"><span class="img" style="width:100%;height:80px;border-radius:8px"></span><div class="sk w80" style="margin-top:10px"></div><div class="sk w40" style="margin-top:6px"></div><div class="sk w40" style="margin-top:10px"></div></div></div>
             <div class="card"><div class="cb"><span class="img" style="width:100%;height:80px;border-radius:8px"></span><div class="sk w60" style="margin-top:10px"></div><div class="sk w60" style="margin-top:6px"></div><div class="sk w80" style="margin-top:10px"></div></div></div>
           </div>
-          <div class="tabbar"><div class="tab"><div class="ic"></div>Агенты</div><div class="tab on"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+          <div class="tabbar"><div class="tab"><div class="ic"></div>Мои</div><div class="tab on"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Аккаунт</div><div class="tab"><div class="ic"></div>Ещё</div></div>
         </div></div>
 
         <!-- C · скелетон чата + индикатор «агент думает» -->
@@ -304,7 +393,7 @@
             <div class="card soft"><div class="cb center" style="padding:20px"><div class="eyebrow">баланс</div><div class="h-lg num" style="margin-top:4px">1 240 кр</div><div class="cap muted">≈ $12.40</div></div></div>
             <div class="card" style="margin-top:14px"><div class="cb"><div class="sk w60" style="margin-bottom:10px"></div><div class="sk w100"></div></div></div>
           </div>
-          <div class="tabbar"><div class="tab"><div class="ic"></div>Агенты</div><div class="tab"><div class="ic"></div>Каталог</div><div class="tab on"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+          <div class="tabbar"><div class="tab"><div class="ic"></div>Мои</div><div class="tab"><div class="ic"></div>Каталог</div><div class="tab on"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Аккаунт</div><div class="tab"><div class="ic"></div>Ещё</div></div>
         </div></div>
 
         <!-- B · ошибка-тост снизу -->
@@ -338,11 +427,13 @@
         <div class="wf-scroll pad">
           <div class="warn" style="margin-bottom:14px"><span class="ic">!</span><span>Правило DESIGN: статус = <b>иконка + слово</b>, никогда не один цвет. JetBrains Mono для кодов/ID. Амбер — только live/active в проде (тут ч/б каркас).</span></div>
 
-          <div class="eyebrow">состояние фичи</div>
+          <div class="eyebrow">состояние фичи <span class="muted">(полная легенда — артборд 00)</span></div>
           <div class="chips" style="margin:8px 0 16px;gap:8px">
             <span class="badge"><span class="v"></span>live</span>
+            <span class="badge">◐ partial</span>
             <span class="badge dash">◷ скоро</span>
             <span class="badge dash">⚗ R&amp;D</span>
+            <span class="badge dash">◳ ПРОЕКТ</span>
           </div>
 
           <div class="eyebrow">результат операции</div>

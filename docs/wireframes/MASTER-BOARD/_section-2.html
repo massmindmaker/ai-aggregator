@@ -1,5 +1,5 @@
 <section id="sec-hire" class="board-sec">
-  <h3>Секция 2 · Наём + Запуск + Чат <small>— наниматель: отдельный инстанс, та же спека (read-only), своя изолированная память; дебет нанимателя (AIAG-путь, не BYOK)</small></h3>
+  <h3>Секция 2 · Наём + Запуск + Чат <small>— наниматель: отдельный инстанс, та же спека (read-only), своя изолированная память; дебет нанимателя (AIAG-путь, не BYOK). ⚠️ НАЁМ = ПРОЕКТ (agent_sessions не построены)</small></h3>
   <div class="boards">
 
     <!-- 11 · Нанять агента -->
@@ -9,6 +9,7 @@
         <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
         <div class="appbar"><span class="back">‹</span><span class="title">Нанять агента</span></div>
         <div class="wf-scroll pad">
+          <div class="warn" style="margin-bottom:12px"><span class="ic">i</span><span><b>ПРОЕКТ · так будет</b> — наём (изолированные сессии) ещё не построен. Экран показывает целевой флоу.</span></div>
           <div class="row" style="gap:12px"><span class="ava lg"></span><div class="col grow"><span class="h-md">Нова</span><span class="cap muted">крипто-аналитик · от @maker_ai</span><div class="row" style="gap:8px;margin-top:4px"><span class="num muted">★ 4.9</span><span class="num muted">128 наймов</span></div></div></div>
 
           <div class="card" style="margin-top:16px"><div class="ch">что получаешь</div><div class="cb">
@@ -23,7 +24,8 @@
           <div class="card soft" style="margin-top:14px"><div class="cb">
             <div class="kv"><span class="k">Аренда автору</span><span class="v">200 кр / мес</span></div>
             <div class="kv"><span class="k">Развёртывание инстанса</span><span class="v">10 кр</span></div>
-            <div class="kv total"><span class="k">Сейчас</span><span class="v">210 кр</span></div>
+            <div class="kv"><span class="k">Модели (AIAG, по факту)</span><span class="v">≈ 0.5–2 кр/прогон</span></div>
+            <div class="kv total"><span class="k">Сейчас (разово)</span><span class="v">210 кр</span></div>
           </div></div>
           <div class="cap muted" style="margin-top:6px">Модели тарифицируются отдельно по мере использования (AIAG-наценка). BYOK при найме недоступен.</div>
         </div>
@@ -45,6 +47,7 @@
         <div class="scrim"></div>
         <div class="sheet">
           <div class="grab"></div>
+          <div class="badge" style="margin-bottom:10px">ПРОЕКТ · так будет</div>
           <div class="row" style="gap:10px"><span class="ava"></span><div class="col grow"><span class="h-md">Нанять «Нова»</span><span class="cap muted">Отдельный инстанс для тебя</span></div></div>
           <div class="card soft" style="margin-top:14px"><div class="cb">
             <div class="opt on" style="border:0;padding:6px 0"><span class="rd"></span><span class="tx">Та же спека и скиллы создателя</span></div>
@@ -54,7 +57,8 @@
           <div class="card soft" style="margin-top:10px"><div class="cb">
             <div class="kv"><span class="k">Аренда автору</span><span class="v">200 кр</span></div>
             <div class="kv"><span class="k">Развёртывание</span><span class="v">10 кр</span></div>
-            <div class="kv total"><span class="k">К оплате</span><span class="v">210 кр</span></div>
+            <div class="kv"><span class="k">Модели (AIAG, по факту)</span><span class="v">≈ 0.5–2 кр/прогон</span></div>
+            <div class="kv total"><span class="k">К оплате сейчас</span><span class="v">210 кр</span></div>
           </div></div>
           <div class="row between" style="margin-top:10px"><span class="cap muted">Баланс после</span><span class="num">1 290 кр</span></div>
           <button class="btn primary block" style="margin-top:12px">Подтвердить · 210 кр</button>
@@ -70,6 +74,7 @@
         <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
         <div class="appbar"><span class="title">Создаём твой инстанс</span></div>
         <div class="wf-scroll pad">
+          <div class="warn" style="margin-bottom:14px"><span class="ic">i</span><span><b>ПРОЕКТ · так будет</b> — Hermes-provisioning под нанимателя не построен (инфра-блок: control-plane + VPS 4–8GB). Лог ниже — заглушка макета.</span></div>
           <div class="stepper" style="margin:8px 0 24px">
             <div class="st done"><div class="dot">✓</div><div class="cap">Оплата</div></div>
             <div class="st done"><div class="dot">✓</div><div class="cap">Профиль</div></div>
@@ -81,12 +86,12 @@
           <div class="h-md center">Поднимаем «Нова» для тебя…</div>
           <div class="cap muted center" style="margin-top:4px">Свой профиль <span class="num">nova-u402</span> · чистая память</div>
 
-          <div class="card" style="margin-top:16px"><div class="ch">лог развёртывания</div><div class="cb" style="font-family:var(--mono);font-size:11px;line-height:1.9;color:var(--body)">
-            <div>[00:01] оплата 210 кр … ok</div>
-            <div>[00:02] hermes profile: <span style="color:var(--ink)">nova-u402</span> … ok</div>
-            <div>[00:04] copy спека создателя (read-only) … ok</div>
-            <div>[00:05] память: <span style="color:var(--ink)">пустая · твоя</span> … ok</div>
-            <div>[00:07] подключаю web_search · calc … <span style="color:var(--ink)">…</span></div>
+          <div class="card" style="margin-top:16px"><div class="ch">лог развёртывания <span class="badge">заглушка</span></div><div class="cb" style="font-family:var(--mono);font-size:11px;line-height:1.9;color:var(--body)">
+            <div>[00:01] оплата 210 кр … (заглушка)</div>
+            <div>[00:02] hermes profile: <span style="color:var(--ink)">nova-u402</span> … (заглушка)</div>
+            <div>[00:04] copy спека создателя (read-only) … (заглушка)</div>
+            <div>[00:05] память: <span style="color:var(--ink)">пустая · твоя</span> … (заглушка)</div>
+            <div>[00:07] подключаю web_search · calc … <span style="color:var(--ink)">(заглушка)</span></div>
           </div></div>
 
           <div class="card soft" style="margin-top:14px"><div class="cb">
@@ -104,17 +109,45 @@
       </div></div>
     </figure>
 
-    <!-- 14 · Досье нанятого -->
+    <!-- 14 · Наём — недостаточно баланса (error-state) -->
     <figure class="artboard" id="hire-14">
-      <figcaption><b>14</b>Досье нанятого · табы <span class="tag">mobile</span></figcaption>
+      <figcaption><b>14</b>Наём — недостаточно баланса <span class="tag">error</span></figcaption>
+      <div class="wf wf-mobile modal-host"><div class="wf-screen">
+        <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+        <div class="appbar"><span class="back">‹</span><span class="title">Нанять агента</span></div>
+        <div class="wf-scroll pad">
+          <div class="sk w60" style="margin-bottom:10px"></div><div class="sk w100" style="margin-bottom:8px"></div><div class="sk w80"></div>
+        </div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="badge" style="margin-bottom:10px">ПРОЕКТ · так будет</div>
+          <div class="row" style="gap:10px"><span class="ava"></span><div class="col grow"><span class="h-md">Нанять «Нова»</span><span class="cap muted">Не хватает кредитов</span></div></div>
+          <div class="warn" style="margin:12px 0;border-color:var(--danger)"><span class="ic">!</span><span><b>Недостаточно баланса.</b> Для найма нужно <span class="num">210 кр</span>, на счету <span class="num">80 кр</span>.</span></div>
+          <div class="card soft"><div class="cb">
+            <div class="kv"><span class="k">К оплате</span><span class="v">210 кр</span></div>
+            <div class="kv"><span class="k">Баланс</span><span class="v">80 кр</span></div>
+            <div class="kv total"><span class="k">Не хватает</span><span class="v">130 кр</span></div>
+          </div></div>
+          <button class="btn primary block" style="margin-top:12px">Пополнить · +130 кр</button>
+          <button class="btn ghost block" style="margin-top:8px">Отмена</button>
+          <div class="cap muted center" style="margin-top:8px">Пополнение через TON Connect</div>
+        </div>
+      </div></div>
+    </figure>
+
+    <!-- 15 · Досье нанятого -->
+    <figure class="artboard" id="hire-15">
+      <figcaption><b>15</b>Досье нанятого · табы <span class="tag">mobile</span></figcaption>
       <div class="wf wf-mobile"><div class="wf-screen">
         <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
         <div class="appbar"><span class="back">‹</span><span class="title">Нова <span class="muted" style="font-size:12px">(нанят)</span></span><span class="icon">⋯</span></div>
         <div class="wf-scroll">
           <div class="pad" style="padding-bottom:0">
             <div class="row" style="gap:10px"><span class="ava"></span><div class="col grow"><span class="h-md" style="font-size:15px">Нова</span><span class="cap muted">нанят у @maker_ai · профиль <span class="num">nova-u402</span></span></div><span class="badge"><span class="star"></span>online</span></div>
+            <!-- ЕДИНСТВЕННЫЙ переключатель табов этого экрана -->
             <div class="tabline" style="margin-top:14px">
-              <span class="t on">Чат</span><span class="t">Память</span><span class="t">Спек (read-only)</span>
+              <span class="t">Чат</span><span class="t">Память</span><span class="t on">Спек (read-only)</span>
             </div>
           </div>
 
@@ -138,20 +171,22 @@
               <div class="kv"><span class="k">Дневной бюджет</span><span class="v">50 кр</span></div>
               <div class="kv"><span class="k">Истрачено сегодня</span><span class="v">1.7 кр</span></div>
             </div></div>
-            <div class="cap muted center" style="margin-top:10px">Табы Чат · Память доступны выше</div>
           </div>
         </div>
+        <!-- нижний tabbar = ОБЩАЯ навигация приложения, не дубль табов экрана -->
         <div class="tabbar">
-          <div class="tab on"><div class="ic"></div>Чат</div>
-          <div class="tab"><div class="ic"></div>Память</div>
-          <div class="tab"><div class="ic"></div>Спек</div>
+          <div class="tab on"><div class="ic"></div>Мои</div>
+          <div class="tab"><div class="ic"></div>Каталог</div>
+          <div class="tab"><div class="ic"></div>Кошелёк</div>
+          <div class="tab"><div class="ic"></div>Аккаунт</div>
+          <div class="tab"><div class="ic"></div>Ещё</div>
         </div>
       </div></div>
     </figure>
 
-    <!-- 15 · Чат / диалог + composer + cost-hint -->
-    <figure class="artboard" id="hire-15">
-      <figcaption><b>15</b>Чат · composer + цена до отправки <span class="tag">mobile</span></figcaption>
+    <!-- 16 · Чат / диалог + composer + cost-hint -->
+    <figure class="artboard" id="hire-16">
+      <figcaption><b>16</b>Чат · composer + цена до отправки <span class="tag">mobile</span></figcaption>
       <div class="wf wf-mobile"><div class="wf-screen">
         <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
         <div class="appbar"><span class="back">‹</span><span class="title">Нова <span class="muted" style="font-size:12px">(нанят)</span></span><span class="badge"><span class="star"></span>online</span></div>
@@ -175,9 +210,9 @@
       </div></div>
     </figure>
 
-    <!-- 16 · Run-trace + tool-call sub-cards -->
-    <figure class="artboard" id="hire-16">
-      <figcaption><b>16</b>Run-trace · tool-call sub-cards <span class="tag">mobile</span></figcaption>
+    <!-- 17 · Run-trace + tool-call sub-cards -->
+    <figure class="artboard" id="hire-17">
+      <figcaption><b>17</b>Run-trace · tool-call sub-cards <span class="tag">mobile</span></figcaption>
       <div class="wf wf-mobile"><div class="wf-screen">
         <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
         <div class="appbar"><span class="back">‹</span><span class="title">Прогон <span class="num" style="font-size:13px">s-9a1</span></span><span class="badge">ok</span></div>
@@ -224,9 +259,9 @@
       </div></div>
     </figure>
 
-    <!-- 17 · Клонировать (free) flow -->
-    <figure class="artboard" id="hire-17">
-      <figcaption><b>17</b>Клонировать (free) <span class="tag">mobile</span></figcaption>
+    <!-- 18 · Клонировать (free / cloneable) flow -->
+    <figure class="artboard" id="hire-18">
+      <figcaption><b>18</b>Клонировать · шаблон vs агент <span class="tag">mobile</span></figcaption>
       <div class="wf wf-mobile"><div class="wf-screen">
         <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
         <div class="appbar"><span class="back">‹</span><span class="title">Скопировать агента</span><span class="badge">free</span></div>
@@ -235,6 +270,13 @@
 
           <div class="seg" style="margin-top:16px"><span class="s">Нанять</span><span class="s on">Скопировать</span></div>
           <div class="cap muted" style="margin-top:6px">Клон ≠ наём: получаешь <b>свою владеющую копию</b> спека, правишь как угодно.</div>
+
+          <!-- различие источников клона -->
+          <div class="card" style="margin-top:14px"><div class="ch">два источника клона</div><div class="cb">
+            <div class="opt on" style="border:0;padding:8px 0"><span class="rd"></span><span class="tx"><b>Из публичного шаблона</b> — клон <b>всегда free</b> (это публичный чертёж).</span></div>
+            <hr class="thin" style="margin:4px 0">
+            <div class="opt on" style="border:0;padding:8px 0"><span class="rd"></span><span class="tx"><b>Из чужого агента</b> — нужен флаг <span class="num">cloneable=true</span> у создателя, иначе <span class="num">403</span>.</span></div>
+          </div></div>
 
           <div class="card" style="margin-top:14px"><div class="ch">что получаешь в клоне</div><div class="cb">
             <div class="opt on" style="border:0;padding:7px 0"><span class="rd"></span><span class="tx">Копия спека: <b>модель · скиллы · MCP-дефы</b></span></div>
@@ -256,9 +298,9 @@
       </div></div>
     </figure>
 
-    <!-- 18 · Модалка «Подключить свой MCP-токен при найме» -->
-    <figure class="artboard" id="hire-18">
-      <figcaption><b>18</b>Подключить свой MCP-токен при найме <span class="tag">dialog</span></figcaption>
+    <!-- 19 · Модалка «Подключить свой MCP-токен при найме» -->
+    <figure class="artboard" id="hire-19">
+      <figcaption><b>19</b>Подключить свой MCP-токен при найме <span class="tag">dialog</span></figcaption>
       <div class="wf wf-mobile modal-host"><div class="wf-screen">
         <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
         <div class="appbar"><span class="back">‹</span><span class="title">Нова <span class="muted" style="font-size:12px">(нанят)</span></span></div>
@@ -278,6 +320,71 @@
           <div class="cap muted" style="margin-top:6px">Шифруется AES-256-GCM · UI показывает only last4.</div>
           <div class="row" style="gap:8px;margin-top:16px"><button class="btn ghost grow">Отмена</button><button class="btn primary grow">Подключить</button></div>
           <div class="center" style="margin-top:10px"><span class="cap muted">или</span> <button class="btn ghost sm" style="margin-top:6px">Войти через OAuth (PKCE)</button></div>
+        </div>
+      </div></div>
+    </figure>
+
+    <!-- 20 · Расторжение найма -->
+    <figure class="artboard" id="hire-20">
+      <figcaption><b>20</b>Расторжение найма · список + confirm <span class="tag">mobile</span></figcaption>
+      <div class="wf wf-mobile modal-host"><div class="wf-screen">
+        <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+        <div class="appbar"><span class="back">‹</span><span class="title">Активные наймы</span></div>
+        <div class="wf-scroll pad">
+          <div class="warn" style="margin-bottom:12px"><span class="ic">i</span><span><b>ПРОЕКТ · так будет</b> — наём (agent_sessions) ещё не построен.</span></div>
+
+          <div class="card"><div class="cb">
+            <div class="row" style="gap:10px"><span class="ava"></span><div class="col grow"><span class="h-md" style="font-size:14px">Нова</span><span class="cap muted">автор @maker_ai · с 03.06 · профиль <span class="num">nova-u402</span></span></div></div>
+            <div class="kv" style="margin-top:8px"><span class="k">Бюджет/день</span><span class="v">50 кр</span></div>
+            <div class="kv"><span class="k">Аренда</span><span class="v">200 кр / мес</span></div>
+            <button class="btn ghost block" style="margin-top:10px">Расторгнуть наём</button>
+          </div></div>
+
+          <div class="card" style="margin-top:12px"><div class="cb">
+            <div class="row" style="gap:10px"><span class="ava"></span><div class="col grow"><span class="h-md" style="font-size:14px">Орион</span><span class="cap muted">автор @smm_lab · с 09.06 · профиль <span class="num">orion-u402</span></span></div></div>
+            <div class="kv" style="margin-top:8px"><span class="k">Бюджет/день</span><span class="v">30 кр</span></div>
+            <div class="kv"><span class="k">Аренда</span><span class="v">120 кр / мес</span></div>
+            <button class="btn ghost block" style="margin-top:10px">Расторгнуть наём</button>
+          </div></div>
+        </div>
+        <!-- confirm-диалог -->
+        <div class="scrim"></div>
+        <div class="dialog">
+          <div class="h-md">Расторгнуть наём «Нова»?</div>
+          <div class="card soft" style="margin-top:12px"><div class="cb">
+            <div class="opt on" style="border:0;padding:6px 0"><span class="rd"></span><span class="tx">Твоя <b>память остаётся у тебя</b> — экспорт доступен 30 дней.</span></div>
+            <div class="opt on" style="border:0;padding:6px 0"><span class="rd"></span><span class="tx">Аренда за текущий месяц <b>без возврата</b>.</span></div>
+            <div class="opt on" style="border:0;padding:6px 0"><span class="rd"></span><span class="tx">Инстанс <span class="num">nova-u402</span> останавливается сразу.</span></div>
+          </div></div>
+          <div class="warn" style="margin-top:12px;border-color:var(--danger)"><span class="ic">!</span><span>Доступ к чату и спеку создателя прекращается. Это нельзя отменить.</span></div>
+          <div class="row" style="gap:8px;margin-top:16px"><button class="btn ghost grow">Оставить</button><button class="btn primary grow">Расторгнуть</button></div>
+        </div>
+      </div></div>
+    </figure>
+
+    <!-- 21 · Наём расторгнут (post-state) -->
+    <figure class="artboard" id="hire-21">
+      <figcaption><b>21</b>Наём расторгнут · post-state <span class="tag">mobile</span></figcaption>
+      <div class="wf wf-mobile"><div class="wf-screen">
+        <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+        <div class="appbar"><span class="back">‹</span><span class="title">Наём расторгнут</span></div>
+        <div class="wf-scroll pad">
+          <div class="img" style="width:64px;height:64px;border-radius:50%;margin:24px auto 14px"></div>
+          <div class="h-md center">Наём «Нова» расторгнут</div>
+          <div class="cap muted center" style="margin-top:4px">Инстанс <span class="num">nova-u402</span> остановлен <span class="num">09:42</span></div>
+
+          <div class="card soft" style="margin-top:18px"><div class="cb">
+            <div class="kv"><span class="k">Память</span><span class="v">осталась у тебя · 2 факта</span></div>
+            <div class="kv"><span class="k">Экспорт памяти</span><span class="v">доступен 30 дней</span></div>
+            <div class="kv"><span class="k">Аренда (тек. месяц)</span><span class="v">без возврата</span></div>
+            <div class="kv"><span class="k">Списано всего</span><span class="v">211.7 кр</span></div>
+          </div></div>
+
+          <div class="warn" style="margin-top:14px"><span class="ic">i</span><span>Хочешь продолжить — можно <b>нанять заново</b> (память подтянется) или <b>скопировать</b> спек, если автор разрешил клон.</span></div>
+        </div>
+        <div class="pad" style="border-top:1px solid var(--hairline)">
+          <button class="btn primary block">Скачать память</button>
+          <button class="btn ghost block" style="margin-top:8px">Вернуться в «Мои агенты»</button>
         </div>
       </div></div>
     </figure>

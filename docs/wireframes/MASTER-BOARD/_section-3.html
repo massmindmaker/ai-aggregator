@@ -10,31 +10,80 @@
         <div class="appbar"><span class="back">‹</span><span class="title">Новый агент</span></div>
         <div class="wf-scroll pad">
           <div class="eyebrow">с чего начать</div>
-          <p class="cap muted" style="margin-top:6px;margin-bottom:14px">Три пути к своему агенту. Спек можно править на любом шаге.</p>
+          <p class="cap muted" style="margin-top:6px;margin-bottom:14px">Три пути. Каждый ведёт в свой шаг, а не в один общий экран.</p>
 
-          <!-- путь 1 -->
+          <!-- путь 1: из шаблона → мини-пикер (артборд 19b) -->
           <div class="card" style="margin-bottom:12px"><div class="cb">
             <div class="row" style="gap:12px"><span class="img" style="width:40px;height:40px;border-radius:8px"></span>
-              <div class="col grow"><span class="h-md" style="font-size:15px">Из шаблона</span><span class="cap muted">Готовый персонаж из маркета — правишь под себя</span></div>
+              <div class="col grow"><span class="h-md" style="font-size:15px">Из шаблона</span><span class="cap muted">Выбираешь готовый спек → конструктор уже заполнен</span></div>
               <span class="caret muted">›</span></div>
-            <div class="chips" style="margin-top:10px"><span class="chip">Алиса · код-ревью</span><span class="chip">Ника · ресёрч</span><span class="chip muted">+5</span></div>
+            <div class="chips" style="margin-top:10px"><span class="chip">Алиса · код-ревью</span><span class="chip">Ника · ресёрч</span><span class="chip muted">→ ещё в каталоге</span></div>
+            <div class="cap muted" style="margin-top:8px">→ открывает мини-пикер (3 карточки + «Ещё в каталоге»)</div>
           </div></div>
 
-          <!-- путь 2 -->
+          <!-- путь 2: AI-builder -->
           <div class="card" style="margin-bottom:12px"><div class="cb">
             <div class="row" style="gap:12px"><span class="img" style="width:40px;height:40px;border-radius:8px"></span>
               <div class="col grow"><span class="h-md" style="font-size:15px">AI-builder «из слов»</span><span class="cap muted">Опиши задачу — спек соберётся сам</span></div>
               <span class="badge dash">R&D</span></div>
           </div></div>
 
-          <!-- путь 3 -->
+          <!-- путь 3: с нуля → пустой конструктор -->
           <div class="card"><div class="cb">
             <div class="row" style="gap:12px"><span class="img" style="width:40px;height:40px;border-radius:8px"></span>
-              <div class="col grow"><span class="h-md" style="font-size:15px">С нуля</span><span class="cap muted">Конструктор: личность, модели, тузы, MCP, память</span></div>
+              <div class="col grow"><span class="h-md" style="font-size:15px">С нуля</span><span class="cap muted">Пустой конструктор: личность, модели, тузы, MCP, память</span></div>
               <span class="caret muted">›</span></div>
           </div></div>
 
-          <div class="warn" style="margin-top:16px"><span class="ic">i</span><span>Любой путь ведёт в один конструктор спека. Преселект зависит от выбора.</span></div>
+          <div class="warn" style="margin-top:16px"><span class="ic">i</span><span>«Из шаблона» → пикер → prefilled-конструктор. «С нуля» → пустой конструктор. «Из слов» — R&D.</span></div>
+        </div>
+      </div></div>
+    </figure>
+
+    <!-- 19b · Из шаблона — мини-пикер каталога -->
+    <figure class="artboard" id="ab-19b">
+      <figcaption><b>19</b>Из шаблона · мини-пикер каталога <span class="tag">mobile</span></figcaption>
+      <div class="wf wf-mobile"><div class="wf-screen">
+        <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+        <div class="appbar"><span class="back">‹</span><span class="title">Выбери шаблон</span></div>
+        <div class="wf-scroll pad">
+          <div class="eyebrow">из шаблона · шаг 1</div>
+          <p class="cap muted" style="margin-top:6px;margin-bottom:14px">Готовый спек из каталога. После выбора откроется конструктор с заполненными полями — правишь под себя.</p>
+
+          <!-- карточка шаблона 1 -->
+          <div class="card" style="margin-bottom:10px"><div class="cb">
+            <div class="row" style="gap:12px"><span class="ava lg"></span>
+              <div class="col grow"><span class="h-md" style="font-size:15px">Алиса · код-ревью</span><span class="cap muted">от @aiag</span>
+                <div class="chips" style="margin-top:6px"><span class="chip">claude-sonnet</span><span class="chip">memory</span></div></div>
+              <span class="caret muted">›</span></div>
+            <hr class="thin" style="margin:10px 0">
+            <div class="row between"><span class="num muted">★ 4.8 · 312 клонов</span><span class="badge">free</span></div>
+          </div></div>
+
+          <!-- карточка шаблона 2 -->
+          <div class="card" style="margin-bottom:10px"><div class="cb">
+            <div class="row" style="gap:12px"><span class="ava lg"></span>
+              <div class="col grow"><span class="h-md" style="font-size:15px">Ника · ресёрч</span><span class="cap muted">от @aiag</span>
+                <div class="chips" style="margin-top:6px"><span class="chip">claude-sonnet</span><span class="chip">web_search</span></div></div>
+              <span class="caret muted">›</span></div>
+            <hr class="thin" style="margin:10px 0">
+            <div class="row between"><span class="num muted">★ 4.7 · 188 клонов</span><span class="badge">free</span></div>
+          </div></div>
+
+          <!-- карточка шаблона 3 -->
+          <div class="card"><div class="cb">
+            <div class="row" style="gap:12px"><span class="ava lg"></span>
+              <div class="col grow"><span class="h-md" style="font-size:15px">Макс · копирайт</span><span class="cap muted">от @aiag</span>
+                <div class="chips" style="margin-top:6px"><span class="chip">gpt-4o-mini</span><span class="chip">memory</span></div></div>
+              <span class="caret muted">›</span></div>
+            <hr class="thin" style="margin:10px 0">
+            <div class="row between"><span class="num muted">★ 4.6 · 96 клонов</span><span class="badge">free</span></div>
+          </div></div>
+
+          <button class="btn ghost block" style="margin-top:12px">Ещё в каталоге →</button>
+        </div>
+        <div class="pad" style="border-top:1px solid var(--hairline)">
+          <button class="btn primary block">Открыть конструктор со спеком →</button>
         </div>
       </div></div>
     </figure>
@@ -85,13 +134,14 @@
         <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
         <div class="appbar"><span class="back">‹</span><span class="title">Конструктор</span><span class="badge">черновик</span></div>
         <div class="wf-scroll pad">
+          <div class="warn" style="margin-bottom:12px"><span class="ic">✓</span><span class="grow">Заполнено из шаблона <b>«Алиса · код-ревью»</b> — правь под себя</span></div>
           <div class="tabline" style="margin-bottom:14px">
             <span class="t on">Персона</span><span class="t">Модели</span><span class="t">Тузы</span><span class="t">MCP</span><span class="t">Память</span>
           </div>
 
-          <!-- блок Персона/SOUL -->
+          <!-- блок Персона/SOUL (prefilled из шаблона) -->
           <span class="input-label">Личность · SOUL.md</span>
-          <div class="field lg" style="height:108px;align-items:flex-start"><span class="ph">Кто агент, как говорит, чего избегает… (свободный текст, как SOUL.md в Hermes)</span></div>
+          <div class="field lg" style="height:108px;align-items:flex-start"><span class="val">Дотошный код-ревьюер. Ищет баги, антипаттерны и риски безопасности. Тон — сухой, по делу, без воды.</span></div>
 
           <hr class="div">
           <!-- блок Модели: чат + aux -->
