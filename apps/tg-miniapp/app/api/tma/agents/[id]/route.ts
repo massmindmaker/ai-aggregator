@@ -51,6 +51,8 @@ interface RunRow {
   error: string | null;
   created_at: string;
   completed_at: string | null;
+  // jsonb → already-parsed array via postgres-js. Empty [] for legacy runs.
+  tool_calls: unknown;
 }
 
 async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null> {
@@ -109,7 +111,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   const runs = (await sql`
     SELECT id::text, input, output, status, cost_credits::text AS cost_rub, error,
-           created_at, completed_at
+           created_at, completed_at, tool_calls
     FROM agent_runs
     WHERE agent_id = ${params.id}::uuid
     ORDER BY created_at DESC

@@ -10,8 +10,10 @@ import { fmtCredits } from '@/lib/credits';
 // run cost («почему это стоило 12 кр»), instead of a faceless chat bubble.
 //
 // Read-only render of agent_runs (input/output/status/cost/error/timestamps).
-// No tool-call sub-cards yet — the stateless runner does not emit per-tool steps
-// (apps/agent-worker), so we render the run as the step and stay honest.
+// Tool-call sub-cards ARE rendered when present: the run row carries a `tool_calls`
+// jsonb array (agent_runs.tool_calls, default []) that the worker writes per agent
+// step — each becomes a collapsible <details> card (tool name + duration + cost +
+// status). Empty/legacy runs have [] → the block silently degrades to nothing.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface RunItem {
@@ -24,6 +26,15 @@ export interface RunItem {
   error: string | null;
   created_at: string;
   completed_at: string | null;
+  /** Per-step trace the worker writes into agent_runs.tool_calls (jsonb, default []). */
+  tool_calls?: Array<{
+    name: string;
+    args?: unknown;
+    result?: string | null;
+    cost_credits?: number;
+    duration_ms?: number;
+    status?: string;
+  }>;
 }
 
 type Tone = 'ok' | 'run' | 'err';
@@ -54,6 +65,12 @@ function fmtDuration(start: string, end: string | null): string | null {
   const sec = (b - a) / 1000;
   if (sec < 60) return `${sec.toFixed(sec < 10 ? 1 : 0)} с`;
   return `${Math.round(sec / 60)} мин`;
+}
+
+// Tool-step status → pill (icon + word + colour; never colour alone — DESIGN.md).
+function toolStatusMeta(status?: string): { label: string; tone: Tone; icon: string } {
+  if (status === 'error') return { label: 'ошибка', tone: 'err', icon: '✗' };
+  return { label: 'ok', tone: 'ok', icon: '✓' };
 }
 
 function fmtTime(iso: string): string {
@@ -125,6 +142,60 @@ export function RunTrace({ runs }: { runs: RunItem[] }) {
                   #{r.id.slice(0, 8)}
                 </span>
               </div>
+
+              {!!r.tool_calls?.length && (
+                <ul className="tma-trace-tools">
+                  {r.tool_calls.map((tc, i) => {
+                    const ts = toolStatusMeta(tc.status);
+                    const hasArgs =
+                      tc.args !== undefined && tc.args !== null;
+                    const hasResult =
+                      typeof tc.result === 'string' && tc.result.length > 0;
+                    const result = hasResult ? tc.result!.slice(0, 400) : '';
+                    return (
+                      <li key={i} className="tma-trace-tool">
+                        <details>
+                          <summary className="tma-trace-tool-head">
+                            <span className="tma-trace-tool-icon" aria-hidden>
+                              🔧
+                            </span>
+                            <span className="tma-trace-tool-name tma-num">
+                              {tc.name}
+                            </span>
+                            {typeof tc.duration_ms === 'number' && (
+                              <span className="tma-trace-tool-badge tma-num">
+                                {tc.duration_ms} мс
+                              </span>
+                            )}
+                            {typeof tc.cost_credits === 'number' && (
+                              <span className="tma-trace-tool-cost tma-num">
+                                {fmtCredits(String(tc.cost_credits))} кр
+                              </span>
+                            )}
+                            <span
+                              className={`tma-pill tma-pill--${ts.tone} tma-trace-tool-pill`}
+                            >
+                              {ts.icon} {ts.label}
+                            </span>
+                          </summary>
+                          {hasArgs && (
+                            <pre className="tma-trace-tool-body tma-mono">
+                              {typeof tc.args === 'string'
+                                ? tc.args
+                                : JSON.stringify(tc.args, null, 2)}
+                            </pre>
+                          )}
+                          {hasResult && (
+                            <pre className="tma-trace-tool-body tma-mono">
+                              {result}
+                            </pre>
+                          )}
+                        </details>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           </li>
         );

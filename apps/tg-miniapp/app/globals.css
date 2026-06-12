@@ -1092,6 +1092,87 @@ code {
   color: var(--ink-faint);
 }
 
+/* Tool-call sub-cards (run-trace) — collapsible <details> per agent step.
+ * Rendered only when agent_runs.tool_calls is non-empty; hairline cards. */
+.tma-trace-tools {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tma-trace-tool {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 6px 8px;
+}
+
+.tma-trace-tool-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.tma-trace-tool-head::-webkit-details-marker {
+  display: none;
+}
+
+.tma-trace-tool-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tma-trace-tool-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.tma-trace-tool-badge {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.tma-trace-tool-cost {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.tma-trace-tool-pill {
+  margin-left: auto;
+}
+
+.tma-trace-tool-body {
+  margin: 6px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 4px);
+  padding: 6px 8px;
+  overflow-x: auto;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * aiag-* motion library — ported from apps/web/src/app/globals.css (DESIGN.md
  * SoT). Rules: transform/opacity only, ease cubic-bezier(.23,1,.32,1),

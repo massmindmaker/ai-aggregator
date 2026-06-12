@@ -289,8 +289,11 @@ jobs:
           if [[ -n "$HEALTH_URL" ]]; then
             curl -fsS --max-time 6 "$HEALTH_URL" >/dev/null || HEALTHY=0
           else
-            # Non-HTTP worker: must be 'online' and not flapping.
-            STATUS="$(pm2 jlist | jq -r ".[] | select(.name==\"$APP\") | .pm2_env.status" | head -n1)"
+            # Non-HTTP worker: must be 'online' and not flapping. MUST force
+            # root's pm2 — `pm2 jlist` as the non-root deploy user SUCCEEDS with
+            # an EMPTY list (exit 0), so the proc (in root's daemon) looks absent
+            # → false-fail + rollback. (Fixed in agent-market split; ported here.)
+            STATUS="$( { sudo -n pm2 jlist 2>/dev/null || pm2 jlist; } | jq -r ".[] | select(.name==\"$APP\") | .pm2_env.status" | head -n1)"
             [[ "$STATUS" == "online" ]] || HEALTHY=0
           fi
 

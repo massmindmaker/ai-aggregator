@@ -61,6 +61,14 @@ interface Run {
   error: string | null;
   created_at: string;
   completed_at: string | null;
+  tool_calls?: Array<{
+    name: string;
+    args?: unknown;
+    result?: string | null;
+    cost_credits?: number;
+    duration_ms?: number;
+    status?: string;
+  }>;
 }
 
 interface Schedule {

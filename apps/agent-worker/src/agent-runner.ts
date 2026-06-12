@@ -10,6 +10,7 @@ import {
   getBalance,
   settleRun,
   loadProviderCredential,
+  recordToolCalls,
   InsufficientBalanceError,
   type AgentRow,
 } from './db.js';
@@ -581,6 +582,17 @@ export async function runAgent(runId: string): Promise<void> {
   // callback below.
   let callAgentCount = 0;
 
+  // Additive observability ONLY (run-trace): collected tool-call steps, written
+  // once via recordToolCalls() AFTER settleRun (separate UPDATE, no billing impact).
+  const capturedToolCalls: Array<{
+    name: string;
+    args?: unknown;
+    result?: string;
+    cost_credits?: number;
+    duration_ms?: number;
+    status: 'ok' | 'error';
+  }> = [];
+
   try {
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     let call: ChatResult;
@@ -693,6 +705,9 @@ export async function runAgent(runId: string): Promise<void> {
         await notifyFailed(agent.tg_user_id, agent.name, agent.id, reason);
         return;
       }
+      // Additive observability: persist captured tool steps as a SEPARATE UPDATE
+      // after settleRun (outside its tx). Self-swallowing — never affects the run.
+      await recordToolCalls(runId, capturedToolCalls);
       await notifyCompleted(agent.tg_user_id, agent.name, agent.id, billable, output);
       return;
     }
@@ -711,6 +726,7 @@ export async function runAgent(runId: string): Promise<void> {
       } catch {
         parsed = {};
       }
+      const __t0 = Date.now();
       const exec =
         mcp && toolCall.function.name.startsWith(MCP_PREFIX)
           ? await callMcpTool(mcp, toolCall.function.name.slice(MCP_PREFIX.length), parsed)
@@ -749,6 +765,19 @@ export async function runAgent(runId: string): Promise<void> {
         // is out of scope for D-1 and treated as a credit-denominated fee here.)
         toolFeesCredits += exec.cost_rub;
       }
+      // Additive observability: capture the step (truncated). Pure read of the
+      // existing exec result — does NOT alter the exec flow or billing.
+      capturedToolCalls.push({
+        name: toolCall.function.name,
+        args: parsed,
+        result:
+          typeof exec.result === 'string'
+            ? exec.result.slice(0, 500)
+            : JSON.stringify(exec.result).slice(0, 500),
+        cost_credits: exec.cost_rub ?? 0,
+        duration_ms: Date.now() - __t0,
+        status: 'ok',
+      });
       messages.push({
         role: 'tool',
         tool_call_id: toolCall.id,

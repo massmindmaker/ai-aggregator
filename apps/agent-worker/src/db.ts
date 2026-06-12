@@ -457,6 +457,19 @@ export async function markFailed(runId: string, error: string): Promise<void> {
   `;
 }
 
+/**
+ * Additive-observability ONLY: persist the captured tool-call steps for a run as
+ * a SEPARATE jsonb UPDATE, outside any billing transaction (NOT inside settleRun).
+ * Any write failure is swallowed — recording steps must never fail/roll back a run.
+ */
+export async function recordToolCalls(runId: string, calls: unknown[]): Promise<void> {
+  try {
+    await sql`UPDATE agent_runs SET tool_calls = ${sql.json(calls as never)} WHERE id = ${runId}::uuid`;
+  } catch (e) {
+    console.warn('[agent-worker] recordToolCalls failed (non-fatal):', (e as Error).message);
+  }
+}
+
 // -- R0-2: prepaid balance (tg_user_balances) -----------------------------
 //
 // D-1: tg_user_balances.balance_credits IS the live spendable balance, in
