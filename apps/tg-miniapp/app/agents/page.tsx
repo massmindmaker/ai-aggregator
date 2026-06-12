@@ -83,7 +83,7 @@ export default function AgentsInboxPage() {
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
-        <header className="tma-page-head">
+        <header className="tma-page-head aiag-fade-up">
           <span className="tma-eyebrow">Агенты</span>
           <h1 className="tma-h1">Мои агенты</h1>
         </header>
@@ -147,6 +147,8 @@ export default function AgentsInboxPage() {
                 {agents.map((a) => {
                   const hue = hueFor(a.id);
                   const char = characterFor(a.template_kind);
+                  const live =
+                    a.last_status === 'running' || a.last_status === 'pending';
                   return (
                     <Link key={a.id} href={`/agents/${a.id}`} className="inbox-row">
                       <span
@@ -165,6 +167,9 @@ export default function AgentsInboxPage() {
                           />
                         ) : (
                           (a.name.trim()[0] ?? '?').toUpperCase()
+                        )}
+                        {live && (
+                          <span className="inbox-live aiag-pulse-dot" aria-hidden />
                         )}
                       </span>
                       <span className="inbox-main">

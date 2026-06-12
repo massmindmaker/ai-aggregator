@@ -100,8 +100,8 @@ export default function AccountPage() {
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
-        <header className="tma-header">
-          <span className="tma-badge">Аккаунт</span>
+        <header className="tma-header aiag-fade-up">
+          <span className="tma-eyebrow">Аккаунт</span>
           <h1 className="tma-title">Профиль</h1>
           <p className="tma-subtitle">Личность, тариф и согласия. Деньги — в кошельке.</p>
         </header>

@@ -10,6 +10,7 @@ import {
 } from '@tonconnect/ui-react';
 import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
+import { fmtCredits } from '@/lib/credits';
 
 interface WalletRow {
   id: string;
@@ -48,17 +49,6 @@ const LEDGER_LABEL: Record<string, string> = {
 function shortAddr(a: string): string {
   if (a.length <= 12) return a;
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
-}
-
-// D-1: balances/amounts are integer US cents (1 credit = $0.01). Display as
-// "N.NN cr" — store/compute in cents, never expose the raw integer.
-function fmtCredits(s: string): string {
-  const cents = Number(s);
-  if (!Number.isFinite(cents)) return s;
-  return (cents / 100).toLocaleString('ru-RU', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 }
 
 export default function WalletPage() {
@@ -209,8 +199,8 @@ export default function WalletPage() {
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
-        <header className="tma-header">
-          <span className="tma-badge">Кошелёк</span>
+        <header className="tma-header aiag-fade-up">
+          <span className="tma-eyebrow">Кошелёк</span>
           <h1 className="tma-title">Баланс</h1>
           <p className="tma-subtitle">
             Привяжите TON-кошелёк, пополните счёт в кредитах через TON.

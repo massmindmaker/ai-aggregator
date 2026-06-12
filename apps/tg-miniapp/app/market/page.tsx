@@ -164,7 +164,7 @@ export default function MarketPage() {
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
-        <header className="tma-header">
+        <header className="tma-header aiag-fade-up">
           <span className="tma-eyebrow">Маркет</span>
           <h1 className="tma-title">Агенты</h1>
           <p className="tma-subtitle">
@@ -197,7 +197,7 @@ export default function MarketPage() {
         </div>
 
         {/* Поиск + категории (визуальный клиентский фильтр). */}
-        <div className="tma-search">
+        <div>
           <input
             type="search"
             className="tma-input"
@@ -286,7 +286,7 @@ export default function MarketPage() {
                       rating: t.avg_rating ?? undefined,
                       price: priceStat(t.price_credits),
                     }}
-                    demoStats
+                    demoStats={!t.clone_count && !t.avg_rating}
                     actionLabel={isTaking ? 'Берём…' : actionLabel(t.price_credits)}
                     onAction={() => take(t)}
                   />

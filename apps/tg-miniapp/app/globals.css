@@ -51,7 +51,7 @@ code {
 
 .tma-shell {
   min-height: 100vh;
-  padding: 32px 20px 64px;
+  padding: calc(32px + env(safe-area-inset-top, 0px)) 20px 64px;
   max-width: 640px;
   margin: 0 auto;
   display: flex;
@@ -123,7 +123,7 @@ code {
 
 /* === Bottom navigation === */
 .tma-shell--with-nav {
-  padding-bottom: 96px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
 .tma-bottom-nav {
@@ -144,6 +144,7 @@ code {
 }
 
 .tma-nav-item {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -158,6 +159,18 @@ code {
 
 .tma-nav-item--active {
   color: var(--accent);
+}
+
+.tma-nav-item--active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 0 0 2px 2px;
 }
 
 .tma-nav-icon {
@@ -320,7 +333,8 @@ code {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 160ms ease, opacity 160ms ease, background 160ms ease;
+  transition: transform 160ms ease, opacity 160ms ease, background 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .tma-btn:disabled {
@@ -338,6 +352,7 @@ code {
 .tma-btn--primary:focus-visible:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
 }
 
 .tma-error {
@@ -2033,6 +2048,7 @@ code {
 }
 
 .inbox-avatar {
+  position: relative;
   flex: none;
   width: 48px;
   height: 48px;
@@ -2045,6 +2061,18 @@ code {
   font-size: 18px;
   font-weight: 700;
   border: 1px solid var(--line);
+}
+
+/* Живой статус последнего прогона — пульсирующая точка в углу аватара. */
+.inbox-live {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
 }
 
 .inbox-main {

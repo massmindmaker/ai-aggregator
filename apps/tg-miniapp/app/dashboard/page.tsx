@@ -257,7 +257,7 @@ export default function DashboardPage() {
         {user && !error && (
           <>
             {/* ── Блок 1: баланс-хедер ── */}
-            <section className="tma-card tma-hub-balance">
+            <section className="tma-card tma-hub-balance aiag-fade-up">
               <span className="tma-eyebrow">Баланс</span>
               {balance === null && !balanceErr ? (
                 <div className="tma-skeleton tma-hub-sum-skeleton" aria-hidden />
