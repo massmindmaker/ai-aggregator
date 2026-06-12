@@ -47,12 +47,14 @@ function OwnerControls({
   transferPriceCredits,
   token,
   onChanged,
+  mintFeeTon,
 }: {
   agentId: string;
   transferable: boolean;
   transferPriceCredits: string | null;
   token?: string | null;
   onChanged?: () => void;
+  mintFeeTon?: string;
 }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -339,6 +341,7 @@ export function TransferPanel({
         transferPriceCredits={transferPriceCredits}
         token={token}
         onChanged={onChanged}
+        mintFeeTon={mintFeeTon}
       />
     );
   }
