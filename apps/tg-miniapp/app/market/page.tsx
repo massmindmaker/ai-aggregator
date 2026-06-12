@@ -184,18 +184,20 @@ export default function MarketPage() {
           >
             Агенты
           </button>
-          {LOCKED_SEGMENTS.map((s) => (
-            <span
-              key={s}
-              role="tab"
-              aria-disabled
-              className="tma-segment-btn is-locked"
-              title="Откроется для операторов"
-            >
-              {s}
-              <span className="tma-pill">для операторов</span>
-            </span>
-          ))}
+          {/* Локед-разделы (модели/скиллы/MCP/тузы/базы) свёрнуты в ОДИН тихий
+              чип — фаза-A это маркет агентов, не витрина заблокированного. */}
+          <span
+            role="tab"
+            aria-disabled
+            className="tma-segment-btn is-locked"
+            title={`Для операторов (фаза 2): ${LOCKED_SEGMENTS.join(' · ')}`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden style={{ flexShrink: 0 }}>
+              <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
+              <path d="M8 11V8a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2" />
+            </svg>
+            Для операторов
+          </span>
         </div>
 
         {/* Поиск + категории (визуальный клиентский фильтр). */}
