@@ -26,6 +26,7 @@ interface Template {
   id: string;
   name: string | null;
   description: string | null;
+  trait: string | null;
   model_slug: string | null;
   tools: unknown;
   price_credits: string | null;
@@ -33,6 +34,7 @@ interface Template {
   avg_rating: string | null;
   rating_count: number;
   author_tg_user_id: string;
+  author_username: string | null;
   created_at: string;
   template_kind?: string | null;
 }
@@ -280,7 +282,8 @@ export default function MarketPage() {
                     portraitVideo={char?.video}
                     modelBadge={t.model_slug}
                     role={t.description}
-                    author="официальный"
+                    trait={t.trait ?? undefined}
+                    author={t.author_username ? `@${t.author_username}` : 'официальный'}
                     stats={{
                       runs: String(t.clone_count),
                       rating: t.avg_rating ?? undefined,

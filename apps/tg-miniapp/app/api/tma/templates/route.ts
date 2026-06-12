@@ -14,6 +14,7 @@ interface TemplateListRow {
   id: string;
   name: string | null;
   description: string | null;
+  trait: string | null;
   model_slug: string | null;
   tools: unknown;
   price_credits: string | null;
@@ -21,6 +22,7 @@ interface TemplateListRow {
   avg_rating: string | null;
   rating_count: number;
   author_tg_user_id: string;
+  author_username: string | null;
   created_at: string;
 }
 
@@ -33,43 +35,49 @@ export async function GET(req: NextRequest) {
     let rows: TemplateListRow[];
     if (sort === 'trending') {
       rows = (await sql`
-        SELECT t.id::text, t.name, t.description, t.model_slug, t.tools,
+        SELECT t.id::text, t.name, t.description, t.trait, t.model_slug, t.tools,
                t.price_credits::text AS price_credits, t.clone_count,
                ROUND(AVG(r.stars), 1)::text AS avg_rating,
                COUNT(r.id)::int AS rating_count,
-               t.author_tg_user_id::text AS author_tg_user_id, t.created_at
+               t.author_tg_user_id::text AS author_tg_user_id,
+               u.username AS author_username, t.created_at
         FROM agent_templates t
         LEFT JOIN template_ratings r ON r.template_id = t.id
+        LEFT JOIN tg_users u ON u.telegram_id = t.author_tg_user_id
         WHERE t.visibility = 'public'
-        GROUP BY t.id
+        GROUP BY t.id, u.username
         ORDER BY t.clone_count DESC
         LIMIT 100
       `) as unknown as TemplateListRow[];
     } else if (sort === 'top') {
       rows = (await sql`
-        SELECT t.id::text, t.name, t.description, t.model_slug, t.tools,
+        SELECT t.id::text, t.name, t.description, t.trait, t.model_slug, t.tools,
                t.price_credits::text AS price_credits, t.clone_count,
                ROUND(AVG(r.stars), 1)::text AS avg_rating,
                COUNT(r.id)::int AS rating_count,
-               t.author_tg_user_id::text AS author_tg_user_id, t.created_at
+               t.author_tg_user_id::text AS author_tg_user_id,
+               u.username AS author_username, t.created_at
         FROM agent_templates t
         LEFT JOIN template_ratings r ON r.template_id = t.id
+        LEFT JOIN tg_users u ON u.telegram_id = t.author_tg_user_id
         WHERE t.visibility = 'public'
-        GROUP BY t.id
+        GROUP BY t.id, u.username
         ORDER BY ROUND(AVG(r.stars), 1) DESC NULLS LAST, t.created_at DESC
         LIMIT 100
       `) as unknown as TemplateListRow[];
     } else {
       rows = (await sql`
-        SELECT t.id::text, t.name, t.description, t.model_slug, t.tools,
+        SELECT t.id::text, t.name, t.description, t.trait, t.model_slug, t.tools,
                t.price_credits::text AS price_credits, t.clone_count,
                ROUND(AVG(r.stars), 1)::text AS avg_rating,
                COUNT(r.id)::int AS rating_count,
-               t.author_tg_user_id::text AS author_tg_user_id, t.created_at
+               t.author_tg_user_id::text AS author_tg_user_id,
+               u.username AS author_username, t.created_at
         FROM agent_templates t
         LEFT JOIN template_ratings r ON r.template_id = t.id
+        LEFT JOIN tg_users u ON u.telegram_id = t.author_tg_user_id
         WHERE t.visibility = 'public'
-        GROUP BY t.id
+        GROUP BY t.id, u.username
         ORDER BY t.created_at DESC
         LIMIT 100
       `) as unknown as TemplateListRow[];
