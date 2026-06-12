@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="ru" class="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI·Aggregator — Найм / развёртывание · HI-FI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+ * AI·Aggregator — HI-FI «Найм / развёртывание» (5 экранов).
+ * Брендовый hi-fi, КОГЕРЕНТНЫЙ с docs/wireframes/design-board.html:
+ * те же токены (DESIGN.md / globals.css), тот же .phone-фрейм, .ccard
+ * character-card, .steps стэппер, .led моно-лог, .note status-pill, .bubble
+ * чат, .seg сегмент, .btn (один amber primary / экран). per-character hue
+ * (Нова = 300) только на карточке агента. Тёмная база, amber-дисциплина,
+ * hairline-границы, JetBrains Mono для ВСЕХ цифр/ID/портов/цен.
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── DARK tokens — verbatim from design-board.html / globals.css ── */
+:root{
+  --bg:#0a0a0b; --bg-elev:#111114; --bg-surface:#18181b;
+  --surface:#111114; --surface-2:#18181b;
+  --line:rgba(255,255,255,.08); --line-strong:rgba(255,255,255,.16); --line-soft:rgba(255,255,255,.05);
+  --ink:#f4f4f5; --ink-muted:#8b8b94; --ink-dim:#8b8b94; --ink-faint:#71717a;
+  --accent:#f59e0b; --accent-hover:#d97706; --accent-ink:#000;
+  --amber:#f59e0b; --amber-ink:#f59e0b; --amber-dim:rgba(245,158,11,.14); --amber-line:rgba(245,158,11,.40); --amber-soft:rgba(245,158,11,.10);
+  --success:#22c55e; --danger:#ef4444; --warning:#eab308;
+  --good:#22c55e; --good-soft:rgba(34,197,94,.10); --good-line:rgba(34,197,94,.42);
+  --sky:rgba(122,162,247,.10); --sky-line:rgba(122,162,247,.42); --sky-deep:#7aa2f7;
+  --bad:#e8736b; --bad-line:rgba(232,115,107,.42); --bad-bg:rgba(232,115,107,.10); --pend:#e0a86a;
+  --card:var(--surface); --card-2:var(--surface-2);
+  --warn-ink:#eab308; --warn-soft:rgba(234,179,8,.10); --warn-line:rgba(234,179,8,.42);
+  --radius:8px;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --sans:'Inter',-apple-system,'Segoe UI',Roboto,system-ui,sans-serif;
+  --exp:cubic-bezier(.23,1,.32,1);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow:0 24px 60px -28px rgba(0,0,0,.7);
+  --frame-shadow:0 30px 80px -40px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;display:flex;min-height:100vh;font-size:14px}
+
+/* logo chain mark — amber rounded stand-in (mask base64 omitted for portability) */
+.brandmark{display:inline-block;width:22px;height:22px;border-radius:6px;background:
+  radial-gradient(circle at 30% 30%,var(--accent),transparent 60%),
+  radial-gradient(circle at 70% 70%,var(--accent),transparent 60%),var(--amber-dim);
+  border:1px solid var(--amber-line);flex:none}
+
+/* ════════ BOARD SHELL ════════ */
+.nav{
+  width:260px;flex:none;height:100vh;position:sticky;top:0;overflow-y:auto;
+  background:var(--bg-elev);border-right:1px solid var(--line);padding:18px 0 40px;
+}
+.nav .brand{display:flex;align-items:center;gap:10px;padding:0 18px 2px}
+.nav .brand h1{font-size:15px;letter-spacing:.01em;font-weight:700}
+.nav .brand h1 b{color:var(--amber-ink);font-weight:800}
+.nav .meta{font-size:10.5px;color:var(--ink-faint);font-family:var(--mono);padding:6px 18px 12px}
+.nav .legend{font-size:10px;color:var(--ink-dim);line-height:1.85;padding:10px 14px;margin:0 12px 12px;
+  border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.nav .legend b{color:var(--ink)}
+.nav .legend .tag{font-size:9px;padding:0 5px;border-radius:4px;border:1px solid;margin-right:5px;font-family:var(--mono)}
+.tag.live{color:var(--good);border-color:var(--good-line);background:var(--good-soft)}
+.tag.soon{color:var(--sky-deep);border-color:var(--sky-line);background:var(--sky)}
+.tag.rnd{color:var(--ink-faint);border-color:var(--line-strong)}
+.nav .grp{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);
+  padding:14px 18px 5px;font-family:var(--mono)}
+.nav a.scr{display:flex;align-items:center;gap:8px;padding:8px 18px;font-size:12.5px;color:var(--ink-dim);
+  text-decoration:none;border-left:2px solid transparent;cursor:pointer}
+.nav a.scr:hover{color:var(--ink);background:var(--card);border-left-color:var(--amber)}
+.nav a.scr.active{color:var(--ink);background:var(--card);border-left-color:var(--amber);font-weight:600}
+.nav a.scr .n{color:var(--ink-faint);font-family:var(--mono);font-size:10.5px;flex:none;min-width:22px}
+.nav a.scr.active .n{color:var(--amber-ink)}
+.nav a.scr .star{color:var(--amber);font-size:10px;margin-left:auto}
+
+.stage{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:14px 26px;background:var(--bg-elev);border-bottom:1px solid var(--line)}
+.topbar .title{font-size:13px;font-weight:600}
+.topbar .title .sub{color:var(--ink-faint);font-family:var(--mono);font-size:11px;margin-left:8px}
+.topbar .sp{flex:1}
+
+.viewport{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:38px 26px 90px;overflow:auto}
+.cap{font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin-bottom:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;max-width:420px;text-align:center}
+.cap b{color:var(--ink);font-weight:600}
+.cap .tag{font-size:10px;padding:0 6px;border-radius:4px;border:1px solid}
+.frame-wrap{display:flex;flex-direction:column;align-items:center;width:100%}
+
+/* ════════ MOBILE phone frame (identical to design-board) ════════ */
+.phone{width:390px;height:800px;flex:none;background:var(--bg);border:10px solid #000;border-radius:34px;
+  overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--frame-shadow);position:relative}
+.tg-bar{height:36px;flex:none;background:var(--bg-elev);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;padding:0 12px;font-family:var(--mono);font-size:11px}
+.tg-bar .dom{color:var(--ink)}.tg-bar .sp{flex:1}.tg-bar .ic{color:var(--ink-faint)}
+.screen{flex:1;overflow-y:auto;padding:14px 13px 14px;display:flex;flex-direction:column;gap:11px}
+.mainbtn{height:48px;flex:none;background:var(--amber);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;gap:8px;font-size:13.5px;font-weight:700;cursor:pointer}
+.mainbtn.danger{background:transparent;color:var(--danger);border-top:1px solid var(--line)}
+.botbar{flex:none;background:var(--bg-elev);border-top:1px solid var(--line);padding:11px 13px;display:flex;gap:8px}
+
+/* ════════ SHARED component vocabulary (from design-board) ════════ */
+.ph{margin-bottom:2px}
+.kicker{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber-ink);margin-bottom:6px}
+.ph h2{font-size:21px;letter-spacing:-.01em;font-weight:700}
+.ph p{font-size:12px;color:var(--ink-dim);margin-top:5px;line-height:1.45;max-width:52ch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow-sm)}
+.card.flat{box-shadow:none}
+.card.amber{border-color:var(--amber-line);background:var(--amber-soft)}
+.card.sky{border-color:var(--sky-line);background:var(--sky)}
+.card.err{border-color:var(--bad-line);background:var(--bad-bg)}
+.card.danger{border-color:var(--bad-line);background:var(--bad-bg)}
+.ch{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-family:var(--mono);margin-bottom:9px}
+.row{display:flex;align-items:center;gap:10px}
+.row.between{justify-content:space-between}.row.top{align-items:flex-start}
+.av{width:36px;height:36px;flex:none;border-radius:10px;background:var(--card-2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--ink-dim)}
+.av.amber{border-color:var(--amber-line);background:var(--amber-dim);color:var(--amber-ink)}
+.t-title{font-size:13.5px;font-weight:640}
+.t-sub{font-size:11px;color:var(--ink-dim);margin-top:2px;line-height:1.45}
+.num{font-family:var(--mono)}.muted{color:var(--ink-dim)}.faint{color:var(--ink-faint)}
+.amber-tx{color:var(--amber-ink)}.good-tx{color:var(--good)}.bad-tx{color:var(--bad)}
+.metric{font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}.metric b{color:var(--ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-dim);border:1px solid var(--line);border-radius:7px;padding:3px 9px}
+.chip.on{color:var(--amber-ink);border-color:var(--amber-line);background:var(--amber-dim)}
+.chip.good{color:var(--good);border-color:var(--good-line);background:var(--good-soft)}
+.chip.sm{font-size:9.5px;padding:1px 7px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:42px;padding:0 18px;border-radius:var(--radius);background:var(--amber);color:var(--accent-ink);font-weight:700;font-size:13px;border:1px solid var(--amber);cursor:pointer;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line-strong)}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid var(--bad-line)}
+.btn.sm{height:32px;font-size:11.5px;padding:0 14px;border-radius:18px}
+.btn.block{display:flex;width:100%}
+.input{min-height:40px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card-2);display:flex;align-items:center;gap:7px;padding:0 12px;font-size:12.5px;color:var(--ink-dim)}
+.input .val{color:var(--ink)}.input .ph-hint{color:var(--ink-faint)}
+.label{font-size:10px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.field{display:flex;flex-direction:column}
+.list{display:flex;flex-direction:column;gap:8px}
+.div{height:1px;background:var(--line);margin:2px 0}
+.thin{height:1px;background:var(--line-soft);border:0;margin:8px 0}
+.sp{flex:1}
+
+/* key-value rows (resources / price breakdown) — mono values */
+.kv{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px}
+.kv .k{color:var(--ink-dim)}
+.kv .v{font-family:var(--mono);color:var(--ink);font-weight:500}
+.kv.total{border-top:1px solid var(--line);margin-top:6px;padding-top:10px}
+.kv.total .k{color:var(--ink);font-weight:600}
+.kv.total .v{color:var(--amber-ink);font-size:15px;font-weight:600}
+
+/* stepper (from design-board .steps) */
+.steps{display:flex;gap:6px;align-items:center}
+.steps .step{display:flex;flex-direction:column;align-items:center;gap:5px;flex:none}
+.steps .dot{width:24px;height:24px;border-radius:50%;border:1px solid var(--line-strong);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-family:var(--mono);color:var(--ink-faint)}
+.steps .dot.on{border-color:var(--amber-line);color:var(--amber-ink);background:var(--amber-dim)}
+.steps .dot.done{border-color:var(--good-line);color:var(--good);background:var(--good-soft)}
+.steps .lbl{font-size:9px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em}
+.steps .step.on .lbl{color:var(--amber-ink)}.steps .step.done .lbl{color:var(--good)}
+.steps .ln{flex:1;height:1px;background:var(--line);margin-bottom:18px}
+.steps .ln.done{background:var(--good-line)}
+/* live pulse on the active step dot */
+.dot.on.pulse{animation:dotpulse 1.7s var(--exp) infinite}
+@keyframes dotpulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.35)}50%{box-shadow:0 0 0 5px rgba(245,158,11,0)}}
+
+/* mono log (from design-board .led / .out) */
+.led{font-family:var(--mono);font-size:11px;line-height:1.95;color:var(--ink-dim)}
+.led .ok{color:var(--good)}.led .hl{color:var(--ink)}.led .t{color:var(--ink-faint)}
+.led .run{color:var(--amber-ink)}
+.led .cur{display:inline-block;width:7px;height:13px;background:var(--amber);vertical-align:middle;margin-left:2px;animation:blink 1.05s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* status notes (from design-board .note) */
+.note{display:flex;gap:8px;align-items:flex-start;font-size:10.5px;line-height:1.5;color:var(--ink-dim);border:1px solid var(--line);border-left-width:3px;border-radius:7px;padding:8px 10px;background:var(--card-2)}
+.note .ni{flex:none;font-family:var(--mono);font-size:10px}
+.note b{color:var(--ink);font-weight:600}.note .mono{font-family:var(--mono);color:var(--amber-ink)}
+.note.live{border-left-color:var(--good)}.note.live .ni{color:var(--good)}
+.note.soon{border-left-color:var(--sky-deep)}.note.soon .ni{color:var(--sky-deep)}
+.note.rnd{border-left-color:var(--ink-faint)}.note.rnd .ni{color:var(--ink-faint)}
+
+/* isolation lock plate (the «создатель не видит» guarantee) */
+.lockplate{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--good-line);background:var(--good-soft);border-radius:10px;padding:11px 12px}
+.lockplate .lk{flex:none;font-size:16px;line-height:1.1;color:var(--good)}
+.lockplate .lt{font-size:11px;line-height:1.5;color:var(--ink-dim)}
+.lockplate .lt b{display:block;color:var(--ink);font-weight:640;font-size:12px;margin-bottom:2px}
+.lockplate .lt .mono{font-family:var(--mono);color:var(--good)}
+
+/* segment (from design-board .seg) */
+.seg{display:flex;background:var(--card-2);border:1px solid var(--line);border-radius:var(--radius);padding:3px}
+.seg .s{flex:1;text-align:center;font-size:11px;padding:6px 4px;border-radius:6px;color:var(--ink-dim);cursor:pointer}
+.seg .s.on{background:var(--amber-dim);color:var(--amber-ink)}
+.seg .s.ro{font-size:10px}
+
+/* chat bubbles (from design-board .bubble) */
+.bubble{max-width:82%;font-size:12px;line-height:1.5;padding:10px 13px;border-radius:var(--radius)}
+.bubble .ts{font-family:var(--mono);font-size:8.5px;color:var(--ink-faint);margin-top:5px}
+.bubble.them{align-self:flex-start;background:var(--amber-dim);border:1px solid var(--amber-line);border-bottom-left-radius:4px}
+.bubble.me{align-self:flex-end;background:var(--surface-2);border:1px solid var(--line);border-bottom-right-radius:4px}
+.bubble.sys{align-self:center;background:transparent;border:1px dashed var(--line-strong);color:var(--ink-faint);font-size:10px;font-family:var(--mono);padding:5px 11px;max-width:90%;text-align:center}
+.memtag{font-family:var(--mono);font-size:9px;color:var(--good);border:1px solid var(--good-line);background:var(--good-soft);border-radius:5px;padding:0 5px;margin-left:4px;vertical-align:middle}
+
+/* chat composer bar */
+.chatbar{flex:none;background:var(--bg-elev);border-top:1px solid var(--line);padding:9px 12px;display:flex;align-items:center;gap:9px}
+.chatbar .f{flex:1;height:38px;border:1px solid var(--line);border-radius:20px;background:var(--card-2);display:flex;align-items:center;padding:0 14px;font-size:12px;color:var(--ink-faint)}
+.chatbar .send{width:38px;height:38px;flex:none;border-radius:50%;background:var(--amber);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:700}
+
+/* memory fact rows */
+.fact{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);padding:10px 12px}
+.fact .ft{display:flex;align-items:flex-start;gap:9px}
+.fact .fi{flex:none;width:18px;height:18px;border-radius:5px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink-faint);margin-top:1px}
+.fact .fx{flex:1;font-size:12.5px;line-height:1.4;color:var(--ink)}
+.fact .forget{flex:none;font-size:10px;font-family:var(--mono);color:var(--ink-faint);border:1px solid var(--line);border-radius:14px;padding:3px 9px;cursor:pointer}
+.fact .forget:hover{color:var(--bad);border-color:var(--bad-line)}
+.fact .meta{font-family:var(--mono);font-size:9px;color:var(--ink-faint);margin-top:6px;padding-left:27px}
+.scrollnote{text-align:center;font-family:var(--mono);font-size:10px;color:var(--ink-faint);padding:10px 0 2px}
+
+/* character card (from design-board .ccard — per-hue, agent-only) */
+.ccard{display:flex;gap:11px;align-items:flex-start}
+.pf{position:relative;flex:none;width:46px;height:56px;border-radius:9px;overflow:hidden;border:1px solid oklch(.74 .10 var(--ch)/.4);
+  background:radial-gradient(85% 70% at 50% 18%,oklch(.55 .13 var(--ch)/.55),transparent 70%),linear-gradient(165deg,oklch(.32 .06 var(--ch)) 0%,oklch(.18 .03 var(--ch)) 100%)}
+.pf.lg{width:60px;height:72px;border-radius:11px}
+.pf .gly{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:24px;color:oklch(.97 .03 var(--ch)/.92);text-shadow:0 3px 18px oklch(.6 .13 var(--ch)/.6)}
+.pf.lg .gly{font-size:32px}
+.pf .tdot{position:absolute;top:4px;left:4px;width:8px;height:8px;border-radius:2px;background:oklch(.74 .12 var(--ch))}
+.pf .plive{position:absolute;bottom:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--good);animation:tdot 1.9s ease-in-out infinite}
+@keyframes tdot{0%,100%{opacity:.55;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
+.ccard .cbody{flex:1;min-width:0}
+.ccard .cname{font-size:13.5px;font-weight:660;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ccard .crole{font-size:11px;color:oklch(.66 .10 var(--ch));margin-top:1px}
+.ccard .crole b{color:var(--ink-dim);font-weight:600}
+.ccard .ctrait{font-size:11px;color:var(--ink-dim);font-style:italic;margin-top:5px;line-height:1.4}
+.ccard .ctrait::before{content:"\201C";color:oklch(.74 .10 var(--ch))}
+.ccard .ctrait::after{content:"\201D";color:oklch(.74 .10 var(--ch))}
+.mbadge{display:inline-block;font-family:var(--mono);font-size:9px;color:oklch(.78 .08 var(--ch));border:1px solid oklch(.74 .10 var(--ch)/.4);border-radius:5px;padding:0 5px;vertical-align:middle}
+.pillrow{display:flex;gap:6px;font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);flex-wrap:wrap;align-items:center}
+.pillrow .amber-tx{color:var(--amber-ink)}
+
+/* live status badge (online + pulse) */
+.livebadge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9.5px;color:var(--good);border:1px solid var(--good-line);background:var(--good-soft);border-radius:14px;padding:2px 9px}
+.livebadge .d{width:6px;height:6px;border-radius:50%;background:var(--good);box-shadow:0 0 6px rgba(34,197,94,.7);animation:tdot 1.7s ease-in-out infinite}
+
+/* health metric tiles */
+.mtile{flex:1;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:11px 12px;box-shadow:var(--shadow-sm)}
+.mtile .me{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-family:var(--mono)}
+.mtile .mv{font-family:var(--mono);font-size:19px;color:var(--ink);margin-top:5px;line-height:1}
+.mtile .mv.good-tx{color:var(--good)}.mtile .mv.amber-tx{color:var(--amber-ink)}
+.mtile .mk{font-size:10px;color:var(--ink-dim);margin-top:4px}.mtile .mk.up{color:var(--good)}
+
+/* runs table (mono) */
+.tbl{width:100%;border-collapse:collapse;font-size:11px}
+.tbl th{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);text-align:left;font-weight:500;padding:0 8px 8px 0}
+.tbl th.n,.tbl td.n{text-align:right;padding-right:0}
+.tbl td{font-family:var(--mono);color:var(--ink-dim);padding:8px 8px 8px 0;border-top:1px solid var(--line-soft)}
+.tbl td.who{font-family:var(--mono);color:var(--ink)}
+.tbl td .ok{color:var(--good)}
+
+@media (max-width:1080px){.nav{display:none}}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="brand"><span class="brandmark"></span><h1>AI·Aggregator <b>HI-FI</b></h1></div>
+  <a href="./design-board.html" target="_top" style="display:none"></a>
+  <a href="../design-board.html" target="_top" style="display:block;margin:8px 12px 10px;padding:8px 12px;background:var(--amber-dim);color:var(--amber-ink);border:1px solid var(--amber-line);border-radius:8px;font:600 12px var(--sans);text-decoration:none">← Единый дизайн-борд</a>
+  <div class="meta">Найм / развёртывание · брендовый hi-fi · 2026-06-12</div>
+  <div class="legend">
+    <b style="color:var(--amber-ink)">5 экранов пути «развернуть → нанять».</b><br>
+    <span style="color:var(--ink-dim)">Создатель <b>разворачивает</b> Hermes-инстанс; наниматель получает <b>отдельный</b> инстанс — те же скиллы, своя изолированная память.</span>
+  </div>
+  <div class="legend">
+    <span class="tag live">live</span>работает сейчас<br>
+    <span class="tag soon">скоро</span>ближний билд<br>
+    <span class="tag rnd">R&D</span>отложено<br>
+    ★ = ядро happy-path
+  </div>
+  <div class="grp">Экраны</div>
+  <a class="scr active" data-n="0" onclick="go(0)"><span class="n">★1</span>Развёртывание инстанса<span class="star">★</span></a>
+  <a class="scr" data-n="1" onclick="go(1)"><span class="n">★2</span>Нанять агента<span class="star">★</span></a>
+  <a class="scr" data-n="2" onclick="go(2)"><span class="n">★3</span>Досье нанятого<span class="star">★</span></a>
+  <a class="scr" data-n="3" onclick="go(3)"><span class="n">★4</span>Управление памятью<span class="star">★</span></a>
+  <a class="scr" data-n="4" onclick="go(4)"><span class="n">★5</span>Здоровье моего агента<span class="star">★</span></a>
+</nav>
+
+<div class="stage">
+  <div class="topbar">
+    <div class="title" id="topTitle">—<span class="sub" id="topSub"></span></div>
+    <div class="sp"></div>
+    <div class="metric faint">тёмная тема · TMA · 390px · Нова hue 300</div>
+  </div>
+  <div class="viewport">
+    <div class="frame-wrap">
+      <div class="cap" id="cap"></div>
+      <div id="mount"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+ * 5 hi-fi screens. Markup reuses the design-board component vocabulary
+ * (.phone / .ccard / .steps / .led / .note / .bubble / .seg / .btn). Nova
+ * = per-character hue 300. One amber primary per screen.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const tgbar = (title, icons='')=>`<div class="tg-bar">${icons.includes('‹')?'<span class="ic">‹</span>':''}<span class="dom">${title}</span><span class="sp"></span>${icons.replace('‹','').trim().split(' ').filter(Boolean).map(i=>`<span class="ic">${i}</span>`).join('')}</div>`;
+
+// phone wrapper: bar + screen + optional footer (mainbtn / botbar / chatbar)
+function phone(o){
+  return `<div class="phone">${o.bar}
+    <div class="screen" style="${o.screenStyle||''}">${o.body}</div>
+    ${o.footer||''}</div>`;
+}
+
+const SCREENS = [
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 1 · РАЗВЁРТЫВАНИЕ ИНСТАНСА (создатель)
+ * stepper · моно-лог · ресурсы (RAM/порт/профиль) · live-pulse · amber CTA
+ * ───────────────────────────────────────────────────────────────────────── */
+{
+ title:'Развёртывание инстанса', sub:'создатель · live-провижн Hermes',
+ cap:`<b>1 · Развёртывание инстанса.</b> Стэппер с живым шагом, моно-лог, ресурсы инстанса. <span class="tag live">live</span>`,
+ render:()=>phone({
+  bar:tgbar('Разворачиваю «Нова»'),
+  screenStyle:'gap:13px',
+  body:`
+   <div class="card flat" style="background:transparent;border:0;box-shadow:none;padding:8px 4px 0">
+     <div class="steps">
+       <div class="step done"><div class="dot done">✓</div><div class="lbl">Спек</div></div>
+       <div class="ln done"></div>
+       <div class="step done"><div class="dot done">✓</div><div class="lbl">Инстанс</div></div>
+       <div class="ln done"></div>
+       <div class="step on"><div class="dot on pulse">3</div><div class="lbl">Скиллы</div></div>
+       <div class="ln"></div>
+       <div class="step"><div class="dot">4</div><div class="lbl">Готов</div></div>
+     </div>
+   </div>
+
+   <div class="ccard" style="--ch:300">
+     <div class="pf"><span class="tdot"></span><span class="plive"></span><span class="gly">Н</span></div>
+     <div class="cbody"><div class="cname">Нова <span class="mbadge">gpt-4o-mini</span></div>
+     <div class="crole">Крипто-аналитик · от <b>@you</b></div>
+     <div class="ctrait">Считает риск, не иксы.</div></div>
+   </div>
+
+   <div class="card"><div class="ch">лог развёртывания</div>
+     <div class="led">
+       <div><span class="t">[00:01]</span> готовлю спек… <span class="ok">ok</span></div>
+       <div><span class="t">[00:03]</span> hermes profile <span class="hl">nova-7f2</span> … <span class="ok">ok</span></div>
+       <div><span class="t">[00:06]</span> поднимаю инстанс на VPS … <span class="ok">ok</span></div>
+       <div><span class="t">[00:09]</span> порт <span class="hl">:8642</span> слушает … <span class="ok">ok</span></div>
+       <div><span class="t">[00:11]</span> <span class="run">подключаю web_search</span> …<span class="cur"></span></div>
+     </div>
+   </div>
+
+   <div class="card"><div class="ch">ресурсы инстанса</div>
+     <div class="kv"><span class="k">RAM</span><span class="v">418 МБ</span></div>
+     <div class="kv"><span class="k">Порт</span><span class="v">:8642</span></div>
+     <div class="kv"><span class="k">Профиль</span><span class="v amber-tx">nova-7f2</span></div>
+     <div class="kv"><span class="k">Аптайм</span><span class="v">00:00:11</span></div>
+   </div>
+
+   <div class="note live"><span class="ni">live</span><div>Инстанс крутится на нашем VPS. <b>Один профиль Hermes</b> — своя память, свой порт. Стрим лога — <span class="mono">SSE</span>.</div></div>
+  `,
+  footer:`<div class="mainbtn">Открыть агента →</div>`
+ })
+},
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 2 · НАНЯТЬ АГЕНТА (наниматель)
+ * character-card · что получаешь · изоляция · цена-разбивка · amber CTA
+ * ───────────────────────────────────────────────────────────────────────── */
+{
+ title:'Нанять агента', sub:'наниматель · отдельный инстанс',
+ cap:`<b>2 · Нанять агента.</b> «Что получаешь», плашка-изоляция, разбивка цены 210 кр. <span class="tag live">live</span>`,
+ render:()=>phone({
+  bar:tgbar('Нанять агента','‹'),
+  screenStyle:'gap:12px',
+  body:`
+   <div class="ccard" style="--ch:300">
+     <div class="pf lg"><span class="tdot"></span><span class="plive"></span><span class="gly">Н</span></div>
+     <div class="cbody"><div class="cname" style="font-size:15px">Нова <span class="mbadge">gpt-4o-mini</span></div>
+     <div class="crole">Крипто-аналитик · от <b>@maker_ai</b></div>
+     <div class="ctrait">Считает риск, не иксы.</div>
+     <div class="pillrow" style="margin-top:7px"><span>★ 4.9</span><span>·</span><span>128 наймов</span></div></div>
+   </div>
+
+   <div class="card"><div class="ch">что получаешь</div>
+     <div class="list" style="gap:9px">
+       <div class="row top"><span class="chip good sm" style="margin-top:1px">✓</span><div class="t-sub" style="margin:0;color:var(--ink)">Те же скиллы: <b>web_search · calc · memory</b></div></div>
+       <div class="row top"><span class="chip good sm" style="margin-top:1px">✓</span><div class="t-sub" style="margin:0;color:var(--ink)">Своя <b>изолированная память</b> — с нуля</div></div>
+       <div class="row top"><span class="chip good sm" style="margin-top:1px">✓</span><div class="t-sub" style="margin:0;color:var(--ink)">Своя история диалога</div></div>
+       <div class="row top"><span class="chip sm" style="margin-top:1px">○</span><div class="t-sub" style="margin:0">Спек создателя — <b style="color:var(--ink)">read-only</b></div></div>
+     </div>
+   </div>
+
+   <div class="lockplate">
+     <span class="lk">🔒</span>
+     <div class="lt"><b>Изоляция гарантирована</b>Создатель не видит твою память и диалоги. Отдельный инстанс <span class="mono">(agent_id + ты)</span>.</div>
+   </div>
+
+   <div class="card"><div class="ch">к оплате сейчас</div>
+     <div class="kv"><span class="k">Аренда автору <span class="muted" style="font-size:10px">@maker_ai</span></span><span class="v">200 кр / мес</span></div>
+     <div class="kv"><span class="k">Развёртывание инстанса</span><span class="v">10 кр</span></div>
+     <div class="kv total"><span class="k">Сейчас</span><span class="v">210 кр</span></div>
+   </div>
+   <div class="note live"><span class="ni">live</span><div>Автор получает <b>ровно 200 кр</b> — AIAG берёт <b>0%</b> с ренты. Модели тарифицируются отдельно по мере использования.</div></div>
+  `,
+  footer:`<div class="mainbtn">Нанять · 210 кр</div>`
+ })
+},
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 3 · ДОСЬЕ НАНЯТОГО ИНСТАНСА
+ * char-card header (online) · сегмент Чат/Память/Спек · чат-пузыри [memory+2]
+ * · карточка-статус (spec read-only / память твоя) · ghost BYOK
+ * ───────────────────────────────────────────────────────────────────────── */
+{
+ title:'Досье нанятого инстанса', sub:'наниматель · чат + статус',
+ cap:`<b>3 · Досье нанятого.</b> Сегмент Чат/Память/Спек, чат с <span class="num">[memory+2]</span>, статус инстанса. <span class="tag live">live</span>`,
+ render:()=>phone({
+  bar:tgbar('Нова <span class="ic" style="color:var(--ink-faint);font-size:10px">(нанят)</span>','‹ ⋯'),
+  screenStyle:'gap:10px;padding-bottom:8px',
+  body:`
+   <div class="row between">
+     <div class="ccard" style="--ch:300;flex:1">
+       <div class="pf"><span class="tdot"></span><span class="plive"></span><span class="gly">Н</span></div>
+       <div class="cbody"><div class="cname">Нова</div>
+       <div class="crole">нанят у <b>@maker_ai</b></div>
+       <div class="pillrow" style="margin-top:4px"><span>профиль</span><span class="amber-tx">nova-u402</span></div></div>
+     </div>
+     <span class="livebadge"><span class="d"></span>online</span>
+   </div>
+
+   <div class="seg"><div class="s on">Чат</div><div class="s">Память</div><div class="s ro">Спек · read-only</div></div>
+
+   <div class="list" style="gap:9px;margin-top:2px">
+     <div class="bubble sys">сессия начата · память пустая · твоя</div>
+     <div class="bubble them">Привет! Я Нова. Память пока чистая — расскажи, что отслеживать.<div class="ts">09:40</div></div>
+     <div class="bubble me">Следи за TON и USDT, кратко.<div class="ts">09:41</div></div>
+     <div class="bubble them">Записал в память: интерес — TON, USDT.<span class="memtag">memory+2</span><div class="ts">09:41</div></div>
+   </div>
+
+   <div class="sp"></div>
+
+   <div class="card flat"><div class="ch">инстанс</div>
+     <div class="row between" style="font-size:12px"><span class="muted">Спек</span><span class="chip sm">read-only создателя</span></div>
+     <div class="div" style="margin:9px 0"></div>
+     <div class="row between" style="font-size:12px"><span class="muted">Память</span><span class="chip good sm">твоя · 2 факта</span></div>
+     <div class="btn ghost block sm" style="margin-top:11px">Подключить свои ключи (BYOK)</div>
+   </div>
+  `,
+  footer:`<div class="chatbar"><div class="f">Сообщение…</div><div class="send">↑</div></div>`
+ })
+},
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 4 · УПРАВЛЕНИЕ ПАМЯТЬЮ АГЕНТА
+ * поиск · список фактов (моно, иконка + факт + дата + забыть) · clear-all danger
+ * ───────────────────────────────────────────────────────────────────────── */
+{
+ title:'Управление памятью агента', sub:'наниматель · факты инстанса',
+ cap:`<b>4 · Управление памятью.</b> Поиск + факты (забыть) + ghost-danger «Очистить всё». <span class="tag live">live</span>`,
+ render:()=>phone({
+  bar:tgbar('Память · Нова','‹'),
+  screenStyle:'gap:11px',
+  body:`
+   <div class="row between">
+     <div class="ph" style="margin:0"><span class="kicker">ПАМЯТЬ</span><h2 style="font-size:19px">42 факта</h2></div>
+     <span class="livebadge"><span class="d"></span>nova-u402</span>
+   </div>
+
+   <div class="input"><span class="faint">🔎</span><span class="ph-hint">Поиск по памяти…</span></div>
+   <div class="note live"><span class="ni">live</span><div>Память <b>этого инстанса</b>. Изолирована — создатель не видит. Hermes: <span class="mono">MEMORY.md + FTS5</span>.</div></div>
+
+   <div class="list">
+     <div class="fact"><div class="ft"><span class="fi">★</span><span class="fx">Интересы: TON, USDT, краткость</span><span class="forget">забыть</span></div><div class="meta">обновлено 09:41 · src chat</div></div>
+     <div class="fact"><div class="ft"><span class="fi">◷</span><span class="fx">Часовой пояс: UTC+3</span><span class="forget">забыть</span></div><div class="meta">обновлено вчера · src chat</div></div>
+     <div class="fact"><div class="ft"><span class="fi">▤</span><span class="fx">Формат отчёта: таблица, без воды</span><span class="forget">забыть</span></div><div class="meta">обновлено 2д назад · src chat</div></div>
+     <div class="fact"><div class="ft"><span class="fi">◴</span><span class="fx">Портфель: 60% TON / 40% USDT</span><span class="forget">забыть</span></div><div class="meta">обновлено 3д назад · src chat</div></div>
+     <div class="scrollnote">↓ ещё 38 фактов…</div>
+   </div>
+  `,
+  footer:`<div class="mainbtn danger">Очистить всю память</div>`
+ })
+},
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 5 · ЗДОРОВЬЕ МОЕГО РАЗВЁРНУТОГО АГЕНТА (создатель)
+ * online live-pulse · метрики моно (аптайм/нанято/нагрузка/доход)
+ * · таблица последних прогонов · ghost Рестарт / Логи
+ * ───────────────────────────────────────────────────────────────────────── */
+{
+ title:'Здоровье моего агента', sub:'создатель · мониторинг инстанса',
+ cap:`<b>5 · Здоровье развёрнутого.</b> Метрики + таблица прогонов + ghost Рестарт/Логи. <span class="tag live">live</span>`,
+ render:()=>phone({
+  bar:tgbar('Нова · здоровье','‹'),
+  screenStyle:'gap:12px',
+  body:`
+   <div class="row between">
+     <div class="ccard" style="--ch:300;flex:1">
+       <div class="pf"><span class="tdot"></span><span class="plive"></span><span class="gly">Н</span></div>
+       <div class="cbody"><div class="cname">Нова</div>
+       <div class="crole">мой развёрнутый агент</div>
+       <div class="pillrow" style="margin-top:4px"><span class="amber-tx">nova-7f2</span><span>·</span><span>:8642</span></div></div>
+     </div>
+     <span class="livebadge"><span class="d"></span>online</span>
+   </div>
+
+   <div class="row" style="gap:9px">
+     <div class="mtile"><div class="me">аптайм</div><div class="mv good-tx">14д</div><div class="mk">06:21:04</div></div>
+     <div class="mtile"><div class="me">нанят раз</div><div class="mv">128</div><div class="mk up">+12 за нед</div></div>
+   </div>
+   <div class="row" style="gap:9px">
+     <div class="mtile"><div class="me">нагрузка</div><div class="mv">37%</div><div class="mk">RAM 418 МБ</div></div>
+     <div class="mtile"><div class="me">доход</div><div class="mv amber-tx">2 940 кр</div><div class="mk">рента + прогоны</div></div>
+   </div>
+
+   <div class="card"><div class="ch">последние прогоны</div>
+     <table class="tbl">
+       <thead><tr><th>сессия</th><th>наниматель</th><th class="n">токенов</th><th class="n">кр</th><th class="n">статус</th></tr></thead>
+       <tbody>
+         <tr><td>s-9a1</td><td class="who">@user_402</td><td class="n">3 120</td><td class="n">1.40</td><td class="n"><span class="ok">ok</span></td></tr>
+         <tr><td>s-9a0</td><td class="who">@user_118</td><td class="n">880</td><td class="n">0.31</td><td class="n"><span class="ok">ok</span></td></tr>
+         <tr><td>s-99f</td><td class="who">@user_077</td><td class="n">5 410</td><td class="n">2.05</td><td class="n"><span class="ok">ok</span></td></tr>
+       </tbody>
+     </table>
+   </div>
+
+   <div class="note live"><span class="ni">live</span><div>Статус и прогоны — <b>live</b> (профиль <span class="mono">nova-7f2</span>). Рестарт перезапускает один Hermes-процесс на VPS.</div></div>
+  `,
+  footer:`<div class="botbar"><div class="btn ghost block" style="flex:1">Логи</div><div class="btn ghost block" style="flex:1">Рестарт</div></div>`
+ })
+}
+
+];
+
+/* ── render ── */
+function go(i){
+  const s=SCREENS[i];
+  document.getElementById('topTitle').innerHTML = s.title + `<span class="sub">${s.sub}</span>`;
+  document.getElementById('cap').innerHTML = s.cap;
+  document.getElementById('mount').innerHTML = s.render();
+  document.querySelectorAll('.nav a.scr').forEach((a,j)=>a.classList.toggle('active', j===i));
+  if(location.hash !== '#s'+i) history.replaceState(null,'','#s'+i);
+}
+const start = (location.hash.match(/^#s(\d)$/)||[])[1];
+go(start!==undefined ? Math.min(+start, SCREENS.length-1) : 0);
+</script>
+</body>
+</html>

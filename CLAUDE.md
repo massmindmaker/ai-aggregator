@@ -1,7 +1,10 @@
 # AIAG — Project Context Anchor
 
+> **КАНОН: `docs/canon/AIAG-CANON.md` — единственный источник истины. При конфликте побеждает он. Этот файл = тонкий якорь.**
+>
+> **КАРТА ПАМЯТИ (куда за чем):** продукт/модель → канон · код → Serena + graphify · ресёрч → LightRAG · сущности/связи → memgraph · быстрый факт → auto-memory `MEMORY.md` · дизайн → `DESIGN.md` + борды.
+
 > **This file auto-loads every session.** It is the always-present "common denominator" so context is not lost between sessions.
-> **Canon / single source of truth:** `docs/specs/2026-06-02-WHAT-WE-ARE-BUILDING.md`. On any conflict, the canon doc wins; this file is its short summary.
 > Detailed state: `.serena/memories/aiag_*.md`. Deploy: skill `aiag-deploy`. Never expose personal Telegram (@b0brov) in artifacts.
 
 ## How to work here (read order)
@@ -32,12 +35,12 @@
 
 ## HERMES — the intended core, but NOT built yet (read this before any agent-runtime work)
 - Hermes = **`NousResearch/hermes-agent`** — an open-source AI-AGENT **RUNTIME** (MIT, v0.15.2). **It is NOT a model.**
-- **Stance (founder 2026-06-03): BUILD managed-Hermes for test on an ~18GB VPS (shared).** Later tier: high-paying users → dedicated instance; ~$20-tier → shared VPS. Synthesis D-2: Daytona sandboxes only the tools; the `hermes gateway` stays **resident (~300-600MB each)** — measure multiplexing in a Phase-0 spike before scaling. Connect-your-own-Hermes stays the cheap path.
+- **РЕШЕНИЕ 2026-06-12: КУРС НА РЕАЛЬНЫЙ Hermes.** UI = control-plane к REST API Hermes; наём = profile-per-наниматель. Инфра-блок: нужен VPS 4-8GB → Phase-0 spike перед масштабированием. Синтез D-2: Daytona песочит только тулы; `hermes gateway` остаётся **resident (~300-600MB each)** — мерить мультиплексинг в spike. Connect-your-own-Hermes остаётся дешёвым путём. См. канон §4-5.
 - **Vision (deferred/R&D):** creating an agent provisions a per-user Hermes instance on our infra; it talks to our `:4000` gateway for models + our tool broker; has persistent memory + skills + cron.
 - **REALITY (verify before promising it):** not built and infra-blocked.
   - Today "Hermes" is just a model slug; the runtime is a **stateless BullMQ → OpenRouter loop** (`apps/agent-worker/src/agent-runner.ts`). No provisioning, no per-user process, no isolation.
   - VPS = 2GB RAM, already runs 5 pm2 procs → **cannot host Hermes pods** (~300MB idle, ~1GB active each).
-  - Hermes has **NO remote config REST API** (no `POST /api/model/set`). Config is via files + CLI on the host. TMA can *talk to* a Hermes via its OpenAI-compatible URL (`http://host:8642/v1`) but cannot remote-control it without a control plane WE build.
+  - Hermes **ИМЕЕТ REST API** (`/api/model/set`, `/api/jobs`, `/api/sessions` на `:8642`) — наш UI **может им управлять** (research 2026-06-12). TMA *talks to* Hermes via OpenAI-compatible URL (`http://host:8642/v1`) И конфигурит его через этот REST control-plane.
   - Hermes natively bridges ~22 chat platforms incl. Telegram out of the box → **we do NOT build the chat bridge.**
 
 ## REAL vs FANTASIZED — what a user is shown MUST match the left column
@@ -82,6 +85,11 @@
 8. ✅ **Web version:** build ALL TMA screens + modals as a separate WEB board too, **light theme** à la Studio23 (airy white / sky-blue + orange-amber accent, dark CTA pills). TMA stays dark/amber. → `docs/wireframes/web/`.
 9. ✅ **Direction confirmed** by the 12-item research (`docs/specs/research/SYNTHESIS.html`); **fix money-path first** (D-0: gateway must return realized margin).
 
+### Founder decisions (2026-06-12) — см. канон §13
+10. ✅ **Наём (rent) — СТРОИМ:** наймовая модель агента = profile-per-наниматель поверх real-Hermes (канон §13).
+11. ✅ **Cloneable** — флаг + роут **LIVE** (1-тап клон сетапа из шаблона).
+12. ✅ **Hermes-разворот:** курс на реальный Hermes как control-plane к его REST API (отменяет «R&D/deferred», см. HERMES-секцию выше).
+
 Detailed product definition reflecting these: `docs/specs/2026-06-02-tma-product-definition.md`. Research synthesis: `docs/specs/research/SYNTHESIS.html`.
 
 ## graphify
@@ -93,3 +101,9 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## ПРАВИЛА ПОДДЕРЖКИ ЗНАНИЯ
+- Канон = SoT. При изменении продукта → сперва обновить канон → затем синхрон memgraph-узла + указателя в auto-memory `MEMORY.md`.
+- После кода → `graphify update .`.
+- Новый ресёрч → `LightRAG upload_document`.
+- Старьё **не удалять** — помечать `DEPRECATED → канон`.

@@ -17,6 +17,13 @@ Load-bearing: the TMA money path is live on prod. These are the security rules c
 ## Billing integrity
 - `settleRun` = markCompleted + daily-spend guard + balance debit in one `sql.begin`.
 - AIAG-supplied model → debit + markup. BYOK/own provider → **zero charge** (the `if (isExternal) return` rule).
+- TON top-ups: **ton-proof is verified strictly** (R2.1-A2; the old "unverified" status is obsolete). Crediting goes through the reconciler over the verified deposit.
+
+## Memory isolation per-hirer (OWASP LLM06) — PROJECT, load-bearing for hire (canon §11)
+- Memory + history are namespaced by **`(agent_id, hirer_tg_user_id)`**: index `(agent_id, COALESCE(scope_tg_user_id,0), key)`; history filtered `tg_user_id = hirer`.
+- A hirer **must not see the creator's memory or any other hirer's memory** — cross-tenant memory read = OWASP LLM06.
+- The scope is **wired server-side by the worker from `runId`/session, NOT from the request body** → the LLM cannot ask for someone else's namespace. This is the isolation boundary.
+- Today `memorySet/Get/List` + `loadHistory` scope only by `agent_id`; the scope dimension is the unbuilt piece (canon §4). Until built, hire stays a PROJECT.
 
 ## White-label
 - Error labels and UI never reveal upstream brand (OpenRouter/Kie). aiag path routes via `:4000`; OpenRouter only as documented degraded fallback.

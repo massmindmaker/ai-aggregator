@@ -1,3 +1,5 @@
+> 🔴 DEPRECATED (2026-06-13). Актуальный SoT = docs/canon/AIAG-CANON.md. Этот файл исторический; статусы not-built/deferred здесь УСТАРЕЛИ (MCP/author-rent/schedules/iNFT/provider-picker/cloneable = LIVE; managed-Hermes = курс-на-реальный). Не доверять статусам — сверять с каноном.
+
 # TMA — User Workflows → Function → Readiness map (2026-06-03)
 
 > ⚠️ **УСТАРЕЛО ЧАСТИЧНО (поправка 2026-06-12).** Этот документ помечает `NOT-BUILT` /
