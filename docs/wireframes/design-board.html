@@ -317,6 +317,10 @@ body.mobile .win-frame{display:none}
   <div class="brand"><span class="brandmark"></span><h1>AI·Aggregator <b>SoT</b></h1></div>
   <a href="../DASHBOARD.html" target="_top" style="display:block;margin:0 4px 10px;padding:8px 12px;background:rgba(245,158,11,.14);color:#f59e0b;border:1px solid rgba(245,158,11,.4);border-radius:8px;font:600 12px system-ui;text-decoration:none">← Общий дашборд</a>
   <div class="meta">Единый дизайн-борд · суб-дашборд проекта · 2026-06-04</div>
+  <div class="legend" style="border-color:var(--amber-line);background:var(--amber-soft)">
+    <b style="color:var(--amber-ink)">★ Обновлено под redesign-A 2026-06-12:</b> 5 табов (Агенты/Маркет/Дэшборд/Кошелёк/Аккаунт), дом=инбокс, Маркет=карточки-персонажи.<br>
+    <span style="color:var(--ink-dim)">Финмодель: AIAG-оператор-0 сеет официальных, массы используют/арендуют.</span>
+  </div>
   <div class="legend">
     <span class="tag live">live</span>работает сейчас<br>
     <span class="tag soon">скоро</span>ближний билд<br>
@@ -364,11 +368,13 @@ body.mobile .win-frame{display:none}
  * Markup is lifted from the existing tma/ + web/ boards (no new screens).
  * ════════════════════════════════════════════════════════════════════════ */
 
+// redesign-A: 5 табов — Агенты · Маркет · Дэшборд · Кошелёк · Аккаунт
 const tabbar = (active)=>`<div class="tabbar">
   <div class="t ${active==='agents'?'on':''}"><div class="g"></div>Агенты</div>
   <div class="t ${active==='market'?'on':''}"><div class="g"></div>Маркет</div>
+  <div class="t ${active==='dashboard'?'on':''}"><div class="g"></div>Дэшборд</div>
   <div class="t ${active==='wallet'?'on':''}"><div class="g"></div>Кошелёк</div>
-  <div class="t ${active==='profile'?'on':''}"><div class="g"></div>Профиль</div></div>`;
+  <div class="t ${active==='account'||active==='profile'?'on':''}"><div class="g"></div>Аккаунт</div></div>`;
 const tgbar = (dom,icons='⋮ ✕')=>`<div class="tg-bar"><span class="dom">${dom}</span><span class="sp"></span>${icons.split(' ').map(i=>`<span class="ic">${i}</span>`).join('')}</div>`;
 // phone wrapper: bar + screen + optional mainbtn/fab + tabbar
 function phone(opts){
@@ -382,8 +388,8 @@ function phone(opts){
 function win(opts){
   const side = opts.side===false ? '' : `<nav class="pside">
     <div class="ph-brand"><span class="brandmark lg"></span><span class="nm">AI<b>·</b>Aggregator</span></div>
-    ${(opts.nav||['agents','market','wallet','profile']).map(n=>{
-      const m={agents:'Агенты',market:'Маркет',wallet:'Кошелёк',profile:'Профиль',tools:'Тулзы'};
+    ${(opts.nav||['agents','market','dashboard','wallet','account']).map(n=>{
+      const m={agents:'Агенты',market:'Маркет',dashboard:'Дэшборд',wallet:'Кошелёк',account:'Аккаунт',profile:'Аккаунт',tools:'Тулзы'};
       return `<div class="pnav ${n===opts.navActive?'on':''}"><span class="ic"></span>${m[n]||n}</div>`;}).join('')}
     <div class="ps-spacer"></div>
     <div class="ps-wallet"><div class="lab">Баланс</div><div class="bal">1 250 <span class="u">кр</span></div></div></nav>`;
@@ -429,68 +435,85 @@ const SCREENS = [
    <div class="row" style="gap:10px;width:100%"><div class="btn block" style="flex:1">Войти через Telegram</div><div class="btn ghost" style="flex:1">Почта</div></div>`})},
 
 /* ─── B · DISCOVERY ────────────────────────────────────────────── */
-{group:'B · Discovery (дом)'},
-{id:'03',title:'Дом — лента «Для тебя»',tag:'live',star:true,surf:['m','w'],
- m:()=>phone({bar:tgbar('//ai-aggregator'),fab:'＋ Создать',screenStyle:'gap:10px',
-   body:`<div class="seg"><div class="s on">Для тебя</div><div class="s">Каталог</div><div class="s">Мои · 3</div></div>
-   <div class="note soon"><span class="ni">скоро</span><div>Лента <b>«Для тебя»</b> чужих авторов, ★-рейтинг и «N запусков» — целевой вид. Сейчас live только <b>«Мои»</b> (<span class="mono">GET /tma/agents</span>).</div></div>
-   <div class="metric faint">Рекомендуем тебе · персонажи под твои задачи</div>
+{group:'B · Агенты (инбокс / дом)'},
+{id:'03',title:'Агенты — инбокс (главная)',tag:'live',star:true,surf:['m','w'],
+ m:()=>phone({bar:tgbar('//ai-aggregator'),tab:'agents',screenStyle:'gap:9px',
+   body:`<div class="ph"><span class="kicker">АГЕНТЫ</span><h2>Мои агенты</h2></div>
+   <div class="note live"><span class="ni">live</span><div>Инбокс «моих» агентов (<span class="mono">GET /tma/agents</span>). Тап по строке → экран агента (run/history). Стрим-чат — фаза B.</div></div>
    <div class="list">
-   ${charCard(28,'А','Алиса','GPT-5.5','Контент-редактор · от <b style="color:var(--ink-dim)">@ainews</b>','Дерзкая, режет воду без жалости.',
-     `<div class="cstats"><div class="cs"><div class="cv">48<span class="u">k</span></div><div class="ck">запусков<span class="demo">демо</span></div></div><div class="cs"><div class="cv star">4.9</div><div class="ck">★<span class="demo">демо</span></div></div><div class="cs"><div class="cv">~6<span class="u">кр</span></div><div class="ck">оценка</div></div></div>`)}
-   ${charCard(165,'Г','Гриша','Claude 4.8','Аналитик данных · от <b style="color:var(--ink-dim)">@finbot</b>','Сухой. Говорит цифрами.')}
-   ${charCard(340,'Н','Ника','GPT-5.5','SMM, тренды · от <b style="color:var(--ink-dim)">@smm</b>','Чует вирусное за день до всех.')}
-   </div>`}),
- w:()=>win({url:'/home',navActive:'agents',tall:true,
-   body:`<div class="ptop"><div class="search">🔎 Найти агента, модель, тулзу…</div><div class="btn sm amber">＋ Создать</div><div class="ub">👤</div></div>
-   <div class="seg" style="max-width:380px"><div class="s on">Для тебя <span class="demo">скоро</span></div><div class="s">Каталог <span class="demo">скоро</span></div><div class="s">Мои · 3</div></div>
-   <div class="note soon"><span class="ni">скоро</span><div><b>Live сегодня — только «Мои».</b> «Для тебя»/Каталог чужих авторов, рекомендатель, ★-рейтинг — скоро. Ниже целевой вид (демо-данные).</div></div>
-   <div class="gallery">
-     <div class="gcard feature" style="--ch:28"><div class="ccard"><div class="pf lg"><span class="tdot"></span><span class="plive"></span><span class="gly">А</span></div>
-       <div class="cbody"><div class="cname">Алиса <span class="mbadge">GPT-5.5</span></div><div class="crole">Контент-редактор · от <b style="color:var(--ink-dim)">@ainews</b></div><div class="ctrait">Дерзкая, режет воду без жалости.</div>
-       <div class="cstats"><div class="cs"><div class="cv">48<span class="u">k</span> <span class="demo">демо</span></div><div class="ck">запусков</div></div><div class="cs"><div class="cv star">★ 4.9 <span class="demo">демо</span></div><div class="ck">312 отз.</div></div><div class="cs"><div class="cv good-tx" style="font-size:11px">бесплатно</div><div class="ck">аренда</div></div></div></div></div></div>
-     ${[[165,'Г','Гриша','Claude 4.8','Аналитик · @finbot','Говорит цифрами.','9 кр/прогон'],[340,'Н','Ника','GPT-5.5','SMM · @smm','Чует вирусное.','200 кр/мес'],[235,'М','Макс','Opus 4.8','Код-ревьюер · @dev','Найдёт забытый баг.','<span class="price free">бесплатно</span>'],[60,'Л','Лея','Gemini 3.5','Саппорт · @cs','Клиент не сорвётся.','150 кр/мес'],[300,'Н','Нова','Opus 4.8','Трейдер · с нуля','Считает риск, не иксы.','12 кр/прогон']]
-       .map(([ch,g,n,md,r,t,p])=>`<div class="gcard" style="--ch:${ch}"><div class="pf" style="--ch:${ch}"><span class="tdot"></span><span class="gly">${g}</span></div>
-       <div class="cname" style="margin-top:9px">${n} <span class="mbadge" style="--ch:${ch}">${md}</span></div><div class="crole" style="--ch:${ch}">${r}</div><div class="ctrait" style="--ch:${ch}">${t}</div>
-       <div style="margin-top:8px">${p.includes('price')?p:`<span class="price">${p}</span>`}</div></div>`).join('')}
-   </div>`})},
-{id:'03b',title:'Дом — первый вход (0 агентов)',tag:'live',star:true,surf:['m','w'],
- m:()=>phone({bar:tgbar('//ai-aggregator'),screenStyle:'gap:12px',
-   body:`<div class="ph"><span class="kicker">ДОБРО ПОЖАЛОВАТЬ</span><h2>Начни отсюда</h2><p>Выбери персонажа и запусти за 2 клика. Платишь по факту — в кредитах.</p></div>
-   <div class="metric faint">Подобрали для старта</div>
-   <div class="list">${charCard(28,'А','Алиса','GPT-5.5','Контент-редактор','Дерзкая, режет воду без жалости.')}
-   ${charCard(60,'Л','Лея','GPT-5.5-mini','Поддержка','Тёплая. С ней клиент не сорвётся.')}
-   ${charCard(165,'Г','Гриша','Claude 4.8','Аналитик данных','Сухой. Говорит цифрами.')}</div>
-   <div class="sp"></div><div class="btn">Запустить первого</div>
-   <div class="metric faint" style="text-align:center">или <span class="amber-tx">собрать своего →</span></div>`}),
- w:()=>win({url:'/home',navActive:'agents',
-   body:`<div class="ph-h"><span class="kicker">Добро пожаловать</span><h2>Начни отсюда</h2><p>Выбери персонажа и запусти за два клика. Оплата по факту — в кредитах.</p></div>
-   <div class="metric faint">Подобрали для старта</div>
-   <div class="grid3">${[[28,'А','Алиса','Контент-редактор','<span class="price free">бесплатно</span>'],[60,'Л','Лея','Поддержка','<span class="price">150 кр/мес</span>'],[165,'Г','Гриша','Аналитик','<span class="price">9 кр/прогон</span>']]
-     .map(([ch,g,n,r,p])=>`<div class="card" style="--ch:${ch}"><div class="pf" style="--ch:${ch}"><span class="tdot"></span><span class="gly">${g}</span></div><div class="cname" style="margin-top:9px">${n}</div><div class="crole" style="--ch:${ch}">${r}</div><div style="margin-top:7px">${p}</div></div>`).join('')}</div>
-   <div class="sp"></div><div class="row" style="gap:10px"><div class="btn amber">Запусти первого</div><div class="btn ghost">Собрать своего →</div></div>`})},
-{id:'04',title:'Каталог / фильтр',tag:'live',surf:['m','w'],
- m:()=>phone({bar:tgbar('//ai-aggregator'),screenStyle:'gap:10px',
-   body:`<div class="seg"><div class="s">Для тебя</div><div class="s on">Каталог</div><div class="s">Мои · 3</div></div>
-   <div class="note soon"><span class="ni">скоро</span><div>Каталог чужих авторов + «N прогонов» — целевой вид. <span class="mono">marketplace</span> сейчас отдаёт только модели.</div></div>
+   ${[[28,'А','Алиса','5 мин','3 варианта поста готовы. Какой берём?',true],[165,'Г','Гриша','2 ч','Сводка по выгрузке: рост 14% м/м.',false],[340,'Н','Ника','вчера','Тренд недели — короткие вертикалки.',false]]
+     .map(([ch,g,n,t,msg,unread])=>`<div class="card" style="--ch:${ch}"><div class="ccard"><div class="pf"><span class="tdot"></span><span class="plive"></span><span class="gly">${g}</span></div>
+     <div class="cbody"><div class="row between"><div class="cname">${n}</div><span class="runs t">${t}</span></div>
+     <div class="t-sub" style="margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${msg}</div></div>
+     ${unread?'<span class="chip on sm" style="align-self:center">●</span>':''}</div></div>`).join('')}
+   </div>
+   <div class="div"></div>
+   <div class="row between"><span class="label" style="margin:0">Группы агентов</span><span class="soonchip">скоро</span></div>
+   <div class="empty">Командные сценарии из нескольких агентов · общая память.<br><span class="faint">фаза C</span></div>`}),
+ w:()=>win({url:'/agents',navActive:'agents',tall:true,mainStyle:'gap:0;padding:0;flex-direction:row',
+   body:`<div style="width:300px;flex:none;border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:9px">
+     <div class="ph-h" style="margin-bottom:2px"><span class="kicker">Агенты</span><h2 style="font-size:18px">Мои агенты</h2></div>
+     ${[[28,'А','Алиса','5 мин','3 варианта поста готовы.',true],[165,'Г','Гриша','2 ч','Сводка: рост 14% м/м.',false],[340,'Н','Ника','вчера','Тренд — вертикалки.',false]]
+       .map(([ch,g,n,t,msg,unread],i)=>`<div class="card ${i===0?'amber':''}" style="--ch:${ch}"><div class="ccard"><div class="pf"><span class="tdot"></span><span class="plive"></span><span class="gly">${g}</span></div>
+       <div class="cbody"><div class="row between"><div class="cname">${n}</div><span class="runs t">${t}</span></div><div class="t-sub" style="margin-top:3px">${msg}</div></div>${unread?'<span class="chip on sm">●</span>':''}</div></div>`).join('')}
+     <div class="div"></div><div class="row between"><span class="label" style="margin:0">Группы</span><span class="soonchip">скоро</span></div></div>
+   <div style="flex:1;padding:20px 22px;display:flex;flex-direction:column;gap:11px;min-width:0">
+     <div class="ccard" style="--ch:28"><div class="pf lg"><span class="tdot"></span><span class="plive"></span><span class="gly">А</span></div>
+     <div class="cbody"><div class="cname" style="font-size:16px">Алиса <span class="mbadge">GPT-5.5</span></div><div class="crole">Контент-редактор · от <b style="color:var(--ink-dim)">@ainews</b></div><div class="ctrait">Дерзкая, режет воду без жалости.</div></div></div>
+     <div class="div"></div>
+     <div class="bubble them">3 варианта поста готовы. Какой берём?</div><div class="bubble me">Первый, добавь CTA в конец</div>
+     <div class="note live"><span class="ni">live</span><div>Сплит: список слева, диалог справа (<span class="mono">GET /tma/agents/[id]</span>). На мобиле — инбокс→диалог full-screen.</div></div>
+     <div class="sp"></div><div class="input ink"><span class="muted" style="flex:1">Сообщение…</span><span class="amber-tx">↑ в очередь</span></div></div>`})},
+{id:'03b',title:'Агенты — пусто (0 агентов)',tag:'live',star:true,surf:['m','w'],
+ m:()=>phone({bar:tgbar('//ai-aggregator'),tab:'agents',screenStyle:'gap:12px;justify-content:center;align-items:center;text-align:center',
+   body:`<span class="brandmark" style="width:50px;height:50px"></span>
+   <h2 style="font-size:20px">У тебя пока нет агентов</h2>
+   <p class="muted" style="font-size:12px;max-width:240px">Возьми готового персонажа в Маркете — он появится здесь как диалог. Платишь по факту, в кредитах.</p>
+   <div class="btn" style="width:100%">Взять в Маркете →</div>
+   <div class="row between" style="width:100%;margin-top:8px"><span class="label" style="margin:0">Группы агентов</span><span class="soonchip">скоро</span></div>`}),
+ w:()=>win({url:'/agents',navActive:'agents',center:true,
+   body:`<span class="brandmark" style="width:48px;height:48px"></span>
+   <h2 style="font-size:22px">У тебя пока нет агентов</h2>
+   <p class="muted" style="max-width:46ch">Возьми готового персонажа в Маркете — он появится здесь как диалог. Оплата по факту, в кредитах.</p>
+   <div class="btn amber">Взять в Маркете →</div>`})},
+{id:'04',title:'Маркет — витрина персонажей',tag:'live',star:true,surf:['m','w'],
+ m:()=>phone({bar:tgbar('//ai-aggregator'),tab:'market',screenStyle:'gap:10px',
+   body:`<div class="ph"><span class="kicker">МАРКЕТ</span><h2>Агенты-персонажи</h2></div>
+   <div class="seg"><div class="s on">Агенты</div><div class="s" style="opacity:.5">Модели 🔒</div><div class="s" style="opacity:.5">Скиллы 🔒</div></div>
+   <div class="note soon"><span class="ni">скоро</span><div>Сегменты <b>Модели · Скиллы · MCP · Тузы · Базы</b> — <b>для операторов</b> (фаза 2). Массы берут готовых агентов.</div></div>
    <div class="input">🔎 Найти агента…</div>
    <div class="chips"><span class="chip on">Все</span><span class="chip">Контент</span><span class="chip">Код</span><span class="chip">SMM</span><span class="chip">Данные</span></div>
-   <div class="list">${[[28,'А','Алиса','GPT-5.5','Контент-редактор · @ainews','48k'],[235,'М','Макс','Claude 4.8','Код-ревьюер · @dev','22k'],[60,'Л','Лея','Gemini 3.5','Саппорт 24/7 · @cs','15k'],[165,'Г','Гриша','DeepSeek V4','SQL-аналитик · @data','9k']]
-     .map(([ch,g,n,md,r,runs])=>`<div class="card" style="--ch:${ch}"><div class="ccard"><div class="pf"><span class="tdot"></span><span class="gly">${g}</span></div><div class="cbody"><div class="row between"><div><div class="cname">${n} <span class="mbadge">${md}</span></div><div class="crole">${r}</div></div><div class="runs"><b>${runs}</b><span class="demo">демо</span></div></div></div></div></div>`).join('')}</div>`}),
- w:()=>win({url:'/catalog',navActive:'agents',nav:['agents','market','tools','wallet'],
-   body:`<div class="ptop"><div class="search">🔎 Найти агента…</div><div class="ub">⇅</div></div>
-   <div class="note soon"><span class="ni">скоро</span><div><b>Каталог чужих авторов — скоро.</b> Сегодня <span class="mono">marketplace</span> отдаёт только модели. Целевой вид (демо-данные).</div></div>
-   <div class="chips"><span class="chip on">Все</span><span class="chip">Контент</span><span class="chip">Код</span><span class="chip">SMM</span><span class="chip free">бесплатные</span></div>
-   <div class="list">${[[28,'А','Алиса','GPT-5.5','Контент-редактор · @ainews','48k','<span class="price free">бесплатно</span>'],[235,'М','Макс','Opus 4.8','Код-ревьюер · @dev','22k','<span class="price free">бесплатно</span>'],[60,'Л','Лея','Gemini 3.5','Саппорт 24/7 · @cs','15k','<span class="price">150 кр/мес</span>']]
-     .map(([ch,g,n,md,r,runs,p])=>`<div class="card" style="--ch:${ch}"><div class="ccard"><div class="pf"><span class="tdot"></span><span class="gly">${g}</span></div><div class="cbody"><div class="row between"><div><div class="cname">${n} <span class="mbadge">${md}</span></div><div class="crole">${r}</div></div><div style="text-align:right"><div class="runs"><b>${runs}</b> <span class="demo">демо</span></div><div style="margin-top:6px">${p}</div></div></div></div></div></div>`).join('')}</div>`})},
-{id:'04b',title:'Каталог — загрузка / пусто',tag:'live',surf:['m'],
- m:()=>phone({bar:tgbar('//ai-aggregator'),screenStyle:'gap:10px',
-   body:`<div class="seg"><div class="s">Для тебя</div><div class="s on">Каталог</div><div class="s">Мои · 0</div></div>
+   <div class="list">
+   ${charCard(28,'А','Алиса','GPT-5.5','Контент-редактор · <b style="color:var(--ink-dim)">официальный</b>','Дерзкая, режет воду без жалости.',
+     `<div class="cstats"><div class="cs"><div class="cv">48<span class="u">k</span></div><div class="ck">запусков<span class="demo">демо</span></div></div><div class="cs"><div class="cv star">★ 4.9</div><div class="ck">рейтинг<span class="demo">демо</span></div></div><div class="cs"><div class="cv good-tx" style="font-size:11px">бесплатно</div><div class="ck">цена</div></div></div><div class="btn block sm" style="margin-top:9px">Использовать</div>`)}
+   ${charCard(235,'М','Макс','Opus 4.8','Код-ревьюер · <b style="color:var(--ink-dim)">@dev</b>','Найдёт забытый баг.',
+     `<div class="cstats"><div class="cs"><div class="cv">22<span class="u">k</span></div><div class="ck">запусков<span class="demo">демо</span></div></div><div class="cs"><div class="cv star">★ 4.8</div><div class="ck">рейтинг<span class="demo">демо</span></div></div><div class="cs"><div class="cv">9<span class="u">кр</span></div><div class="ck">мес</div></div></div><div class="btn block sm" style="margin-top:9px">Арендовать · 9 кр</div>`)}
+   ${charCard(340,'Н','Ника','GPT-5.5','SMM, тренды · <b style="color:var(--ink-dim)">@smm</b>','Чует вирусное за день до всех.')}
+   </div>`}),
+ w:()=>win({url:'/market',navActive:'market',tall:true,
+   body:`<div class="ph-h"><span class="kicker">Маркет</span><h2>Агенты-персонажи</h2><p>AIAG сеет официальных. Возьми готового — он появится в инбоксе «Агенты».</p></div>
+   <div class="ptop"><div class="search">🔎 Найти агента…</div><div class="ub">⇅</div></div>
+   <div class="seg" style="max-width:460px"><div class="s on">Агенты</div><div class="s" style="opacity:.5">Модели 🔒</div><div class="s" style="opacity:.5">Скиллы 🔒</div><div class="s" style="opacity:.5">MCP 🔒</div><div class="s" style="opacity:.5">Тузы 🔒</div><div class="s" style="opacity:.5">Базы 🔒</div></div>
+   <div class="note soon"><span class="ni">скоро</span><div>Сегменты <b>Модели/Скиллы/MCP/Тузы/Базы</b> — заблокированы, <b>для операторов</b> (фаза 2). Цифры карточек — демо.</div></div>
+   <div class="gallery">
+     <div class="gcard feature" style="--ch:28"><div class="ccard"><div class="pf lg"><span class="tdot"></span><span class="plive"></span><span class="gly">А</span></div>
+       <div class="cbody"><div class="cname">Алиса <span class="mbadge">GPT-5.5</span></div><div class="crole">Контент-редактор · <b style="color:var(--ink-dim)">официальный</b></div><div class="ctrait">Дерзкая, режет воду без жалости.</div>
+       <div class="cstats"><div class="cs"><div class="cv">48<span class="u">k</span> <span class="demo">демо</span></div><div class="ck">запусков</div></div><div class="cs"><div class="cv star">★ 4.9 <span class="demo">демо</span></div><div class="ck">312 отз.</div></div><div class="cs"><div class="cv good-tx" style="font-size:11px">бесплатно</div><div class="ck">цена</div></div></div>
+       <div class="btn amber sm" style="margin-top:10px;width:fit-content">Использовать</div></div></div></div>
+     ${[[235,'М','Макс','Opus 4.8','Код-ревьюер · @dev','Найдёт забытый баг.','Арендовать · 9 кр'],[340,'Н','Ника','GPT-5.5','SMM · @smm','Чует вирусное.','Арендовать · 200 кр'],[165,'Г','Гриша','Claude 4.8','Аналитик · @finbot','Говорит цифрами.','Использовать'],[60,'Л','Лея','Gemini 3.5','Саппорт · @cs','Клиент не сорвётся.','Арендовать · 150 кр'],[300,'Н','Нова','Opus 4.8','Трейдер · с нуля','Считает риск, не иксы.','Использовать']]
+       .map(([ch,g,n,md,r,t,act])=>`<div class="gcard" style="--ch:${ch}"><div class="pf" style="--ch:${ch}"><span class="tdot"></span><span class="plive"></span><span class="gly">${g}</span></div>
+       <div class="cname" style="margin-top:9px">${n} <span class="mbadge" style="--ch:${ch}">${md}</span></div><div class="crole" style="--ch:${ch}">${r}</div><div class="ctrait" style="--ch:${ch}">${t}</div>
+       <div class="btn ghost sm" style="margin-top:9px;width:100%">${act}</div></div>`).join('')}
+   </div>`})},
+{id:'04b',title:'Маркет — загрузка / пусто',tag:'live',surf:['m'],
+ m:()=>phone({bar:tgbar('//ai-aggregator'),tab:'market',screenStyle:'gap:10px',
+   body:`<div class="ph"><span class="kicker">МАРКЕТ</span><h2>Агенты-персонажи</h2></div>
+   <div class="seg"><div class="s on">Агенты</div><div class="s" style="opacity:.5">Модели 🔒</div><div class="s" style="opacity:.5">Скиллы 🔒</div></div>
    <div class="input"><span class="ph-hint">🔎 Найти агента…</span></div>
    <div class="chips"><span class="chip on">Все</span><span class="chip">Контент</span><span class="chip">Код</span></div>
-   <div class="label">загрузка ленты</div><div class="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+   <div class="label">загрузка витрины</div><div class="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
    <div class="label" style="margin-top:4px">или — поиск без совпадений</div>
-   <div class="empty">По запросу «<span style="color:var(--ink)">кулинар</span>» агентов нет.<br>Сбрось фильтр или <span class="amber-tx">собери своего →</span></div>`})},
+   <div class="empty">По запросу «<span style="color:var(--ink)">кулинар</span>» агентов нет.<br>Сбрось фильтр — официальных сеет AIAG.</div>`})},
 {id:'05',title:'Карточка агента + RUN',tag:'live',star:true,surf:['m','w'],
  m:()=>phone({bar:tgbar('Алиса','‹ ⤴').replace('class="dom">‹','class="ic">‹</span><span class="dom">').replace('<span class="ic">⤴</span><span class="ic"></span>','<span class="ic">⤴</span>'),mainbtn:'▶ Запустить · ~6 кр',screenStyle:'gap:10px',
    bar:`<div class="tg-bar"><span class="ic">‹</span><span class="dom">Алиса</span><span class="sp"></span><span class="ic">⤴</span></div>`,
@@ -511,15 +534,17 @@ const SCREENS = [
    <div class="grid2"><div class="field"><div class="label">быстрый старт</div><div class="chips"><span class="starter on">Пост про запуск</span><span class="starter">Анонс</span></div></div>
    <div class="field"><div class="label">тема</div><div class="input ink">запуск нашего ИИ-маркета</div></div></div>
    <div class="row" style="gap:10px"><div class="btn ghost sm">⎘ Клонировать<span class="soonchip">скоро</span></div><div class="btn ghost sm">Сохранить</div></div>`})},
-{id:'06',title:'Маркет моделей',tag:'live',surf:['m','w'],
+{id:'06',title:'Маркет — Модели (операторский сегмент)',tag:'soon',surf:['m','w'],
  m:()=>phone({bar:tgbar('//ai-aggregator'),tab:'market',
-   body:`<div class="ph"><span class="kicker">МАРКЕТ</span><h2>Модели</h2><p>AIAG-шлюз + свои провайдеры. Модели — один из источников.</p></div>
+   body:`<div class="ph"><span class="kicker">МАРКЕТ · ДЛЯ ОПЕРАТОРОВ</span><h2>Модели</h2><p>Операторский каталог (фаза 2). Массам виден сегмент «Агенты».</p></div>
+   <div class="note soon"><span class="ni">скоро</span><div>Сегмент <b>Модели</b> в Маркете <b>заблокирован «для операторов»</b> (фаза 2). Главная витрина — карточки-персонажи (экран 04).</div></div>
    <div class="input">🔎 GPT, Claude, Gemini, Qwen…</div>
    <div class="chips"><span class="chip on">Все</span><span class="chip">LLM</span><span class="chip">Изобр.</span><span class="chip">Видео</span><span class="chip">Gonka</span></div>
    <div class="list">${[['A','Claude Opus 4.8','$5 / $25 за 1M · ctx 1M','amber'],['O','GPT-5.5','$5 / $30 за 1M',''],['Q','Qwen3 <span class="chip" style="padding:0 5px">Gonka</span>','децентрализ. · GNK',''],['D','DeepSeek V4 Pro','$0.44 / $0.87 за 1M','']]
      .map(([a,t,s,am])=>`<div class="card"><div class="row between"><div class="row"><div class="av ${am}">${a}</div><div><div class="t-title">${t}</div><div class="t-sub num">${s}</div></div></div><div class="${am?'amber-tx':'muted'}">›</div></div></div>`).join('')}</div>`}),
- w:()=>win({url:'/models',navActive:'market',nav:['agents','market','wallet'],
-   body:`<div class="ph-h"><span class="kicker">Маркет</span><h2>Модели</h2><p>AIAG-шлюз + свои провайдеры. Модели — один из источников.</p></div>
+ w:()=>win({url:'/market/models',navActive:'market',
+   body:`<div class="ph-h"><span class="kicker">Маркет · для операторов</span><h2>Модели</h2><p>Операторский каталог (фаза 2). Массам виден сегмент «Агенты» (экран 04).</p></div>
+   <div class="note soon"><span class="ni">скоро</span><div>Сегмент <b>Модели</b> заблокирован «для операторов». Цена/контекст — из реестра; маршрут-health — демо.</div></div>
    <div class="ptop"><div class="search">🔎 GPT, Claude, Gemini, Qwen…</div></div>
    <div class="list">${[['A','Claude Opus 4.8','$5 / $25 за 1M · ctx 1M','amber'],['O','GPT-5.5','$5 / $30 за 1M',''],['Q','Qwen3 <span class="chip sky sm">Gonka</span>','децентрализ. · GNK','sky'],['D','DeepSeek V4 Pro','$0.44 / $0.87 за 1M','']]
      .map(([a,t,s,am])=>`<div class="card ${am==='amber'?'amber':''}"><div class="row between"><div class="row"><div class="av ${am}">${a}</div><div><div class="t-title">${t}</div><div class="t-sub num">${s}</div></div></div><span class="${am==='amber'?'amber-tx':'muted'}">›</span></div></div>`).join('')}</div>`})},
@@ -536,6 +561,60 @@ const SCREENS = [
    <div class="chips"><span class="chip on">vision</span><span class="chip on">tools</span><span class="chip on">reasoning</span><span class="chip on">code</span></div>
    <div class="note soon"><span class="ni">скоро</span><div><b>Цена/контекст — live</b> (из реестра). Маршрут-health, uptime, p50, рейтинг — демо.</div></div>
    <div class="sp"></div><div class="row" style="gap:10px"><div class="btn ghost" style="flex:1">Калькулятор стоимости</div><div class="btn" style="flex:1.3">Создать агента →</div></div>`})},
+
+/* ─── K · НОВЫЕ ТАБЫ (redesign-A) ──────────────────────────────── */
+{group:'K · Новые табы (redesign-A)'},
+{id:'K1',title:'Дэшборд (командный центр)',tag:'live',star:true,surf:['m','w'],
+ m:()=>phone({tab:'dashboard',screenStyle:'gap:11px',
+   body:`<div class="ph"><span class="kicker">ДЭШБОРД</span><h2>Командный центр</h2></div>
+   <div class="card amber"><div class="row between"><div><div class="label">Баланс</div><div class="balance amber-tx">1 250 кр</div></div><div class="metric faint" style="text-align:right">3 агента<br>сегодня −24 кр</div></div></div>
+   <div class="note live"><span class="ni">live</span><div>Только <b>обзор</b>. Операции — в Кошельке. Шорткаты ведут в Маркет/Кошелёк/Аккаунт/Агенты.</div></div>
+   <div class="grid2">${[['💬','Агенты','3 диалога'],['🛒','Маркет','витрина'],['👛','Кошелёк','пополнить'],['👤','Аккаунт','тариф'],['🧾','История','леджер'],['🔌','Провайдеры','2 ключа'],['✍️','Доход','автор'],['⚙️','Настройки','152-ФЗ']]
+     .map(([ic,t,v])=>`<div class="card"><div class="av">${ic}</div><div class="t-title" style="margin-top:7px;font-size:12.5px">${t}</div><div class="t-sub" style="margin-top:1px">${v}</div></div>`).join('')}</div>
+   <div class="row between"><span class="label" style="margin:0">Шаблоны недели</span><span class="soonchip">из Маркета</span></div>
+   <div class="list">${charCard(28,'А','Алиса','GPT-5.5','Контент-редактор · официальный','Дерзкая, режет воду без жалости.')}</div>`}),
+ w:()=>win({url:'/dashboard',navActive:'dashboard',tall:true,
+   body:`<div class="ph-h"><span class="kicker">Дэшборд</span><h2>Командный центр</h2><p>Только обзор. Операции с деньгами — в Кошельке.</p></div>
+   <div class="card amber"><div class="row between"><div><div class="label">Баланс</div><div class="balance amber-tx">1 250 кр</div><div class="metric faint">≈ 12.5 USDT · хватит на ~36 дн</div></div><div class="metric faint" style="text-align:right">3 агента<br>сегодня −24 кр</div></div></div>
+   <div class="grid2">${[['💬','Агенты','3 активных диалога'],['🛒','Маркет','витрина персонажей'],['👛','Кошелёк','баланс · пополнить · леджер'],['👤','Аккаунт','тариф · доход · 152-ФЗ']]
+     .map(([ic,t,v])=>`<div class="card"><div class="row"><div class="av">${ic}</div><div><div class="t-title">${t}</div><div class="t-sub">${v}</div></div></div></div>`).join('')}</div>
+   <div class="div"></div><div class="row between"><span class="label" style="margin:0">Шаблоны недели</span><span class="soonchip">витрина из Маркета</span></div>
+   <div class="grid3">${[[28,'А','Алиса','Контент'],[235,'М','Макс','Код'],[340,'Н','Ника','SMM']]
+     .map(([ch,g,n,r])=>`<div class="card" style="--ch:${ch}"><div class="pf" style="--ch:${ch}"><span class="tdot"></span><span class="gly">${g}</span></div><div class="cname" style="margin-top:9px">${n}</div><div class="crole" style="--ch:${ch}">${r}</div></div>`).join('')}</div>`})},
+{id:'K2',title:'Кошелёк (баланс · леджер · TON)',tag:'live',star:true,surf:['m','w'],
+ m:()=>phone({tab:'wallet',screenStyle:'gap:10px',
+   body:`<div class="ph"><span class="kicker">КОШЕЛЁК</span><h2>Баланс</h2></div>
+   <div class="card amber"><div class="row between"><div><div class="balance amber-tx">1 250 кр</div><div class="metric faint">≈ 12.5 USDT · хватит на ~36 дн</div></div><div class="btn sm">＋ Пополнить</div></div></div>
+   <div class="label">движения (леджер)</div>
+   <div class="list">${[['Пополнение · TON','+1000 кр','good'],['Алиса · прогон','−12 кр','muted'],['Аренда · Макс','−9 кр','muted'],['Firecrawl · тулза','−3 кр','muted']]
+     .map(([t,a,c])=>`<div class="card"><div class="row between"><div class="t-sub">${t}</div><span class="num ${c==='good'?'good-tx':'muted'}">${a}</span></div></div>`).join('')}</div>
+   <div class="label" style="margin-top:4px">привязанные кошельки</div>
+   <div class="card"><div class="row between"><div class="row"><div class="av amber">💎</div><div><div class="t-title">TON · EQ…SiRW</div><div class="t-sub good-tx">✓ ton_proof</div></div></div><span class="muted">›</span></div></div>`}),
+ w:()=>win({url:'/wallet',navActive:'wallet',
+   body:`<div class="ph-h"><span class="kicker">Кошелёк</span><h2>Баланс</h2></div>
+   <div class="card amber"><div class="row between"><div><div class="balance amber-tx">1 250 кр</div><div class="metric faint">≈ 12.5 USDT · хватит на ~36 дн</div></div><div class="btn sm amber">＋ Пополнить</div></div></div>
+   <div class="grid2" style="align-items:start"><div><div class="label">движения (леджер)</div>
+   <div class="list">${[['Пополнение · TON','+1000 кр','good'],['Алиса · прогон','−12 кр','muted'],['Аренда · Макс','−9 кр','muted']]
+     .map(([t,a,c])=>`<div class="card"><div class="row between"><div class="t-sub">${t}</div><span class="num ${c==='good'?'good-tx':'muted'}">${a}</span></div></div>`).join('')}</div></div>
+   <div><div class="label">привязанные кошельки</div>
+   <div class="card"><div class="row between"><div class="row"><div class="av amber">💎</div><div><div class="t-title">TON · EQ…SiRW</div><div class="t-sub good-tx">✓ ton_proof</div></div></div><span class="muted">›</span></div></div>
+   <div class="card flat" style="margin-top:8px"><div class="row"><div class="av">＋</div><div class="t-sub" style="margin:0">Привязать ещё (TON · HOT)</div></div></div></div></div>`})},
+{id:'K3',title:'Аккаунт (профиль · тариф · 152-ФЗ)',tag:'live',star:true,surf:['m','w'],
+ m:()=>phone({tab:'account',screenStyle:'gap:10px',
+   body:`<div class="row"><div class="av amber" style="width:44px;height:44px">👤</div><div><div class="t-title">@username</div><div class="t-sub">AIAG · с мая 2026</div></div></div>
+   <div class="card"><div class="row between"><div><div class="label">Тариф</div><div class="t-title">Шара · ~$20/мес</div></div><span class="chip on">активен</span></div>
+   <div class="div"></div><div class="row between"><div class="t-sub">Оператор (дедик-Hermes)</div><span class="soonchip">фаза 2</span></div></div>
+   <div class="card"><div class="row between"><div class="row"><div class="av">✍️</div><div><div class="t-title">Доход автора</div><div class="t-sub">если публикуешь шаблоны</div></div></div><span class="muted num">0 кр ›</span></div></div>
+   <div class="list">${[['📄','Согласие 152-ФЗ','✓'],['📄','Пользовательское соглашение','✓'],['🔌','Провайдеры / ключи','2 ›']]
+     .map(([ic,t,v])=>`<div class="card"><div class="row between"><div class="row"><div class="av">${ic}</div><div class="t-title">${t}</div></div><span class="muted num">${v}</span></div></div>`).join('')}</div>
+   <div class="sp"></div><div class="btn ghost block">Выйти</div>`}),
+ w:()=>win({url:'/account',navActive:'account',
+   body:`<div class="row"><div class="av amber" style="width:48px;height:48px;font-size:20px">👤</div><div><div class="t-title" style="font-size:16px">@username</div><div class="t-sub">AIAG · с мая 2026</div></div></div>
+   <div class="grid2" style="align-items:start"><div class="card"><div class="row between"><div><div class="label">Тариф</div><div class="t-title">Шара · ~$20/мес</div></div><span class="chip on sm">активен</span></div>
+   <div class="div"></div><div class="row between"><div class="t-sub">Оператор (дедик-Hermes)</div><span class="soonchip">фаза 2</span></div></div>
+   <div class="card"><div class="row between"><div class="row"><div class="av">✍️</div><div><div class="t-title">Доход автора</div><div class="t-sub">если публикуешь</div></div></div><span class="muted num">0 кр</span></div></div></div>
+   <div class="grid2">${[['🔌','Провайдеры / ключи','2'],['📄','Согласия · 152-ФЗ / ToS','✓'],['⚙️','Настройки',''],['🚪','Выйти','']]
+     .map(([ic,t,v])=>`<div class="card"><div class="row between"><div class="row"><div class="av">${ic}</div><div class="t-title">${t}</div></div><span class="muted num">${v||'›'}</span></div></div>`).join('')}</div>`})},
 
 /* ─── C · RUN / ЧАТ ────────────────────────────────────────────── */
 {group:'C · Run / чат'},
@@ -835,9 +914,10 @@ const SCREENS = [
 
 /* ─── H · КОШЕЛЁК ──────────────────────────────────────────────── */
 {group:'H · Кошелёк'},
-{id:'31',title:'Баланс (Credits)',tag:'live',star:true,surf:['m','w'],
+{id:'31',title:'Баланс — устар. → K2',tag:'soon',surf:['m','w'],
  m:()=>phone({tab:'wallet',screenStyle:'gap:10px',
-   body:`<div class="ph"><span class="kicker">КОШЕЛЁК</span><h2>Баланс</h2></div>
+   body:`<div class="note soon"><span class="ni">устар.</span><div>Заменён вкладкой <b>Кошелёк (K2)</b> в redesign-A. Оставлен для истории.</div></div>
+   <div class="ph"><span class="kicker">КОШЕЛЁК</span><h2>Баланс</h2></div>
    <div class="card amber"><div class="row between"><div><div class="balance amber-tx">1 250 кр</div><div class="metric faint">≈ 12.5 USDT</div></div><div class="btn sm">＋ Пополнить</div></div><div class="metric faint" style="margin-top:8px">хватит на ~36 дн при текущем темпе</div></div>
    <div class="label">последние операции</div>
    <div class="list"><div class="card"><div class="row between"><div class="t-sub">Пополнение · TON</div><span class="num" style="color:var(--good)">+1000 кр</span></div></div>
@@ -927,9 +1007,10 @@ const SCREENS = [
 
 /* ─── J · АККАУНТ / МОДАЛКИ ────────────────────────────────────── */
 {group:'J · Аккаунт / модалки'},
-{id:'37',title:'Профиль',tag:'live',surf:['m','w'],
- m:()=>phone({tab:'profile',
-   body:`<div class="row"><div class="av amber" style="width:44px;height:44px">👤</div><div><div class="t-title">@username</div><div class="t-sub">AIAG · с мая 2026</div></div></div>
+{id:'37',title:'Профиль — устар. → K3',tag:'soon',surf:['m','w'],
+ m:()=>phone({tab:'account',
+   body:`<div class="note soon"><span class="ni">устар.</span><div>Заменён вкладкой <b>Аккаунт (K3)</b> в redesign-A. Оставлен для истории.</div></div>
+   <div class="row"><div class="av amber" style="width:44px;height:44px">👤</div><div><div class="t-title">@username</div><div class="t-sub">AIAG · с мая 2026</div></div></div>
    <div class="card amber"><div class="label">Баланс</div><div class="row between"><div class="balance amber-tx">1 250 кр</div><div class="btn sm">Пополнить</div></div></div>
    <div class="list">${[['🔌','Провайдеры / ключи','2 ›'],['👛','Кошельки (TON · HOT)','›'],['✍️','Мои шаблоны / доход','›'],['🧾','История / чеки','›'],['⚙️','Настройки · 152-ФЗ','›']]
      .map(([ic,t,v])=>`<div class="card"><div class="row between"><div class="row"><div class="av">${ic}</div><div class="t-title">${t}</div></div><span class="muted num">${v}</span></div></div>`).join('')}</div>`}),
