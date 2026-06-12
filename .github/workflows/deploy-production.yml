@@ -177,11 +177,25 @@ jobs:
               --exclude='*.log' \
               -czf "dist-pkg/release.tar.gz" .
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-${{ needs.plan.outputs.release }}-${{ matrix.app }}
-          path: dist-pkg/release.tar.gz
-          retention-days: 14
+      # Ship the tarball STRAIGHT to the VPS (no GitHub artifact). The Actions
+      # artifact-storage quota repeatedly filled and hard-blocked deploys
+      # (2026-06-12, "Artifact storage quota has been hit") with a 6-12h recalc
+      # lag. Bypassing artifacts entirely removes that dependency and makes the
+      # deploy work immediately + automatically. The deploy job below extracts
+      # the tarball already sitting in /srv/aiag/deploy/tmp on the box.
+      - name: Ship tarball to VPS (${{ matrix.app }})
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          RELEASE: ${{ needs.plan.outputs.release }}
+          APP: ${{ matrix.app }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+          ssh "$USER@$HOST" "mkdir -p /srv/aiag/deploy/tmp/$RELEASE/$APP"
+          scp dist-pkg/release.tar.gz "$USER@$HOST:/srv/aiag/deploy/tmp/$RELEASE/$APP/"
 
   # --------------------------------------------------------------------------
   # deploy — one matrix leg PER APP. Each leg: upload tarball → extract into
@@ -201,27 +215,14 @@ jobs:
       name: production
       url: https://ai-aggregator.ru
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-${{ needs.plan.outputs.release }}-${{ matrix.app }}
-          path: dist-pkg/
-
+      # No download-artifact: the build job already scp'd the tarball straight
+      # to /srv/aiag/deploy/tmp/$RELEASE/$APP on the box (artifact bypass).
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Upload release (${{ matrix.app }})
-        env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          USER: ${{ secrets.DEPLOY_USER }}
-          RELEASE: ${{ needs.plan.outputs.release }}
-          APP: ${{ matrix.app }}
-        run: |
-          ssh "$USER@$HOST" "mkdir -p /srv/aiag/deploy/tmp/$RELEASE/$APP"
-          scp dist-pkg/release.tar.gz "$USER@$HOST:/srv/aiag/deploy/tmp/$RELEASE/$APP/"
 
       - name: Atomic swap + pm2 self-heal + health (${{ matrix.app }})
         env:
@@ -234,6 +235,11 @@ jobs:
           ssh "$USER@$HOST" "APP='$APP' RELEASE='$RELEASE' bash -s" <<'REMOTE'
           set -euo pipefail
           ECOSYSTEM="/srv/aiag/shared/ecosystem.config.cjs"
+          # pm2 runs under root but the deploy user is non-root → plain `pm2
+          # restart` hit "Process or Namespace not found" and the deploy needed
+          # a MANUAL restart every single time. Try the local pm2, then sudo to
+          # root's pm2 (passwordless sudo on the box) so deploys self-complete.
+          pm2do() { pm2 "$@" 2>/dev/null || sudo -n pm2 "$@"; }
           TARGET="/srv/aiag/$APP/releases/$RELEASE"
           CURRENT="/srv/aiag/$APP/current"
           # Capture the PREVIOUS release BEFORE we swap, for a precise rollback
@@ -252,16 +258,20 @@ jobs:
           # ---- Atomic swap: the ONLY thing that flips a release live. -------
           ln -sfn "$TARGET" "$CURRENT"
 
-          # ---- Restart from the ecosystem (which points at `current`). ------
-          # F1/F2/F3 self-heal chain:
+          # ---- Prune old releases NOW (before pm2) so a pm2/health hiccup can
+          # never leave the disk filling up — releases piled to 36 (~7G) when the
+          # post-pm2 cleanup got skipped by a failing pm2 step (2026-06-12).
+          ( cd "/srv/aiag/$APP/releases" && ls -1t | tail -n +6 | xargs -r rm -rf ) || true
+          rm -rf "/srv/aiag/deploy/tmp/$RELEASE/$APP" || true
+
+          # ---- Restart (root's pm2 via pm2do). self-heal chain:
           #   reload  — graceful, works if proc exists (cluster or fork)
           #   restart — fork-mode safe re-exec
-          #   startOrReload <ecosystem> --only $APP — recreate from `current`
-          #                  paths if the proc was deleted / never existed
-          pm2 reload "$APP" --update-env \
-            || pm2 restart "$APP" --update-env \
-            || pm2 startOrReload "$ECOSYSTEM" --only "$APP" --update-env
-          pm2 save
+          #   startOrReload <ecosystem> --only $APP — recreate if proc gone
+          pm2do reload "$APP" --update-env \
+            || pm2do restart "$APP" --update-env \
+            || pm2do startOrReload "$ECOSYSTEM" --only "$APP" --update-env
+          pm2do save || true
 
           # ---- Per-app health check (F9). --------------------------------------
           # web → :3000/health, gateway → :4000/health, tma → :3100/tg/health.
@@ -288,10 +298,10 @@ jobs:
             echo "[$APP] HEALTH FAILED — rolling back"
             if [[ -n "$PREV_LINK" ]]; then
               ln -sfn "$PREV_LINK" "$CURRENT"
-              pm2 reload "$APP" --update-env \
-                || pm2 restart "$APP" --update-env \
-                || pm2 startOrReload "$ECOSYSTEM" --only "$APP" --update-env
-              pm2 save
+              pm2do reload "$APP" --update-env \
+                || pm2do restart "$APP" --update-env \
+                || pm2do startOrReload "$ECOSYSTEM" --only "$APP" --update-env
+              pm2do save || true
               echo "[$APP] rolled back to $PREV_LINK"
             else
               echo "[$APP] no previous release to roll back to"
@@ -299,11 +309,6 @@ jobs:
             exit 1
           fi
           echo "[$APP] healthy"
-
-          # ---- Keep last 5 releases. ---------------------------------------
-          cd "/srv/aiag/$APP/releases"
-          ls -1t | tail -n +6 | xargs -r rm -rf
-          rm -rf "/srv/aiag/deploy/tmp/$RELEASE/$APP"
           REMOTE
 
       # ----------------------------------------------------------------------
