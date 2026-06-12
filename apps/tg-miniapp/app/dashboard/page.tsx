@@ -311,7 +311,7 @@ export default function DashboardPage() {
                 <span className="tma-hub-cell-icon"><HubIcon d={ICONS.history} /></span>
                 <span className="tma-hub-cell-label">История</span>
               </Link>
-              <Link href="/account" className="tma-hub-cell">
+              <Link href="/profile/income" className="tma-hub-cell">
                 <span className="tma-hub-cell-icon"><HubIcon d={ICONS.income} /></span>
                 <span className="tma-hub-cell-label">Доход</span>
               </Link>

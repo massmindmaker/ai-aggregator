@@ -34,6 +34,7 @@ interface LedgerRow {
   id: string;
   kind: string;
   delta_credits: string;
+  balance_after: string | null;
   created_at: string;
 }
 
@@ -280,7 +281,24 @@ export default function WalletPage() {
             .filter((t) => t.status !== 'confirmed')
             .map((t) => (
               <div className="tma-row" key={t.id}>
-                <span className="tma-mono">+{fmtCredits(t.amount_credits)} кр</span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    gap: 2,
+                  }}
+                >
+                  <span className="tma-mono">+{fmtCredits(t.amount_credits)} кр</span>
+                  {t.comment_tag && (
+                    <span
+                      className="tma-text-small tma-mono"
+                      style={{ color: 'var(--ink-faint)' }}
+                    >
+                      тег: {t.comment_tag}
+                    </span>
+                  )}
+                </span>
                 <span
                   className="tma-card-text"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
@@ -315,12 +333,30 @@ export default function WalletPage() {
                   </span>
                   <span
                     className="tma-card-text"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                    style={{
+                      display: 'inline-flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                      gap: 2,
+                    }}
                   >
-                    {LEDGER_LABEL[e.kind] ?? e.kind}
-                    <span className="tma-text-small" style={{ color: 'var(--ink-faint)' }}>
-                      {new Date(e.created_at).toLocaleDateString('ru-RU')}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      {LEDGER_LABEL[e.kind] ?? e.kind}
+                      <span
+                        className="tma-text-small"
+                        style={{ color: 'var(--ink-faint)' }}
+                      >
+                        {new Date(e.created_at).toLocaleDateString('ru-RU')}
+                      </span>
                     </span>
+                    {e.balance_after != null && (
+                      <span
+                        className="tma-text-small tma-mono"
+                        style={{ color: 'var(--ink-faint)' }}
+                      >
+                        баланс стал: {fmtCredits(e.balance_after)} кр
+                      </span>
+                    )}
                   </span>
                 </div>
               );

@@ -77,12 +77,18 @@ const WORKER_TOOLS: {
 ];
 
 // Проверенные MCP-пресеты (зеркало MCP_PRESETS из app/agents/[id]).
-const MCP_PRESETS: { label: string; hint: string }[] = [
-  { label: 'Notion', hint: 'Страницы и базы данных Notion как контекст агента' },
-  { label: 'GitHub', hint: 'Репозитории, issues и PR через GitHub MCP' },
-  { label: 'Linear', hint: 'Задачи и проекты Linear' },
-  { label: 'Sentry', hint: 'Ошибки и трейсы из Sentry' },
+const MCP_PRESETS: { label: string; hint: string; url: string }[] = [
+  { label: 'Notion', hint: 'Страницы и базы данных Notion как контекст агента', url: 'https://mcp.notion.com/mcp' },
+  { label: 'GitHub', hint: 'Репозитории, issues и PR через GitHub MCP', url: 'https://api.githubcopilot.com/mcp/' },
+  { label: 'Linear', hint: 'Задачи и проекты Linear', url: 'https://mcp.linear.app/sse' },
+  { label: 'Sentry', hint: 'Ошибки и трейсы из Sentry', url: 'https://mcp.sentry.dev/mcp' },
 ];
+
+// Нормализуем MCP-URL так же, как POST /api/tma/agents (срезаем хвостовые слэши),
+// чтобы сравнение пресета с подключённым у агента эндпоинтом было устойчивым.
+function normMcpUrl(u: string): string {
+  return u.trim().replace(/\/+$/, '').toLowerCase();
+}
 
 // Хелпер: вернуть валидный TabId из строки запроса (или дефолт 'agents').
 function tabFromSearch(): TabId {
@@ -167,6 +173,10 @@ export default function MarketPage() {
   const [takeErr, setTakeErr] = useState<string | null>(null);
   const [insufficientId, setInsufficientId] = useState<string | null>(null);
 
+  // P6: набор нормализованных MCP-эндпоинтов, уже подключённых у агентов юзера
+  // (GET /tg/api/tma/agents → mcp_endpoint_url). Пустой = нет/не загружено.
+  const [connectedMcp, setConnectedMcp] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (!token || tab !== 'agents') return;
     let cancelled = false;
@@ -188,6 +198,33 @@ export default function MarketPage() {
       } catch (e) {
         if (cancelled) return;
         setFetchErr(e instanceof Error ? e.message : 'fetch_failed');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, tab]);
+
+  // P6: в табе MCP подтягиваем агентов юзера, чтобы пометить пресеты, чей URL уже
+  // подключён хотя бы к одному агенту. Read-only, без записи.
+  useEffect(() => {
+    if (!token || tab !== 'mcp') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/tg/api/tma/agents', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (cancelled || !res.ok) return;
+        const data = (await res.json()) as { agents?: Array<{ mcp_endpoint_url?: string | null }> };
+        if (cancelled) return;
+        const urls = new Set<string>();
+        for (const a of data.agents ?? []) {
+          if (a.mcp_endpoint_url) urls.add(normMcpUrl(a.mcp_endpoint_url));
+        }
+        setConnectedMcp(urls);
+      } catch {
+        /* бейдж необязателен — молча пропускаем */
       }
     })();
     return () => {
@@ -442,6 +479,11 @@ export default function MarketPage() {
                 <div className="tma-mkt-row-body">
                   <div className="tma-mkt-row-head">
                     <span className="tma-mkt-row-name">{p.label}</span>
+                    {connectedMcp.has(normMcpUrl(p.url)) && (
+                      <span className="tma-pill tma-pill--ok">
+                        <Dot /> подключён
+                      </span>
+                    )}
                   </div>
                   <p className="tma-mkt-row-hint">{p.hint}</p>
                 </div>

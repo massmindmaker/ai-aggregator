@@ -27,6 +27,7 @@ interface AgentRow {
   last_output?: string | null;
   last_at?: string | null;
   last_status?: string | null;
+  mcp_endpoint_url?: string | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
     SELECT a.id::text, a.tg_user_id::text, a.template_kind, a.name, a.description,
            a.system_prompt, a.tools, a.model_slug,
            a.budget_credits_monthly::text AS budget_rub_monthly,
-           a.status, a.created_at, a.updated_at,
+           a.status, a.created_at, a.updated_at, a.mcp_endpoint_url,
            r.output AS last_output, r.created_at AS last_at, r.status AS last_status
     FROM agents a
     LEFT JOIN LATERAL (

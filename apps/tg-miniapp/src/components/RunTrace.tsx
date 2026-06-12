@@ -130,13 +130,20 @@ export function RunTrace({ runs }: { runs: RunItem[] }) {
 
               <div className="tma-trace-metrics">
                 <span className="tma-trace-metric">
+                  <span className="tma-trace-metric-label">cost:</span>
                   <span className="tma-num">{fmtCredits(r.cost_rub)}</span>
                   <span className="tma-trace-metric-unit">кр</span>
                 </span>
                 {dur && (
-                  <span className="tma-trace-metric">
-                    <span className="tma-num">{dur}</span>
-                  </span>
+                  <>
+                    <span className="tma-trace-metric-sep" aria-hidden>
+                      ·
+                    </span>
+                    <span className="tma-trace-metric">
+                      <span className="tma-trace-metric-label">время:</span>
+                      <span className="tma-num">{dur}</span>
+                    </span>
+                  </>
                 )}
                 <span className="tma-trace-id" title={r.id}>
                   #{r.id.slice(0, 8)}

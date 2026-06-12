@@ -1085,6 +1085,16 @@ code {
   color: var(--ink-faint);
 }
 
+.tma-trace-metric-label {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.tma-trace-metric-sep {
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
 .tma-trace-id {
   margin-left: auto;
   font-family: var(--font-mono);

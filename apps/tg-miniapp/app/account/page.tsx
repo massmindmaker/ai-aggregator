@@ -13,6 +13,47 @@ interface IncomeResp {
   templates: { id: string }[];
 }
 
+// /tg/api/tma/agents → { agents: [...] }; на этом экране нужен только счётчик.
+interface AgentsResp {
+  agents: unknown[];
+}
+
+// /tg/api/tma/providers → каталог доступных провайдеров (БЕЗ ключей).
+interface ProviderItem {
+  id: string;
+  name: string;
+  apiBase: string | null;
+  requiresBaseUrl: boolean;
+}
+interface ProvidersResp {
+  providers: ProviderItem[];
+}
+
+// /tg/api/tma/ledger → лента движения средств (центы США, D-1).
+// Расход за месяц = Σ |delta| по kind='run_debit' за текущий календарный месяц.
+interface LedgerEntry {
+  kind: string;
+  delta_credits: string;
+  created_at: string;
+}
+interface LedgerResp {
+  entries: LedgerEntry[];
+}
+
+// Σ списаний за прогоны (run_debit) с начала текущего месяца, в центах (строка
+// для fmtCredits). delta_credits у списаний отрицательная → берём модуль.
+function monthRunSpendCents(entries: LedgerEntry[]): string {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  let cents = 0;
+  for (const e of entries) {
+    if (e.kind !== 'run_debit') continue;
+    if (new Date(e.created_at).getTime() < monthStart) continue;
+    cents += Math.abs(Number(e.delta_credits) || 0);
+  }
+  return String(cents);
+}
+
 // Best-effort token wipe. The JWT lives in Telegram CloudStorage under
 // `aiag_jwt` (see useAuth). We clear it there and, as a fallback, any
 // localStorage key holding the same name, then bounce to the root.
@@ -35,18 +76,69 @@ export default function AccountPage() {
   const { user, token, loading: authLoading, error: authError } = useAuth();
   const [income, setIncome] = useState<IncomeResp | null>(null);
 
+  // Мои агенты / провайдеры / расход — каждый блок грузится сам, с собственным
+  // флагом загрузки (скелетон) и тихой обработкой ошибки (null = «нет данных»).
+  const [agentsCount, setAgentsCount] = useState<number | null>(null);
+  const [agentsLoading, setAgentsLoading] = useState(true);
+  const [providers, setProviders] = useState<ProviderItem[] | null>(null);
+  const [providersLoading, setProvidersLoading] = useState(true);
+  const [monthSpend, setMonthSpend] = useState<string | null>(null);
+  const [spendLoading, setSpendLoading] = useState(true);
+
   useEffect(() => {
     if (!token) return;
+    const auth = { Authorization: `Bearer ${token}` };
+
     (async () => {
       try {
-        const res = await fetch('/tg/api/tma/me/author-income', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch('/tg/api/tma/me/author-income', { headers: auth });
         if (!res.ok) return;
         const j = (await res.json()) as IncomeResp;
         setIncome(j);
       } catch {
         /* доход автора прячем, если запрос не удался */
+      }
+    })();
+
+    (async () => {
+      try {
+        const res = await fetch('/tg/api/tma/agents', { headers: auth });
+        if (res.ok) {
+          const j = (await res.json()) as AgentsResp;
+          setAgentsCount(Array.isArray(j.agents) ? j.agents.length : 0);
+        }
+      } catch {
+        /* счётчик агентов оставляем неизвестным */
+      } finally {
+        setAgentsLoading(false);
+      }
+    })();
+
+    (async () => {
+      try {
+        const res = await fetch('/tg/api/tma/providers', { headers: auth });
+        if (res.ok) {
+          const j = (await res.json()) as ProvidersResp;
+          setProviders(Array.isArray(j.providers) ? j.providers : []);
+        }
+      } catch {
+        /* каталог провайдеров прячем при ошибке */
+      } finally {
+        setProvidersLoading(false);
+      }
+    })();
+
+    (async () => {
+      try {
+        const res = await fetch('/tg/api/tma/ledger', { headers: auth });
+        if (res.ok) {
+          const j = (await res.json()) as LedgerResp;
+          setMonthSpend(monthRunSpendCents(Array.isArray(j.entries) ? j.entries : []));
+        }
+      } catch {
+        /* расход прячем при ошибке */
+      } finally {
+        setSpendLoading(false);
       }
     })();
   }, [token]);
@@ -122,6 +214,70 @@ export default function AccountPage() {
           </div>
           <p className="tma-card-text tma-text-small" style={{ marginTop: 8 }}>
             Разворачивай своих агентов и сдавай их — в платном тарифе (фаза 2).
+          </p>
+        </section>
+
+        {/* Мои агенты — счётчик из /agents + ссылка на список. */}
+        <section className="tma-card">
+          <h2 className="tma-card-title">Мои агенты</h2>
+          {agentsLoading ? (
+            <div className="aiag-skeleton" style={{ height: 20, width: '30%' }} />
+          ) : (
+            <div className="tma-row">
+              <span className="tma-card-text">Всего агентов</span>
+              <span className="tma-mono" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {agentsCount ?? 0}
+              </span>
+            </div>
+          )}
+          <div className="tma-cta" style={{ marginTop: 12 }}>
+            <Link href="/agents" className="tma-btn">
+              К моим агентам
+            </Link>
+          </div>
+        </section>
+
+        {/* Расход за месяц — Σ run_debit за текущий месяц из /ledger. */}
+        <section className="tma-card">
+          <h2 className="tma-card-title">Расход за месяц</h2>
+          {spendLoading ? (
+            <div className="aiag-skeleton" style={{ height: 20, width: '40%' }} />
+          ) : (
+            <div className="tma-row">
+              <span className="tma-card-text">Списано за прогоны</span>
+              <span className="tma-mono" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {fmtCredits(monthSpend ?? '0')} кр
+              </span>
+            </div>
+          )}
+        </section>
+
+        {/* Провайдеры — каталог доступных провайдеров из /providers (БЕЗ ключей). */}
+        <section className="tma-card">
+          <h2 className="tma-card-title">Провайдеры</h2>
+          {providersLoading ? (
+            <>
+              <div className="aiag-skeleton" style={{ height: 14, width: '50%' }} />
+              <div className="aiag-skeleton" style={{ height: 14, width: '40%', marginTop: 8 }} />
+            </>
+          ) : !providers || providers.length === 0 ? (
+            <p className="tma-card-text">Список провайдеров недоступен.</p>
+          ) : (
+            providers.map((p, i) => (
+              <div className="tma-row" key={p.id} style={i > 0 ? { marginTop: 10 } : undefined}>
+                <span className="tma-card-text">{p.name}</span>
+                {p.apiBase ? (
+                  <span className="tma-mono" style={{ color: 'var(--ink-faint)' }}>
+                    {p.apiBase.replace(/^https?:\/\//, '')}
+                  </span>
+                ) : (
+                  <span className="tma-pill tma-pill--muted">свой URL</span>
+                )}
+              </div>
+            ))
+          )}
+          <p className="tma-card-text tma-text-small" style={{ marginTop: 8 }}>
+            Свой ключ к любому из них — 0 комиссии. Подключаются при создании агента.
           </p>
         </section>
 

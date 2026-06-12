@@ -899,6 +899,14 @@ export default function AgentDetailPage() {
                   </button>
                 </div>
               </form>
+
+              <Link
+                href="/schedules"
+                className="tma-card-text tma-text-small"
+                style={{ display: 'inline-block', marginTop: 12, color: 'var(--accent)' }}
+              >
+                Все расписания →
+              </Link>
             </section>
             )}
 
@@ -1038,14 +1046,6 @@ export default function AgentDetailPage() {
                 </span>
               </div>
               <div className="tma-spec-cell">
-                <span className="tma-spec-label">Подключение</span>
-                <span className="tma-spec-value">
-                  {agent.connection_type === 'external_openai'
-                    ? 'свой провайдер · 0 комиссии'
-                    : 'наш шлюз · с наценкой'}
-                </span>
-              </div>
-              <div className="tma-spec-cell">
                 <span className="tma-spec-label">Бюджет</span>
                 <span className="tma-spec-value">
                   <span className="tma-num">{fmtCredits(agent.budget_rub_monthly)}</span> кр/мес
@@ -1094,6 +1094,80 @@ export default function AgentDetailPage() {
                     <span className="tma-pill tma-pill--muted">✗ не настроен</span>
                   )}
                 </span>
+              </div>
+            </section>
+
+            {/* P5: «Подключение» вынесено из формы редактирования на видное место.
+                Показывает текущий провайдер + hint ключа (P4) READ-ONLY; «Сменить»
+                переиспользует существующий startEdit() (форма провайдера ниже). */}
+            <section className="tma-card" style={{ padding: 16 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-title" style={{ margin: 0 }}>
+                    Подключение
+                  </span>
+                  {agent.connection_type === 'external_openai' ? (
+                    <>
+                      <span
+                        className="tma-pill tma-pill--ok"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          alignSelf: 'flex-start',
+                        }}
+                      >
+                        <Icon d={ICONS.check} /> свой провайдер · 0 комиссии
+                      </span>
+                      {agent.external_base_url && (
+                        <span className="tma-card-text tma-text-small">
+                          URL:{' '}
+                          <span className="tma-mono" title={agent.external_base_url}>
+                            {agent.external_base_url}
+                          </span>
+                        </span>
+                      )}
+                      {agent.external_api_key_hint && (
+                        <span className="tma-card-text tma-text-small">
+                          Ключ: <span className="tma-mono">…{agent.external_api_key_hint}</span>
+                        </span>
+                      )}
+                      {agent.external_model_slug && (
+                        <span className="tma-card-text tma-text-small">
+                          Модель:{' '}
+                          <span className="tma-mono" title={agent.external_model_slug}>
+                            {agent.external_model_slug}
+                          </span>
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span
+                      className="tma-pill tma-pill--accent"
+                      style={{ alignSelf: 'flex-start' }}
+                    >
+                      AIAG (наценка)
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic.impact('light');
+                    startEdit();
+                  }}
+                  className="tma-btn"
+                  style={{ flexShrink: 0 }}
+                >
+                  Сменить
+                </button>
               </div>
             </section>
 
