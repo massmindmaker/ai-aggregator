@@ -144,6 +144,9 @@ function OwnerControls({
             />
           </label>
           {err && <div className="tma-error">{err}</div>}
+          <p className="tma-card-text tma-text-small" style={{ opacity: 0.7 }}>
+            Минт iNFT ≈ {mintFeeTon ?? '1'} TON (списывается из кошелька TON при подтверждении).
+          </p>
           <button
             type="button"
             className="tma-btn tma-btn--primary"

@@ -307,10 +307,6 @@ export default function DashboardPage() {
                 <span className="tma-hub-cell-icon"><HubIcon d={ICONS.templates} /></span>
                 <span className="tma-hub-cell-label">Шаблоны</span>
               </Link>
-              <Link href="/market" className="tma-hub-cell">
-                <span className="tma-hub-cell-icon"><HubIcon d={ICONS.layers} /></span>
-                <span className="tma-hub-cell-label">Модели</span>
-              </Link>
               <Link href="/wallet" className="tma-hub-cell">
                 <span className="tma-hub-cell-icon"><HubIcon d={ICONS.history} /></span>
                 <span className="tma-hub-cell-label">История</span>
@@ -388,7 +384,7 @@ export default function DashboardPage() {
 
               {agents && agents.length === 0 && (
                 <div className="tma-hub-paths">
-                  <Link href="/templates" className="tma-hub-path">
+                  <Link href="/market" className="tma-hub-path">
                     <span className="tma-hub-path-body">
                       <span className="tma-hub-path-label">Из шаблона</span>
                       <span className="tma-hub-path-sub">
@@ -439,7 +435,7 @@ export default function DashboardPage() {
               <section className="tma-hub-section">
                 <div className="tma-section-head">
                   <h2 className="tma-hub-h2">Шаблоны недели</h2>
-                  <Link href="/templates" className="tma-hub-link">
+                  <Link href="/market" className="tma-hub-link">
                     Все →
                   </Link>
                 </div>

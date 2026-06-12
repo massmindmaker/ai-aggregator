@@ -139,6 +139,9 @@ export default function AgentsInboxPage() {
                 <Link href="/market" className="tma-btn tma-btn--primary tma-btn--block">
                   Взять в Маркете →
                 </Link>
+                <Link href="/agents/new" className="tma-btn tma-btn--ghost tma-btn--block">
+                  Создать с нуля
+                </Link>
               </div>
             )}
 
