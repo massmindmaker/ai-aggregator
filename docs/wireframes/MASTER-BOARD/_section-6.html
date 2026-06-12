@@ -1,0 +1,391 @@
+<section id="sec-states" class="board-sec">
+  <h3>6 · Модалки, состояния и мелкие элементы <small>— оверлеи .modal-host/.scrim/.sheet/.dialog · пустые/ошибки/загрузка · тосты · библиотека status-pill</small></h3>
+  <div class="boards">
+
+    <!-- ============================================================ -->
+    <!-- 41 · ВСЕ МОДАЛКИ-ПОДТВЕРЖДЕНИЯ — мини-сетка диалогов -->
+    <!-- ============================================================ -->
+    <figure class="artboard" id="st-41">
+      <figcaption><b>41</b>Модалки-подтверждения <span class="tag">dialog ×4</span></figcaption>
+      <div class="wf wf-mobile modal-host"><div class="wf-screen">
+        <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+        <div class="appbar"><span class="back">‹</span><span class="title">Подтверждения</span></div>
+        <!-- 4 диалога стопкой как библиотека: каждый = .dialog в потоке (без translate), -->
+        <!-- чтобы показать все четыре деструктивных/опасных confirm в одной сетке -->
+        <div class="wf-scroll pad" style="display:flex;flex-direction:column;gap:14px;background:rgba(23,23,23,.28)">
+
+          <!-- A · клонировать -->
+          <div class="card" style="border-color:var(--line-2)">
+            <div class="cb">
+              <div class="row" style="gap:8px;margin-bottom:8px"><span class="badge"><span class="v"></span></span><span class="h-md" style="font-size:15px">Клонировать «Нова»?</span></div>
+              <p class="cap muted">Создастся <b>твоя копия</b> спека (без ключей и памяти создателя). Память — <b>с нуля</b>. BYOK подключишь сам.</p>
+              <div class="card soft" style="margin-top:10px"><div class="cb" style="padding:10px 14px">
+                <div class="kv" style="padding:6px 0"><span class="k">Спек</span><span class="v">копируется</span></div>
+                <div class="kv" style="padding:6px 0"><span class="k">Ключи / память создателя</span><span class="v muted">не копируются</span></div>
+                <div class="kv" style="padding:6px 0"><span class="k">Комиссия</span><span class="v">0 кр</span></div>
+              </div></div>
+              <div class="row" style="gap:8px;margin-top:14px"><button class="btn ghost grow">Отмена</button><button class="btn primary grow">Клонировать</button></div>
+            </div>
+          </div>
+
+          <!-- B · удалить агента (деструктив) -->
+          <div class="card" style="border-color:var(--ink)">
+            <div class="cb">
+              <div class="warn" style="border:0;padding:0;margin-bottom:10px"><span class="ic">⚠</span><span class="h-md" style="font-size:15px">Удалить «Нова»?</span></div>
+              <p class="cap muted">Агент <span class="num">nova-7f2</span>, его память и история удалятся. Активные расписания и <span class="num">3</span> сессии найма — погасятся. Действие необратимо.</p>
+              <div class="req" style="margin-top:10px"><span class="k">впиши</span><span class="v">УДАЛИТЬ</span><span class="copy">⌨</span></div>
+              <div class="row" style="gap:8px;margin-top:14px"><button class="btn ghost grow">Отмена</button><button class="btn danger grow">Удалить</button></div>
+            </div>
+          </div>
+
+          <!-- C · передать (iNFT transfer) -->
+          <div class="card" style="border-color:var(--line-2)">
+            <div class="cb">
+              <div class="row" style="gap:8px;margin-bottom:8px"><span class="badge dash">iNFT</span><span class="h-md" style="font-size:15px">Передать агента?</span></div>
+              <p class="cap muted">Владение перейдёт <b>@user_402</b>. Спек+скиллы — да. <b>Личная история — нет.</b> Минт TON-iNFT <span class="num">1 TON</span>, необратимо после подтверждения сети.</p>
+              <div class="card soft" style="margin-top:10px"><div class="cb" style="padding:10px 14px">
+                <div class="kv" style="padding:6px 0"><span class="k">Получатель</span><span class="v">@user_402</span></div>
+                <div class="kv" style="padding:6px 0"><span class="k">Минт</span><span class="v">1 TON</span></div>
+                <div class="kv" style="padding:6px 0"><span class="k">История</span><span class="v muted">не переносится</span></div>
+              </div></div>
+              <div class="row" style="gap:8px;margin-top:14px"><button class="btn ghost grow">Отмена</button><button class="btn primary grow">Передать · 1 TON</button></div>
+            </div>
+          </div>
+
+          <!-- D · очистить память -->
+          <div class="card" style="border-color:var(--line-2)">
+            <div class="cb">
+              <div class="warn" style="border:0;padding:0;margin-bottom:10px"><span class="ic">⚠</span><span class="h-md" style="font-size:15px">Очистить память?</span></div>
+              <p class="cap muted">Все <span class="num">42</span> факта инстанса <span class="num">nova-u402</span> сотрутся. Спек и скиллы останутся. Изоляция: чужую память это не трогает.</p>
+              <div class="row" style="gap:8px;margin-top:14px"><button class="btn ghost grow">Отмена</button><button class="btn danger grow">Очистить</button></div>
+            </div>
+          </div>
+
+          <div class="scrollnote">библиотека confirm-диалогов · в проде по одному поверх .scrim</div>
+        </div>
+      </div></div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- 42 · КАНАЛЫ-PICKER модалка -->
+    <!-- ============================================================ -->
+    <figure class="artboard" id="st-42">
+      <figcaption><b>42</b>Каналы · picker <span class="tag">sheet</span></figcaption>
+      <div class="wf wf-mobile modal-host"><div class="wf-screen">
+        <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+        <div class="appbar"><span class="back">‹</span><span class="title">Нова · каналы</span></div>
+        <div class="wf-scroll pad"><div class="sk w60" style="margin-bottom:10px"></div><div class="sk w100" style="margin-bottom:8px"></div><div class="sk w80"></div></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="h-md">Где живёт агент</div>
+          <div class="cap muted" style="margin-top:4px">Hermes нативно бриджит ~22 платформы. Показываем только Telegram — мост не строим.</div>
+
+          <div class="card" style="margin-top:14px"><div class="cb" style="padding:0">
+            <div class="opt on" style="padding:12px 14px"><span class="img" style="width:30px;height:30px;border-radius:7px"></span><span class="tx grow" style="margin-left:10px">Telegram <span class="muted">— @aiaggbot</span></span><span class="badge"><span class="v"></span>подключён</span></div>
+            <div class="opt" style="padding:12px 14px;opacity:.55"><span class="img" style="width:30px;height:30px;border-radius:7px"></span><span class="tx grow" style="margin-left:10px">Discord</span><span class="badge dash">◷ скоро</span></div>
+            <div class="opt" style="padding:12px 14px;opacity:.55"><span class="img" style="width:30px;height:30px;border-radius:7px"></span><span class="tx grow" style="margin-left:10px">Slack</span><span class="badge dash">◷ скоро</span></div>
+            <div class="opt" style="padding:12px 14px;border-bottom:0;opacity:.55"><span class="img" style="width:30px;height:30px;border-radius:7px"></span><span class="tx grow" style="margin-left:10px">WhatsApp</span><span class="badge dash">◷ скоро</span></div>
+          </div></div>
+
+          <div class="warn" style="margin-top:12px"><span class="ic">i</span><span>Остальные каналы появятся, когда включим мост рантайма. Биллинг и память — общие.</span></div>
+          <button class="btn primary block" style="margin-top:14px">Готово</button>
+        </div>
+      </div></div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- 43 · ПОДКЛЮЧИТЬ КЛЮЧ — BYOK / MCP модалка -->
+    <!-- ============================================================ -->
+    <figure class="artboard" id="st-43">
+      <figcaption><b>43</b>Подключить ключ · BYOK / MCP <span class="tag">sheet</span></figcaption>
+      <div class="wf wf-mobile modal-host"><div class="wf-screen">
+        <div class="statusbar"><span>9:41</span><span class="row" style="gap:6px"><span class="dots"><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+        <div class="appbar"><span class="back">‹</span><span class="title">Нова · конфиг</span></div>
+        <div class="wf-scroll pad"><div class="sk w80" style="margin-bottom:10px"></div><div class="sk w100" style="margin-bottom:8px"></div><div class="sk w60"></div></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="seg" style="margin-bottom:14px"><span class="s on">Ключ модели</span><span class="s">MCP-токен</span></div>
+
+          <!-- активная вкладка: BYOK -->
+          <div class="escrow" style="margin-bottom:14px"><span class="lock">0%</span><span class="t"><b>Свой ключ = 0 комиссии</b>Платишь напрямую провайдеру, AIAG не берёт наценку.</span></div>
+          <span class="input-label">Провайдер</span>
+          <div class="seg ghost" style="margin-bottom:12px"><span class="s on">AIAG</span><span class="s">OpenRouter</span><span class="s">Свой</span></div>
+          <span class="input-label">API-ключ</span>
+          <div class="field"><span class="ph">sk-••••••••••••••••</span><span class="caret">⌕</span></div>
+          <div class="cap muted" style="margin-top:6px">Шифруется AES-256-GCM. В UI — только last4.</div>
+
+          <hr class="div">
+          <!-- свёрнутая вкладка MCP (превью второй вкладки) -->
+          <div class="card soft"><div class="cb" style="padding:12px 14px">
+            <div class="row between"><span class="label">MCP-токен (вторая вкладка)</span><span class="badge dash">OAuth 2.1 · PKCE</span></div>
+            <div class="kv" style="padding:7px 0"><span class="k">Сервер</span><span class="v">Notion (HTTP)</span></div>
+            <div class="kv" style="padding:7px 0"><span class="k">Статус</span><span class="v muted">не подключён</span></div>
+          </div></div>
+
+          <div class="row" style="gap:8px;margin-top:14px"><button class="btn ghost grow">Проверить</button><button class="btn primary grow">Сохранить</button></div>
+        </div>
+      </div></div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- 44 · ПУСТЫЕ СОСТОЯНИЯ — 3 в ряд (нет агентов / шаблонов / истории) -->
+    <!-- ============================================================ -->
+    <figure class="artboard" id="st-44">
+      <figcaption><b>44</b>Пустые состояния <span class="tag">empty ×3</span></figcaption>
+      <div class="row" style="gap:24px;align-items:flex-start">
+
+        <!-- A · нет агентов -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="title">Мои агенты</span><span class="icon">+</span></div>
+          <div class="wf-scroll pad center" style="display:flex;flex-direction:column;justify-content:center;gap:14px">
+            <div class="img" style="width:72px;height:72px;border-radius:16px;margin:0 auto"></div>
+            <div class="h-md center">Пока нет агентов</div>
+            <p class="cap muted center" style="max-width:230px;margin:0 auto">Наними готового из каталога или собери своего. Первый запуск ничего не стоит.</p>
+            <div class="col" style="gap:8px;margin-top:6px"><button class="btn primary block">Нанять из каталога</button><button class="btn ghost block">Создать своего</button></div>
+          </div>
+          <div class="tabbar"><div class="tab on"><div class="ic"></div>Агенты</div><div class="tab"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+        </div></div>
+
+        <!-- B · нет шаблонов (поиск пуст) -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="back">‹</span><span class="title">Каталог · Шаблоны</span><span class="icon">⌕</span></div>
+          <div class="wf-scroll">
+            <div class="pad-x" style="padding-top:10px"><div class="field"><span class="val">«крипто-юрист»</span><span class="caret">✕</span></div></div>
+            <div class="pad center" style="display:flex;flex-direction:column;justify-content:center;height:380px;gap:12px">
+              <div class="img" style="width:64px;height:64px;border-radius:14px;margin:0 auto"></div>
+              <div class="h-md center">Ничего не нашлось</div>
+              <p class="cap muted center" style="max-width:220px;margin:0 auto">По запросу <b>«крипто-юрист»</b> шаблонов нет. Сбрось фильтр или собери такого агента сам.</p>
+              <div class="col" style="gap:8px;margin-top:4px"><button class="btn ghost block">Сбросить поиск</button><button class="btn primary block">Собрать агента</button></div>
+            </div>
+          </div>
+          <div class="tabbar"><div class="tab"><div class="ic"></div>Агенты</div><div class="tab on"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+        </div></div>
+
+        <!-- C · нет истории прогонов -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="back">‹</span><span class="title">Нова · история</span></div>
+          <div class="wf-scroll pad center" style="display:flex;flex-direction:column;justify-content:center;gap:12px">
+            <div class="img" style="width:64px;height:64px;border-radius:14px;margin:0 auto"></div>
+            <div class="h-md center">Прогонов ещё не было</div>
+            <p class="cap muted center" style="max-width:220px;margin:0 auto">Здесь появятся шаги, токены и стоимость каждого запуска. Напиши агенту — и трейс соберётся.</p>
+            <button class="btn primary" style="margin:4px auto">Открыть чат</button>
+          </div>
+          <div class="chatbar"><span class="f">Сообщение…</span><button class="btn sm">↑</button></div>
+        </div></div>
+
+      </div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- 45 · ОШИБКИ — 3 в ряд (баланс / сеть / HTTP500) -->
+    <!-- ============================================================ -->
+    <figure class="artboard" id="st-45">
+      <figcaption><b>45</b>Ошибки <span class="tag">error ×3</span></figcaption>
+      <div class="row" style="gap:24px;align-items:flex-start">
+
+        <!-- A · недостаток баланса (sheet) -->
+        <div class="wf wf-mobile modal-host" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="back">‹</span><span class="title">Нова · чат</span></div>
+          <div class="wf-scroll pad"><div class="sk w80" style="margin-bottom:8px"></div><div class="sk w100"></div></div>
+          <div class="scrim"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="warn" style="border:0;padding:0;margin-bottom:10px"><span class="ic">⚠</span><span class="h-md" style="font-size:15px">Недостаточно кредитов</span></div>
+            <p class="cap muted">Прогон стоит ~<span class="num">2.4 кр</span>, на балансе <span class="num">0.8 кр</span>. Пополни, чтобы продолжить.</p>
+            <div class="card soft" style="margin-top:12px"><div class="cb" style="padding:10px 14px">
+              <div class="kv" style="padding:6px 0"><span class="k">Баланс</span><span class="v">0.8 кр</span></div>
+              <div class="kv" style="padding:6px 0"><span class="k">Нужно</span><span class="v">2.4 кр</span></div>
+            </div></div>
+            <button class="btn primary block" style="margin-top:14px">Пополнить · TON</button>
+            <button class="btn ghost block" style="margin-top:8px">Подключить свой ключ (0 комиссии)</button>
+          </div>
+        </div></div>
+
+        <!-- B · сеть -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="back">‹</span><span class="title">Каталог</span></div>
+          <div class="wf-scroll pad center" style="display:flex;flex-direction:column;justify-content:center;gap:12px">
+            <div class="img" style="width:64px;height:64px;border-radius:50%;margin:0 auto"></div>
+            <div class="h-md center">Нет соединения</div>
+            <p class="cap muted center" style="max-width:220px;margin:0 auto">Не удалось загрузить каталог. Проверь интернет и попробуй снова.</p>
+            <div class="badge dash" style="margin:0 auto"><span class="num">ERR_NETWORK</span></div>
+            <button class="btn primary" style="margin:4px auto">↻ Повторить</button>
+          </div>
+          <div class="tabbar"><div class="tab"><div class="ic"></div>Агенты</div><div class="tab on"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+        </div></div>
+
+        <!-- C · HTTP 500 -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="back">‹</span><span class="title">Нова</span></div>
+          <div class="wf-scroll pad center" style="display:flex;flex-direction:column;justify-content:center;gap:12px">
+            <div class="img" style="width:64px;height:64px;border-radius:14px;margin:0 auto"></div>
+            <div class="h-md center">Что-то пошло не так</div>
+            <p class="cap muted center" style="max-width:220px;margin:0 auto">Сбой на нашей стороне. Мы уже знаем. Попробуй позже — деньги за прерванный прогон не списаны.</p>
+            <div class="req" style="margin:0 8px"><span class="k">код</span><span class="v">500 · req_9f2a1</span><span class="copy">копир.</span></div>
+            <button class="btn primary" style="margin:4px auto">↻ Повторить</button>
+          </div>
+          <div class="chatbar"><span class="f">Сообщение…</span><button class="btn sm">↑</button></div>
+        </div></div>
+
+      </div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- 46 · ЗАГРУЗКА / СКЕЛЕТОНЫ — инбокс / карточки / чат -->
+    <!-- ============================================================ -->
+    <figure class="artboard" id="st-46">
+      <figcaption><b>46</b>Загрузка · скелетоны <span class="tag">skeleton ×3</span></figcaption>
+      <div class="row" style="gap:24px;align-items:flex-start">
+
+        <!-- A · скелетон инбокса (строки-агенты) -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="title">Мои агенты</span><span class="icon">+</span></div>
+          <div class="wf-scroll">
+            <div class="pad-x" style="padding-top:10px"><div class="seg ghost"><span class="s on">Нанять</span><span class="s">Мои</span><span class="s">Создать</span></div></div>
+            <div style="margin-top:8px">
+              <div class="order-row"><div class="top"><span class="ava sm"></span><div class="col grow" style="gap:6px;margin-left:8px"><span class="sk w60"></span><span class="sk w40"></span></div><span class="sk" style="width:40px"></span></div></div>
+              <div class="order-row"><div class="top"><span class="ava sm"></span><div class="col grow" style="gap:6px;margin-left:8px"><span class="sk w80"></span><span class="sk w40"></span></div><span class="sk" style="width:40px"></span></div></div>
+              <div class="order-row"><div class="top"><span class="ava sm"></span><div class="col grow" style="gap:6px;margin-left:8px"><span class="sk w60"></span><span class="sk w60"></span></div><span class="sk" style="width:40px"></span></div></div>
+              <div class="order-row"><div class="top"><span class="ava sm"></span><div class="col grow" style="gap:6px;margin-left:8px"><span class="sk w80"></span><span class="sk w40"></span></div><span class="sk" style="width:40px"></span></div></div>
+            </div>
+            <div class="scrollnote">aiag-skeleton · shimmer</div>
+          </div>
+          <div class="tabbar"><div class="tab on"><div class="ic"></div>Агенты</div><div class="tab"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+        </div></div>
+
+        <!-- B · скелетон карточек (грид) -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="title">Каталог</span><span class="icon">⌕</span></div>
+          <div class="wf-scroll pad" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-content:start">
+            <div class="card"><div class="cb"><span class="img" style="width:100%;height:80px;border-radius:8px"></span><div class="sk w80" style="margin-top:10px"></div><div class="sk w40" style="margin-top:6px"></div><div class="sk w60" style="margin-top:10px"></div></div></div>
+            <div class="card"><div class="cb"><span class="img" style="width:100%;height:80px;border-radius:8px"></span><div class="sk w60" style="margin-top:10px"></div><div class="sk w40" style="margin-top:6px"></div><div class="sk w80" style="margin-top:10px"></div></div></div>
+            <div class="card"><div class="cb"><span class="img" style="width:100%;height:80px;border-radius:8px"></span><div class="sk w80" style="margin-top:10px"></div><div class="sk w40" style="margin-top:6px"></div><div class="sk w40" style="margin-top:10px"></div></div></div>
+            <div class="card"><div class="cb"><span class="img" style="width:100%;height:80px;border-radius:8px"></span><div class="sk w60" style="margin-top:10px"></div><div class="sk w60" style="margin-top:6px"></div><div class="sk w80" style="margin-top:10px"></div></div></div>
+          </div>
+          <div class="tabbar"><div class="tab"><div class="ic"></div>Агенты</div><div class="tab on"><div class="ic"></div>Каталог</div><div class="tab"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+        </div></div>
+
+        <!-- C · скелетон чата + индикатор «агент думает» -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="back">‹</span><span class="title">Нова</span><span class="badge"><span class="star"></span>online</span></div>
+          <div class="wf-scroll pad chat" style="gap:10px">
+            <div class="b" style="width:70%"><div class="sk w100" style="margin-bottom:6px"></div><div class="sk w60"></div></div>
+            <div class="b me" style="width:55%;background:var(--soft-2);border-color:var(--line-2)"><div class="sk w80" style="background:var(--line-2)"></div></div>
+            <div class="b" style="width:78%"><div class="sk w100" style="margin-bottom:6px"></div><div class="sk w80"></div></div>
+            <div class="b sys" style="font-family:var(--mono)">● ● ● агент печатает…</div>
+          </div>
+          <div class="chatbar"><span class="f">Сообщение…</span><button class="btn sm">↑</button></div>
+        </div></div>
+
+      </div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- 47 · ТОСТЫ — успех пополнения / ошибка (оверлей) -->
+    <!-- ============================================================ -->
+    <figure class="artboard" id="st-47">
+      <figcaption><b>47</b>Тосты · успех / ошибка <span class="tag">toast ×2</span></figcaption>
+      <div class="row" style="gap:24px;align-items:flex-start">
+
+        <!-- A · успех пополнения (тост сверху) -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="back">‹</span><span class="title">Кошелёк</span></div>
+          <!-- тост: top toast, наезжает поверх контента -->
+          <div style="position:absolute;left:12px;right:12px;top:42px;z-index:5">
+            <div class="card" style="border-color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,.12)"><div class="cb" style="padding:12px 14px;display:flex;align-items:center;gap:10px">
+              <span class="badge solid" style="border-radius:50%;width:24px;height:24px;padding:0;justify-content:center"><span class="v" style="margin:0"></span></span>
+              <div class="col grow"><span style="font-weight:600;font-size:13px">Баланс пополнен</span><span class="cap muted">+<span class="num">500 кр</span> · TON-перевод подтверждён</span></div>
+              <span class="muted">✕</span>
+            </div></div>
+          </div>
+          <div class="wf-scroll pad" style="opacity:.6">
+            <div class="card soft"><div class="cb center" style="padding:20px"><div class="eyebrow">баланс</div><div class="h-lg num" style="margin-top:4px">1 240 кр</div><div class="cap muted">≈ $12.40</div></div></div>
+            <div class="card" style="margin-top:14px"><div class="cb"><div class="sk w60" style="margin-bottom:10px"></div><div class="sk w100"></div></div></div>
+          </div>
+          <div class="tabbar"><div class="tab"><div class="ic"></div>Агенты</div><div class="tab"><div class="ic"></div>Каталог</div><div class="tab on"><div class="ic"></div>Кошелёк</div><div class="tab"><div class="ic"></div>Ещё</div></div>
+        </div></div>
+
+        <!-- B · ошибка-тост снизу -->
+        <div class="wf wf-mobile" style="width:300px;height:560px"><div class="wf-screen">
+          <div class="appbar"><span class="back">‹</span><span class="title">Нова · конфиг</span></div>
+          <div class="wf-scroll pad" style="opacity:.6">
+            <span class="input-label">API-ключ</span>
+            <div class="field"><span class="val">sk-or-···· 4f7c</span></div>
+            <div class="card soft" style="margin-top:14px"><div class="cb"><div class="sk w80" style="margin-bottom:10px"></div><div class="sk w100"></div></div></div>
+          </div>
+          <!-- тост: bottom toast над таб-баром -->
+          <div style="position:absolute;left:12px;right:12px;bottom:14px;z-index:5">
+            <div class="card" style="border:1px dashed var(--ink)"><div class="cb" style="padding:12px 14px;display:flex;align-items:center;gap:10px">
+              <span class="badge dash" style="border-radius:50%;width:24px;height:24px;padding:0;justify-content:center;border-color:var(--ink)">!</span>
+              <div class="col grow"><span style="font-weight:600;font-size:13px">Ключ не сохранён</span><span class="cap muted">Провайдер отклонил — проверь ключ. <span class="num">401</span></span></div>
+              <span class="cap" style="text-decoration:underline">Ещё раз</span>
+            </div></div>
+          </div>
+        </div></div>
+
+      </div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- 48 · БИБЛИОТЕКА STATUS-PILL — icon + слово (никогда не цвет) -->
+    <!-- ============================================================ -->
+    <figure class="artboard" id="st-48">
+      <figcaption><b>48</b>Библиотека status-pill <span class="tag">tokens</span></figcaption>
+      <div class="wf wf-mobile" style="height:auto;min-height:560px"><div class="wf-screen" style="position:relative">
+        <div class="appbar"><span class="title">Status-pill · набор</span></div>
+        <div class="wf-scroll pad">
+          <div class="warn" style="margin-bottom:14px"><span class="ic">!</span><span>Правило DESIGN: статус = <b>иконка + слово</b>, никогда не один цвет. JetBrains Mono для кодов/ID. Амбер — только live/active в проде (тут ч/б каркас).</span></div>
+
+          <div class="eyebrow">состояние фичи</div>
+          <div class="chips" style="margin:8px 0 16px;gap:8px">
+            <span class="badge"><span class="v"></span>live</span>
+            <span class="badge dash">◷ скоро</span>
+            <span class="badge dash">⚗ R&amp;D</span>
+          </div>
+
+          <div class="eyebrow">результат операции</div>
+          <div class="chips" style="margin:8px 0 16px;gap:8px">
+            <span class="badge"><span class="v"></span>ok</span>
+            <span class="badge dash">✕ error</span>
+            <span class="badge">◷ в очереди</span>
+            <span class="badge">⟳ выполняется</span>
+          </div>
+
+          <div class="eyebrow">инстанс / рантайм</div>
+          <div class="chips" style="margin:8px 0 16px;gap:8px">
+            <span class="badge"><span class="star"></span>online</span>
+            <span class="badge">○ offline</span>
+            <span class="badge">⏸ пауза</span>
+            <span class="badge dash">⤴ передаётся</span>
+          </div>
+
+          <div class="eyebrow">владение / тип</div>
+          <div class="chips" style="margin:8px 0 16px;gap:8px">
+            <span class="badge solid">мой</span>
+            <span class="badge">НАЁМ</span>
+            <span class="badge">клон</span>
+            <span class="badge dash">read-only</span>
+          </div>
+
+          <div class="eyebrow">оплата / комиссия</div>
+          <div class="chips" style="margin:8px 0 16px;gap:8px">
+            <span class="badge">AIAG · +наценка</span>
+            <span class="badge">BYOK · 0%</span>
+            <span class="badge dash">iNFT</span>
+          </div>
+
+          <hr class="div">
+          <div class="eyebrow">правильно vs нет</div>
+          <div class="card soft" style="margin-top:8px"><div class="cb" style="padding:12px 14px">
+            <div class="row between"><span class="cap"><span class="badge"><span class="v"></span>ok</span> — иконка + слово</span><span class="badge"><span class="v"></span></span></div>
+            <hr class="thin" style="margin:10px 0">
+            <div class="row between"><span class="cap muted">только цветная точка — запрещено</span><span style="width:12px;height:12px;border-radius:50%;background:var(--line-3)"></span></div>
+          </div></div>
+        </div>
+      </div></div>
+    </figure>
+
+  </div>
+</section>

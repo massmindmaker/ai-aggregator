@@ -1,0 +1,422 @@
+<section id="sec-account" class="board-sec">
+<h3>5 · Деньги · Аккаунт · Ops <small>— кошелёк (USD-pegged кредиты), пополнение TON, аккаунт, дэшборд-хаб, расписания, канбан, transfer-iNFT, доход автора</small></h3>
+
+<div class="boards">
+
+<!-- ════════════ 33 · КОШЕЛЁК ════════════ -->
+<figure class="artboard" id="ab-33">
+  <figcaption><b>33</b> Кошелёк — баланс · леджер · balance_after <span class="tag">live</span></figcaption>
+  <div class="wf wf-mobile">
+    <div class="wf-screen">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i><span class="batt"></span></span></div>
+      <div class="appbar"><span class="title">Кошелёк</span><span class="icon">⤴</span></div>
+      <div class="wf-scroll">
+        <div class="pad">
+          <!-- баланс -->
+          <div class="card">
+            <div class="cb">
+              <div class="eyebrow">Баланс</div>
+              <div class="row between" style="align-items:flex-end;margin-top:var(--s1)">
+                <div>
+                  <div class="num" style="font-size:30px;letter-spacing:-1px">1 250 <span class="muted" style="font-size:14px">кр</span></div>
+                  <div class="cap muted num">≈ $12.50 · 1 кр = $0.01 · хватит на ~36 дн</div>
+                </div>
+                <a class="btn sm primary">＋ Пополнить</a>
+              </div>
+            </div>
+          </div>
+
+          <hr class="div">
+          <div class="row between"><span class="label">Движения (леджер)</span><span class="cap muted num">7 за 30 дн</span></div>
+
+          <!-- леджер: каждая строка показывает delta + balance_after (моно) -->
+          <div class="card" style="margin-top:var(--s2)">
+            <table class="tbl">
+              <thead><tr><th>операция</th><th class="n">Δ кр</th><th class="n">после</th></tr></thead>
+              <tbody>
+                <tr><td>Пополнение · TON<div class="cap muted num">tx a3f…91c</div></td><td class="n">+1000</td><td class="n">1 250</td></tr>
+                <tr><td>Алиса · прогон<div class="cap muted num">gpt-4o-mini · 1.2k tok</div></td><td class="n">−12</td><td class="n">250</td></tr>
+                <tr><td>Наём · Макс<div class="cap muted num">session #s-204</div></td><td class="n">−9</td><td class="n">262</td></tr>
+                <tr><td>Firecrawl · тулза<div class="cap muted num">per-call</div></td><td class="n">−3</td><td class="n">271</td></tr>
+                <tr><td>Пополнение · TON</td><td class="n">+250</td><td class="n">274</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="cap muted" style="margin-top:var(--s2)">Append-only · <span class="num">balance_after</span> зафиксирован на момент записи — реконсиль с on-chain.</div>
+
+          <hr class="div">
+          <span class="label">Привязанные кошельки</span>
+          <div class="req" style="margin-top:var(--s2)"><span class="k">TON</span><span class="v">UQAb…7Fk2</span><span class="badge"><span class="v"></span>ton-proof</span></div>
+
+          <div class="scrollnote">↕ леджер · бесконечный скролл</div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><div class="ic"></div>Агенты</div>
+        <div class="tab"><div class="ic"></div>Каталог</div>
+        <div class="tab on"><div class="ic"></div>Кошелёк</div>
+        <div class="tab"><div class="ic"></div>Аккаунт</div>
+        <div class="tab"><div class="ic"></div>Ещё</div>
+      </div>
+    </div>
+  </div>
+</figure>
+
+<!-- ════════════ 34 · ПОПОЛНЕНИЕ TON ════════════ -->
+<figure class="artboard" id="ab-34">
+  <figcaption><b>34</b> Пополнение TON — сумма · курс · sendTransaction <span class="tag">live</span></figcaption>
+  <div class="wf wf-mobile modal-host">
+    <div class="wf-screen">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i><span class="batt"></span></span></div>
+      <div class="appbar"><span class="title">Кошелёк</span></div>
+      <div class="wf-scroll">
+        <div class="pad">
+          <div class="card" style="opacity:.4"><div class="cb"><div class="eyebrow">Баланс</div><div class="num" style="font-size:30px">1 250 <span class="muted" style="font-size:14px">кр</span></div></div></div>
+        </div>
+      </div>
+      <!-- bottom-sheet: пополнить -->
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="h-md" style="margin-bottom:var(--s3)">Пополнить</div>
+
+        <span class="input-label">Сумма</span>
+        <div class="chips">
+          <span class="chip">+500 кр</span>
+          <span class="chip on">+1000 кр</span>
+          <span class="chip">+2500 кр</span>
+          <span class="chip">Другое</span>
+        </div>
+
+        <div class="card soft" style="margin-top:var(--s3)">
+          <div class="cb">
+            <div class="kv"><span class="k">К зачислению</span><span class="v">1000 кр</span></div>
+            <div class="kv"><span class="k">Курс</span><span class="v">1 кр = $0.01</span></div>
+            <div class="kv"><span class="k">TON ≈ $5.20</span><span class="v">~1.92 TON</span></div>
+            <div class="kv total"><span class="k">К оплате</span><span class="v">1.92 TON</span></div>
+          </div>
+        </div>
+
+        <span class="input-label" style="margin-top:var(--s3)">Чем платишь</span>
+        <div class="opt on"><span class="rd"></span><span class="tx grow">TON <span class="muted">· TON Connect</span></span><span class="badge">по умолч.</span></div>
+        <div class="opt"><span class="rd"></span><span class="tx grow">USDT <span class="muted num">· TON / TRC-20 / ERC-20</span></span><span class="badge dash">скоро</span></div>
+        <div class="opt" style="border-bottom:0"><span class="tx grow muted">USDC / др. <span class="num">· HOT Wallet</span></span><span class="badge dash">скоро</span></div>
+
+        <div class="warn" style="margin-top:var(--s3)"><span class="ic">!</span><span>Откроется кошелёк → <span class="num">sendTransaction</span>. Зачислим после <span class="num">3</span> подтверждений сети.</span></div>
+
+        <a class="btn primary block" style="margin-top:var(--s3)">Оплатить · 1.92 TON</a>
+      </div>
+    </div>
+  </div>
+</figure>
+
+<!-- ════════════ 35 · АККАУНТ ════════════ -->
+<figure class="artboard" id="ab-35">
+  <figcaption><b>35</b> Аккаунт — агенты N · провайдеры · расход за месяц <span class="tag">live</span></figcaption>
+  <div class="wf wf-mobile">
+    <div class="wf-screen">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i><span class="batt"></span></span></div>
+      <div class="appbar"><span class="title">Аккаунт</span><span class="icon">⚙</span></div>
+      <div class="wf-scroll">
+        <div class="pad">
+          <div class="row">
+            <span class="ava lg"></span>
+            <div class="grow"><div class="h-md">@username</div><div class="cap muted num">id 48201 · AIAG · с мая 2026</div></div>
+          </div>
+
+          <!-- статы: агенты N + расход за месяц -->
+          <div class="row" style="gap:var(--s2);margin-top:var(--s4)">
+            <div class="card grow"><div class="cb"><div class="label">Агентов</div><div class="num" style="font-size:22px">3</div></div></div>
+            <div class="card grow"><div class="cb"><div class="label">Провайдеров</div><div class="num" style="font-size:22px">2</div></div></div>
+            <div class="card grow"><div class="cb"><div class="label">За месяц</div><div class="num" style="font-size:22px">−642</div><div class="cap muted">кр</div></div></div>
+          </div>
+
+          <hr class="div">
+          <div class="card">
+            <div class="kv"><a class="row grow between"><span class="row" style="gap:var(--s2)"><span class="ava sm"></span>Провайдеры / ключи</span><span class="muted num">2 ›</span></a></div>
+          </div>
+          <div class="card" style="margin-top:var(--s2)">
+            <div class="kv"><span class="k">Кошельки (TON · HOT)</span><span class="v muted">1 ›</span></div>
+            <div class="kv"><span class="k">Мои шаблоны / доход автора</span><span class="v muted num">2 940 кр ›</span></div>
+            <div class="kv"><span class="k">История / чеки</span><span class="v muted">›</span></div>
+            <div class="kv"><span class="k">Настройки · 152-ФЗ</span><span class="v muted">›</span></div>
+          </div>
+
+          <hr class="div">
+          <span class="label">Расход за месяц по агентам</span>
+          <div class="card" style="margin-top:var(--s2)">
+            <table class="tbl">
+              <thead><tr><th>агент</th><th class="n">прогонов</th><th class="n">кр</th></tr></thead>
+              <tbody>
+                <tr><td>Алиса</td><td class="n">214</td><td class="n">−318</td></tr>
+                <tr><td>Макс</td><td class="n">96</td><td class="n">−201</td></tr>
+                <tr><td>Ника</td><td class="n">58</td><td class="n">−123</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <a class="btn ghost block" style="margin-top:var(--s4)">Выйти</a>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><div class="ic"></div>Агенты</div>
+        <div class="tab"><div class="ic"></div>Каталог</div>
+        <div class="tab"><div class="ic"></div>Кошелёк</div>
+        <div class="tab on"><div class="ic"></div>Аккаунт</div>
+        <div class="tab"><div class="ic"></div>Ещё</div>
+      </div>
+    </div>
+  </div>
+</figure>
+
+<!-- ════════════ 36 · ДЭШБОРД-ХАБ ════════════ -->
+<figure class="artboard" id="ab-36">
+  <figcaption><b>36</b> Дэшборд-хаб — баланс · сетка действий · пиннед-агент <span class="tag">live</span></figcaption>
+  <div class="wf wf-mobile">
+    <div class="wf-screen">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i><span class="batt"></span></span></div>
+      <div class="appbar"><span class="title">Командный центр</span></div>
+      <div class="wf-scroll">
+        <div class="pad">
+          <!-- баланс-обзор -->
+          <div class="card">
+            <div class="cb">
+              <div class="row between" style="align-items:flex-start">
+                <div><div class="label">Баланс</div><div class="num" style="font-size:26px">1 250 <span class="muted" style="font-size:13px">кр</span></div><div class="cap muted num">≈ $12.50 · ~36 дн</div></div>
+                <div class="center"><div class="num" style="font-size:18px">3</div><div class="cap muted">агента</div><div class="cap muted num">сегодня −24 кр</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="cap muted" style="margin-top:var(--s2)">Только <b>обзор</b>. Денежные операции — в Кошельке.</div>
+
+          <!-- пиннед-агент -->
+          <hr class="div">
+          <span class="label">Закреплённый агент</span>
+          <div class="order-row card" style="margin-top:var(--s2);border-radius:var(--r-lg)">
+            <div class="top"><span class="ava"></span><span class="name grow">Алиса <span class="rep">· код-ревью</span></span><span class="badge"><span class="v"></span>live</span></div>
+            <div class="meta" style="margin-top:6px">3 диалога · сегодня −12 кр · ★ 4.9</div>
+            <div class="row" style="margin-top:var(--s2);gap:var(--s2)"><a class="btn sm primary grow">Открыть чат</a><a class="btn sm ghost">Трейс</a></div>
+          </div>
+
+          <!-- сетка действий 2×3 -->
+          <hr class="div">
+          <span class="label">Быстрые действия</span>
+          <div class="row" style="flex-wrap:wrap;gap:var(--s2);margin-top:var(--s2)">
+            <a class="card grow" style="min-width:46%"><div class="cb"><div class="h-md">Каталог</div><div class="cap muted">витрина персонажей</div></div></a>
+            <a class="card grow" style="min-width:46%"><div class="cb"><div class="h-md">Кошелёк</div><div class="cap muted">пополнить · леджер</div></div></a>
+            <a class="card grow" style="min-width:46%"><div class="cb"><div class="h-md">Расписания</div><div class="cap muted num">2 активных cron</div></div></a>
+            <a class="card grow" style="min-width:46%"><div class="cb"><div class="h-md">Доход</div><div class="cap muted num">автор · 2 940 кр</div></div></a>
+          </div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab on"><div class="ic"></div>Дэшборд</div>
+        <div class="tab"><div class="ic"></div>Каталог</div>
+        <div class="tab"><div class="ic"></div>Кошелёк</div>
+        <div class="tab"><div class="ic"></div>Аккаунт</div>
+        <div class="tab"><div class="ic"></div>Ещё</div>
+      </div>
+    </div>
+  </div>
+</figure>
+
+<!-- ════════════ 37 · РАСПИСАНИЯ ════════════ -->
+<figure class="artboard" id="ab-37">
+  <figcaption><b>37</b> Расписания — cron список · создать daily/weekly/interval <span class="tag">live</span></figcaption>
+  <div class="wf wf-mobile modal-host">
+    <div class="wf-screen">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i><span class="batt"></span></span></div>
+      <div class="appbar"><span class="back">‹</span><span class="title">Расписания</span><span class="icon">＋</span></div>
+      <div class="wf-scroll">
+        <div class="pad">
+          <div class="cap muted">Агент «Алиса» · запуск по таймеру. Cron хранится на воркере.</div>
+          <div class="card" style="margin-top:var(--s3)">
+            <table class="tbl">
+              <thead><tr><th>задача</th><th>когда</th><th class="n">статус</th></tr></thead>
+              <tbody>
+                <tr><td>Утренний дайджест<div class="cap muted num">daily</div></td><td class="num">09:00</td><td class="n"><span class="badge"><span class="v"></span>вкл</span></td></tr>
+                <tr><td>Недельный отчёт<div class="cap muted num">weekly · пн</div></td><td class="num">10:00</td><td class="n"><span class="badge"><span class="v"></span>вкл</span></td></tr>
+                <tr><td>Пинг новостей<div class="cap muted num">interval</div></td><td class="num">/30мин</td><td class="n"><span class="badge dash">выкл</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="warn" style="margin-top:var(--s3)"><span class="ic">!</span><span>Баг: на вкладке агента daily/weekly затирается в interval — фикс в работе.</span></div>
+          <a class="btn block" style="margin-top:var(--s4)">＋ Новое расписание</a>
+        </div>
+      </div>
+      <!-- bottom-sheet: создать расписание -->
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="h-md" style="margin-bottom:var(--s3)">Новое расписание</div>
+
+        <span class="input-label">Тип</span>
+        <div class="seg"><div class="s on">Daily</div><div class="s">Weekly</div><div class="s">Interval</div></div>
+
+        <span class="input-label" style="margin-top:var(--s3)">Время</span>
+        <div class="field"><span class="val">09:00</span><span class="caret">▾</span></div>
+
+        <span class="input-label" style="margin-top:var(--s3)">Что делать (промпт-инъекция)</span>
+        <div class="field"><span class="ph">«собери дайджест за вчера и пришли»…</span></div>
+
+        <div class="kv" style="margin-top:var(--s3)"><span class="k">Оценка стоимости запуска</span><span class="v">~12 кр</span></div>
+        <a class="btn primary block" style="margin-top:var(--s3)">Создать расписание</a>
+      </div>
+    </div>
+  </div>
+</figure>
+
+<!-- ════════════ 38 · КАНБАН ════════════ -->
+<figure class="artboard" id="ab-38">
+  <figcaption><b>38</b> Канбан-доска агента — triage → done <span class="tag">partial</span></figcaption>
+  <div class="wf wf-mobile">
+    <div class="wf-screen">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i><span class="batt"></span></span></div>
+      <div class="appbar"><span class="back">‹</span><span class="title">Доска · Алиса</span><span class="icon">⟳</span></div>
+      <div class="wf-scroll">
+        <div class="pad">
+          <div class="badge dash" style="margin-bottom:var(--s3)">partial · проксируется из Hermes (read-only)</div>
+
+          <!-- горизонтальные колонки -->
+          <div class="row" style="gap:var(--s2);align-items:flex-start;overflow:hidden">
+            <!-- triage -->
+            <div class="col grow" style="min-width:108px">
+              <div class="label" style="margin-bottom:var(--s2)">Triage <span class="num">2</span></div>
+              <div class="card soft" style="margin-bottom:var(--s2)"><div class="cb" style="padding:var(--s3)"><div class="cap">Ответить в 3 тредах</div><div class="cap muted num">триггер</div></div></div>
+              <div class="card soft"><div class="cb" style="padding:var(--s3)"><div class="cap">Дайджест за вчера</div><div class="cap muted num">cron 09:00</div></div></div>
+            </div>
+            <!-- in progress -->
+            <div class="col grow" style="min-width:108px">
+              <div class="label" style="margin-bottom:var(--s2)">В работе <span class="num">1</span></div>
+              <div class="card"><div class="cb" style="padding:var(--s3)"><div class="cap">Ревью PR #214</div><div class="cap muted num">2 тула · 1.4k tok</div></div></div>
+            </div>
+            <!-- done -->
+            <div class="col grow" style="min-width:108px">
+              <div class="label" style="margin-bottom:var(--s2)">Done <span class="num">3</span></div>
+              <div class="card"><div class="cb" style="padding:var(--s3)"><div class="cap">Перевод доков</div><div class="cap muted num">−4 кр</div></div></div>
+              <div class="card" style="margin-top:var(--s2)"><div class="cb" style="padding:var(--s3)"><div class="cap">Саммари чата</div><div class="cap muted num">−2 кр</div></div></div>
+            </div>
+          </div>
+
+          <div class="scrollnote">↔ колонки скроллятся горизонтально</div>
+          <div class="warn" style="margin-top:var(--s3)"><span class="ic">!</span><span>Для не-Hermes агента доска = <span class="num">not_connected</span> (нужен экспонированный порт <span class="num">:9119</span>).</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</figure>
+
+<!-- ════════════ 39 · ПЕРЕДАЧА iNFT ════════════ -->
+<figure class="artboard" id="ab-39">
+  <figcaption><b>39</b> Передача-iNFT — transfer offer · mint-цена <span class="tag">live</span></figcaption>
+  <div class="wf wf-mobile">
+    <div class="wf-screen">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i><span class="batt"></span></span></div>
+      <div class="appbar"><span class="back">‹</span><span class="title">Передать агента</span></div>
+      <div class="wf-scroll">
+        <div class="pad">
+          <div class="row">
+            <span class="ava lg"></span>
+            <div class="grow"><div class="h-md">Макс</div><div class="cap muted num">копирайт · agent #a-1042</div></div>
+          </div>
+
+          <!-- что переносится -->
+          <div class="card" style="margin-top:var(--s4)">
+            <div class="ch">переносится новому владельцу</div>
+            <div class="cb">
+              <div class="kv"><span class="k">Спека (персона · модель · тулзы)</span><span class="v"><span class="badge"><span class="v"></span>да</span></span></div>
+              <div class="kv"><span class="k">Бюджет-карта (обнуляется)</span><span class="v"><span class="badge"><span class="v"></span>да</span></span></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:var(--s2)">
+            <div class="ch" style="color:var(--mute)">НЕ переносится</div>
+            <div class="cb">
+              <div class="kv"><span class="k">Личная история / память</span><span class="v muted">🔒 остаётся</span></div>
+              <div class="kv"><span class="k">Твои BYOK-ключи</span><span class="v muted">🔒 остаётся</span></div>
+            </div>
+          </div>
+
+          <!-- mint-цена -->
+          <hr class="div">
+          <span class="label">Передача через TON iNFT (TEP-62)</span>
+          <div class="card soft" style="margin-top:var(--s2)">
+            <div class="cb">
+              <div class="kv"><span class="k">Получатель (TON-адрес)</span><span class="v">UQ…7Fk2</span></div>
+              <div class="kv"><span class="k">Минт iNFT</span><span class="v">1 TON</span></div>
+              <div class="kv"><span class="k">Сеть · комиссия</span><span class="v">~0.05 TON</span></div>
+              <div class="kv total"><span class="k">Итого к оплате</span><span class="v">~1.05 TON</span></div>
+            </div>
+          </div>
+
+          <div class="warn" style="margin-top:var(--s3)"><span class="ic">!</span><span>Необратимо: после re-key агент уходит получателю. Подтверждение минта — пуш в фоне.</span></div>
+          <a class="btn primary block" style="margin-top:var(--s3)">Создать offer · минт 1 TON</a>
+          <div class="cap muted center" style="margin-top:var(--s2)">opt-in · единственная NFT-поверхность · без спекуляции</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</figure>
+
+<!-- ════════════ 40 · ДОХОД АВТОРА ════════════ -->
+<figure class="artboard" id="ab-40">
+  <figcaption><b>40</b> Доход автора — earnings · вывод <span class="tag">live</span></figcaption>
+  <div class="wf wf-mobile modal-host">
+    <div class="wf-screen">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i><span class="batt"></span></span></div>
+      <div class="appbar"><span class="back">‹</span><span class="title">Доход автора</span></div>
+      <div class="wf-scroll">
+        <div class="pad">
+          <div class="row">
+            <span class="ava lg"></span>
+            <div class="grow"><div class="h-md">@username</div><div class="cap muted num">автор · 6 шаблонов · ★ 4.9</div></div>
+          </div>
+
+          <!-- earnings -->
+          <div class="card" style="margin-top:var(--s4)">
+            <div class="cb">
+              <div class="label">Накоплено к выводу</div>
+              <div class="num" style="font-size:30px;letter-spacing:-1px">2 940 <span class="muted" style="font-size:14px">кр</span></div>
+              <div class="cap muted num">≈ $29.40 · author-rent · AIAG берёт 0 %</div>
+            </div>
+          </div>
+
+          <div class="row" style="gap:var(--s2);margin-top:var(--s3)">
+            <div class="card grow"><div class="cb"><div class="label">Арендаторов</div><div class="num" style="font-size:20px">86</div></div></div>
+            <div class="card grow"><div class="cb"><div class="label">Клонов</div><div class="num" style="font-size:20px">2 314</div></div></div>
+          </div>
+
+          <hr class="div">
+          <span class="label">Начисления по шаблонам</span>
+          <div class="card" style="margin-top:var(--s2)">
+            <table class="tbl">
+              <thead><tr><th>шаблон</th><th class="n">аренд.</th><th class="n">кр</th></tr></thead>
+              <tbody>
+                <tr><td>Постовик<div class="cap muted num">50 кр / мес</div></td><td class="n">42</td><td class="n">+2100</td></tr>
+                <tr><td>Аналитик<div class="cap muted num">30 кр / мес</div></td><td class="n">28</td><td class="n">+560</td></tr>
+                <tr><td>Переводчик<div class="cap muted num">free</div></td><td class="n">16</td><td class="n">+0</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card soft" style="margin-top:var(--s3)"><div class="cb"><div class="row"><span class="cap">Получаешь <b>ровно назначенную сумму</b> — комиссии нет. AIAG зарабатывает на моделях/тулзах/деплое.</span></div></div></div>
+
+          <a class="btn primary block" style="margin-top:var(--s4)">Вывести → баланс</a>
+        </div>
+      </div>
+      <!-- dialog: вывод (FD-2 открыт — вывод наружу отложен) -->
+      <div class="scrim"></div>
+      <div class="dialog">
+        <div class="h-md">Вывести доход</div>
+        <div class="cap dim" style="margin-top:var(--s2)">Доступно сейчас: перевод в spendable-баланс (тратить на прогоны/тулзы).</div>
+        <div class="kv" style="margin-top:var(--s3)"><span class="k">К переводу</span><span class="v">2 940 кр</span></div>
+        <div class="kv"><span class="k">Комиссия AIAG</span><span class="v">0 кр</span></div>
+        <div class="kv total"><span class="k">На баланс</span><span class="v">+2 940 кр</span></div>
+        <div class="warn" style="margin-top:var(--s3)"><span class="ic">!</span><span>Вывод в фиат/крипту наружу (cash-out) — <span class="num">скоро</span> (решение FD-2).</span></div>
+        <div class="row" style="gap:var(--s2);margin-top:var(--s4)"><a class="btn ghost grow">Отмена</a><a class="btn primary grow">Перевести</a></div>
+      </div>
+    </div>
+  </div>
+</figure>
+
+</div>
+</section>
