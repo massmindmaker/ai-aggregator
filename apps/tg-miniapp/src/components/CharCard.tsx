@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { haptic } from '@/lib/haptics';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CharCard — полная карточка-персонаж (DESIGN.md / PRODUCT.md «коллекционная
@@ -218,6 +219,7 @@ export function CharCard({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                haptic.impact('medium');
                 onAction();
               }}
             >

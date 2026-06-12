@@ -11,6 +11,7 @@ import {
 import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { fmtCredits } from '@/lib/credits';
+import { haptic } from '@/lib/haptics';
 
 interface WalletRow {
   id: string;
@@ -213,7 +214,11 @@ export default function WalletPage() {
             <span className="tma-mono">{fmtCredits(balance)} кр</span>
           </div>
           <div className="tma-cta" style={{ marginTop: 12 }}>
-            <Link href="/profile/topup" className="tma-btn tma-btn--primary">
+            <Link
+              href="/profile/topup"
+              className="tma-btn tma-btn--primary"
+              onClick={() => haptic.impact('medium')}
+            >
               Пополнить
             </Link>
           </div>

@@ -165,6 +165,12 @@ code {
   color: var(--accent);
 }
 
+/* Press-отклик: лёгкий spring-сжим при тапе по табу. */
+.tma-nav-item:active {
+  transform: scale(0.92);
+  transition: transform 0.1s;
+}
+
 .tma-nav-item--active::before {
   content: '';
   position: absolute;
@@ -344,6 +350,11 @@ code {
 .tma-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Press-отклик: spring-сжим при тапе (transform уже в transition выше). */
+.tma-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .tma-btn--primary {
@@ -1118,6 +1129,18 @@ code {
 .aiag-stagger > *:nth-child(9) { animation-delay: 600ms; }
 .aiag-stagger > *:nth-child(n + 10) { animation-delay: 670ms; }
 
+/* Современный stagger: реальный индекс через sibling-index() (Chromium-Telegram)
+ * — лента появляется ровной волной без потолка в 10 элементов. Обёрнуто в
+ * @supports, поэтому на iOS Safari / Firefox остаётся nth-child fallback выше. */
+@supports (animation-delay: calc(sibling-index() * 1ms)) {
+  .aiag-stagger > * {
+    animation-delay: calc(sibling-index() * 60ms);
+  }
+  .tma-agent-grid > * {
+    animation-delay: calc(sibling-index() * 60ms);
+  }
+}
+
 /* Amber glow ring on hover (cards). Same effect as .tma-agent-card:hover. */
 .aiag-glow-hover {
   transition: box-shadow 240ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -1226,6 +1249,11 @@ code {
     transition: none !important;
   }
   .aiag-glow-hover:hover {
+    transform: none !important;
+  }
+  /* Press-spring (табы/кнопки) — без transform в reduce. */
+  .tma-nav-item:active,
+  .tma-btn:active:not(:disabled) {
     transform: none !important;
   }
 }
@@ -1768,6 +1796,37 @@ code {
   .tma-sheet,
   .tma-sheet-scrim {
     animation: none;
+  }
+}
+
+/* Современный enter через @starting-style (Chromium-Telegram): шит выезжает с
+ * лёгким spring-ощущением (cubic-bezier(.34,1.56,.64,1)), скрим плавно
+ * проявляется. Обёрнуто в @supports(transition-behavior: allow-discrete) —
+ * на iOS Safari / старых WebView остаётся keyframes-fallback (tma-sheet-up). */
+@supports (transition-behavior: allow-discrete) {
+  .tma-sheet {
+    animation: none;
+    transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @starting-style {
+    .tma-sheet {
+      transform: translateY(100%);
+    }
+  }
+  .tma-sheet-scrim {
+    animation: none;
+    transition: opacity 200ms ease;
+  }
+  @starting-style {
+    .tma-sheet-scrim {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tma-sheet,
+    .tma-sheet-scrim {
+      transition: none;
+    }
   }
 }
 

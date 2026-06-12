@@ -8,6 +8,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { hueFor } from '@/components/AgentCard';
 import { Icon, ICONS } from '@/components/Icon';
 import { AGENT_TEMPLATES, getTemplate } from '@/lib/agent-templates';
+import { haptic } from '@/lib/haptics';
 
 // Tools actually implemented by the agent-worker (apps/agent-worker/src/tools.ts).
 const AVAILABLE_TOOLS: { id: string; label: string; hint: string }[] = [
@@ -188,6 +189,7 @@ export default function NewAgentPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!token || !pickedKind) return;
+    haptic.impact('medium');
     setSubmitting(true);
     setSubmitErr(null);
     try {
@@ -224,12 +226,15 @@ export default function NewAgentPage() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setSubmitErr(body.error ?? `HTTP ${res.status}`);
+        haptic.notify('error');
         return;
       }
       const data = await res.json();
+      haptic.notify('success');
       router.push(`/agents/${data.agent.id}`);
     } catch (err) {
       setSubmitErr(err instanceof Error ? err.message : 'submit_failed');
+      haptic.notify('error');
     } finally {
       setSubmitting(false);
     }

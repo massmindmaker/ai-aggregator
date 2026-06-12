@@ -9,6 +9,7 @@ import { hueFor } from '@/components/AgentCard';
 import { RunTrace } from '@/components/RunTrace';
 import { Icon, ICONS } from '@/components/Icon';
 import { fmtCredits, parseCreditsInput } from '@/lib/credits';
+import { haptic } from '@/lib/haptics';
 import { TransferPanel } from './TransferPanel';
 
 interface Agent {
@@ -190,6 +191,7 @@ export default function AgentDetailPage() {
   async function handleSaveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!token || !id) return;
+    haptic.impact('medium');
     setSaving(true);
     setEditErr(null);
     try {
@@ -236,13 +238,16 @@ export default function AgentDetailPage() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setEditErr(body.error ?? `HTTP ${res.status}`);
+        haptic.notify('error');
         return;
       }
       const data = await res.json();
       if (data.agent) setAgent(data.agent);
       setEditing(false);
+      haptic.notify('success');
     } catch (err) {
       setEditErr(err instanceof Error ? err.message : 'save_failed');
+      haptic.notify('error');
     } finally {
       setSaving(false);
     }
@@ -418,6 +423,7 @@ export default function AgentDetailPage() {
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!token || !id || !input.trim()) return;
+    haptic.impact('medium');
     setSending(true);
     try {
       const res = await fetch(`/tg/api/tma/agents/${id}/run`, {
@@ -435,6 +441,7 @@ export default function AgentDetailPage() {
       } else {
         const body = await res.json().catch(() => ({}));
         setSendErr(body.error ?? `HTTP ${res.status}`);
+        haptic.notify('error');
       }
     } finally {
       setSending(false);
@@ -973,7 +980,10 @@ export default function AgentDetailPage() {
 
             <button
               type="button"
-              onClick={startEdit}
+              onClick={() => {
+                haptic.impact('medium');
+                startEdit();
+              }}
               className="tma-btn tma-btn--primary"
             >
               Редактировать

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { haptic } from '@/lib/haptics';
 
 interface Item {
   href: string;
@@ -60,6 +61,9 @@ export function BottomNav() {
             href={it.href}
             className={`tma-nav-item ${active ? 'tma-nav-item--active' : ''}`}
             aria-current={active ? 'page' : undefined}
+            onClick={() => {
+              if (!active) haptic.select();
+            }}
           >
             <svg
               className="tma-nav-icon"
