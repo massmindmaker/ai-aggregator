@@ -59,6 +59,14 @@ export default function NewAgentPage() {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [modelSlug, setModelSlug] = useState('');
   const [tools, setTools] = useState<string[]>([]);
+  // AI-builder — «создать агента из слов». Генерация house-funded (не run, не дебет):
+  // модель возвращает черновик-спек, которым предзаполняется обычная форма ниже.
+  const [aiDescription, setAiDescription] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+  const [aiDraft, setAiDraft] = useState(false);
+  // role из спека → description агента (POST использует его как описание).
+  const [aiRole, setAiRole] = useState('');
   // Primary spend control = daily cap in credits (worker's daily guard column,
   // default 10000 = $100); monthly stays as a secondary line in the accordion.
   const [dailyBudget, setDailyBudget] = useState(10000);
@@ -136,9 +144,11 @@ export default function NewAgentPage() {
     }
   }
 
-  // Prefill form when template chosen
+  // Prefill form when template chosen. Skipped for AI-builder drafts — those
+  // already filled the form from the generated spec; a template overwrite would
+  // clobber it.
   useEffect(() => {
-    if (!pickedKind) return;
+    if (!pickedKind || aiDraft) return;
     const t = getTemplate(pickedKind);
     if (!t) return;
     setName(t.name);
@@ -186,6 +196,58 @@ export default function NewAgentPage() {
       .catch(() => {});
   }, [token]);
 
+  async function handleGenerate() {
+    if (!token || !aiDescription.trim() || aiBusy) return;
+    haptic.impact('medium');
+    setAiBusy(true);
+    setAiErr(null);
+    try {
+      const res = await fetch('/tg/api/tma/agents/ai-builder', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ description: aiDescription.trim() }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setAiErr(
+          j.error === 'invalid_spec'
+            ? 'Не удалось разобрать, переформулируй описание.'
+            : 'Не получилось сгенерировать. Попробуй ещё раз.',
+        );
+        haptic.notify('error');
+        return;
+      }
+      const { spec } = (await res.json()) as {
+        spec: {
+          name: string;
+          role: string;
+          system_prompt: string;
+          model_slug: string;
+          tools: string[];
+        };
+      };
+      // Заполняем существующие поля формы сгенерированным черновиком.
+      setPickedKind('personal');
+      setName(spec.name);
+      setSystemPrompt(spec.system_prompt);
+      setModelSlug(spec.model_slug);
+      setTools((spec.tools ?? []).filter((id) => AVAILABLE_TOOL_IDS.has(id)));
+      setAiRole(spec.role ?? '');
+      setAiDraft(true);
+      // Раскрываем «Инструкцию» — её и надо проверить в первую очередь.
+      setOpen((p) => ({ ...p, prompt: true }));
+      haptic.notify('success');
+    } catch {
+      setAiErr('Не получилось сгенерировать. Попробуй ещё раз.');
+      haptic.notify('error');
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!token || !pickedKind) return;
@@ -202,6 +264,7 @@ export default function NewAgentPage() {
         body: JSON.stringify({
           template_kind: pickedKind,
           name: name.trim(),
+          description: aiRole.trim() || undefined,
           system_prompt: systemPrompt.trim(),
           model_slug: modelSlug.trim() || undefined,
           tools,
@@ -279,8 +342,37 @@ export default function NewAgentPage() {
 
         {user && !error && !pickedKind && (
           <>
+            {/* AI-builder — «создать агента из слов». Один amber primary в секции. */}
+            <section className="tma-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <h2 className="tma-card-text" style={{ fontWeight: 600, fontSize: 16 }}>
+                ✨ Создать из слов
+              </h2>
+              <p className="tma-card-text" style={{ fontSize: 12, opacity: 0.75 }}>
+                Опиши, что должен делать агент — ИИ соберёт черновик настроек, а ты
+                проверишь и поправишь перед сохранением.
+              </p>
+              <textarea
+                value={aiDescription}
+                onChange={(e) => setAiDescription(e.target.value)}
+                placeholder="Опиши агента словами… напр.: «бот, который кратко пересказывает статьи по ссылке и отвечает по-русски»"
+                rows={4}
+                maxLength={2000}
+                className="tma-input"
+                style={{ resize: 'vertical', fontFamily: 'inherit' }}
+              />
+              {aiErr && <div className="tma-error">{aiErr}</div>}
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={aiBusy || !aiDescription.trim()}
+                className="tma-btn tma-btn--primary"
+              >
+                {aiBusy ? 'Генерирую…' : 'Сгенерировать'}
+              </button>
+            </section>
+
             <header className="tma-header">
-              <h1 className="tma-title">Выберите шаблон</h1>
+              <h1 className="tma-title">…или выберите шаблон</h1>
               <p className="tma-subtitle">Стартовая конфигурация — потом всё можно поправить.</p>
             </header>
             {/* P1-7: карточный язык каталога (tma-agent-card), не emoji-плитки. */}
@@ -323,8 +415,22 @@ export default function NewAgentPage() {
           <>
             <header className="tma-header">
               <h1 className="tma-title">Новый агент</h1>
-              <p className="tma-subtitle">Шаблон: {getTemplate(pickedKind)?.name}</p>
+              <p className="tma-subtitle">
+                {aiDraft ? 'Черновик из описания' : `Шаблон: ${getTemplate(pickedKind)?.name ?? '—'}`}
+              </p>
             </header>
+
+            {aiDraft && (
+              <div
+                className="tma-card tma-success-box"
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <Icon d={ICONS.check} size={14} />
+                <span className="tma-card-text" style={{ fontSize: 12 }}>
+                  Сгенерировано — это черновик, проверь и поправь перед сохранением.
+                </span>
+              </div>
+            )}
 
             <form
               onSubmit={handleSubmit}
@@ -650,7 +756,10 @@ export default function NewAgentPage() {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
-                  onClick={() => setPickedKind(null)}
+                  onClick={() => {
+                    setPickedKind(null);
+                    setAiDraft(false);
+                  }}
                   className="tma-btn"
                   disabled={submitting}
                 >
