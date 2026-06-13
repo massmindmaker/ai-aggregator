@@ -121,7 +121,9 @@
 
 > 🔴 **ПОПРАВКИ к старому канону/`/CLAUDE.md`/`PRODUCT.md`/`ARCHITECTURE.md`** (источник: `project_hermes_capabilities_research`, ресёрч 2026-06-12 по v0.15.2/v0.16). Старые утверждения «Hermes has NO remote REST API» и «managed-Hermes deferred/R&D» — **НЕВЕРНЫ**, заменены.
 
-Hermes = `NousResearch/hermes-agent` — open-source AI-АГЕНТ **РАНТАЙМ** (MIT). **Это НЕ модель.** Актуальная версия **v0.16.0 (v2026.6.5) «Surface Release»** (5 июня 2026).
+Hermes = `NousResearch/hermes-agent` — open-source AI-АГЕНТ **РАНТАЙМ** (MIT). **Это НЕ модель.** Последняя версия — v0.16; **у основателя на VPS работает v0.12**.
+
+> 🔥 **РЕАЛЬНЫЙ РАНТАЙМ ОСНОВАТЕЛЯ ЖИВ** (прочитан 2026-06-13, см. `project_hermes_runtime_setup`): Hermes **v0.12** на VPS `176.124.211.11` (ssh `hermes@`, key `timeweb_vps`), gateway REST **`:8642`**, dashboard `:9119`, мост `:9121`, gonka-proxy `:9131`. **6 живых профилей** (alisa/backend-eng/ops/researcher/reviewer) → изоляция доказана. **Docker-мультитенантность** (`container_memory: 5120`). Провайдеры: gonkagate/ollama-cloud/groq/openai-codex. Дизайн интеграции: `docs/superpowers/specs/2026-06-13-hermes-control-plane-design.md`. ⚠️ Точные сигнатуры REST :8642 добрать с бокса (SSH под fail2ban после серии подключений).
 
 **Ключевые факты (исправленные):**
 1. **У Hermes ЕСТЬ REST API** — `POST /api/model/set`, `/api/model/auxiliary`, `/api/jobs`, `/api/sessions`, `/v1/capabilities`, `/v1/toolsets` на `localhost:8642` (нужен `X-Hermes-Session-Token`; **токен ротируется при рестарте** → нужен стабильный `API_SERVER_KEY` / control-plane перечитывает токен). Наш UI МОЖЕТ удалённо управлять Hermes-агентом.
@@ -316,7 +318,7 @@ Wireframe-борд есть (`docs/wireframes/missing-screens/`), **код не�
 - **Авто-деплой РАБОТАЕТ:** монорепо через GitHub Actions SSH rsync; agent-market через `gh workflow run deploy-production.yml -R massmindmaker/agent-market --ref master -f apps=tma,agent-worker` (scp + pm2do + cleanup). Health-check воркера = `sudo -n pm2 jlist` (не `pm2`/`pm2do` — у jlist exit 0 на пустом → ложный rollback). Прод TMA = `app.ai-aggregator.ru/tg`.
 - **Миграции** применяются вручную, без трекинга (`sudo -u postgres psql aiag` для ALTER; app-юзер `aiag` не может ALTER).
 - **SSH gotcha:** под always-on VPN тунель через `ssh -o ProxyCommand="connect -H 127.0.0.1:10809 %h %p"`; `pm2 reload` может оставить stale-процесс → `pm2 restart`.
-- **Для Hermes нужен ОТДЕЛЬНЫЙ VPS 4-8GB / Docker** (Phase-0 spike, ~600-900₽/мес, почасово; НЕ ставить Hermes на прод-2GB-бокс — риск OOM money-path). Единый источник релиза: skill `aiag-deploy`. Локальный рантайм не запускать (верификация на VPS после деплоя).
+- 🟢 **ИНФРА-БЛОКЕР HERMES СНЯТ (2026-06-13):** отдельный VPS искать НЕ надо — **Hermes уже работает на VPS основателя `176.124.211.11`** (v0.12, gateway :8642, 6 профилей, Docker, ≥5GB). Строим **control-plane к существующему Hermes** (см. §5 + спека control-plane), а НЕ ставим новый. (Прод-TMA-бокс 2GB не трогаем — Hermes на ОТДЕЛЬНОМ боксе основателя, money-path изолирован.) ⚠️ Не долбить SSH к Hermes-боксу (fail2ban) — control-plane жить НА боксе, локальные вызовы. Единый источник релиза TMA: skill `aiag-deploy`.
 
 ---
 
@@ -340,6 +342,7 @@ Wireframe-борд есть (`docs/wireframes/missing-screens/`), **код не�
 | 2026-06-12 | **КУРС НА РЕАЛЬНЫЙ HERMES** — наш UI = control-plane к Hermes REST API (РАЗВОРОТ от 2026-06-02 deferred) | §5 архитектура | 🔨 Phase-0 spike pending |
 | 2026-06-12 | Repo-split (TMA/Web в 2 репо) | §2 | ✅ Фаза 1 done; Фаза 2 pending |
 | **2026-06-13** | **Архитектура знания** — мастер-канон = SoT; производные слои синхронятся | этот документ + карта памяти | ✅ действует |
+| **2026-06-13** | **Hermes-рантайм основателя подтверждён ЖИВЫМ** (v0.12, VPS 176.124.211.11, :8642, 6 профилей, Docker) → **инфра-блокер СНЯТ**, строим control-plane на нём | §5, §12, спека control-plane | 🔨 Phase-0 spike (добрать REST :8642 когда SSH спадёт с fail2ban) |
 
 ---
 
