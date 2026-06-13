@@ -45,6 +45,15 @@ interface AgentRow {
   cloneable: boolean;
 }
 
+// Hire-aware view flags (ADDITIVE). The page renders owner vs hired vs other from
+// these — never from the row's tg_user_id (which is not exposed to non-owners).
+interface AgentView extends AgentRow {
+  // Caller is the agent owner (tg_user_id === caller).
+  is_owner: boolean;
+  // Caller has an ACTIVE agent_sessions row for this agent (hired, not owner).
+  hired: boolean;
+}
+
 interface RunRow {
   id: string;
   input: string;
@@ -84,6 +93,87 @@ async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null>
   return rows[0] ?? null;
 }
 
+// Hire-aware read: an agent's detail page is visible to (a) its OWNER, (b) a HIRER
+// with an active agent_sessions row, or (c) any logged-in user viewing an ACTIVE
+// agent they could hire. For non-owners we strip owner-only/secret-derived columns
+// (keys/hints/budget/MCP/transfer) → a public spec view + the "Нанять" CTA. The
+// owner branch returns EXACTLY the same shape as before (loadAgent) + the two flags.
+async function loadAgentForViewer(id: string, tgUserId: string): Promise<AgentView | null> {
+  // Owner path is unchanged — same query, same columns the page already relied on.
+  const owned = await loadAgent(id, tgUserId);
+  if (owned) return { ...owned, is_owner: true, hired: false };
+
+  // Not the owner. Show the agent if it's active (so it can be hired / is hired).
+  const rows = (await sql`
+    SELECT agents.id::text, agents.tg_user_id::text, agents.template_kind, agents.name,
+           agents.description, agents.system_prompt, agents.tools, agents.model_slug,
+           agents.budget_credits_monthly::text AS budget_rub_monthly,
+           agents.daily_budget_credits::text,
+           agents.status, agents.created_at, agents.updated_at,
+           agents.connection_type,
+           agents.cloneable,
+           (s.id IS NOT NULL) AS hired
+    FROM agents
+    LEFT JOIN agent_sessions s
+      ON s.agent_id = agents.id
+     AND s.hirer_tg_user_id = ${tgUserId}::bigint
+     AND s.status = 'active'
+    WHERE agents.id = ${id}::uuid
+      AND agents.status = 'active'
+    LIMIT 1
+  `) as unknown as Array<{
+    id: string;
+    tg_user_id: string;
+    template_kind: string;
+    name: string;
+    description: string | null;
+    system_prompt: string;
+    tools: unknown;
+    model_slug: string | null;
+    budget_rub_monthly: string;
+    daily_budget_credits: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    connection_type: string;
+    cloneable: boolean;
+    hired: boolean;
+  }>;
+  const r = rows[0];
+  if (!r) return null;
+
+  // Public/hirer view: never leak the owner id or any secret-derived column.
+  return {
+    id: r.id,
+    tg_user_id: '', // hidden for non-owners
+    template_kind: r.template_kind,
+    name: r.name,
+    description: r.description,
+    system_prompt: r.system_prompt,
+    tools: r.tools,
+    model_slug: r.model_slug,
+    budget_rub_monthly: r.budget_rub_monthly,
+    daily_budget_credits: r.daily_budget_credits,
+    status: r.status,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+    connection_type: r.connection_type,
+    external_base_url: null,
+    external_api_key_hint: null,
+    external_model_slug: null,
+    mcp_endpoint_url: null,
+    mcp_auth_set: false,
+    mcp_oauth_set: false,
+    mcp_oauth_scope: null,
+    transferable: false,
+    transfer_price_credits: null,
+    nft_address: null,
+    cloneable: r.cloneable,
+    is_owner: false,
+    hired: r.hired,
+  };
+}
+
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const tgUserId = req.headers.get('x-tma-user-id');
   if (!tgUserId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -91,7 +181,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: 'invalid_id' }, { status: 400 });
   }
 
-  const agent = await loadAgent(params.id, tgUserId);
+  const agent = await loadAgentForViewer(params.id, tgUserId);
   if (!agent) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   // R2.1-A4: model rate for the pre-send cost hint (AIAG path only — BYOK is 0).
@@ -113,14 +203,29 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     modelRate = rate[0] ?? null;
   }
 
-  const runs = (await sql`
-    SELECT id::text, input, output, status, cost_credits::text AS cost_rub, error,
-           created_at, completed_at, tool_calls
-    FROM agent_runs
-    WHERE agent_id = ${params.id}::uuid
-    ORDER BY created_at DESC
-    LIMIT 20
-  `) as unknown as RunRow[];
+  // History isolation (OWASP LLM06, SECURITY.md): the OWNER sees the full run
+  // history; a HIRER / public viewer sees ONLY their own runs (tg_user_id = caller).
+  // The owner branch keeps the prior behaviour (no tg_user_id filter).
+  const runs = (
+    agent.is_owner
+      ? await sql`
+          SELECT id::text, input, output, status, cost_credits::text AS cost_rub, error,
+                 created_at, completed_at, tool_calls
+          FROM agent_runs
+          WHERE agent_id = ${params.id}::uuid
+          ORDER BY created_at DESC
+          LIMIT 20
+        `
+      : await sql`
+          SELECT id::text, input, output, status, cost_credits::text AS cost_rub, error,
+                 created_at, completed_at, tool_calls
+          FROM agent_runs
+          WHERE agent_id = ${params.id}::uuid
+            AND tg_user_id = ${tgUserId}::bigint
+          ORDER BY created_at DESC
+          LIMIT 20
+        `
+  ) as unknown as RunRow[];
 
   return NextResponse.json({ agent, runs, model_rate: modelRate });
 }

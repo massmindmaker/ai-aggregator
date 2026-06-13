@@ -34,6 +34,10 @@ interface Agent {
   transfer_price_credits?: string | null;
   nft_address?: string | null;
   cloneable?: boolean;
+  // Hire-aware view flags (API: GET /api/tma/agents/[id]). Owner controls render
+  // only when is_owner; a non-owner gets "Нанять" (→ hired) and a dialog-only view.
+  is_owner?: boolean;
+  hired?: boolean;
 }
 
 // C11: проверенные MCP-пресеты (2026-06). Клик заполняет URL эндпоинта;
@@ -177,6 +181,44 @@ export default function AgentDetailPage() {
   const [schErr, setSchErr] = useState<string | null>(null);
 
   const runActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
+
+  // ---- hire (наём чужого агента) ----
+  // Производные роли вьюера. API не отдаёт owner-only поля не-владельцу → флаги
+  // приходят с бэка. Дефолт is_owner=true для обратной совместимости (старый ответ
+  // без флага = владелец, т.к. раньше карточку видел только владелец).
+  const isOwner = agent ? agent.is_owner !== false : true;
+  const isHired = !!agent?.hired && !isOwner;
+  const canHire = !!agent && !isOwner && !isHired;
+  const [hiring, setHiring] = useState(false);
+  const [hireErr, setHireErr] = useState<string | null>(null);
+
+  async function handleHire() {
+    if (!token || !id || hiring) return;
+    haptic.impact('medium');
+    setHiring(true);
+    setHireErr(null);
+    try {
+      const res = await fetch(`/tg/api/tma/agents/${id}/hire`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setHireErr(body.error ?? `HTTP ${res.status}`);
+        haptic.notify('error');
+        return;
+      }
+      // Успех (идемпотентно): перечитываем агента — теперь hired=true,
+      // композер диалога разблокируется.
+      haptic.notify('success');
+      await load();
+    } catch (err) {
+      setHireErr(err instanceof Error ? err.message : 'hire_failed');
+      haptic.notify('error');
+    } finally {
+      setHiring(false);
+    }
+  }
 
   function startEdit() {
     if (!agent) return;
@@ -589,17 +631,23 @@ export default function AgentDetailPage() {
                   <p className="tma-subtitle">{agent.description}</p>
                 )}
                 <div className="tma-chips" style={{ marginTop: 2 }}>
-                  <span
-                    className={
-                      agent.connection_type === 'external_openai'
-                        ? 'tma-pill tma-pill--ok'
-                        : 'tma-pill tma-pill--accent'
-                    }
-                  >
-                    {agent.connection_type === 'external_openai'
-                      ? 'свой провайдер · 0 комиссии'
-                      : 'наш шлюз · с наценкой'}
-                  </span>
+                  {/* Биллинг-бейдж владельца. Для нанимателя биллинг всегда AIAG-путь
+                      (дебетуется он) → показываем честный «наш шлюз · с наценкой». */}
+                  {isOwner ? (
+                    <span
+                      className={
+                        agent.connection_type === 'external_openai'
+                          ? 'tma-pill tma-pill--ok'
+                          : 'tma-pill tma-pill--accent'
+                      }
+                    >
+                      {agent.connection_type === 'external_openai'
+                        ? 'свой провайдер · 0 комиссии'
+                        : 'наш шлюз · с наценкой'}
+                    </span>
+                  ) : (
+                    <span className="tma-pill tma-pill--accent">наш шлюз · с наценкой</span>
+                  )}
                   {agent.mcp_endpoint_url && (
                     <span className="tma-pill tma-pill--muted">MCP подключён</span>
                   )}
@@ -630,7 +678,10 @@ export default function AgentDetailPage() {
               </div>
             </section>
 
-            {/* P1-6: сегмент-контрол — страница разбита на 4 локальных сегмента. */}
+            {/* P1-6: сегмент-контрол — страница разбита на 4 локальных сегмента.
+                Настройки/Публикация/Расписание — owner-only: наниматель/чужой видит
+                только «Диалог» (его контролы недоступны). */}
+            {isOwner && (
             <div className="tma-segment tma-segment--fit" role="tablist" aria-label="Разделы агента">
               {TABS.map((t) => (
                 <button
@@ -645,6 +696,43 @@ export default function AgentDetailPage() {
                 </button>
               ))}
             </div>
+            )}
+
+            {/* Hire CTA / статус найма (только для не-владельца). */}
+            {!isOwner && (
+              <section className="tma-card" style={{ padding: 16 }}>
+                {isHired ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span
+                      className="tma-pill tma-pill--ok"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+                    >
+                      <Icon d={ICONS.check} /> Нанят
+                    </span>
+                    <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
+                      Свой изолированный инстанс: те же навыки, ваша личная память.
+                      Списывается с вас.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
+                      Свой изолированный инстанс: те же навыки, ваша личная память.
+                      Списывается с вас.
+                    </p>
+                    {hireErr && <div className="tma-error">Ошибка: {hireErr}</div>}
+                    <button
+                      type="button"
+                      onClick={handleHire}
+                      disabled={hiring}
+                      className="tma-btn tma-btn--primary tma-btn--block"
+                    >
+                      {hiring ? 'Нанимаем…' : 'Нанять'}
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* Spec strip — model + budget in one mono-numeric glance. */}
             {tab === 'dialog' && (
@@ -947,6 +1035,13 @@ export default function AgentDetailPage() {
               </div>
             )}
 
+            {/* Чужой не нанятый агент — композер заблокирован до найма (no dead-end
+                paid flow, PRODUCT.md §1). Hire-CTA выше уже даёт действие. */}
+            {canHire ? (
+              <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
+                Чтобы написать агенту, наймите его — выше.
+              </p>
+            ) : (
             <form onSubmit={handleSend} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
               {/* K2b: textarea с автовысотой. Enter = отправка, Shift+Enter = перенос. */}
               <textarea
@@ -978,6 +1073,7 @@ export default function AgentDetailPage() {
                 {sending ? '…' : <Icon d={ICONS.send} />}
               </button>
             </form>
+            )}
 
             {/* P0-3: ошибка отправки — рядом с инпутом, с действием. */}
             {sendErr && (
@@ -995,8 +1091,10 @@ export default function AgentDetailPage() {
               </div>
             )}
 
-            {/* R2.1-A4: честная цена ДО отправки — тариф из реестра, не выдумка. */}
-            {agent.connection_type !== 'aiag' ? (
+            {/* R2.1-A4: честная цена ДО отправки — тариф из реестра, не выдумка.
+                «Свой провайдер · 0 комиссии» относится к биллингу ВЛАДЕЛЬЦА (BYOK).
+                Для нанимателя биллинг всегда AIAG-путь → эту ветку не показываем. */}
+            {isOwner && agent.connection_type !== 'aiag' ? (
               <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
                 Свой провайдер: <span className="tma-mono">0</span> комиссии, платите
                 напрямую своему провайдеру.
@@ -1012,7 +1110,9 @@ export default function AgentDetailPage() {
 
             {/* P3: Канбан/swarm — доступен ВСЕГДА. Сам /kanban показывает честный
                 empty-state для не-Hermes агентов, поэтому условие по connection_type
-                убрано (раньше ссылка пряталась для всех, кроме external_openai). */}
+                убрано (раньше ссылка пряталась для всех, кроме external_openai).
+                Скрыт для не-владельца (owner-surface). */}
+            {isOwner && (
             <Link
               href={`/agents/${id}/kanban`}
               className="tma-btn"
@@ -1020,6 +1120,7 @@ export default function AgentDetailPage() {
             >
               <Icon d={ICONS.board} /> Канбан (swarm)
             </Link>
+            )}
             </>
             )}
           </>
