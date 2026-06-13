@@ -5,6 +5,7 @@ import {
   sumMonthlySpend,
   getOrResetDailyBucket,
   loadHistory,
+  resolveRunScope,
   markStarted,
   markFailed,
   getBalance,
@@ -526,8 +527,15 @@ export async function runAgent(runId: string): Promise<void> {
 
   await markStarted(runId);
 
+  // ---- HIRE ISOLATION (OWASP LLM06): resolve per-hirer scope SERVER-SIDE ----
+  // scope is derived from the run row (run.tg_user_id = who launched it) vs the
+  // agent owner (agent.tg_user_id) + an ACTIVE agent_sessions row — NEVER from
+  // the request body. Owner run ⇒ null (shared memory, legacy). Hirer run ⇒ the
+  // hirer's tg_user_id, which namespaces both history and the memory tool.
+  const scopeHirerId = await resolveRunScope(agent.id, run.tg_user_id, agent.tg_user_id);
+
   // ---- conversation history ----
-  const history = await loadHistory(agent.id, runId, 10);
+  const history = await loadHistory(agent.id, runId, 10, scopeHirerId);
   const messages: Message[] = [{ role: 'system', content: buildSystem(agent) }];
   for (const h of history) {
     messages.push({ role: 'user', content: h.input });
@@ -733,6 +741,9 @@ export async function runAgent(runId: string): Promise<void> {
           : await executeTool(toolCall.function.name, parsed, {
               agentId: agent.id,
               tgUserId: agent.tg_user_id,
+              // HIRE ISOLATION: server-derived per-hirer memory scope (null for
+              // owner runs). The memory tool namespaces every read/write by it.
+              scopeHirerId,
               // R-20: delegation callback. Enforces the per-run cap, then runs ONE
               // owner-guarded, recursion-stripped sub-completion. Its cost is
               // returned as cost_rub and folded into toolFeesCredits → settleRun

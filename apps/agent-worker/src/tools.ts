@@ -316,6 +316,7 @@ async function memoryTool(
   op: string,
   key?: string,
   value?: string,
+  scopeHirerId: string | null = null,
 ): Promise<unknown> {
   switch (op) {
     case 'set': {
@@ -323,16 +324,16 @@ async function memoryTool(
       if (value === undefined) return { error: 'memory.set requires "value"' };
       const k = key.slice(0, MEM_KEY_MAX);
       const v = value.slice(0, MEM_VAL_MAX);
-      await memorySet(agentId, k, v);
+      await memorySet(agentId, k, v, scopeHirerId);
       return { ok: true, key: k };
     }
     case 'get': {
       if (!key) return { error: 'memory.get requires "key"' };
-      const v = await memoryGet(agentId, key.slice(0, MEM_KEY_MAX));
+      const v = await memoryGet(agentId, key.slice(0, MEM_KEY_MAX), scopeHirerId);
       return v === null ? { found: false, key } : { found: true, key, value: v };
     }
     case 'list': {
-      const items = await memoryList(agentId);
+      const items = await memoryList(agentId, 100, scopeHirerId);
       return { items };
     }
     default:
@@ -367,6 +368,12 @@ export interface ToolContext {
   // R-20: the owning tg_user_id of the CALLING run. The `call_agent` tool uses it
   // as the hard ownership guard — a sub-agent must belong to this same user.
   tgUserId: string;
+  // HIRE ISOLATION (OWASP LLM06): per-hirer memory scope. null ⇒ owner's shared
+  // memory (legacy). NOT null ⇒ the hirer's private namespace. Set server-side by
+  // agent-runner from resolveRunScope (derived from the run, NOT the body). The
+  // `memory` tool scopes every read/write by it — a hirer cannot reach the
+  // owner's or another hirer's keyspace.
+  scopeHirerId?: string | null;
   // R-20: injected by agent-runner. Resolves + runs ONE completion of a target
   // agent (same-owner-guarded, recursion-stripped, capped) and returns its output
   // + cost. Absent ⇒ the run has no call_agent capability and the tool degrades
@@ -434,6 +441,8 @@ export async function executeTool(
           String(args.op ?? ''),
           args.key !== undefined ? String(args.key) : undefined,
           args.value !== undefined ? String(args.value) : undefined,
+          // HIRE ISOLATION: scope comes from the run (server-derived), NOT args.
+          ctx.scopeHirerId ?? null,
         );
         return { result, cost_rub: 0 };
       }

@@ -33,15 +33,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const input = body.input?.trim();
   if (!input) return NextResponse.json({ error: 'input_required' }, { status: 400 });
 
-  // Ownership check
-  const owner = (await sql`
-    SELECT id::text FROM agents
-    WHERE id = ${params.id}::uuid
-      AND tg_user_id = ${tgUserId}::bigint
-      AND status = 'active'
-    LIMIT 1
-  `) as unknown as Array<{ id: string }>;
-  if (!owner[0]) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  // Launch authorization — ADDITIVE for hire (OWASP LLM06 isolation downstream).
+  // Allowed if the caller is EITHER:
+  //   (a) the agent OWNER (legacy: tg_user_id = caller), OR
+  //   (b) a HIRER with an ACTIVE agent_sessions row (agent_id, hirer = caller).
+  // In BOTH cases the run row's tg_user_id is set to the CALLER below, so the
+  // worker debits the caller and derives the memory/history scope server-side
+  // from (run.tg_user_id vs owner) — never from the request body. The single
+  // EXISTS query covers both cases without changing the owner path's behaviour.
+  const allowed = (await sql`
+    SELECT 1
+    WHERE EXISTS (
+      SELECT 1 FROM agents
+       WHERE id = ${params.id}::uuid
+         AND status = 'active'
+         AND tg_user_id = ${tgUserId}::bigint
+    )
+    OR EXISTS (
+      SELECT 1
+        FROM agent_sessions s
+        JOIN agents a ON a.id = s.agent_id
+       WHERE s.agent_id = ${params.id}::uuid
+         AND s.hirer_tg_user_id = ${tgUserId}::bigint
+         AND s.status = 'active'
+         AND a.status = 'active'
+    )
+  `) as unknown as Array<{ '?column?': number }>;
+  if (!allowed[0]) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   const ins = (await sql`
     INSERT INTO agent_runs (agent_id, tg_user_id, input, status)
