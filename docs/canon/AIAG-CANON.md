@@ -126,13 +126,14 @@ Hermes = `NousResearch/hermes-agent` — open-source AI-АГЕНТ **РАНТА�
 > 🔥 **РЕАЛЬНЫЙ РАНТАЙМ ОСНОВАТЕЛЯ ЖИВ** (прочитан 2026-06-13, см. `project_hermes_runtime_setup`): Hermes **v0.12** на VPS `176.124.211.11` (ssh `hermes@`, key `timeweb_vps`), gateway REST **`:8642`**, dashboard `:9119`, мост `:9121`, gonka-proxy `:9131`. **6 живых профилей** (alisa/backend-eng/ops/researcher/reviewer) → изоляция доказана. **Docker-мультитенантность** (`container_memory: 5120`). Провайдеры: gonkagate/ollama-cloud/groq/openai-codex. Дизайн интеграции: `docs/superpowers/specs/2026-06-13-hermes-control-plane-design.md`. ⚠️ Точные сигнатуры REST :8642 добрать с бокса (SSH под fail2ban после серии подключений).
 
 **Ключевые факты (исправленные):**
-1. **У Hermes ЕСТЬ REST API** — `POST /api/model/set`, `/api/model/auxiliary`, `/api/jobs`, `/api/sessions`, `/v1/capabilities`, `/v1/toolsets` на `localhost:8642` (нужен `X-Hermes-Session-Token`; **токен ротируется при рестарте** → нужен стабильный `API_SERVER_KEY` / control-plane перечитывает токен). Наш UI МОЖЕТ удалённо управлять Hermes-агентом.
+1. **У Hermes ЕСТЬ REST API** на `localhost:8642`: сессии `/api/sessions/*` (+`/chat`, `/chat/stream` SSE, `/fork`, `/messages`), прогоны `/v1/runs` (+`/events` SSE, `/stop`, `/approval`), `/v1/models|capabilities|skills|toolsets`, OpenAI-совм. `/v1/chat/completions`+`/v1/responses`, джобы/cron `/api/jobs/*`, `/health`. 🔴 **ПОПРАВКА (ресёрч 2026-06-13, исходник `api_server.py`):** auth = **СТАТИЧЕСКИЙ** `Authorization: Bearer API_SERVER_KEY` — ротируемого session-token НЕТ (старая запись врала). Изоляция нанимателя = заголовок **`X-Hermes-Session-Key`** (worker проставляет из `runId` сервер-сайд = OWASP-LLM06 boundary). Наш UI/worker МОЖЕТ удалённо управлять Hermes. Provisioning = CLI `hermes profile create <agent>_<hirer> --clone-from <tpl> --clone-all`.
 2. **Изоляция = `hermes profile`** (свои порты/память/конфиг), ОДИН gateway-процесс, НЕ pod-на-юзера. Но файловая система НЕ изолирована (профиль работает от OS-юзера) → реальная мультитенантность = **Docker-контейнер на тенанта**.
 3. **Provisioning профиля — REST НЕТ** (важно для найма): только CLI `hermes profile create <name> [--clone]`. Скриптовый provisioning = `mkdir ~/.hermes/profiles/<tenant>` + cp + `HERMES_HOME=...`. REST есть для runs/jobs/sessions, НЕ для профилей → **control-plane найма строим САМИ**.
 4. **Модели НЕ per-role в нашем смысле:** ОДНА главная модель (чат-цикл) + **11 aux-слотов** (vision, compression, web_extract, approval, title_gen, skills_hub, mcp, triage_specifier, kanban_decomposer, profile_describer, curator). **image_gen и TTS/voice — это ТУЛСЕТЫ, не model-слоты.** → наша «мультимодель» = чат-модель + vision-слот + image/voice как инструменты со своим провайдером (НЕ 4 равных слота).
 5. **RAM:** 300-600MB chat-only / 1.2-1.8GB с browser. 2GB прод-VPS = 1-2 профиля макс → **Phase-0 spike требует отдельный 4-8GB VPS** (инфра-блокер подтверждён). Docker-образ `nousresearch/hermes-agent:latest`, Node 20+/22.
 6. **Remote gateway (v0.16)** — тонкий клиент → удалённый Hermes-сервер по HTTP/OAuth/user-pass. Это ровно **наша control-plane** для «прокси к Hermes».
 7. Память Hermes = `MEMORY.md` + `USER.md` + `state.db` **FTS5 (полнотекст, НЕ вектор)** — НЕ обещать «семантическую память». Вектор только через внешних (Mem0/Honcho).
+8. 🔴 **ИЗОЛЯЦИЯ ПАМЯТИ НЕБЕЗОПАСНА «из коробки» для мультитенанта** (ресёрч 2026-06-13): `memory_store.db` де-факто **общий** (открытый баг **#4726**) + `session_search_tool` читает **кросс-профильно**. «Изоляция доказана 6 профилями» верна для файлов config/MEMORY.md, НЕ для holographic-памяти/поиска. При найме ОБЯЗАТЕЛЬНО: per-profile `db_path` (или отключить holographic) + запретить `session_search_tool` в hire-профилях + **наша БД = source of record** (`agent_memory(agent_id,hirer)`), Hermes-память = кэш. RAM: Docker = **контейнер-на-профиль** ~300MB резидент (5GB=cap) → на 8GB ~6-10 активных тенантов; мультиплексинг сессий на одном gateway vs profile-per-процесс = замерить в Phase-0. Полный R&D-синтез: `docs/superpowers/specs/2026-06-13-rnd-research-synthesis.md`.
 
 **Маппинг Hermes → наш UI:**
 | Hermes | Наш UI агента |
@@ -185,6 +186,14 @@ Hermes = `NousResearch/hermes-agent` — open-source AI-АГЕНТ **РАНТА�
 - **FD-2** — авторский доход: **withdrawable наружу vs in-app-spend-only** (лицензионные импликации). Cash-out отложен.
 - **Free-first-run грант** — ~300 кр / $3 на первый прогон ИЛИ убрать. Founder-gate открыт, грант НЕ построен.
 - **FD-pricing** — наценка (×1.25?) не подтверждена.
+
+**🟢 TON-стек — решения ресёрча 2026-06-13** (полностью: `docs/superpowers/specs/2026-06-13-rnd-research-synthesis.md`):
+- **Кредит остаётся OFF-CHAIN** (`tg_user_balances`, USD-credit). Свой jetton НЕ выпускаем (газ съест микро-списания + риск выпуска стейблкоина иностранным юрлицом). On-chain ТОЛЬКО на границах.
+- **Пополнение мульти-крипто v1 = native TON (live) + USDT-on-TON jetton** (USD-пег без оракула, 1 USDT=100 кр); кросс-чейн (ETH/SOL) делегируем встроенному Telegram Wallet. Реконсилер: +ветка jetton-transfers (TonCenter v3).
+- **Выплаты авторам = off-chain ledger + батч прямым USDT-переводом** (`@ton/ton`), БЕЗ escrow-контракта.
+- **TON API-стек:** TonCenter v3 (уже в `topup-reconciler.ts`, Free 10 RPS хватает) + npm **`@ton/ton`** для отправки (новая зависимость; seqno-сериализация 1 воркер/кошелёк). Опц. TonAPI Webhooks как push-ускоритель (SSE deprecated).
+- **Агентский кошелёк (Model B) = adopt `the-ton-tech` Agentic Wallet (TEP-85 SBT, split-key) + `@ton/mcp`**, но ⛔ **контракты НЕ аудированы + MCP alpha + спенд-капов нет** → mainnet с деньгами заблокирован до аудита; **наш cap-слой в Postgres** (дневной/per-call/allowlist) перед подписью; `operatorKey` AES-256-GCM как BYOK. **Custody = founder-gate** (Vault/OpenBao vs внешний вендор; US-TEE блокируются OFAC).
+- **Контракты если придётся: Tolk** (Tact депрекейтится ~апр-2026) + Blueprint/`@ton/sandbox`; любой money-контракт = аудит ($25–70k) → принцип «меньше своего кода». A2A payment-channels + x402-on-TON = поздний R&D.
 
 ---
 
@@ -343,6 +352,8 @@ Wireframe-борд есть (`docs/wireframes/missing-screens/`), **код не�
 | 2026-06-12 | Repo-split (TMA/Web в 2 репо) | §2 | ✅ Фаза 1 done; Фаза 2 pending |
 | **2026-06-13** | **Архитектура знания** — мастер-канон = SoT; производные слои синхронятся | этот документ + карта памяти | ✅ действует |
 | **2026-06-13** | **Hermes-рантайм основателя подтверждён ЖИВЫМ** (v0.12, VPS 176.124.211.11, :8642, 6 профилей, Docker) → **инфра-блокер СНЯТ**, строим control-plane на нём | §5, §12, спека control-plane | 🔨 Phase-0 spike (добрать REST :8642 когда SSH спадёт с fail2ban) |
+| **2026-06-13** | **R&D-синтез (12 агентов): критический путь наёма = память→Hermes-спайк→USDT-on-TON→агент-кошелёк** | §5 (поправки auth/изоляции), §6 (TON-стек) | ✅ ресёрч (`2026-06-13-rnd-research-synthesis.md`) |
+| **2026-06-13** | **Кредит off-chain (свой jetton НЕТ); агент-кошелёк = adopt unaudited the-ton-tech + наш cap-слой; TON API = TonCenter v3 + `@ton/ton`** | §6 TON-стек | 🔨 строим память+пополнение сейчас; кошелёк ждёт аудит+custody-гейт |
 
 ---
 
