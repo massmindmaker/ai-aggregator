@@ -3,6 +3,8 @@ import {
   loadAgent,
   loadAgentByName,
   sumMonthlySpend,
+  loadRentalSubscriptionForAgent,
+  sumPeriodSpendForAgent,
   getOrResetDailyBucket,
   loadHistory,
   resolveRunScope,
@@ -502,6 +504,32 @@ export async function runAgent(runId: string): Promise<void> {
     return;
   }
 
+  // ---- Аренда = месячная подписка: period-scoped лимит трат (ADDITIVE) ----
+  // Если агент создан через аренду (template_rentals с rent_period='month'),
+  // расход в ТЕКУЩЕМ периоде подписки не должен превышать месячный лимит, входящий
+  // в цену. Истёк период без продления → запуск лапсится (доступ закрыт). Это
+  // зеркало месячного user-гарда выше, но scoped по подписке. settleRun не трогаем.
+  // limit=null (автор не задал) → подписочного лимита нет, ведём только по бюджету.
+  const rentalSub = await loadRentalSubscriptionForAgent(agent.id);
+  let subLimit = 0;
+  let subPeriodSpend = 0;
+  if (rentalSub) {
+    if (rentalSub.expired) {
+      await markFailed(runId, 'rental_expired');
+      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'rental_expired');
+      return;
+    }
+    if (rentalSub.monthly_limit_credits !== null && rentalSub.period_start) {
+      subLimit = rentalSub.monthly_limit_credits;
+      subPeriodSpend = await sumPeriodSpendForAgent(agent.id, rentalSub.period_start);
+      if (subPeriodSpend >= subLimit) {
+        await markFailed(runId, 'rental_limit_exceeded');
+        await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'rental_limit_exceeded');
+        return;
+      }
+    }
+  }
+
   // ---- upstream resolution (provider_id / aiag-gateway / external) ----
   // Resolve BEFORE the balance gate so external (user-paid) runs skip it.
   let upstream: Upstream;
@@ -657,6 +685,12 @@ export async function runAgent(runId: string): Promise<void> {
     if (daily.spent_today_credits + totalCostCredits > daily.daily_budget_credits) {
       await markFailed(runId, 'budget_exceeded_daily_mid_run');
       await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'budget_exceeded_daily_mid_run');
+      return;
+    }
+    // Аренда-подписка: period-scoped лимит (mid-run). subLimit=0 ⇒ нет подписки/лимита.
+    if (subLimit > 0 && subPeriodSpend + totalCostCredits > subLimit) {
+      await markFailed(runId, 'rental_limit_exceeded_mid_run');
+      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'rental_limit_exceeded_mid_run');
       return;
     }
 

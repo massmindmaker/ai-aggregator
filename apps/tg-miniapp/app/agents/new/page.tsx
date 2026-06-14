@@ -9,6 +9,7 @@ import { hueFor } from '@/components/AgentCard';
 import { Icon, ICONS } from '@/components/Icon';
 import { AGENT_TEMPLATES, getTemplate } from '@/lib/agent-templates';
 import { haptic } from '@/lib/haptics';
+import { parseCreditsInput } from '@/lib/credits';
 
 // Tools actually implemented by the agent-worker (apps/agent-worker/src/tools.ts).
 const AVAILABLE_TOOLS: { id: string; label: string; hint: string }[] = [
@@ -69,8 +70,12 @@ export default function NewAgentPage() {
   const [aiRole, setAiRole] = useState('');
   // Primary spend control = daily cap in credits (worker's daily guard column,
   // default 10000 = $100); monthly stays as a secondary line in the accordion.
-  const [dailyBudget, setDailyBudget] = useState(10000);
-  const [budget, setBudget] = useState(1000);
+  // #2: бюджеты вводятся в КРЕДИТАХ (как поля цены), хранятся строкой; при сабмите
+  // конвертируются в центы через parseCreditsInput (кр → центы), консистентно со
+  // страницей агента, где fmtCredits показывает центы ÷100. Дефолты: 100 кр/день,
+  // 10 кр/мес (= прежние 10000 / 1000 центов).
+  const [dailyBudget, setDailyBudget] = useState('100');
+  const [budget, setBudget] = useState('10');
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
@@ -252,6 +257,18 @@ export default function NewAgentPage() {
     e.preventDefault();
     if (!token || !pickedKind) return;
     haptic.impact('medium');
+    // #2: ввод в кр → центы (как поля цены). daily 1..1_000_000 центов; месячный
+    // допускает 0 (без лимита) → пустое поле трактуем как 0.
+    const dailyCents = parseCreditsInput(dailyBudget, 10000);
+    if (dailyCents === undefined) {
+      setSubmitErr('Дневной бюджет — число от 0,01 до 10 000 кр');
+      return;
+    }
+    const monthlyCents = budget.trim() ? parseCreditsInput(budget, 1000000) : 0;
+    if (monthlyCents === undefined) {
+      setSubmitErr('Месячный бюджет — число от 0,01 до 1 000 000 кр (или пусто)');
+      return;
+    }
     setSubmitting(true);
     setSubmitErr(null);
     try {
@@ -268,8 +285,8 @@ export default function NewAgentPage() {
           system_prompt: systemPrompt.trim(),
           model_slug: modelSlug.trim() || undefined,
           tools,
-          daily_budget_credits: dailyBudget,
-          budget_rub_monthly: budget,
+          daily_budget_credits: dailyCents,
+          budget_rub_monthly: monthlyCents ?? 0,
           mcp_endpoint_url: mcpUrl.trim() || undefined,
           mcp_auth: mcpAuth.trim() || undefined,
           // BYOK via the provider catalog → backend routes through external_openai
@@ -320,7 +337,7 @@ export default function NewAgentPage() {
     useExternal && providerId
       ? (providers.find((p) => p.id === providerId)?.name ?? 'свой провайдер')
       : 'AIAG';
-  const mcpBudgetSummary = `${mcpUrl.trim() ? 'MCP подключён' : 'без MCP'} · ${dailyBudget} кр/день`;
+  const mcpBudgetSummary = `${mcpUrl.trim() ? 'MCP подключён' : 'без MCP'} · ${dailyBudget.trim() || '0'} кр/день`;
 
   return (
     <>
@@ -721,11 +738,12 @@ export default function NewAgentPage() {
                   <span className="tma-card-text">Дневной бюджет, кр</span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={dailyBudget}
-                    onChange={(e) => setDailyBudget(Number(e.target.value))}
-                    min={1}
-                    max={1000000}
-                    step={100}
+                    onChange={(e) => setDailyBudget(e.target.value)}
+                    min={0.01}
+                    max={10000}
+                    step={1}
                     className="tma-input tma-mono"
                     disabled={useExternal}
                   />
@@ -736,10 +754,11 @@ export default function NewAgentPage() {
                   </span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={budget}
-                    onChange={(e) => setBudget(Number(e.target.value))}
+                    onChange={(e) => setBudget(e.target.value)}
                     min={0}
-                    step={100}
+                    step={1}
                     className="tma-input tma-mono"
                     disabled={useExternal}
                   />

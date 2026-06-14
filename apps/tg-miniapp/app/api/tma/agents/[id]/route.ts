@@ -43,6 +43,15 @@ interface AgentRow {
   // Direct-clone opt-in (2026-06-12): owner allows others to clone this agent's
   // spec via POST …/agents/[id]/clone. Spec-only; no secrets/memory copied.
   cloneable: boolean;
+  // Аренда = месячная подписка (founder 2026-06-14). NULL во всех полях = агент
+  // создан НЕ через аренду (обычный клон/с нуля) → подписочной плашки нет.
+  // Все поля приходят из активной template_rentals(rent_period='month') клона.
+  sub_template_id: string | null;       // для продления (POST templates/[id]/rent)
+  sub_price_credits: string | null;     // месячная цена подписки (US cents)
+  sub_monthly_limit_credits: string | null; // месячный лимит, входящий в цену
+  sub_period_end: string | null;        // дата продления (ISO)
+  sub_expired: boolean;                 // период истёк (доступ к запуску лапснут)
+  sub_spent_period_credits: string | null;  // потрачено в текущем периоде
 }
 
 // Hire-aware view flags (ADDITIVE). The page renders owner vs hired vs other from
@@ -82,9 +91,25 @@ async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null>
            agents.cloneable,
            (agents.mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
            (o.agent_id IS NOT NULL) AS mcp_oauth_set,
-           o.scope AS mcp_oauth_scope
+           o.scope AS mcp_oauth_scope,
+           r.template_id::text AS sub_template_id,
+           r.price_credits::text AS sub_price_credits,
+           r.monthly_limit_credits::text AS sub_monthly_limit_credits,
+           r.period_end::text AS sub_period_end,
+           (r.period_end IS NOT NULL AND r.period_end <= NOW()) AS sub_expired,
+           (
+             SELECT COALESCE(SUM(ar.cost_credits), 0)::text
+             FROM agent_runs ar
+             WHERE ar.agent_id = agents.id
+               AND r.period_start IS NOT NULL
+               AND ar.created_at >= r.period_start
+           ) AS sub_spent_period_credits
     FROM agents
     LEFT JOIN agent_mcp_oauth o ON o.agent_id = agents.id
+    LEFT JOIN template_rentals r
+      ON r.cloned_agent_id = agents.id
+     AND r.status = 'active'
+     AND r.rent_period = 'month'
     WHERE agents.id = ${id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
       AND status != 'deleted'
@@ -169,6 +194,12 @@ async function loadAgentForViewer(id: string, tgUserId: string): Promise<AgentVi
     transfer_price_credits: null,
     nft_address: null,
     cloneable: r.cloneable,
+    sub_template_id: null,
+    sub_price_credits: null,
+    sub_monthly_limit_credits: null,
+    sub_period_end: null,
+    sub_expired: false,
+    sub_spent_period_credits: null,
     is_owner: false,
     hired: r.hired,
   };
@@ -404,7 +435,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
               cloneable,
               (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
               EXISTS (SELECT 1 FROM agent_mcp_oauth o WHERE o.agent_id = agents.id) AS mcp_oauth_set,
-              (SELECT o.scope FROM agent_mcp_oauth o WHERE o.agent_id = agents.id) AS mcp_oauth_scope
+              (SELECT o.scope FROM agent_mcp_oauth o WHERE o.agent_id = agents.id) AS mcp_oauth_scope,
+              (SELECT tr.template_id::text FROM template_rentals tr
+                 WHERE tr.cloned_agent_id = agents.id AND tr.status = 'active'
+                   AND tr.rent_period = 'month' LIMIT 1) AS sub_template_id,
+              (SELECT tr.price_credits::text FROM template_rentals tr
+                 WHERE tr.cloned_agent_id = agents.id AND tr.status = 'active'
+                   AND tr.rent_period = 'month' LIMIT 1) AS sub_price_credits,
+              (SELECT tr.monthly_limit_credits::text FROM template_rentals tr
+                 WHERE tr.cloned_agent_id = agents.id AND tr.status = 'active'
+                   AND tr.rent_period = 'month' LIMIT 1) AS sub_monthly_limit_credits,
+              (SELECT tr.period_end::text FROM template_rentals tr
+                 WHERE tr.cloned_agent_id = agents.id AND tr.status = 'active'
+                   AND tr.rent_period = 'month' LIMIT 1) AS sub_period_end,
+              false AS sub_expired,
+              null AS sub_spent_period_credits
   `) as unknown as AgentRow[];
 
   return NextResponse.json({ agent: upd[0] });

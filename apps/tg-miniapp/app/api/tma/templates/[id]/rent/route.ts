@@ -27,6 +27,9 @@ interface TemplateRow {
   tools: unknown;
   mcp_endpoint_url: string | null;
   price_credits: string | null;
+  // Аренда = месячная подписка: месячный лимит трат, входящий в цену (US cents).
+  // NULL = берём дефолт клона (DEFAULT_BUDGET_CREDITS).
+  rent_monthly_limit_credits: string | null;
   author_tg_user_id: string;
 }
 
@@ -57,6 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const rows = (await sql`
     SELECT name, description, system_prompt, model_slug, tools, mcp_endpoint_url,
            price_credits::text AS price_credits,
+           rent_monthly_limit_credits::text AS rent_monthly_limit_credits,
            author_tg_user_id::text AS author_tg_user_id
     FROM agent_templates
     WHERE id = ${params.id}::uuid
@@ -91,24 +95,40 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'invalid_price' }, { status: 400 });
   }
 
-  // 3) Idempotency pre-check: if the renter already has an active rental of this
-  //    template, return that existing clone instead of charging again (a re-tap or
-  //    page refresh must NOT double-charge). uq_rental_active is the race-safe
-  //    backstop for the concurrent case (handled in the catch below).
+  // Месячный лимит трат, входящий в цену подписки. Автор задаёт его на шаблоне;
+  // если не задал (NULL) — клон получает дефолтный месячный бюджет.
+  const rawLimit = tpl.rent_monthly_limit_credits;
+  const monthlyLimit =
+    rawLimit !== null && Number.isInteger(Number(rawLimit)) && Number(rawLimit) > 0
+      ? Number(rawLimit)
+      : DEFAULT_BUDGET_CREDITS;
+
+  // 3) Idempotency / renewal pre-check. Аренда = месячная подписка:
+  //    • активная подписка с НЕ истёкшим периодом → no-op (re-tap/refresh не должны
+  //      списывать второй раз) — возвращаем существующий клон.
+  //    • активная подписка с ИСТЁКШИМ периодом → ПРОДЛЕНИЕ: списываем ещё месяц тем
+  //      же атомарным путём и сдвигаем период вперёд (renewal=true ниже).
+  //    uq_rental_active — race-safe backstop для конкурентного оформления.
   const existing = (await sql`
-    SELECT cloned_agent_id::text AS cloned_agent_id
+    SELECT id::text AS id,
+           cloned_agent_id::text AS cloned_agent_id,
+           (period_end IS NOT NULL AND period_end > NOW()) AS within_period
     FROM template_rentals
     WHERE template_id = ${params.id}::uuid
       AND renter_tg_user_id = ${renterId}::bigint
       AND status = 'active'
     LIMIT 1
-  `) as unknown as Array<{ cloned_agent_id: string | null }>;
-  if (existing[0]?.cloned_agent_id) {
+  `) as unknown as Array<{ id: string; cloned_agent_id: string | null; within_period: boolean }>;
+  const activeRental = existing[0] ?? null;
+  if (activeRental?.cloned_agent_id && activeRental.within_period) {
     return NextResponse.json(
-      { agent_id: existing[0].cloned_agent_id, already_rented: true },
+      { agent_id: activeRental.cloned_agent_id, already_rented: true },
       { status: 200 },
     );
   }
+  // Активная подписка с истёкшим периодом → продлеваем существующую запись (новый
+  // charge + сдвиг периода), НЕ создаём дубль и НЕ клонируем агента заново.
+  const renewal = activeRental?.cloned_agent_id ? activeRental : null;
 
   // 4) THE ENTIRE RENT IN ONE TRANSACTION. Any throw rolls back EVERYTHING.
   const templateKind = `tpl:${params.id}`.slice(0, 40);
@@ -121,28 +141,42 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   let duplicate = false; // a concurrent active rental won the uq_rental_active slot
   try {
     await sql.begin(async (sql) => {
-      // a) Claim the rental slot. The uq_rental_active partial unique index
-      //    (template_id, renter) WHERE status='active' makes a concurrent/retried
-      //    rent a no-op: ON CONFLICT DO NOTHING → 0 rows → duplicate → rollback
-      //    (no debit, no second charge).
-      const rentalRows = (await sql`
-        INSERT INTO template_rentals (
-          template_id, renter_tg_user_id, author_tg_user_id,
-          price_credits, rent_period, status
-        )
-        VALUES (
-          ${params.id}::uuid, ${renterId}::bigint, ${authorId}::bigint,
-          ${price}::bigint, 'use', 'active'
-        )
-        ON CONFLICT (template_id, renter_tg_user_id) WHERE status = 'active'
-        DO NOTHING
-        RETURNING id::text
-      `) as unknown as Array<{ id: string }>;
-      if (rentalRows.length === 0) {
-        duplicate = true;
-        throw new Error('duplicate_rental');
+      // a) Get/claim the subscription row.
+      let rentalId: string;
+      if (renewal) {
+        // ПРОДЛЕНИЕ: подписка есть, период истёк. Используем ту же запись — НЕ
+        // создаём дубль и НЕ клонируем агента (он уже есть). Деньги ниже (b–e)
+        // идут тем же атомарным путём, что и первичное оформление.
+        rentalId = renewal.id;
+        newAgentId = renewal.cloned_agent_id!;
+      } else {
+        // ПЕРВИЧНОЕ ОФОРМЛЕНИЕ. rent_period='month' + период [now, now+1мес] +
+        // замороженный месячный лимит. The uq_rental_active partial unique index
+        // (template_id, renter) WHERE status='active' makes a concurrent/retried
+        // rent a no-op: ON CONFLICT DO NOTHING → 0 rows → duplicate → rollback
+        // (no debit, no second charge).
+        const rentalRows = (await sql`
+          INSERT INTO template_rentals (
+            template_id, renter_tg_user_id, author_tg_user_id,
+            price_credits, rent_period, status,
+            period_start, period_end, expires_at, monthly_limit_credits
+          )
+          VALUES (
+            ${params.id}::uuid, ${renterId}::bigint, ${authorId}::bigint,
+            ${price}::bigint, 'month', 'active',
+            NOW(), NOW() + INTERVAL '1 month', NOW() + INTERVAL '1 month',
+            ${monthlyLimit}::bigint
+          )
+          ON CONFLICT (template_id, renter_tg_user_id) WHERE status = 'active'
+          DO NOTHING
+          RETURNING id::text
+        `) as unknown as Array<{ id: string }>;
+        if (rentalRows.length === 0) {
+          duplicate = true;
+          throw new Error('duplicate_rental');
+        }
+        rentalId = rentalRows[0]!.id;
       }
-      const rentalId = rentalRows[0]!.id;
 
       // b) Charge row — the ledger ref_id anchor (settled in this same tx).
       const chargeRows = (await sql`
@@ -202,41 +236,57 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         ON CONFLICT (ref_kind, ref_id, kind) WHERE ref_id IS NOT NULL DO NOTHING
       `;
 
-      // f) Clone the agent to the renter — IN THE SAME TX (same INSERT shape as the
-      //    free-clone route; no secret columns copied; connection_type='aiag'). If
-      //    this throws, the debit + credit above ROLL BACK — the renter is never
-      //    charged without receiving the agent.
-      const ins = (await sql`
-        INSERT INTO agents (
-          tg_user_id, template_kind, name, description,
-          system_prompt, tools, model_slug, budget_credits_monthly,
-          connection_type, mcp_endpoint_url
-        )
-        VALUES (
-          ${renterId}::bigint,
-          ${templateKind},
-          ${name},
-          ${tpl.description},
-          ${systemPrompt},
-          ${sql.json(tools as never)},
-          ${tpl.model_slug},
-          ${DEFAULT_BUDGET_CREDITS},
-          'aiag',
-          ${tpl.mcp_endpoint_url}
-        )
-        RETURNING id::text
-      `) as unknown as Array<{ id: string }>;
-      newAgentId = ins[0]!.id;
+      if (renewal) {
+        // f-renew) ПРОДЛЕНИЕ: только сдвигаем период на месяц вперёд. Агент уже
+        //   существует (newAgentId выставлен выше), клон не создаём. Лимит обновляем
+        //   на актуальный из шаблона (автор мог сменить цену/лимит к продлению).
+        await sql`
+          UPDATE template_rentals
+          SET period_start = NOW(),
+              period_end = NOW() + INTERVAL '1 month',
+              expires_at = NOW() + INTERVAL '1 month',
+              monthly_limit_credits = ${monthlyLimit}::bigint
+          WHERE id = ${rentalId}::uuid
+        `;
+      } else {
+        // f) Clone the agent to the renter — IN THE SAME TX (same INSERT shape as the
+        //    free-clone route; no secret columns copied; connection_type='aiag'). If
+        //    this throws, the debit + credit above ROLL BACK — the renter is never
+        //    charged without receiving the agent. budget_credits_monthly = месячный
+        //    лимит подписки (worker-гард на агенте), а period-scoped лимит подписки
+        //    дополнительно проверяет воркер.
+        const ins = (await sql`
+          INSERT INTO agents (
+            tg_user_id, template_kind, name, description,
+            system_prompt, tools, model_slug, budget_credits_monthly,
+            connection_type, mcp_endpoint_url
+          )
+          VALUES (
+            ${renterId}::bigint,
+            ${templateKind},
+            ${name},
+            ${tpl.description},
+            ${systemPrompt},
+            ${sql.json(tools as never)},
+            ${tpl.model_slug},
+            ${monthlyLimit},
+            'aiag',
+            ${tpl.mcp_endpoint_url}
+          )
+          RETURNING id::text
+        `) as unknown as Array<{ id: string }>;
+        newAgentId = ins[0]!.id;
 
-      // g) Bind the clone to the rental + bump clone_count.
-      await sql`
-        UPDATE template_rentals SET cloned_agent_id = ${newAgentId}::uuid
-        WHERE id = ${rentalId}::uuid
-      `;
-      await sql`
-        UPDATE agent_templates SET clone_count = clone_count + 1
-        WHERE id = ${params.id}::uuid
-      `;
+        // g) Bind the clone to the rental + bump clone_count.
+        await sql`
+          UPDATE template_rentals SET cloned_agent_id = ${newAgentId}::uuid
+          WHERE id = ${rentalId}::uuid
+        `;
+        await sql`
+          UPDATE agent_templates SET clone_count = clone_count + 1
+          WHERE id = ${params.id}::uuid
+        `;
+      }
     });
   } catch (e) {
     if (insufficient) {
@@ -269,7 +319,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   return NextResponse.json(
-    { agent_id: newAgentId, charged_credits: price },
-    { status: 201 },
+    {
+      agent_id: newAgentId,
+      charged_credits: price,
+      monthly_limit_credits: monthlyLimit,
+      renewed: !!renewal,
+    },
+    { status: renewal ? 200 : 201 },
   );
 }

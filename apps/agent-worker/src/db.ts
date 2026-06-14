@@ -191,6 +191,76 @@ export async function sumMonthlySpend(tgUserId: string): Promise<number> {
 }
 
 /**
+ * Аренда = месячная подписка (founder 2026-06-14). Месячный ЛИМИТ трат входит в
+ * цену подписки и ограничивает расход подписчика на КЛОН-агент в текущем периоде.
+ *
+ * Возвращает активную подписку для данного клон-агента ИЛИ null (агент создан не
+ * через аренду — обычный клон/с нуля → подписочного лимита нет, ведём как раньше).
+ * Период определяется period_start/period_end; limit — monthly_limit_credits.
+ * Это ADDITIVE-гард: дневной/месячный бюджет агента работает как прежде; здесь —
+ * дополнительный лимит, привязанный к подписке. settleRun НЕ затрагивается.
+ */
+export interface RentalSubscription {
+  rental_id: string;
+  period_start: string | null;
+  period_end: string | null;
+  monthly_limit_credits: number | null;
+  expired: boolean;
+}
+
+export async function loadRentalSubscriptionForAgent(
+  agentId: string,
+): Promise<RentalSubscription | null> {
+  const rows = (await sql`
+    SELECT id::text AS rental_id,
+           period_start::text AS period_start,
+           period_end::text   AS period_end,
+           monthly_limit_credits::text AS monthly_limit_credits,
+           (period_end IS NOT NULL AND period_end <= NOW()) AS expired
+    FROM template_rentals
+    WHERE cloned_agent_id = ${agentId}::uuid
+      AND status = 'active'
+      AND rent_period = 'month'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `) as unknown as Array<{
+    rental_id: string;
+    period_start: string | null;
+    period_end: string | null;
+    monthly_limit_credits: string | null;
+    expired: boolean;
+  }>;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    rental_id: r.rental_id,
+    period_start: r.period_start,
+    period_end: r.period_end,
+    monthly_limit_credits:
+      r.monthly_limit_credits === null ? null : Number(r.monthly_limit_credits),
+    expired: r.expired,
+  };
+}
+
+/**
+ * Сумма cost_credits (US cents), потраченная на КЛОН-агент с начала текущего
+ * периода подписки. Зеркало sumMonthlySpend, но period-scoped по подписке
+ * (фильтр по agent_id + created_at >= period_start). Read-only — billing не трогает.
+ */
+export async function sumPeriodSpendForAgent(
+  agentId: string,
+  periodStart: string,
+): Promise<number> {
+  const rows = (await sql`
+    SELECT COALESCE(SUM(cost_credits), 0)::text AS total
+    FROM agent_runs
+    WHERE agent_id = ${agentId}::uuid
+      AND created_at >= ${periodStart}::timestamptz
+  `) as unknown as Array<{ total: string }>;
+  return Number(rows[0]?.total ?? 0);
+}
+
+/**
  * Atomically reset today's counter if the stored date is stale, then
  * return the current bucket. Race-safe under concurrent runs.
  */

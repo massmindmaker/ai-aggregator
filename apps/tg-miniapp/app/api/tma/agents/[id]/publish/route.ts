@@ -10,6 +10,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // Upper bound on author rent: 100000 cents = $1000. Rejects absurd / overflow prices.
 const MAX_PRICE_CREDITS = 100_000;
+// Upper bound on the monthly spend limit included in a subscription: 1_000_000
+// cents = $10000. Mirrors the agent daily/monthly budget ceilings.
+const MAX_LIMIT_CREDITS = 1_000_000;
 
 // The ONLY columns we read off the owned agent — the publicly shareable spec.
 // We NEVER select external_api_key_encrypted, external_api_key_hint,
@@ -61,7 +64,11 @@ async function resolveForkParent(templateKind: string | null): Promise<string | 
 
 interface PublishBody {
   // NULL / absent = free. Otherwise a positive integer (US cents) author rent.
+  // Аренда = месячная подписка: это МЕСЯЧНАЯ цена.
   price_credits?: number | null;
+  // Месячный лимит трат (US cents), входящий в цену подписки. NULL/absent = дефолт
+  // клона (rent-роут подставит DEFAULT_BUDGET_CREDITS). Игнорируется для free.
+  rent_monthly_limit_credits?: number | null;
   visibility?: 'public' | 'unlisted' | 'private';
 }
 
@@ -89,6 +96,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     priceCredits = p;
   }
 
+  // rent_monthly_limit_credits: только для платного шаблона; NULL = дефолт клона.
+  let monthlyLimit: number | null = null;
+  if (priceCredits !== null && body.rent_monthly_limit_credits != null) {
+    const l = body.rent_monthly_limit_credits;
+    if (!Number.isInteger(l) || l <= 0 || l > MAX_LIMIT_CREDITS) {
+      return NextResponse.json({ error: 'invalid_limit' }, { status: 400 });
+    }
+    monthlyLimit = l;
+  }
+
   const visibility =
     body.visibility === 'unlisted' || body.visibility === 'private' ? body.visibility : 'public';
 
@@ -104,7 +121,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const ins = (await sql`
     INSERT INTO agent_templates (
       author_tg_user_id, name, description, system_prompt,
-      model_slug, tools, mcp_endpoint_url, price_credits, visibility,
+      model_slug, tools, mcp_endpoint_url, price_credits,
+      rent_monthly_limit_credits, visibility,
       fork_parent_id
     )
     VALUES (
@@ -116,6 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ${sql.json((Array.isArray(spec.tools) ? spec.tools : []) as never)},
       ${spec.mcp_endpoint_url},
       ${priceCredits},
+      ${monthlyLimit},
       ${visibility},
       ${forkParentId}
     )

@@ -92,14 +92,15 @@ function fmtTime(iso: string | null): string {
     : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
 }
 
-// Цена для строки статов CharCard: центы → «N,NN кр» или «бесплатно».
+// Цена для строки статов CharCard: центы → «N,NN кр/мес» или «бесплатно».
+// Аренда = месячная подписка → цена всегда «кр/мес» (честно: списывается ежемесячно).
 function priceStat(price: string | null): string {
-  return price !== null ? `${fmtCredits(price)} кр` : 'бесплатно';
+  return price !== null ? `${fmtCredits(price)} кр/мес` : 'бесплатно';
 }
 
-// Подпись amber-кнопки: платный → аренда с ценой, бесплатный → использовать.
+// Подпись amber-кнопки: платный → ПОДПИСКА с месячной ценой, бесплатный → использовать.
 function actionLabel(price: string | null): string {
-  return price !== null ? `Арендовать · ${fmtCredits(price)} кр` : 'Использовать';
+  return price !== null ? `Подписаться · ${fmtCredits(price)} кр/мес` : 'Использовать';
 }
 
 export default function AgentsPage() {
