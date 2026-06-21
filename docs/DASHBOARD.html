@@ -108,6 +108,7 @@ const SERVED = location.protocol==='http:' || location.protocol==='https:';
 const REPO='https://github.com/massmindmaker/aiag-marketplace';
 const TABS=[
  {id:'overview',ic:'📊',name:'Обзор',overview:true},
+ {id:'features',ic:'📋',name:'Функционал (заказчику)',features:true},
  {id:'tma',ic:'🎴',name:'TMA · агенты',cards:[
    {t:'★ Дизайн-борд (моб+веб, SoT)',d:'ОДИН борт вместо showcase/tma/web — мобильный+веб, тёмная/светлая, 45 экранов',p:'wireframes/design-board.html',ty:'html',star:1},
    {t:'Product definition',d:'3 способа завести агента, спец, биллинг',p:'specs/2026-06-02-tma-product-definition.md',ty:'md'},
@@ -297,7 +298,46 @@ function overview(){const page=document.createElement('div');page.className='pag
   const td=page.querySelector('#todo');TODOS.forEach(t=>{const done=localStorage.getItem('aiag_chk_'+t.k)==='1';const lb=document.createElement('label');if(done)lb.className='done';lb.innerHTML='<input type="checkbox" '+(done?'checked':'')+'><span>'+t.x+'</span>';lb.querySelector('input').onchange=e=>{localStorage.setItem('aiag_chk_'+t.k,e.target.checked?'1':'0');lb.classList.toggle('done',e.target.checked);};td.appendChild(lb);});
   const qa=page.querySelector('#qa');ALLCARDS.filter(c=>c.star).forEach(c=>qa.appendChild(cardEl(c,true)));
 }
-function renderPage(tab){const t=TABS.find(x=>x.id===tab)||TABS[0];if(t.overview){overview();return;}
+function featuresPage(){const page=document.createElement('div');page.className='page';
+  page.innerHTML='<div class="head"><div class="eyebrow">AIAG · TMA для заказчика</div><h1>Функционал маркетплейса AI-агентов</h1>'
+   +'<p class="lead">Telegram-маркетплейс, где за пару кликов можно запустить, клонировать или взять в аренду готового AI-агента-персонажа, собрать своего с любыми инструментами, и где авторы зарабатывают на своих агентах — всё с прозрачным учётом расходов и оплатой в крипте.</p>'
+   +'<p class="lead" style="font-size:12px;color:var(--ink-faint);margin-top:6px">Честное разделение: <span class="pill p-live">live</span> на проде · <span class="pill p-branch">готово, выкатываем</span> на ветке · <span class="pill p-rnd">дорожная карта</span> пока нет. Основано на код-ревью 2026-06-13.</p></div>'
+
+   +'<div class="sec" style="color:var(--good)">🟢 Работает сейчас (на проде)</div>'
+   +'<div class="sec">Каталог и запуск</div><ul class="facts">'
+     +'<li><b>Каталог агентов-персонажей</b> — витрина с лицом, именем, характером, моделью, рейтингом и статистикой запусков; поиск, разделы, featured <span class="pill p-live">live</span></li>'
+     +'<li><b>Запуск и чат в Telegram</b> — диалог с агентом, история сохраняется <span class="pill p-live">live</span></li>'
+     +'<li><b>Run-trace «что делал мой агент»</b> — пошаговая лента: шаги, вызванные инструменты, токены, <b>стоимость</b>, длительность <span class="pill p-live">live</span></li>'
+     +'<li><b>Оценка стоимости ДО отправки</b> + живой статус выполнения <span class="pill p-live">live</span></li></ul>'
+   +'<div class="sec">Создание и получение агента</div><ul class="facts">'
+     +'<li><b>Конструктор агента</b> — персона/инструкция, модель, навыки и инструменты <span class="pill p-live">live</span></li>'
+     +'<li><b>Подключение MCP-серверов</b> (внешние инструменты) с авторизацией OAuth <span class="pill p-live">live</span></li>'
+     +'<li><b>Выбор провайдера модели</b> — наш шлюз с наценкой ИЛИ свой ключ → <b>свой ключ = 0 комиссии</b> <span class="pill p-live">live</span></li>'
+     +'<li><b>Клон из шаблона</b> — своя копия публичного агента (свои настройки, чистая память) <span class="pill p-live">live</span></li></ul>'
+   +'<div class="sec">Деньги и монетизация</div><ul class="facts">'
+     +'<li><b>Монетизация для авторов</b> — публикация шаблона бесплатно или за деньги; <b>автор получает 100%, платформа 0% с аренды</b> (зарабатываем на наценке моделей) <span class="pill p-live">live</span></li>'
+     +'<li><b>Крипто-кредиты</b> с привязкой к доллару (1 кредит = $0.01); все списания атомарные, без двойных <span class="pill p-live">live</span></li>'
+     +'<li><b>Пополнение через TON</b> с настоящей криптографической проверкой кошелька (TON Connect) <span class="pill p-live">live</span></li>'
+     +'<li><b>Бюджеты агента</b> — дневной и месячный лимит трат <span class="pill p-live">live</span></li>'
+     +'<li><b>Передача агента</b> — подарить/продать один экземпляр через TON (transferable-iNFT), без личной истории <span class="pill p-live">live</span></li></ul>'
+   +'<div class="sec">Автоматизация и честность</div><ul class="facts">'
+     +'<li><b>Расписания</b> — агент запускается по графику (интервал/день/неделя) <span class="pill p-live">live</span></li>'
+     +'<li><b>A2A</b> — агент вызывает другого агента для подзадачи <span class="pill p-live">live</span></li>'
+     +'<li><b>Честный интерфейс</b> — статусы работает/скоро/в разработке, нет тупиков в оплаченных сценариях, бренд провайдеров скрыт (white-label) <span class="pill p-live">live</span></li></ul>'
+
+   +'<div class="sec" style="color:var(--soon)">🟡 Готово, выкатываем (проверено, на ветке)</div><ul class="facts">'
+     +'<li><b>Подписка / аренда агента (наём)</b> — берёшь чужого агента как <b>месячную подписку</b>: автор ставит цену в месяц + лимит кредитов, ты получаешь <b>свой изолированный инстанс</b> (те же навыки, личная память — создатель её не видит), продлеваешь раз в месяц <span class="pill p-branch">выкатываем</span></li>'
+     +'<li><b>AI-конструктор «из слов»</b> — описываешь агента текстом, система собирает черновик настроек <span class="pill p-branch">выкатываем</span></li></ul>'
+
+   +'<div class="sec" style="color:var(--ink-faint)">⚪ Дорожная карта (честно — пока нет)</div><ul class="facts">'
+     +'<li>Мультимодель по ролям (отдельные модели для текста / картинок / голоса / зрения) <span class="pill p-rnd">скоро</span></li>'
+     +'<li>Бесплатный первый запуск (онбординг) <span class="pill p-rnd">скоро</span></li>'
+     +'<li>Собственный TON-кошелёк агента для автономных трат <span class="pill p-rnd">R&amp;D</span></li></ul>'
+
+   +'<div class="sec">Открыть вживую</div><div class="links"><a href="https://app.ai-aggregator.ru/tg" target="_blank">прод TMA ↗</a><a href="#design::wireframes/MASTER-BOARD/index.html">дизайн-борд (все экраны)</a><a href="#overview">обзор проекта</a></div>';
+  main.innerHTML='';main.appendChild(page);
+}
+function renderPage(tab){const t=TABS.find(x=>x.id===tab)||TABS[0];if(t.overview){overview();return;}if(t.features){featuresPage();return;}
   const page=document.createElement('div');page.className='page';page.innerHTML='<div class="head"><div class="eyebrow">'+t.ic+' '+t.name+'</div><h1>'+t.name+'</h1></div>';
   page.appendChild(chipsEl(()=>renderPage(tab)));const g=document.createElement('div');g.className='grid';applyFilter(t.cards).forEach(c=>g.appendChild(cardEl(c,false)));page.appendChild(g);
   main.innerHTML='';main.appendChild(page);}
