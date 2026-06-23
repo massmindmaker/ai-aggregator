@@ -37,6 +37,9 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [debug, setDebug] = useState<string | null>(null);
+  // Set once, only on the verify that actually applied the one-time welcome grant
+  // → lets the UI show a "300 кр на старт" hint exactly once for a new user.
+  const [freeGrantCredits, setFreeGrantCredits] = useState<number | null>(null);
 
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
@@ -92,9 +95,15 @@ export function useAuth() {
           setLoading(false);
           return;
         }
-        const { token: newToken, user: tgUser } = await res.json();
+        const {
+          token: newToken,
+          user: tgUser,
+          freeGrant,
+          freeGrantCredits: grantAmount,
+        } = await res.json();
         setToken(newToken);
         setUser(tgUser);
+        if (freeGrant && typeof grantAmount === 'number') setFreeGrantCredits(grantAmount);
         tg.CloudStorage?.setItem?.('aiag_jwt', newToken, () => {});
       } catch (err) {
         setError(err instanceof Error ? err.message : 'auth_error');
@@ -104,5 +113,5 @@ export function useAuth() {
     })();
   }, []);
 
-  return { user, token, loading, error, debug };
+  return { user, token, loading, error, debug, freeGrantCredits };
 }
