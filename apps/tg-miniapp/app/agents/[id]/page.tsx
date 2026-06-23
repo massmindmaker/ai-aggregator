@@ -19,6 +19,10 @@ interface Agent {
   description: string | null;
   system_prompt: string;
   model_slug: string | null;
+  // Multimodel per-role (migration 0042): optional per-role model slugs.
+  image_model_slug?: string | null;
+  voice_model_slug?: string | null;
+  vision_model_slug?: string | null;
   budget_rub_monthly: string;
   daily_budget_credits?: string;
   tools: unknown;
@@ -177,6 +181,10 @@ export default function AgentDetailPage() {
   const [eDescription, setEDescription] = useState('');
   const [eSystemPrompt, setESystemPrompt] = useState('');
   const [eModelSlug, setEModelSlug] = useState('');
+  // Multimodel per-role: optional per-role model slots. '' = «как основная».
+  const [eImageModelSlug, setEImageModelSlug] = useState('');
+  const [eVoiceModelSlug, setEVoiceModelSlug] = useState('');
+  const [eVisionModelSlug, setEVisionModelSlug] = useState('');
   const [eBudget, setEBudget] = useState(0);
   // C10: дневной бюджет (кр) — worker-гард daily_budget_credits.
   const [eDailyBudget, setEDailyBudget] = useState(0);
@@ -285,6 +293,9 @@ export default function AgentDetailPage() {
     setEDescription(agent.description ?? '');
     setESystemPrompt(agent.system_prompt);
     setEModelSlug(agent.model_slug ?? '');
+    setEImageModelSlug(agent.image_model_slug ?? '');
+    setEVoiceModelSlug(agent.voice_model_slug ?? '');
+    setEVisionModelSlug(agent.vision_model_slug ?? '');
     setEBudget(Number(agent.budget_rub_monthly));
     setEDailyBudget(Number(agent.daily_budget_credits ?? '10000'));
     setETools(Array.isArray(agent.tools) ? (agent.tools as string[]) : []);
@@ -320,6 +331,10 @@ export default function AgentDetailPage() {
           description: eDescription.trim(),
           system_prompt: eSystemPrompt.trim(),
           model_slug: eModelSlug.trim(),
+          // Multimodel per-role: пусто = очистить (бэк сохранит NULL → «как основная»).
+          image_model_slug: eImageModelSlug.trim(),
+          voice_model_slug: eVoiceModelSlug.trim(),
+          vision_model_slug: eVisionModelSlug.trim(),
           budget_rub_monthly: eBudget,
           daily_budget_credits: Math.round(eDailyBudget),
           tools: eTools,
@@ -1509,6 +1524,46 @@ export default function AgentDetailPage() {
                   )}
                 </select>
               </label>
+
+              {/* Multimodel per-role: опциональные модели под разные задачи.
+                  Пусто = «как основная» (поле «Модель» выше). */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span className="tma-card-text" style={{ fontWeight: 600 }}>
+                  🎚 Модели по ролям
+                </span>
+                <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -4 }}>
+                  Опционально: разные модели под картинки / голос / зрение. Пусто = «как основная».
+                </p>
+                {(
+                  [
+                    { key: 'image', label: 'Картинки', value: eImageModelSlug, set: setEImageModelSlug },
+                    { key: 'voice', label: 'Голос', value: eVoiceModelSlug, set: setEVoiceModelSlug },
+                    { key: 'vision', label: 'Зрение', value: eVisionModelSlug, set: setEVisionModelSlug },
+                  ] as const
+                ).map((r) => (
+                  <label key={r.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span className="tma-card-text">{r.label}</span>
+                    <select
+                      value={r.value}
+                      onChange={(e) => r.set(e.target.value)}
+                      className="tma-input tma-mono"
+                    >
+                      <option value="">— как основная —</option>
+                      {models.map((m) => (
+                        <option key={m.slug} value={m.slug}>
+                          {m.name} · {m.slug}
+                        </option>
+                      ))}
+                      {r.value && !models.some((m) => m.slug === r.value) && (
+                        <option value={r.value}>
+                          {r.value}
+                          {models.length > 0 ? ' (вне реестра)' : ''}
+                        </option>
+                      )}
+                    </select>
+                  </label>
+                ))}
+              </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <span className="tma-card-text">Инструменты</span>

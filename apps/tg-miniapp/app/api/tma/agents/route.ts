@@ -18,6 +18,10 @@ interface AgentRow {
   system_prompt: string;
   tools: unknown;
   model_slug: string | null;
+  // Multimodel per-role (migration 0042): optional per-role model overrides.
+  image_model_slug?: string | null;
+  voice_model_slug?: string | null;
+  vision_model_slug?: string | null;
   budget_rub_monthly: string;
   daily_budget_credits?: string;
   status: string;
@@ -40,6 +44,7 @@ export async function GET(req: NextRequest) {
   const rows = (await sql`
     SELECT a.id::text, a.tg_user_id::text, a.template_kind, a.name, a.description,
            a.system_prompt, a.tools, a.model_slug,
+           a.image_model_slug, a.voice_model_slug, a.vision_model_slug,
            a.budget_credits_monthly::text AS budget_rub_monthly,
            a.status, a.created_at, a.updated_at, a.mcp_endpoint_url,
            r.output AS last_output, r.created_at AS last_at, r.status AS last_status
@@ -62,6 +67,7 @@ export async function GET(req: NextRequest) {
   const hired = (await sql`
     SELECT a.id::text, a.tg_user_id::text, a.template_kind, a.name, a.description,
            a.system_prompt, a.tools, a.model_slug,
+           a.image_model_slug, a.voice_model_slug, a.vision_model_slug,
            a.budget_credits_monthly::text AS budget_rub_monthly,
            a.status, a.created_at, a.updated_at, a.mcp_endpoint_url,
            r.output AS last_output, r.created_at AS last_at, r.status AS last_status
@@ -92,6 +98,11 @@ interface CreateBody {
   system_prompt?: string;
   tools?: unknown[];
   model_slug?: string;
+  // Multimodel per-role (migration 0042): optional per-role model slugs. Empty/
+  // missing ⇒ NULL ⇒ worker falls back to the primary model_slug.
+  image_model_slug?: string;
+  voice_model_slug?: string;
+  vision_model_slug?: string;
   budget_rub_monthly?: number;
   // P1-7: daily spend cap, integer credits (the worker's daily guard column).
   // Mirrors the PATCH validation in [id]/route.ts: int 1..1_000_000.
@@ -136,6 +147,13 @@ export async function POST(req: NextRequest) {
   }
   const tools = Array.isArray(body.tools) ? body.tools : (template?.suggestedTools ?? []);
   const modelSlug = body.model_slug?.trim() || template?.defaultModelSlug || null;
+  // Multimodel per-role: optional per-role slugs. Same handling as model_slug —
+  // trim, empty ⇒ NULL. The UI picks them from the registered model registry (like
+  // the primary model); an out-of-registry slug just falls back to OpenRouter via
+  // the gateway exactly like the primary, so no white-label/markup change.
+  const imageModelSlug = body.image_model_slug?.trim() || null;
+  const voiceModelSlug = body.voice_model_slug?.trim() || null;
+  const visionModelSlug = body.vision_model_slug?.trim() || null;
   const budget =
     typeof body.budget_rub_monthly === 'number' && body.budget_rub_monthly >= 0
       ? body.budget_rub_monthly
@@ -226,7 +244,9 @@ export async function POST(req: NextRequest) {
   const ins = (await sql`
     INSERT INTO agents (
       tg_user_id, template_kind, name, description,
-      system_prompt, tools, model_slug, budget_credits_monthly,
+      system_prompt, tools, model_slug,
+      image_model_slug, voice_model_slug, vision_model_slug,
+      budget_credits_monthly,
       daily_budget_credits,
       connection_type, external_base_url, external_api_key_encrypted,
       external_api_key_hint, external_model_slug,
@@ -240,6 +260,9 @@ export async function POST(req: NextRequest) {
       ${systemPrompt},
       ${sql.json(tools as never)},
       ${modelSlug},
+      ${imageModelSlug},
+      ${voiceModelSlug},
+      ${visionModelSlug},
       ${budget},
       ${dailyBudget},
       ${connectionType},
@@ -251,7 +274,9 @@ export async function POST(req: NextRequest) {
       ${mcpAuthEncrypted}
     )
     RETURNING id::text, tg_user_id::text, template_kind, name, description,
-              system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
+              system_prompt, tools, model_slug,
+              image_model_slug, voice_model_slug, vision_model_slug,
+              budget_credits_monthly::text AS budget_rub_monthly,
               daily_budget_credits::text,
               status, created_at, updated_at, connection_type,
               external_base_url, external_api_key_hint, external_model_slug

@@ -13,6 +13,11 @@ import { sql } from './db.js';
 
 const TICK_MS = 120_000; // 2 min — reconciliation fallback, not a latency path
 const TX_PAGE_LIMIT = 50;
+// USDT-on-TON jetton has 6 decimals → 1 USDT = 1_000_000 smallest units, and the
+// USD-peg credit rule is fixed (no oracle): 1 USDT = 100 credits ($1 = 100 cents).
+// expected_amount on a USDT topup row is already in jetton smallest units, so the
+// reconciler only has to compare received >= expected and credit amount_credits.
+const USDT_MASTER_DEFAULT = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'; // USD₮ jetton master (mainnet)
 // Expire only after 7 DAYS pending (UI window is 10 min). The sweep runs
 // continuously, so any real payment is matched within minutes of landing;
 // a week-old pending row is an abandoned invoice, not lost money.
@@ -24,6 +29,8 @@ interface PendingTopup {
   amount_nano_ton: string;
   amount_credits: string; // US cents, BIGINT as text (D-1)
   comment_tag: string;
+  asset: string;            // 'TON' | 'USDT' (0043); legacy rows default 'TON'
+  expected_amount: string | null; // smallest-unit expected (USDT jetton: 1e6/USDT)
 }
 
 interface TonCenterTx {
@@ -79,6 +86,97 @@ function matchTx(txs: TonCenterTx[], commentTag: string, expectedNano: bigint): 
   return null;
 }
 
+// --- USDT-on-TON (jetton) branch (R2-readiness, 0043) ---------------------
+//
+// Native-TON is matched above off the receiver's plain `/transactions` in_msg
+// comment. USDT-on-TON is a JETTON transfer: the value rides a separate jetton
+// wallet, not the TON `value`, so we read TonCenter v3 `/jetton/transfers` for
+// the receiver, match on the forward-payload comment `topup:<tag>` and on
+// received jetton amount >= expected_amount, and credit with the SAME idempotent
+// creditTopup path (status-guard + uq_ledger_ref). No native logic is touched.
+//
+// TODO(testnet): verify the exact v3 jetton-transfer field shape against a real
+// testnet transfer — comment location (forward_payload vs decoded comment),
+// `destination`/`source` address form, and the amount field key can differ by
+// TonCenter version. Adjust extractJettonComment / amount parse if so.
+
+interface TonCenterJettonTransfer {
+  transaction_hash?: string;
+  transaction_id?: { hash?: string };
+  hash?: string;
+  amount?: string | number;            // jetton smallest units
+  destination?: string;                // receiver (our wallet) for inbound
+  jetton_master?: string;
+  comment?: string;                    // v3 sometimes decodes the text comment
+  forward_payload?: string;
+  custom_payload?: string;
+  transaction_now?: number;
+}
+
+async function fetchRecentJettonTransfers(
+  receiver: string,
+): Promise<TonCenterJettonTransfer[] | null> {
+  const tcBase = process.env.TONCENTER_API_URL ?? 'https://toncenter.com/api/v3';
+  const url = new URL(`${tcBase.replace(/\/$/, '')}/jetton/transfers`);
+  // Inbound transfers landing on our receiver wallet. v3 supports owner_address
+  // (the jetton-wallet owner). direction=in narrows to received transfers.
+  url.searchParams.set('owner_address', receiver);
+  url.searchParams.set('direction', 'in');
+  const usdtMaster = process.env.TMA_USDT_JETTON_MASTER ?? USDT_MASTER_DEFAULT;
+  if (usdtMaster) url.searchParams.set('jetton_master', usdtMaster);
+  url.searchParams.set('limit', String(TX_PAGE_LIMIT));
+  url.searchParams.set('sort', 'desc');
+
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (process.env.TONCENTER_API_KEY) headers['X-API-Key'] = process.env.TONCENTER_API_KEY;
+
+  try {
+    const r = await fetch(url.toString(), { headers });
+    if (!r.ok) {
+      console.warn(`[topup-reconciler] toncenter jetton ${r.status} — usdt tick skipped`);
+      return null;
+    }
+    const j = (await r.json()) as {
+      jetton_transfers?: TonCenterJettonTransfer[];
+      transfers?: TonCenterJettonTransfer[];
+      result?: TonCenterJettonTransfer[];
+    };
+    return j.jetton_transfers ?? j.transfers ?? j.result ?? [];
+  } catch (e) {
+    console.warn(`[topup-reconciler] jetton fetch failed: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+/** Best-effort extraction of the text comment carried by a jetton transfer.
+ *  v3 may surface it pre-decoded (`comment`) or only as a forward_payload cell —
+ *  we accept either and just substring-match the tag. TODO(testnet): confirm. */
+function extractJettonComment(t: TonCenterJettonTransfer): string {
+  if (typeof t.comment === 'string' && t.comment) return t.comment;
+  if (typeof t.forward_payload === 'string') return t.forward_payload;
+  return '';
+}
+
+function matchJettonTransfer(
+  transfers: TonCenterJettonTransfer[],
+  commentTag: string,
+  expectedUnits: bigint,
+): string | null {
+  const expectedComment = `topup:${commentTag}`;
+  for (const t of transfers) {
+    const text = extractJettonComment(t);
+    if (!text || !text.includes(expectedComment)) continue;
+    const raw = t.amount;
+    const units =
+      typeof raw === 'string' ? BigInt(raw) :
+      typeof raw === 'number' ? BigInt(Math.floor(raw)) :
+      0n;
+    if (units < expectedUnits) continue;
+    return t.transaction_hash ?? t.transaction_id?.hash ?? t.hash ?? '';
+  }
+  return null;
+}
+
 /** Confirm + credit ONE matched topup. Mirrors topup/check/[id] exactly:
  *  status-guarded UPDATE → balance upsert → append-only ledger (uq_ledger_ref). */
 async function creditTopup(t: PendingTopup, txHash: string): Promise<boolean> {
@@ -126,7 +224,9 @@ export async function runTopupReconcileTick(): Promise<void> {
              tg_user_id::text AS tg_user_id,
              amount_nano_ton::text AS amount_nano_ton,
              amount_credits::text AS amount_credits,
-             comment_tag
+             comment_tag,
+             COALESCE(asset, 'TON') AS asset,
+             expected_amount::text AS expected_amount
       FROM tg_topups
       WHERE status = 'pending'
       ORDER BY created_at ASC
@@ -138,23 +238,63 @@ export async function runTopupReconcileTick(): Promise<void> {
   }
 
   if (pending.length > 0) {
-    const txs = await fetchRecentInboundTxs(receiver);
-    if (txs === null) return; // TonCenter down — rows stay pending, next tick retries
+    // Split by asset so each on-chain source is queried at most once per tick.
+    const tonPending = pending.filter((t) => t.asset !== 'USDT');
+    const usdtPending = pending.filter((t) => t.asset === 'USDT');
 
-    for (const t of pending) {
-      try {
-        const hash = matchTx(txs, t.comment_tag, BigInt(t.amount_nano_ton));
-        if (!hash) continue;
-        const credited = await creditTopup(t, hash);
-        if (credited) {
-          console.log(
-            `[topup-reconciler] credited topup=${t.id} user=${t.tg_user_id} credits=${t.amount_credits} tx=${hash}`,
-          );
+    // --- native TON branch (unchanged) ---
+    if (tonPending.length > 0) {
+      const txs = await fetchRecentInboundTxs(receiver);
+      if (txs === null) return; // TonCenter down — rows stay pending, next tick retries
+      for (const t of tonPending) {
+        try {
+          const hash = matchTx(txs, t.comment_tag, BigInt(t.amount_nano_ton));
+          if (!hash) continue;
+          const credited = await creditTopup(t, hash);
+          if (credited) {
+            console.log(
+              `[topup-reconciler] credited TON topup=${t.id} user=${t.tg_user_id} credits=${t.amount_credits} tx=${hash}`,
+            );
+          }
+        } catch (e) {
+          // One bad row must not abort the rest of the sweep.
+          console.error(`[topup-reconciler] credit failed topup=${t.id}: ${(e as Error).message}`);
         }
-      } catch (e) {
-        // One bad row must not abort the rest of the sweep.
-        console.error(`[topup-reconciler] credit failed topup=${t.id}: ${(e as Error).message}`);
       }
+    }
+
+    // --- USDT-on-TON jetton branch (0043) ---
+    // Same idempotent creditTopup → uq_ledger_ref guard, so a concurrent client
+    // poll can never double-credit. Expected jetton units live in expected_amount.
+    if (usdtPending.length > 0) {
+      const transfers = await fetchRecentJettonTransfers(receiver);
+      if (transfers !== null) {
+        for (const t of usdtPending) {
+          try {
+            // expected_amount should always be set for a USDT row (init route),
+            // but if missing, derive from amount_credits: credits are cents,
+            // 1 USDT = 100 credits = 1e6 jetton units → units = credits/100 * 1e6
+            // = credits * 1e4. Defensive only.
+            const expectedUnits =
+              t.expected_amount !== null
+                ? BigInt(t.expected_amount)
+                : BigInt(t.amount_credits) * 10_000n;
+            const hash = matchJettonTransfer(transfers, t.comment_tag, expectedUnits);
+            if (!hash) continue;
+            const credited = await creditTopup(t, hash);
+            if (credited) {
+              console.log(
+                `[topup-reconciler] credited USDT topup=${t.id} user=${t.tg_user_id} credits=${t.amount_credits} tx=${hash}`,
+              );
+            }
+          } catch (e) {
+            console.error(
+              `[topup-reconciler] usdt credit failed topup=${t.id}: ${(e as Error).message}`,
+            );
+          }
+        }
+      }
+      // transfers === null (TonCenter down) → USDT rows stay pending, next tick retries.
     }
   }
 

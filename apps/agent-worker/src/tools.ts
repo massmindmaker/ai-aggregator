@@ -225,7 +225,24 @@ interface KieStatusResp {
   };
 }
 
-async function kieCreateTask(prompt: string, aspect: string): Promise<string> {
+/**
+ * Multimodel per-role: choose the Kie image model. The agent's image_model_slug
+ * is honoured ONLY when it names a Kie-compatible image model — gateway LLM slugs
+ * (e.g. "openai/gpt-4o", "anthropic/...") are chat models and would break Kie's
+ * image endpoint, so they are ignored and KIE_MODEL stays. Conservative allowlist:
+ * a slug Kie's playground recognises as an image model.
+ */
+const KIE_IMAGE_MODEL_RE = /(nano-banana|flux|imagen|sd|stable-diffusion|dall-e|seedream|gpt-image)/i;
+function pickKieModel(imageModelSlug: string | null): string {
+  const s = imageModelSlug?.trim();
+  return s && KIE_IMAGE_MODEL_RE.test(s) ? s : KIE_MODEL;
+}
+
+async function kieCreateTask(
+  prompt: string,
+  aspect: string,
+  imageModelSlug: string | null = null,
+): Promise<string> {
   const apiKey = process.env.KIE_API_KEY;
   if (!apiKey) throw new Error('image service not configured');
   const res = await fetch(`${KIE_BASE}/api/v1/playground/createTask`, {
@@ -235,7 +252,7 @@ async function kieCreateTask(prompt: string, aspect: string): Promise<string> {
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: KIE_MODEL,
+      model: pickKieModel(imageModelSlug),
       input: { prompt, aspect_ratio: aspect, output_format: 'png' },
     }),
   });
@@ -284,7 +301,11 @@ interface ImageGenResult {
   cost_rub: number;
 }
 
-async function imageGen(prompt: string, aspectRaw?: string): Promise<ImageGenResult> {
+async function imageGen(
+  prompt: string,
+  aspectRaw?: string,
+  imageModelSlug: string | null = null,
+): Promise<ImageGenResult> {
   const aspect = normaliseAspect(aspectRaw);
   if (!process.env.KIE_API_KEY) {
     // Graceful fallback for envs without Kie configured
@@ -295,7 +316,7 @@ async function imageGen(prompt: string, aspectRaw?: string): Promise<ImageGenRes
       cost_rub: 0,
     };
   }
-  const taskId = await kieCreateTask(prompt, aspect);
+  const taskId = await kieCreateTask(prompt, aspect, imageModelSlug);
   const url = await kiePoll(taskId);
   return { url, prompt, aspect_ratio: aspect, cost_rub: KIE_COST_CREDITS };
 }
@@ -374,6 +395,12 @@ export interface ToolContext {
   // `memory` tool scopes every read/write by it — a hirer cannot reach the
   // owner's or another hirer's keyspace.
   scopeHirerId?: string | null;
+  // Multimodel per-role (migration 0042): the agent's resolved IMAGE model slug
+  // (image_model_slug ?? model_slug). Passed to image_gen so the agent's chosen
+  // image model overrides the built-in Kie default WHEN it names a Kie image model;
+  // a non-Kie/gateway-LLM slug or null leaves the default untouched (never breaks
+  // generation). No billing impact — the Kie tool fee is a fixed credit fee.
+  imageModelSlug?: string | null;
   // R-20: injected by agent-runner. Resolves + runs ONE completion of a target
   // agent (same-owner-guarded, recursion-stripped, capped) and returns its output
   // + cost. Absent ⇒ the run has no call_agent capability and the tool degrades
@@ -408,6 +435,8 @@ export async function executeTool(
         const r = await imageGen(
           String(args.prompt ?? ''),
           args.aspect_ratio ? String(args.aspect_ratio) : undefined,
+          // Multimodel per-role: agent's resolved image model (may be null).
+          ctx.imageModelSlug ?? null,
         );
         return { result: { url: r.url, aspect_ratio: r.aspect_ratio }, cost_rub: r.cost_rub };
       }

@@ -59,6 +59,10 @@ export default function NewAgentPage() {
   const [name, setName] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [modelSlug, setModelSlug] = useState('');
+  // Multimodel per-role: optional per-role model slots. Пусто = «как основная».
+  const [imageModelSlug, setImageModelSlug] = useState('');
+  const [voiceModelSlug, setVoiceModelSlug] = useState('');
+  const [visionModelSlug, setVisionModelSlug] = useState('');
   const [tools, setTools] = useState<string[]>([]);
   // AI-builder — «создать агента из слов». Генерация house-funded (не run, не дебет):
   // модель возвращает черновик-спек, которым предзаполняется обычная форма ниже.
@@ -284,6 +288,10 @@ export default function NewAgentPage() {
           description: aiRole.trim() || undefined,
           system_prompt: systemPrompt.trim(),
           model_slug: modelSlug.trim() || undefined,
+          // Multimodel per-role: пусто = «как основная» (бэк сохранит NULL).
+          image_model_slug: imageModelSlug.trim() || undefined,
+          voice_model_slug: voiceModelSlug.trim() || undefined,
+          vision_model_slug: visionModelSlug.trim() || undefined,
           tools,
           daily_budget_credits: dailyCents,
           budget_rub_monthly: monthlyCents,
@@ -338,6 +346,11 @@ export default function NewAgentPage() {
       ? (providers.find((p) => p.id === providerId)?.name ?? 'свой провайдер')
       : 'AIAG';
   const mcpBudgetSummary = `${mcpUrl.trim() ? 'MCP подключён' : 'без MCP'} · ${dailyBudget.trim() || '0'} кр/день`;
+  const roleCount =
+    (imageModelSlug.trim() ? 1 : 0) +
+    (voiceModelSlug.trim() ? 1 : 0) +
+    (visionModelSlug.trim() ? 1 : 0);
+  const rolesSummary = roleCount ? `${roleCount} переопределено` : 'всё как основная';
 
   return (
     <>
@@ -483,6 +496,44 @@ export default function NewAgentPage() {
                   ))}
                 </select>
               </label>
+
+              <Accordion
+                title="🎚 Модели по ролям"
+                summary={rolesSummary}
+                open={!!open.roles}
+                onToggle={() => toggle('roles')}
+              >
+                <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -4 }}>
+                  Опционально: агент может использовать РАЗНЫЕ модели под разные задачи.
+                  Пусто = «как основная» (поле «Модель» выше).
+                </p>
+                {(
+                  [
+                    { key: 'image', label: 'Картинки', value: imageModelSlug, set: setImageModelSlug },
+                    { key: 'voice', label: 'Голос', value: voiceModelSlug, set: setVoiceModelSlug },
+                    { key: 'vision', label: 'Зрение', value: visionModelSlug, set: setVisionModelSlug },
+                  ] as const
+                ).map((r) => (
+                  <label key={r.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span className="tma-card-text">{r.label}</span>
+                    <select
+                      value={r.value}
+                      onChange={(e) => r.set(e.target.value)}
+                      className="tma-input tma-mono"
+                    >
+                      <option value="">— как основная —</option>
+                      {r.value && !models.some((m) => m.slug === r.value) && (
+                        <option value={r.value}>{r.value}</option>
+                      )}
+                      {models.map((m) => (
+                        <option key={m.slug} value={m.slug}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </Accordion>
 
               <Accordion
                 title="Инструкция"

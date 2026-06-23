@@ -15,6 +15,13 @@ export interface AgentRow {
   system_prompt: string;
   tools: string[];
   model_slug: string | null;
+  // Multimodel per-role (migration 0042). Optional per-task-role model overrides;
+  // NULL ⇒ fall back to the primary model_slug. resolveModelForRole(agent, role)
+  // in agent-runner picks the slug. Billing is unchanged — the worker bills by the
+  // model it actually CALLS; these only select WHICH slug per role.
+  image_model_slug: string | null;
+  voice_model_slug: string | null;
+  vision_model_slug: string | null;
   // D-1: credit unit = integer US cents (BIGINT). 1 credit = $0.01.
   budget_credits_monthly: string;
   daily_budget_credits: string;
@@ -61,6 +68,7 @@ export async function loadRun(runId: string): Promise<AgentRunRow | null> {
 export async function loadAgent(agentId: string): Promise<AgentRow | null> {
   const rows = (await sql`
     SELECT id::text, tg_user_id::text, name, system_prompt, tools, model_slug,
+           image_model_slug, voice_model_slug, vision_model_slug,
            budget_credits_monthly::text AS budget_credits_monthly,
            daily_budget_credits::text   AS daily_budget_credits,
            spent_today_credits::text    AS spent_today_credits,
@@ -96,6 +104,7 @@ export async function loadAgentByName(
 ): Promise<AgentRow | null> {
   const rows = (await sql`
     SELECT id::text, tg_user_id::text, name, system_prompt, tools, model_slug,
+           image_model_slug, voice_model_slug, vision_model_slug,
            budget_credits_monthly::text AS budget_credits_monthly,
            daily_budget_credits::text   AS daily_budget_credits,
            spent_today_credits::text    AS spent_today_credits,

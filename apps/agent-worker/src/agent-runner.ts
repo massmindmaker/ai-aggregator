@@ -75,7 +75,56 @@ interface Upstream {
   isExternal: boolean;  // external = user-supplied; cost stays 0
 }
 
-export async function resolveUpstream(agent: AgentRow): Promise<Upstream> {
+/**
+ * Multimodel per-role (migration 0042). An agent may set OPTIONAL per-role model
+ * slugs; pick the slug for the given task role, falling back to the primary
+ * `model_slug` whenever the role slot is empty/blank.
+ *
+ * Roles:
+ *  - 'chat'   → the primary model_slug (default; ordinary text turn)
+ *  - 'vision' → vision_model_slug ?? model_slug (an image came IN the message)
+ *  - 'image'  → image_model_slug  ?? model_slug (image GENERATION, image_gen tool)
+ *  - 'voice'  → voice_model_slug  ?? model_slug (voice / TTS)
+ *
+ * This ONLY chooses WHICH slug per role. Billing/markup/settleRun are untouched —
+ * the worker bills by the model it actually CALLS. An out-of-registry slug falls
+ * back to OpenRouter via the gateway exactly like the primary model does today.
+ * Returns null when the agent has no primary model (caller then uses DEFAULT_MODEL).
+ */
+export type ModelRole = 'chat' | 'vision' | 'image' | 'voice';
+export function resolveModelForRole(agent: AgentRow, role: ModelRole): string | null {
+  const base = agent.model_slug?.trim() || null;
+  const pick = (slot: string | null | undefined) => slot?.trim() || base;
+  switch (role) {
+    case 'vision':
+      return pick(agent.vision_model_slug);
+    case 'image':
+      return pick(agent.image_model_slug);
+    case 'voice':
+      return pick(agent.voice_model_slug);
+    case 'chat':
+    default:
+      return base;
+  }
+}
+
+/**
+ * Pick the task role of a run from its input. Today a run carries a single text
+ * field, so the only role we can actually detect is VISION — when the input clearly
+ * references an image (data:image URI, an http(s) image URL, or markdown image
+ * syntax). Text-only ⇒ 'chat'. Image-GENERATION and voice/TTS are driven by tools,
+ * not the run input, so they resolve their model at the tool call (image_gen below),
+ * not here. Conservative: a false 'chat' is harmless (uses the primary model).
+ */
+export function detectInputRole(input: string): ModelRole {
+  const s = input ?? '';
+  if (/data:image\//i.test(s)) return 'vision';
+  if (/!\[[^\]]*\]\(/.test(s)) return 'vision'; // markdown image ![alt](url)
+  if (/https?:\/\/\S+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:[?#]\S*)?/i.test(s)) return 'vision';
+  return 'chat';
+}
+
+export async function resolveUpstream(agent: AgentRow, role: ModelRole = 'chat'): Promise<Upstream> {
   // R0-6: provider-picker path (most specific first). provider_id NOT NULL ⇒
   // the agent was created via the new catalog; route to its chosen provider's
   // decrypted credential. It IS billable through us (isExternal=false).
@@ -101,9 +150,11 @@ export async function resolveUpstream(agent: AgentRow): Promise<Upstream> {
     // a complete "https://x/v1/chat/completions" URL.
     const url = /\/chat\/completions$/.test(base) ? base : `${base}/chat/completions`;
     const apiKey = decryptSecret(agent.external_api_key_encrypted);
+    // BYOK keeps its explicit external_model_slug first; otherwise the role-resolved
+    // primary slug (vision/image/voice override → chat fallback).
     const model =
       agent.external_model_slug?.trim() ||
-      agent.model_slug?.trim() ||
+      resolveModelForRole(agent, role) ||
       DEFAULT_MODEL;
     return { url, apiKey, model, isExternal: true };
   }
@@ -116,7 +167,8 @@ export async function resolveUpstream(agent: AgentRow): Promise<Upstream> {
   // fall back to OpenRouter directly so runs keep working — the R0-2 balance debit
   // and the auth fixes still apply; only the gateway routing/markup/white-label is
   // OFF. Logged loudly so the missing-key state is visible in the worker logs.
-  const model = agent.model_slug?.trim() || DEFAULT_MODEL;
+  // Role-resolved slug: vision/image/voice override → primary model_slug fallback.
+  const model = resolveModelForRole(agent, role) || DEFAULT_MODEL;
   const gwKey = process.env.AIAG_GATEWAY_KEY;
   if (gwKey) {
     return { url: AIAG_GATEWAY_URL, apiKey: gwKey, model, isExternal: false };
@@ -532,9 +584,13 @@ export async function runAgent(runId: string): Promise<void> {
 
   // ---- upstream resolution (provider_id / aiag-gateway / external) ----
   // Resolve BEFORE the balance gate so external (user-paid) runs skip it.
+  // Multimodel per-role: pick the role from the run input (vision when an image is
+  // referenced, else chat) so the agent's vision_model_slug is used for image-input
+  // turns. Image-generation/voice models are resolved at their tool call, not here.
+  const runRole = detectInputRole(run.input);
   let upstream: Upstream;
   try {
-    upstream = await resolveUpstream(agent);
+    upstream = await resolveUpstream(agent, runRole);
   } catch (e) {
     const msg = `upstream_misconfigured: ${(e as Error).message.slice(0, 160)}`;
     await markFailed(runId, msg);
@@ -778,6 +834,9 @@ export async function runAgent(runId: string): Promise<void> {
               // HIRE ISOLATION: server-derived per-hirer memory scope (null for
               // owner runs). The memory tool namespaces every read/write by it.
               scopeHirerId,
+              // Multimodel per-role: agent's resolved IMAGE model (image_model_slug
+              // ?? model_slug) → image_gen. Non-image/null slug keeps the default.
+              imageModelSlug: resolveModelForRole(agent, 'image'),
               // R-20: delegation callback. Enforces the per-run cap, then runs ONE
               // owner-guarded, recursion-stripped sub-completion. Its cost is
               // returned as cost_rub and folded into toolFeesCredits → settleRun

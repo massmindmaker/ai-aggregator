@@ -117,17 +117,159 @@ export async function GET(req: NextRequest) {
       LIMIT 200
     `) as unknown as TemplateRow[];
 
+    // Available-to-withdraw = lifetime rent income − income already committed to a
+    // payout request (any non-failed author_payouts row). This is what POST can
+    // request a cash-out for. Read-only here.
+    const availRows = (await sql`
+      SELECT (
+        COALESCE((
+          SELECT SUM(delta_credits) FROM tg_ledger_entries
+          WHERE tg_user_id = ${authorId}::bigint AND kind = 'rent_credit'
+        ), 0)
+        - COALESCE((
+          SELECT SUM(amount_credits) FROM author_payouts
+          WHERE author_tg_user_id = ${authorId}::bigint AND status <> 'failed'
+        ), 0)
+      )::text AS available
+    `) as unknown as Array<{ available: string }>;
+    const availNum = Number(availRows[0]?.available ?? '0');
+    const available_income_credits = (availNum > 0 ? availNum : 0).toString();
+
+    // Recent payout requests (status only — pending until the flag-gated worker
+    // batch actually sends). No secrets.
+    const payouts = (await sql`
+      SELECT id::text AS id,
+             amount_credits::text AS amount_credits,
+             status,
+             tx_hash,
+             requested_at
+      FROM author_payouts
+      WHERE author_tg_user_id = ${authorId}::bigint
+      ORDER BY requested_at DESC
+      LIMIT 20
+    `) as unknown as Array<{
+      id: string;
+      amount_credits: string;
+      status: string;
+      tx_hash: string | null;
+      requested_at: string;
+    }>;
+
     return NextResponse.json({
       total_income_credits,
       month_income_credits,
       spendable_credits,
+      available_income_credits,
       templates,
       recent_entries,
+      payouts,
+      payouts_enabled: process.env.TON_PAYOUTS_ENABLED === 'true',
     });
   } catch (e) {
     // Return a real error (NOT a zeroed 200) — a transient DB failure must show the
     // page's «Ошибка» state, never tell an author they earned 0 when they didn't.
     console.error('author-income error:', e);
     return NextResponse.json({ error: 'fetch_failed' }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/tma/me/author-income — create an author-payout REQUEST (cash-out).
+ *
+ * MONEY-OUT SAFETY: this records a 'pending' payout + an off-chain debit ledger row
+ * (so the same income can't be requested twice). It NEVER moves funds — the actual
+ * USDT transfer is done by the flag-gated worker batch (apps/agent-worker payouts.ts),
+ * which is a no-op unless TON_PAYOUTS_ENABLED='true' AND a payout wallet is configured.
+ * With the flag off, a request just sits 'pending' and nothing leaves the wallet.
+ *
+ * Scoped to the authed author (x-tma-user-id). Prepared statements only.
+ */
+interface PayoutBody {
+  amount_credits: number;
+  dest_address: string;
+}
+
+export async function POST(req: NextRequest) {
+  const authorId = req.headers.get('x-tma-user-id');
+  if (!authorId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  let body: PayoutBody;
+  try {
+    body = (await req.json()) as PayoutBody;
+  } catch {
+    return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+  }
+  const amount = Number(body.amount_credits);
+  const dest = body.dest_address;
+  if (!Number.isFinite(amount) || !Number.isInteger(amount) || amount <= 0) {
+    return NextResponse.json({ error: 'invalid_amount' }, { status: 400 });
+  }
+  if (!dest || typeof dest !== 'string' || dest.length < 10) {
+    return NextResponse.json({ error: 'dest_address_required' }, { status: 400 });
+  }
+  const amountBig = BigInt(amount);
+
+  try {
+    let payoutId: string | null = null;
+    let insufficient = false;
+    await sql.begin(async (sql) => {
+      // Re-check available income INSIDE the tx so two concurrent requests can't
+      // both pass the guard for the same income.
+      const incomeRows = (await sql`
+        SELECT COALESCE(SUM(delta_credits), 0)::text AS total
+        FROM tg_ledger_entries
+        WHERE tg_user_id = ${authorId}::bigint AND kind = 'rent_credit'
+      `) as unknown as Array<{ total: string }>;
+      const committedRows = (await sql`
+        SELECT COALESCE(SUM(amount_credits), 0)::text AS total
+        FROM author_payouts
+        WHERE author_tg_user_id = ${authorId}::bigint AND status <> 'failed'
+      `) as unknown as Array<{ total: string }>;
+      const available =
+        BigInt(incomeRows[0]?.total ?? '0') - BigInt(committedRows[0]?.total ?? '0');
+      if (available < amountBig) {
+        insufficient = true;
+        return;
+      }
+
+      const ins = (await sql`
+        INSERT INTO author_payouts
+          (author_tg_user_id, amount_credits, asset, dest_address, status)
+        VALUES
+          (${authorId}::bigint, ${amountBig.toString()}::bigint, 'USDT', ${dest}, 'pending')
+        RETURNING id::text
+      `) as unknown as Array<{ id: string }>;
+      payoutId = ins[0]!.id;
+
+      // Off-chain debit ledger row (audit; prevents double cash-out of same income).
+      // Idempotent via uq_ledger_ref(ref_kind, ref_id, kind). Does NOT touch
+      // tg_user_balances — income spendability is separate.
+      await sql`
+        INSERT INTO tg_ledger_entries
+          (tg_user_id, delta_credits, kind, ref_kind, ref_id, balance_after)
+        VALUES
+          (${authorId}::bigint, ${(-amountBig).toString()}::bigint, 'author_payout',
+           'author_payout', ${payoutId}::uuid, ${(available - amountBig).toString()}::bigint)
+        ON CONFLICT (ref_kind, ref_id, kind) WHERE ref_id IS NOT NULL DO NOTHING
+      `;
+    });
+
+    if (insufficient) {
+      return NextResponse.json({ error: 'insufficient_income' }, { status: 400 });
+    }
+    if (!payoutId) {
+      return NextResponse.json({ error: 'payout_request_failed' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      payout_id: payoutId,
+      status: 'pending',
+      amount_credits: amountBig.toString(),
+      // Honest: with the flag off, the request stays pending until cash-out is enabled.
+      payouts_enabled: process.env.TON_PAYOUTS_ENABLED === 'true',
+    });
+  } catch (e) {
+    console.error('author-payout request error:', e);
+    return NextResponse.json({ error: 'request_failed' }, { status: 500 });
   }
 }

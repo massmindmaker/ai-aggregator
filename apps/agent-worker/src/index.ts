@@ -4,6 +4,7 @@ import http from 'node:http';
 import { runAgent } from './agent-runner.js';
 import { startScheduler } from './scheduler.js';
 import { startTopupReconciler } from './topup-reconciler.js';
+import { batchPayout, payoutsEnabled } from './payouts.js';
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
 const PORT = Number(process.env.PORT ?? 3101);
@@ -43,6 +44,21 @@ const scheduler = startScheduler(scheduleQueue);
 // path; this sweep is the safety net). Идемпотентен с клиентским поллом.
 const topupReconciler = startTopupReconciler();
 
+// R2-readiness: author-payout batch (MONEY-OUT, off by default). The tick is a
+// no-op unless TON_PAYOUTS_ENABLED='true' AND a payout wallet is configured — with
+// the flag off it never claims a row or moves funds (see payouts.ts safety contract).
+// Single resident worker = single wallet seqno serialization boundary.
+const PAYOUT_TICK_MS = 300_000; // 5 min
+const payoutTimer = setInterval(() => {
+  void batchPayout().catch((e) =>
+    console.error('[payouts] batch tick failed:', (e as Error).message),
+  );
+}, PAYOUT_TICK_MS);
+if (typeof payoutTimer.unref === 'function') payoutTimer.unref();
+console.log(
+  `[payouts] batch-tick every ${PAYOUT_TICK_MS / 1000}s (enabled=${payoutsEnabled()})`,
+);
+
 http
   .createServer((_req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -58,6 +74,7 @@ async function shutdown(): Promise<void> {
   console.log('[agent-worker] shutting down…');
   scheduler.stop();
   topupReconciler.stop();
+  clearInterval(payoutTimer);
   await scheduleQueue.close();
   await worker.close();
   await connection.quit();

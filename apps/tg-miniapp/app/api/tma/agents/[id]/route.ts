@@ -19,6 +19,10 @@ interface AgentRow {
   system_prompt: string;
   tools: unknown;
   model_slug: string | null;
+  // Multimodel per-role (migration 0042): optional per-role model overrides.
+  image_model_slug: string | null;
+  voice_model_slug: string | null;
+  vision_model_slug: string | null;
   budget_rub_monthly: string;
   // Daily spend cap (credits) — the worker's getOrResetDailyBucket guard column
   // (migration 0020, renamed daily_budget_rub → daily_budget_credits in 0029).
@@ -79,7 +83,9 @@ interface RunRow {
 async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null> {
   const rows = (await sql`
     SELECT agents.id::text, agents.tg_user_id::text, agents.template_kind, agents.name, agents.description,
-           agents.system_prompt, agents.tools, agents.model_slug, agents.budget_credits_monthly::text AS budget_rub_monthly,
+           agents.system_prompt, agents.tools, agents.model_slug,
+           agents.image_model_slug, agents.voice_model_slug, agents.vision_model_slug,
+           agents.budget_credits_monthly::text AS budget_rub_monthly,
            agents.daily_budget_credits::text,
            agents.status, agents.created_at, agents.updated_at,
            agents.connection_type, agents.external_base_url, agents.external_api_key_hint,
@@ -177,6 +183,10 @@ async function loadAgentForViewer(id: string, tgUserId: string): Promise<AgentVi
     system_prompt: r.system_prompt,
     tools: r.tools,
     model_slug: r.model_slug,
+    // Per-role models are owner-only spec detail — hidden in the public/hirer view.
+    image_model_slug: null,
+    voice_model_slug: null,
+    vision_model_slug: null,
     budget_rub_monthly: r.budget_rub_monthly,
     daily_budget_credits: r.daily_budget_credits,
     status: r.status,
@@ -267,6 +277,11 @@ interface PatchBody {
   system_prompt?: string;
   tools?: unknown[];
   model_slug?: string;
+  // Multimodel per-role (migration 0042): optional per-role slugs. Sent as a string
+  // (set/replace) or '' (clear → NULL); undefined ⇒ left unchanged.
+  image_model_slug?: string;
+  voice_model_slug?: string;
+  vision_model_slug?: string;
   budget_rub_monthly?: number;
   // C10: daily spend cap, integer credits (the worker's daily guard column).
   daily_budget_credits?: number;
@@ -313,6 +328,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const tools = Array.isArray(body.tools) ? body.tools : (existing.tools as unknown[]);
   const modelSlug =
     body.model_slug !== undefined ? (body.model_slug?.trim() || null) : existing.model_slug;
+  // Multimodel per-role: undefined ⇒ keep existing; provided ⇒ trim, '' ⇒ NULL.
+  const imageModelSlug =
+    body.image_model_slug !== undefined
+      ? (body.image_model_slug?.trim() || null)
+      : existing.image_model_slug;
+  const voiceModelSlug =
+    body.voice_model_slug !== undefined
+      ? (body.voice_model_slug?.trim() || null)
+      : existing.voice_model_slug;
+  const visionModelSlug =
+    body.vision_model_slug !== undefined
+      ? (body.vision_model_slug?.trim() || null)
+      : existing.vision_model_slug;
   const budget =
     typeof body.budget_rub_monthly === 'number' && body.budget_rub_monthly >= 0
       ? body.budget_rub_monthly
@@ -419,6 +447,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         system_prompt = ${systemPrompt},
         tools = ${sql.json(tools as never)},
         model_slug = ${modelSlug},
+        image_model_slug = ${imageModelSlug},
+        voice_model_slug = ${voiceModelSlug},
+        vision_model_slug = ${visionModelSlug},
         budget_credits_monthly = ${budget},
         daily_budget_credits = ${dailyBudget},
         cloneable = ${cloneable},
@@ -426,7 +457,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     WHERE id = ${params.id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
     RETURNING id::text, tg_user_id::text, template_kind, name, description,
-              system_prompt, tools, model_slug, budget_credits_monthly::text AS budget_rub_monthly,
+              system_prompt, tools, model_slug,
+              image_model_slug, voice_model_slug, vision_model_slug,
+              budget_credits_monthly::text AS budget_rub_monthly,
               daily_budget_credits::text,
               status, created_at, updated_at,
               connection_type, external_base_url, external_api_key_hint,
