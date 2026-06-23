@@ -143,7 +143,21 @@ export default function AccountPage() {
     })();
   }, [token]);
 
-  function onLogout() {
+  async function onLogout() {
+    // Server-side revoke: put this token's jti on the denylist so a copy that
+    // leaked off this device stops working immediately. Best-effort — if the
+    // call fails (offline / store not configured), we still clear locally and
+    // leave; the token simply expires on its own.
+    if (token) {
+      try {
+        await fetch('/tg/api/tma/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch {
+        /* выход не блокируем при сетевой ошибке */
+      }
+    }
     clearAuthToken();
     router.replace('/');
   }

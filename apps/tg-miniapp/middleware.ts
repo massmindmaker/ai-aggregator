@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify, errors } from 'jose';
+import { isRevoked } from '@/lib/jwt-denylist';
 
 // R0-5: fail hard at module load if TMA_JWT_SECRET is missing or too short.
 // Throwing here causes Next to refuse to serve protected routes rather than
@@ -48,6 +49,15 @@ export async function middleware(req: NextRequest) {
       issuer: 'aiag-tma',
       audience: 'aiag-gateway',
     });
+
+    // Live revocation: if this token's jti is on the denylist (stolen/logged-out),
+    // reject it even though the signature is still valid. Only runs when the token
+    // carries a jti AND the denylist store is configured — isRevoked() fails open
+    // (returns false) on a missing store or a transient network error, so a Redis
+    // blip never blocks legitimate users on the happy path.
+    if (typeof payload.jti === 'string' && (await isRevoked(payload.jti))) {
+      return NextResponse.json({ error: 'token_revoked' }, { status: 401 });
+    }
 
     const reqHeaders = new Headers(req.headers);
     // R0-4 defense-in-depth: strip any inbound spoofed x-tma-user-id and the

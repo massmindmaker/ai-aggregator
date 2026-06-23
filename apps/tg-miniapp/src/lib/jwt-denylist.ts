@@ -1,93 +1,98 @@
 /**
- * JWT denylist helper — deferred live-revocation wiring (T-15.1-10, R0 non-blocking).
+ * JWT denylist — live revocation of issued tokens (steal / logout).
  *
- * Design:
- *   revoke(jti, ttl)  — ioredis, node-runtime callers only (future logout route).
- *   isRevoked(jti)    — Edge-safe, no ioredis import.
- *                       If UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN are set,
- *                       uses the Upstash REST API (GET by key).
- *                       Otherwise returns false (stub) — the alg-pin + CVE patch +
- *                       fail-hard secret are the R0 blocking layer; live revocation
- *                       lands in T-15.1-10 deferred hardening.
+ * Storage: Upstash Redis REST (`@upstash/redis`) — edge-compatible (HTTP, no TCP
+ * socket), so the same client works in both `middleware.ts` (Edge) and node-runtime
+ * routes (logout). One store, one source of truth for both `revoke` and `isRevoked`.
+ *
+ * Env (set both or neither):
+ *   UPSTASH_REDIS_REST_URL
+ *   UPSTASH_REDIS_REST_TOKEN
+ *
+ * Soft degradation — if env is NOT configured:
+ *   - isRevoked() returns false (never blocks a legitimate login) + one warn log.
+ *   - revoke()  is a no-op + one warn log.
+ *   The alg-pin + CVE patch + fail-hard secret remain the primary auth layer; live
+ *   revocation simply stays off until the founder provisions Upstash.
  *
  * Key namespace: tma:jwt:denylist:{jti}
- *   SET with EX = remaining token lifetime so the set self-cleans.
- *
- * isRevoked status for R0: STUB (returns false when Upstash not configured).
- * revoke status for R0: FUNCTIONAL (ioredis, node-runtime only).
+ *   SET with EX = remaining token lifetime so the entry self-cleans on expiry.
  */
 
-// ---------------------------------------------------------------------------
-// revoke — node-runtime only (ioredis); called from future logout/session routes
-// ---------------------------------------------------------------------------
+import { Redis } from '@upstash/redis';
+
+const KEY_PREFIX = 'tma:jwt:denylist:';
+
+// One warn per process per method, so a missing-env deployment does not spam logs.
+let warnedRevoke = false;
+let warnedIsRevoked = false;
+
+/**
+ * Build an Upstash REST client from env, or null if env is absent.
+ * Returns null (rather than throwing) so callers can degrade softly.
+ */
+function getRedis(): Redis | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  return new Redis({ url, token });
+}
 
 /**
  * Add a jti to the denylist with a TTL matching the token's remaining lifetime.
- * Call from node-runtime routes only — ioredis cannot run on the Edge.
+ * Edge- and node-safe (Upstash REST). No-op when the token is already expired or
+ * when the denylist store is not configured.
  *
- * @param jti        - JWT ID (the `jti` claim value from the token)
- * @param ttlSeconds - seconds until the token expires (set EX to match so the set self-cleans)
+ * @param jti        - JWT ID (the `jti` claim value)
+ * @param ttlSeconds - seconds until the token's own exp (EX so the entry self-cleans)
  */
 export async function revoke(jti: string, ttlSeconds: number): Promise<void> {
+  if (!jti) return;
   if (ttlSeconds <= 0) return; // already expired — nothing to revoke
 
-  // Lazy import keeps ioredis out of Edge bundle analysis paths.
-  const { default: Redis } = await import('ioredis');
-  const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) {
-    throw new Error('REDIS_URL not configured — cannot revoke JWT');
+  const redis = getRedis();
+  if (!redis) {
+    if (!warnedRevoke) {
+      console.warn(
+        '[jwt-denylist] UPSTASH_REDIS_REST_URL/TOKEN not set — revoke() is a no-op (live revocation disabled).',
+      );
+      warnedRevoke = true;
+    }
+    return;
   }
-  const redis = new Redis(redisUrl);
-  try {
-    const key = `tma:jwt:denylist:${jti}`;
-    await redis.set(key, '1', 'EX', ttlSeconds);
-  } finally {
-    await redis.quit();
-  }
-}
 
-// ---------------------------------------------------------------------------
-// isRevoked — Edge-safe; no ioredis import
-// ---------------------------------------------------------------------------
+  await redis.set(`${KEY_PREFIX}${jti}`, '1', { ex: Math.ceil(ttlSeconds) });
+}
 
 /**
  * Check whether a jti has been revoked.
- *
- * Edge-safe implementation:
- *   - If UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN are set in env,
- *     queries the Upstash REST API (GET /get/{key}).
- *   - Otherwise returns false (stub) for R0. Wire real revocation in T-15.1-10.
+ * Edge-safe. Fail-open: a missing store or a transient network error returns false
+ * (allow) rather than locking out legitimate users — only an explicit denylist hit
+ * returns true.
  *
  * @param jti - JWT ID claim to check
- * @returns   true if the token has been explicitly revoked; false otherwise
+ * @returns   true only if the token was explicitly revoked; false otherwise
  */
 export async function isRevoked(jti: string): Promise<boolean> {
-  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!jti) return false;
 
-  if (!upstashUrl || !upstashToken) {
-    // Stub path — deferred hardening (T-15.1-10).
-    // The alg-pin + CVE patch + fail-hard secret cover R0; live revocation is
-    // a future work item. Return false so the middleware continues normally.
+  const redis = getRedis();
+  if (!redis) {
+    if (!warnedIsRevoked) {
+      console.warn(
+        '[jwt-denylist] UPSTASH_REDIS_REST_URL/TOKEN not set — isRevoked() returns false (live revocation disabled).',
+      );
+      warnedIsRevoked = true;
+    }
     return false;
   }
 
-  // Upstash REST API: GET /get/{key} returns { result: "1" } if present, { result: null } if absent.
-  const key = `tma:jwt:denylist:${jti}`;
-  const url = `${upstashUrl.replace(/\/$/, '')}/get/${encodeURIComponent(key)}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${upstashToken}` },
-    // Short timeout for the middleware hot path — treat fetch errors as non-revoked
-    // to avoid breaking auth on transient Redis blips.
-  });
-
-  if (!res.ok) {
-    // Network or Upstash error — fail open (non-revoked) to avoid auth disruption.
-    // A stricter policy (fail closed) would call for returning true here, but that
-    // would lock out all users on any Redis blip; R0 favours availability.
+  try {
+    const exists = await redis.exists(`${KEY_PREFIX}${jti}`);
+    return exists === 1;
+  } catch (err) {
+    // Fail-open on a transient Upstash/network blip — never block legitimate auth.
+    console.warn('[jwt-denylist] isRevoked check failed, failing open (treated as not revoked):', err);
     return false;
   }
-
-  const body = (await res.json()) as { result: string | null };
-  return body.result !== null;
 }
