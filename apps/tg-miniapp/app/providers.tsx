@@ -2,6 +2,7 @@
 
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
 import type { ReactNode } from 'react';
+import { useTelegramNav } from '@/hooks/useTelegramNav';
 
 /**
  * MANDATORY pattern (spike result 2026-05-11):
@@ -16,7 +17,17 @@ const MANIFEST_URL =
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <TonConnectUIProvider manifestUrl={MANIFEST_URL}>
+      <TelegramNavGate />
       {children}
     </TonConnectUIProvider>
   );
+}
+
+/**
+ * Renders nothing — exists only to host the native BackButton / nav wiring as a
+ * side-effect hook inside the client boundary (provider tree).
+ */
+function TelegramNavGate() {
+  useTelegramNav();
+  return null;
 }

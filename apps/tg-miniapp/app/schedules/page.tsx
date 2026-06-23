@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
+import { haptic } from '@/lib/haptics';
 
 // ---- types (mirror GET /api/tma/me/schedules) ----
 interface ScheduleRow {
@@ -119,6 +120,7 @@ export default function SchedulesPage() {
 
   async function toggle(s: ScheduleRow) {
     if (!token) return;
+    haptic.select();
     setBusyId(s.id);
     try {
       const res = await fetch(`/tg/api/tma/me/schedules/${s.id}`, {
@@ -192,7 +194,19 @@ export default function SchedulesPage() {
   if (authLoading) {
     return (
       <main className="tma-shell tma-shell--with-nav">
-        <p className="tma-card-text">Загрузка…</p>
+        <header className="tma-header" aria-hidden>
+          <div className="aiag-skeleton tma-skel-block tma-skel-block--title" />
+          <div className="aiag-skeleton tma-skel-block tma-skel-block--wide" />
+        </header>
+        <section aria-hidden style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="tma-skel-card">
+              <div className="aiag-skeleton tma-skel-block tma-skel-block--title" />
+              <div className="aiag-skeleton tma-skel-block tma-skel-block--mid" />
+              <div className="aiag-skeleton tma-skel-block tma-skel-block--wide" />
+            </div>
+          ))}
+        </section>
         <BottomNav />
       </main>
     );
@@ -243,6 +257,8 @@ export default function SchedulesPage() {
           </section>
         )}
 
+        {schedules.length > 0 && (
+        <div className="aiag-stagger" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {schedules.map((s) => (
           <section className="tma-card" key={s.id} style={{ gap: 10 }}>
             <div className="tma-row">
@@ -304,6 +320,8 @@ export default function SchedulesPage() {
             </div>
           </section>
         ))}
+        </div>
+        )}
 
         {/* + Новое расписание */}
         {!formOpen ? (

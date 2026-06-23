@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
+import { haptic } from '@/lib/haptics';
 
 type Status =
   | 'idle'
@@ -81,6 +82,7 @@ export default function TopupPage() {
         const j = await r.json().catch(() => ({}));
         if (j.status === 'confirmed') {
           setStatus('confirmed');
+          haptic.notify('success');
           return;
         }
       } catch {
@@ -92,6 +94,7 @@ export default function TopupPage() {
   }
 
   async function handlePay() {
+    haptic.impact('medium');
     setErrorMsg(null);
     if (!token) {
       setErrorMsg('Откройте через @aiag_bot для авторизации.');
@@ -139,7 +142,17 @@ export default function TopupPage() {
   if (authLoading) {
     return (
       <main className="tma-shell tma-shell--with-nav">
-        <p className="tma-card-text">Загрузка…</p>
+        <header className="tma-header" aria-hidden>
+          <div className="aiag-skeleton tma-skel-block tma-skel-block--title" />
+          <div className="aiag-skeleton tma-skel-block tma-skel-block--wide" />
+        </header>
+        <section className="tma-skel-card" aria-hidden>
+          <div className="aiag-skeleton tma-skel-block tma-skel-block--mid" />
+          <div className="aiag-skeleton tma-skel-block tma-skel-block--wide" />
+        </section>
+        <section className="tma-skel-card" aria-hidden>
+          <div className="aiag-skeleton tma-skel-block tma-skel-block--btn" />
+        </section>
         <BottomNav />
       </main>
     );
@@ -175,7 +188,10 @@ export default function TopupPage() {
                 key={p}
                 type="button"
                 className={`tma-btn ${amount === p ? 'tma-btn--primary' : ''}`}
-                onClick={() => setAmount(p)}
+                onClick={() => {
+                  haptic.select();
+                  setAmount(p);
+                }}
               >
                 {fmtCredits(p)} кр
               </button>

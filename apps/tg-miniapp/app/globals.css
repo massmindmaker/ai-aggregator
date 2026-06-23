@@ -1324,12 +1324,44 @@ code {
   z-index: -1;
 }
 
+/* === Page transition (app/template.tsx) ===
+ * Re-mounted on every navigation → this enter keyframe replays per route.
+ * Soft fade + 10px lift, 320ms, canonical ease. Universal fallback; where
+ * the browser supports View Transitions the root cross-fade layers on top. */
+@keyframes tma-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tma-page-enter {
+  animation: tma-page-enter 320ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* View Transitions cross-fade (progressive enhancement). Old/new snapshots
+ * fade transform/opacity only; speed matches the keyframe. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
 /* Full reduced-motion off-switch for the aiag-* library (DESIGN.md rule). */
 @media (prefers-reduced-motion: reduce) {
   .aiag-fade-up,
   .aiag-skeleton,
   .aiag-pulse-dot::after,
-  .aiag-featured-ring::before {
+  .aiag-featured-ring::before,
+  .tma-page-enter {
+    animation: none !important;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
     animation: none !important;
   }
   .aiag-stagger > * {
@@ -2406,4 +2438,56 @@ code {
 .tma-mkt-note--link:hover {
   color: var(--ink);
   border-color: var(--accent);
+}
+
+/* === Sticky chat composer (agents/[id]) ===
+ * Keeps the message box pinned above the keyboard / bottom-nav with safe-area
+ * padding so the on-screen keyboard never hides it. transform/opacity-free —
+ * pure layout, nothing to disable in reduced-motion. */
+.tma-composer {
+  position: sticky;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding-top: 8px;
+  background: linear-gradient(to top, var(--bg) 72%, transparent);
+}
+
+/* === Generic skeleton card-row (dead-screen loaders) ===
+ * A card-shaped shimmer placeholder so loading screens echo their content
+ * structure instead of bare «Загрузка…». Reuses .tma-skeleton shimmer. */
+.tma-skel-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tma-skel-block {
+  height: 14px;
+  border-radius: 6px;
+}
+
+.tma-skel-block--title {
+  height: 18px;
+  width: 50%;
+}
+
+.tma-skel-block--wide {
+  width: 90%;
+}
+
+.tma-skel-block--mid {
+  width: 70%;
+}
+
+.tma-skel-block--btn {
+  height: 44px;
+  border-radius: var(--radius);
+  margin-top: 4px;
 }

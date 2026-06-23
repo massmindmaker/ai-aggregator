@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
@@ -432,6 +432,21 @@ export default function AgentDetailPage() {
     const t = setInterval(load, 1500);
     return () => clearInterval(t);
   }, [runs, load]);
+
+  // Тактильный «готово»: когда прогон перестаёт быть активным (был active →
+  // стал не-active), даём success-вибро. Ошибочный финал → error-вибро.
+  const prevRunActive = useRef(false);
+  useEffect(() => {
+    if (prevRunActive.current && !runActive) {
+      const last = runs[0];
+      if (last && (last.status === 'error' || last.status === 'failed')) {
+        haptic.notify('error');
+      } else {
+        haptic.notify('success');
+      }
+    }
+    prevRunActive.current = runActive;
+  }, [runActive, runs]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -947,7 +962,7 @@ export default function AgentDetailPage() {
               </div>
             )}
 
-            <form onSubmit={handleSend} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <form onSubmit={handleSend} className="tma-composer">
               {/* K2b: textarea с автовысотой. Enter = отправка, Shift+Enter = перенос. */}
               <textarea
                 rows={1}
@@ -956,6 +971,14 @@ export default function AgentDetailPage() {
                 onInput={(e) => {
                   e.currentTarget.style.height = 'auto';
                   e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 120) + 'px';
+                }}
+                onFocus={(e) => {
+                  // Клавиатура не должна перекрывать композер: подтягиваем его в зону
+                  // видимости после появления keyboard (короткая задержка под анимацию TG).
+                  const el = e.currentTarget;
+                  setTimeout(() => {
+                    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                  }, 250);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {

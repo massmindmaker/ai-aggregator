@@ -173,7 +173,33 @@ export default function AgentKanbanPage() {
           </p>
         </header>
 
-        {loading && <p className="tma-card-text">Загрузка…</p>}
+        {loading && (
+          <section
+            aria-hidden
+            style={{ display: 'flex', gap: 12, overflowX: 'hidden', paddingBottom: 8 }}
+          >
+            {[0, 1, 2].map((c) => (
+              <div
+                key={c}
+                style={{
+                  flex: '0 0 78vw',
+                  maxWidth: 320,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <div className="aiag-skeleton tma-skel-block tma-skel-block--mid" />
+                {[0, 1].map((t) => (
+                  <div key={t} className="tma-skel-card" style={{ padding: 12 }}>
+                    <div className="aiag-skeleton tma-skel-block tma-skel-block--wide" />
+                    <div className="aiag-skeleton tma-skel-block tma-skel-block--mid" />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </section>
+        )}
         {!loading && error && (
           <div className="tma-card">
             <p className="tma-card-text">
@@ -269,12 +295,15 @@ export default function AgentKanbanPage() {
                     >
                       <span
                         aria-hidden
+                        className="aiag-pulse-dot"
                         style={{
                           width: 8,
                           height: 8,
                           borderRadius: '50%',
                           background: 'var(--success)',
                           flex: '0 0 auto',
+                          position: 'relative',
+                          display: 'inline-block',
                         }}
                       />
                       <div style={{ minWidth: 0, flex: 1 }}>
