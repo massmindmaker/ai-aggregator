@@ -29,6 +29,9 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: '#0a0a0b',
+  // viewport-fit=cover — без него env(safe-area-inset-*) резолвится в 0 и
+  // notch/home-indicator паддинги (tg-bar/tabbar в globals.css) мертвы.
+  viewportFit: 'cover' as const,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

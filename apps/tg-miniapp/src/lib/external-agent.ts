@@ -9,7 +9,18 @@
  *
  * The probe just calls `GET ${base}/models` with the user's bearer to confirm
  * the endpoint is alive and the key is valid.
+ *
+ * ⚠️ `validateExternalUrl` below is only a cheap synchronous PRE-flight (regex /
+ * literal-IP rejection). It does NOT defend against DNS-rebinding (a public host
+ * that resolves to 127.0.0.1 / 169.254.169.254 / RFC1918) or a 302 redirect into
+ * an internal host — the URL parses fine, the regex sees a public hostname, and a
+ * naive fetch then dials the internal IP. The real defence is `safeFetch`, which
+ * DNS-resolves every A/AAAA record, blocks the private ranges, pins the socket to
+ * the vetted IP (anti-rebind) and re-validates every redirect hop. So the actual
+ * outbound probe MUST go through `safeFetch`, never raw `fetch`.
  */
+
+import { safeFetch, SsrfError } from './safe-fetch';
 
 export interface ValidationResult {
   ok: boolean;
@@ -81,7 +92,10 @@ export async function probeExternalEndpoint(
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, {
+    // SSRF-hardened: safeFetch DNS-resolves + blocks private ranges + pins the
+    // socket + re-validates redirects. It throws SsrfError on a policy violation
+    // (e.g. a public host that rebinds to an internal IP) — caught below.
+    const res = await safeFetch(url, {
       method: 'GET',
       headers: {
         authorization: `Bearer ${apiKey}`,
@@ -112,6 +126,11 @@ export async function probeExternalEndpoint(
     };
   } catch (e) {
     clearTimeout(t);
+    if (e instanceof SsrfError) {
+      // Blocked by the SSRF guard (private/loopback/link-local target, encoded-IP
+      // literal, or a redirect into an internal host). Don't leak the internal IP.
+      return { ok: false, error: 'blocked_target' };
+    }
     return { ok: false, error: (e as Error).message.slice(0, 200) };
   }
 }

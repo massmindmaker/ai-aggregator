@@ -41,9 +41,12 @@ export function useAuth() {
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     // Signal Telegram the Mini App is ready + take full height (no-op in a browser).
+    // disableVerticalSwipes — иначе свайп-скролл в TG iOS сворачивает приложение.
+    // Optional-chaining защищает старые клиенты, где метода ещё нет.
     try {
       tg?.ready?.();
       tg?.expand?.();
+      tg?.disableVerticalSwipes?.();
     } catch {
       /* ignore */
     }

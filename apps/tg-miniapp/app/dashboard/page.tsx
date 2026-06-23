@@ -423,7 +423,7 @@ export default function DashboardPage() {
                       portraitVideo={characterFor(a.template_kind)?.video}
                       role={a.description}
                       model={a.model_slug}
-                      metricLabel={`${Number(a.budget_rub_monthly).toFixed(0)} кр/мес`}
+                      metricLabel={`${fmtCredits(a.budget_rub_monthly)} кр/мес`}
                     />
                   ))}
                 </div>

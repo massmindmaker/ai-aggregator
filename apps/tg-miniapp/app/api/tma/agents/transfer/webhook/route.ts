@@ -59,10 +59,17 @@ export async function POST(req: NextRequest) {
   // T-16-09: Startonus does NOT sign webhooks and publishes no fixed egress IPs.
   // We build the callbackUrl ourselves, so we embed a shared secret (?token=…) and
   // verify it constant-time BEFORE any DB work. This closes the self-settle hole
-  // (the charge UUID is returned to the acquirer, so it is not a secret). If the
-  // secret is unconfigured the check is skipped (fail-open only when unset).
+  // (the charge UUID is returned to the acquirer, so it is not a secret).
+  //
+  // FAIL-HARD: if the secret is not configured we CANNOT authenticate the caller,
+  // so this money-moving finalizer must refuse to run (503) rather than fall open
+  // and let an unauthenticated request settle a charge / move ownership.
   const WEBHOOK_SECRET = process.env.TRANSFER_WEBHOOK_SECRET;
-  if (WEBHOOK_SECRET) {
+  if (!WEBHOOK_SECRET || WEBHOOK_SECRET.length === 0) {
+    console.error('[transfer/webhook] TRANSFER_WEBHOOK_SECRET unset — refusing (fail-hard)');
+    return NextResponse.json({ error: 'webhook_not_configured' }, { status: 503 });
+  }
+  {
     const got = Buffer.from(req.nextUrl.searchParams.get('token') ?? '');
     const want = Buffer.from(WEBHOOK_SECRET);
     if (got.length !== want.length || !timingSafeEqual(got, want)) {
