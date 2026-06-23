@@ -92,14 +92,15 @@ function fmtTime(iso: string | null): string {
     : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
 }
 
-// Цена для строки статов CharCard: центы → «N,NN кр» или «бесплатно».
+// Цена для строки статов CharCard: центы → «N,NN кр/мес» или «бесплатно».
+// Аренда = месячная подписка → цена всегда «кр/мес» (честно: списывается ежемесячно).
 function priceStat(price: string | null): string {
-  return price !== null ? `${fmtCredits(price)} кр` : 'бесплатно';
+  return price !== null ? `${fmtCredits(price)} кр/мес` : 'бесплатно';
 }
 
-// Подпись amber-кнопки: платный → аренда с ценой, бесплатный → использовать.
+// Подпись amber-кнопки: платный → ПОДПИСКА с месячной ценой, бесплатный → использовать.
 function actionLabel(price: string | null): string {
-  return price !== null ? `Арендовать · ${fmtCredits(price)} кр` : 'Использовать';
+  return price !== null ? `Подписаться · ${fmtCredits(price)} кр/мес` : 'Использовать';
 }
 
 export default function AgentsPage() {
@@ -121,6 +122,8 @@ export default function AgentsPage() {
 
   // ── Инбокс «Мои» ───────────────────────────────────────────────────────────
   const [agents, setAgents] = useState<Agent[] | null>(null);
+  // Нанятые агенты (active agent_sessions, не владелец) — отдельная секция.
+  const [hiredAgents, setHiredAgents] = useState<Agent[]>([]);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -137,7 +140,10 @@ export default function AgentsPage() {
           return;
         }
         const data = await res.json();
-        if (!cancelled) setAgents(data.agents ?? []);
+        if (!cancelled) {
+          setAgents(data.agents ?? []);
+          setHiredAgents(data.hired ?? []);
+        }
       } catch (e) {
         if (!cancelled) setFetchErr(e instanceof Error ? e.message : 'fetch_failed');
       }
@@ -147,12 +153,13 @@ export default function AgentsPage() {
     };
   }, [token]);
 
-  // Дефолт вкладки: если URL не задал tab — пустой инбокс → «Нанять», иначе «Мои».
-  // Применяем ОДИН раз, когда инбокс загрузился и вкладка ещё не выбрана.
+  // Дефолт вкладки: если URL не задал tab — пустой инбокс (нет ни своих, ни
+  // нанятых) → «Нанять», иначе «Мои». Применяем один раз после загрузки инбокса.
   useEffect(() => {
     if (tab !== null || agents === null) return;
-    setTabState(agents.length === 0 ? 'hire' : 'mine');
-  }, [tab, agents]);
+    const empty = agents.length === 0 && hiredAgents.length === 0;
+    setTabState(empty ? 'hire' : 'mine');
+  }, [tab, agents, hiredAgents]);
 
   // ── Шаблоны (для «Нанять» и рейла «Создать») ───────────────────────────────
   const [templates, setTemplates] = useState<Template[] | null>(null);
@@ -232,7 +239,11 @@ export default function AgentsPage() {
           headers: { Authorization: `Bearer ${token}` },
         })
           .then((r) => (r.ok ? r.json() : null))
-          .then((d) => d && setAgents(d.agents ?? []))
+          .then((d) => {
+            if (!d) return;
+            setAgents(d.agents ?? []);
+            setHiredAgents(d.hired ?? []);
+          })
           .catch(() => {});
         return;
       }
@@ -323,7 +334,7 @@ export default function AgentsPage() {
                   </section>
                 )}
 
-                {agents && agents.length === 0 && (
+                {agents && agents.length === 0 && hiredAgents.length === 0 && (
                   <div className="tma-card">
                     <p className="tma-card-text">У тебя пока нет агентов</p>
                     <button
@@ -381,6 +392,53 @@ export default function AgentsPage() {
                         </Link>
                       );
                     })}
+                  </section>
+                )}
+
+                {/* ── Нанятые — чужие агенты с активной сессией найма ── */}
+                {hiredAgents.length > 0 && (
+                  <section className="tma-hub-section">
+                    <div className="tma-section-head">
+                      <h2 className="tma-hub-h2">Нанятые</h2>
+                      <span className="tma-pill tma-pill--ok">нанят</span>
+                    </div>
+                    <div className="aiag-stagger">
+                      {hiredAgents.map((a) => {
+                        const hue = hueFor(a.id);
+                        const char = characterFor(a.template_kind);
+                        const live = a.last_status === 'running' || a.last_status === 'pending';
+                        return (
+                          <Link key={a.id} href={`/agents/${a.id}`} className="inbox-row">
+                            <span
+                              className="inbox-avatar"
+                              style={{
+                                background: `linear-gradient(155deg, oklch(0.34 0.09 ${hue}), oklch(0.17 0.045 ${hue}))`,
+                                color: `oklch(0.93 0.11 ${hue})`,
+                              }}
+                            >
+                              {char?.image ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={char.image}
+                                  alt=""
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                (a.name.trim()[0] ?? '?').toUpperCase()
+                              )}
+                              {live && <span className="inbox-live aiag-pulse-dot" aria-hidden />}
+                            </span>
+                            <span className="inbox-main">
+                              <span className="inbox-name-row">
+                                <span className="inbox-name">{a.name}</span>
+                                {a.last_at && <span className="inbox-time">{fmtTime(a.last_at)}</span>}
+                              </span>
+                              <span className="inbox-preview">{previewLine(a)}</span>
+                            </span>
+                          </Link>
+                        );
+                      })}
+                    </div>
                   </section>
                 )}
 

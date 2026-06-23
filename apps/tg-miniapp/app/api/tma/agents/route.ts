@@ -56,7 +56,33 @@ export async function GET(req: NextRequest) {
     ORDER BY COALESCE(r.created_at, a.created_at) DESC
   `) as unknown as AgentRow[];
 
-  return NextResponse.json({ agents: rows });
+  // ADDITIVE: нанятые агенты (active agent_sessions, но НЕ владелец). Изоляция
+  // истории per-наниматель — превью (last_*) берём ТОЛЬКО из ПРОГОНОВ нанимателя
+  // (r.tg_user_id = caller), а не из всей истории агента (OWASP LLM06).
+  const hired = (await sql`
+    SELECT a.id::text, a.tg_user_id::text, a.template_kind, a.name, a.description,
+           a.system_prompt, a.tools, a.model_slug,
+           a.budget_credits_monthly::text AS budget_rub_monthly,
+           a.status, a.created_at, a.updated_at, a.mcp_endpoint_url,
+           r.output AS last_output, r.created_at AS last_at, r.status AS last_status
+    FROM agent_sessions s
+    JOIN agents a ON a.id = s.agent_id
+    LEFT JOIN LATERAL (
+      SELECT output, created_at, status
+      FROM agent_runs
+      WHERE agent_id = a.id
+        AND tg_user_id = ${tgUserId}::bigint
+      ORDER BY created_at DESC
+      LIMIT 1
+    ) r ON true
+    WHERE s.hirer_tg_user_id = ${tgUserId}::bigint
+      AND s.status = 'active'
+      AND a.status = 'active'
+      AND a.tg_user_id <> ${tgUserId}::bigint
+    ORDER BY COALESCE(r.created_at, s.created_at) DESC
+  `) as unknown as AgentRow[];
+
+  return NextResponse.json({ agents: rows, hired });
 }
 
 interface CreateBody {

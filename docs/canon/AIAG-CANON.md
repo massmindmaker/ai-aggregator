@@ -354,6 +354,9 @@ Wireframe-борд есть (`docs/wireframes/missing-screens/`), **код не�
 | **2026-06-13** | **Hermes-рантайм основателя подтверждён ЖИВЫМ** (v0.12, VPS 176.124.211.11, :8642, 6 профилей, Docker) → **инфра-блокер СНЯТ**, строим control-plane на нём | §5, §12, спека control-plane | 🔨 Phase-0 spike (добрать REST :8642 когда SSH спадёт с fail2ban) |
 | **2026-06-13** | **R&D-синтез (12 агентов): критический путь наёма = память→Hermes-спайк→USDT-on-TON→агент-кошелёк** | §5 (поправки auth/изоляции), §6 (TON-стек) | ✅ ресёрч (`2026-06-13-rnd-research-synthesis.md`) |
 | **2026-06-13** | **Кредит off-chain (свой jetton НЕТ); агент-кошелёк = adopt unaudited the-ton-tech + наш cap-слой; TON API = TonCenter v3 + `@ton/ton`** | §6 TON-стек | 🔨 строим память+пополнение сейчас; кошелёк ждёт аудит+custody-гейт |
+| **2026-06-13** | **Наём MVP = на stateless-loop** (не ждём Hermes-профиль); наниматель сам запускает → `settleRun` дебетует его → money-path не трогаем | §3-4 модель найма | 🔨 СТРОИМ (ветка `feat/hire-memory-foundation`) |
+| **2026-06-13** | **Пополнение = stables-only USDT-on-TON + свой кошелёк (0%)**; кросс-чейн → Telegram Wallet (без оракула/KYB) | §6 | 🔨 строим jetton-ветку реконсилера |
+| **2026-06-13** | **Custody operatorKey агент-кошелька отложено** (последний на пути, заблокирован аудитом): testnet=AES-256-GCM на воркере, mainnet=Vault | §6 агент-кошелёк | ⚪ отложено |
 
 ---
 

@@ -3,8 +3,11 @@ import {
   loadAgent,
   loadAgentByName,
   sumMonthlySpend,
+  loadRentalSubscriptionForAgent,
+  sumPeriodSpendForAgent,
   getOrResetDailyBucket,
   loadHistory,
+  resolveRunScope,
   markStarted,
   markFailed,
   getBalance,
@@ -501,6 +504,32 @@ export async function runAgent(runId: string): Promise<void> {
     return;
   }
 
+  // ---- Аренда = месячная подписка: period-scoped лимит трат (ADDITIVE) ----
+  // Если агент создан через аренду (template_rentals с rent_period='month'),
+  // расход в ТЕКУЩЕМ периоде подписки не должен превышать месячный лимит, входящий
+  // в цену. Истёк период без продления → запуск лапсится (доступ закрыт). Это
+  // зеркало месячного user-гарда выше, но scoped по подписке. settleRun не трогаем.
+  // limit=null (автор не задал) → подписочного лимита нет, ведём только по бюджету.
+  const rentalSub = await loadRentalSubscriptionForAgent(agent.id);
+  let subLimit = 0;
+  let subPeriodSpend = 0;
+  if (rentalSub) {
+    if (rentalSub.expired) {
+      await markFailed(runId, 'rental_expired');
+      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'rental_expired');
+      return;
+    }
+    if (rentalSub.monthly_limit_credits !== null && rentalSub.period_start) {
+      subLimit = rentalSub.monthly_limit_credits;
+      subPeriodSpend = await sumPeriodSpendForAgent(agent.id, rentalSub.period_start);
+      if (subPeriodSpend >= subLimit) {
+        await markFailed(runId, 'rental_limit_exceeded');
+        await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'rental_limit_exceeded');
+        return;
+      }
+    }
+  }
+
   // ---- upstream resolution (provider_id / aiag-gateway / external) ----
   // Resolve BEFORE the balance gate so external (user-paid) runs skip it.
   let upstream: Upstream;
@@ -526,8 +555,15 @@ export async function runAgent(runId: string): Promise<void> {
 
   await markStarted(runId);
 
+  // ---- HIRE ISOLATION (OWASP LLM06): resolve per-hirer scope SERVER-SIDE ----
+  // scope is derived from the run row (run.tg_user_id = who launched it) vs the
+  // agent owner (agent.tg_user_id) + an ACTIVE agent_sessions row — NEVER from
+  // the request body. Owner run ⇒ null (shared memory, legacy). Hirer run ⇒ the
+  // hirer's tg_user_id, which namespaces both history and the memory tool.
+  const scopeHirerId = await resolveRunScope(agent.id, run.tg_user_id, agent.tg_user_id);
+
   // ---- conversation history ----
-  const history = await loadHistory(agent.id, runId, 10);
+  const history = await loadHistory(agent.id, runId, 10, scopeHirerId);
   const messages: Message[] = [{ role: 'system', content: buildSystem(agent) }];
   for (const h of history) {
     messages.push({ role: 'user', content: h.input });
@@ -651,6 +687,12 @@ export async function runAgent(runId: string): Promise<void> {
       await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'budget_exceeded_daily_mid_run');
       return;
     }
+    // Аренда-подписка: period-scoped лимит (mid-run). subLimit=0 ⇒ нет подписки/лимита.
+    if (subLimit > 0 && subPeriodSpend + totalCostCredits > subLimit) {
+      await markFailed(runId, 'rental_limit_exceeded_mid_run');
+      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'rental_limit_exceeded_mid_run');
+      return;
+    }
 
     const choice = resp.choices[0];
     if (!choice) {
@@ -733,6 +775,9 @@ export async function runAgent(runId: string): Promise<void> {
           : await executeTool(toolCall.function.name, parsed, {
               agentId: agent.id,
               tgUserId: agent.tg_user_id,
+              // HIRE ISOLATION: server-derived per-hirer memory scope (null for
+              // owner runs). The memory tool namespaces every read/write by it.
+              scopeHirerId,
               // R-20: delegation callback. Enforces the per-run cap, then runs ONE
               // owner-guarded, recursion-stripped sub-completion. Its cost is
               // returned as cost_rub and folded into toolFeesCredits → settleRun

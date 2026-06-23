@@ -191,6 +191,76 @@ export async function sumMonthlySpend(tgUserId: string): Promise<number> {
 }
 
 /**
+ * Аренда = месячная подписка (founder 2026-06-14). Месячный ЛИМИТ трат входит в
+ * цену подписки и ограничивает расход подписчика на КЛОН-агент в текущем периоде.
+ *
+ * Возвращает активную подписку для данного клон-агента ИЛИ null (агент создан не
+ * через аренду — обычный клон/с нуля → подписочного лимита нет, ведём как раньше).
+ * Период определяется period_start/period_end; limit — monthly_limit_credits.
+ * Это ADDITIVE-гард: дневной/месячный бюджет агента работает как прежде; здесь —
+ * дополнительный лимит, привязанный к подписке. settleRun НЕ затрагивается.
+ */
+export interface RentalSubscription {
+  rental_id: string;
+  period_start: string | null;
+  period_end: string | null;
+  monthly_limit_credits: number | null;
+  expired: boolean;
+}
+
+export async function loadRentalSubscriptionForAgent(
+  agentId: string,
+): Promise<RentalSubscription | null> {
+  const rows = (await sql`
+    SELECT id::text AS rental_id,
+           period_start::text AS period_start,
+           period_end::text   AS period_end,
+           monthly_limit_credits::text AS monthly_limit_credits,
+           (period_end IS NOT NULL AND period_end <= NOW()) AS expired
+    FROM template_rentals
+    WHERE cloned_agent_id = ${agentId}::uuid
+      AND status = 'active'
+      AND rent_period = 'month'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `) as unknown as Array<{
+    rental_id: string;
+    period_start: string | null;
+    period_end: string | null;
+    monthly_limit_credits: string | null;
+    expired: boolean;
+  }>;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    rental_id: r.rental_id,
+    period_start: r.period_start,
+    period_end: r.period_end,
+    monthly_limit_credits:
+      r.monthly_limit_credits === null ? null : Number(r.monthly_limit_credits),
+    expired: r.expired,
+  };
+}
+
+/**
+ * Сумма cost_credits (US cents), потраченная на КЛОН-агент с начала текущего
+ * периода подписки. Зеркало sumMonthlySpend, но period-scoped по подписке
+ * (фильтр по agent_id + created_at >= period_start). Read-only — billing не трогает.
+ */
+export async function sumPeriodSpendForAgent(
+  agentId: string,
+  periodStart: string,
+): Promise<number> {
+  const rows = (await sql`
+    SELECT COALESCE(SUM(cost_credits), 0)::text AS total
+    FROM agent_runs
+    WHERE agent_id = ${agentId}::uuid
+      AND created_at >= ${periodStart}::timestamptz
+  `) as unknown as Array<{ total: string }>;
+  return Number(rows[0]?.total ?? 0);
+}
+
+/**
  * Atomically reset today's counter if the stored date is stale, then
  * return the current bucket. Race-safe under concurrent runs.
  */
@@ -230,11 +300,19 @@ export async function incrementDailySpend(
 /**
  * Last N COMPLETED runs (excluding the current one) — input + output pairs,
  * ordered oldest-first so they slot naturally into messages[].
+ *
+ * HIRE ISOLATION (OWASP LLM06): when `scopeHirerId` is provided (a non-owner
+ * hirer is running), history is additionally filtered to runs belonging to THAT
+ * hirer (`tg_user_id = hirer`) — a hirer never sees the creator's or another
+ * hirer's conversation. When absent/null (owner run, legacy), behaviour is
+ * unchanged (history scoped only by agent_id). The scope is set server-side by
+ * the caller from the run, NEVER from the request body — see resolveRunScope.
  */
 export async function loadHistory(
   agentId: string,
   excludeRunId: string,
   limit = 10,
+  scopeHirerId: string | null = null,
 ): Promise<HistoryRow[]> {
   const rows = (await sql`
     SELECT input, output
@@ -243,10 +321,52 @@ export async function loadHistory(
        AND id <> ${excludeRunId}::uuid
        AND status = 'completed'
        AND output IS NOT NULL
+       AND (
+         ${scopeHirerId}::bigint IS NULL
+         OR tg_user_id = ${scopeHirerId}::bigint
+       )
      ORDER BY created_at DESC
      LIMIT ${limit}
   `) as unknown as HistoryRow[];
   return rows.reverse();
+}
+
+/**
+ * HIRE: resolve the per-hirer memory/history scope for a run, SERVER-SIDE.
+ *
+ * The scope is the isolation boundary (SECURITY.md). It MUST be derived from
+ * trusted state (the run row + agent owner), NEVER from the request body — else
+ * the LLM/caller could ask for another tenant's namespace.
+ *
+ * Rule:
+ *  - run launched by the agent OWNER  → scope = null (owner's shared memory,
+ *    legacy behaviour, unchanged).
+ *  - run launched by a HIRER (the runner's tg_user_id ≠ owner's tg_user_id) and
+ *    that hirer has an active agent_sessions row → scope = the hirer's tg_user_id.
+ *  - no active session for a non-owner → null (defensive; the run route already
+ *    rejects unauthorized launches, so this only ever fires for owner runs).
+ *
+ * Returns the hirer tg_user_id as a string (matches the rest of db.ts), or null.
+ */
+export async function resolveRunScope(
+  agentId: string,
+  runnerTgUserId: string,
+  ownerTgUserId: string,
+): Promise<string | null> {
+  // Owner run → no scope (shared/owner memory).
+  if (String(runnerTgUserId) === String(ownerTgUserId)) return null;
+  // Non-owner: only scope if there is an ACTIVE hire session. The lookup is by
+  // (agent_id, hirer_tg_user_id) — both server-trusted (agentId from the run,
+  // runnerTgUserId from the run row, not the body).
+  const rows = (await sql`
+    SELECT 1
+      FROM agent_sessions
+     WHERE agent_id = ${agentId}::uuid
+       AND hirer_tg_user_id = ${runnerTgUserId}::bigint
+       AND status = 'active'
+     LIMIT 1
+  `) as unknown as Array<{ '?column?': number }>;
+  return rows.length > 0 ? String(runnerTgUserId) : null;
 }
 
 // -- agent_schedules (scheduled self-running runs, migration 0034) ---------
@@ -381,16 +501,28 @@ export async function insertScheduledRun(
 }
 
 // -- agent_memory (key-value store backing the `memory` tool) -------------
+//
+// HIRE ISOLATION (OWASP LLM06, migration 0040): each row carries an optional
+// scope_tg_user_id. NULL = the owner's shared memory (legacy). NOT NULL = a
+// single hirer's private namespace. All three ops scope by
+// `COALESCE(scope_tg_user_id,0) = COALESCE($scope,0)` so an owner run (scope
+// null/0) and a hirer run (scope = hirer id) read/write DISJOINT keyspaces and
+// can never see each other. The conflict target is the expression unique index
+// ix_agent_memory_scope (agent_id, COALESCE(scope_tg_user_id,0), key).
+//
+// `scopeHirerId` is supplied by the caller from resolveRunScope (server-side,
+// derived from the run, NOT the request body) — it is the isolation boundary.
 
 export async function memorySet(
   agentId: string,
   key: string,
   value: string,
+  scopeHirerId: string | null = null,
 ): Promise<void> {
   await sql`
-    INSERT INTO agent_memory (agent_id, key, value, updated_at)
-    VALUES (${agentId}::uuid, ${key}, ${value}, NOW())
-    ON CONFLICT (agent_id, key)
+    INSERT INTO agent_memory (agent_id, key, value, scope_tg_user_id, updated_at)
+    VALUES (${agentId}::uuid, ${key}, ${value}, ${scopeHirerId}::bigint, NOW())
+    ON CONFLICT (agent_id, COALESCE(scope_tg_user_id, 0), key)
     DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
   `;
 }
@@ -398,10 +530,13 @@ export async function memorySet(
 export async function memoryGet(
   agentId: string,
   key: string,
+  scopeHirerId: string | null = null,
 ): Promise<string | null> {
   const rows = (await sql`
     SELECT value FROM agent_memory
-    WHERE agent_id = ${agentId}::uuid AND key = ${key}
+    WHERE agent_id = ${agentId}::uuid
+      AND key = ${key}
+      AND COALESCE(scope_tg_user_id, 0) = COALESCE(${scopeHirerId}::bigint, 0)
     LIMIT 1
   `) as unknown as Array<{ value: string }>;
   return rows[0]?.value ?? null;
@@ -410,10 +545,12 @@ export async function memoryGet(
 export async function memoryList(
   agentId: string,
   limit = 100,
+  scopeHirerId: string | null = null,
 ): Promise<Array<{ key: string; value: string }>> {
   const rows = (await sql`
     SELECT key, value FROM agent_memory
     WHERE agent_id = ${agentId}::uuid
+      AND COALESCE(scope_tg_user_id, 0) = COALESCE(${scopeHirerId}::bigint, 0)
     ORDER BY updated_at DESC
     LIMIT ${limit}
   `) as unknown as Array<{ key: string; value: string }>;

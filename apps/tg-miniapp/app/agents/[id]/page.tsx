@@ -34,6 +34,17 @@ interface Agent {
   transfer_price_credits?: string | null;
   nft_address?: string | null;
   cloneable?: boolean;
+  // Hire-aware view flags (API: GET /api/tma/agents/[id]). Owner controls render
+  // only when is_owner; a non-owner gets "Нанять" (→ hired) and a dialog-only view.
+  is_owner?: boolean;
+  hired?: boolean;
+  // Аренда = месячная подписка. Все sub_* null ⇒ агент создан НЕ через аренду.
+  sub_template_id?: string | null;
+  sub_price_credits?: string | null;
+  sub_monthly_limit_credits?: string | null;
+  sub_period_end?: string | null;
+  sub_expired?: boolean;
+  sub_spent_period_credits?: string | null;
 }
 
 // C11: проверенные MCP-пресеты (2026-06). Клик заполняет URL эндпоинта;
@@ -150,6 +161,9 @@ export default function AgentDetailPage() {
   const [publishedId, setPublishedId] = useState<string | null>(null);
   // Empty = free template (price_credits NULL). Else a positive integer (credits).
   const [pPrice, setPPrice] = useState('');
+  // Аренда = месячная подписка: месячный лимит трат, входящий в цену (кр). Пусто =
+  // дефолт клона. Только для платного шаблона.
+  const [pLimit, setPLimit] = useState('');
 
   // ---- direct-clone opt-in (2026-06-12) ----
   const [cloneSaving, setCloneSaving] = useState(false);
@@ -190,6 +204,80 @@ export default function AgentDetailPage() {
   const [schErr, setSchErr] = useState<string | null>(null);
 
   const runActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
+
+  // ---- hire (наём чужого агента) ----
+  // Производные роли вьюера. API не отдаёт owner-only поля не-владельцу → флаги
+  // приходят с бэка. Дефолт is_owner=true для обратной совместимости (старый ответ
+  // без флага = владелец, т.к. раньше карточку видел только владелец).
+  const isOwner = agent ? agent.is_owner !== false : true;
+  const isHired = !!agent?.hired && !isOwner;
+  const canHire = !!agent && !isOwner && !isHired;
+  const [hiring, setHiring] = useState(false);
+  const [hireErr, setHireErr] = useState<string | null>(null);
+  // ---- аренда-подписка: продление вручную (MVP, без авто-списания) ----
+  const [renewing, setRenewing] = useState(false);
+  const [renewErr, setRenewErr] = useState<string | null>(null);
+
+  async function handleHire() {
+    if (!token || !id || hiring) return;
+    haptic.impact('medium');
+    setHiring(true);
+    setHireErr(null);
+    try {
+      const res = await fetch(`/tg/api/tma/agents/${id}/hire`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setHireErr(body.error ?? `HTTP ${res.status}`);
+        haptic.notify('error');
+        return;
+      }
+      // Успех (идемпотентно): перечитываем агента — теперь hired=true,
+      // композер диалога разблокируется.
+      haptic.notify('success');
+      await load();
+    } catch (err) {
+      setHireErr(err instanceof Error ? err.message : 'hire_failed');
+      haptic.notify('error');
+    } finally {
+      setHiring(false);
+    }
+  }
+
+  // Продление подписки = повторный POST на тот же rent-роут. Сервер видит активную
+  // подписку с истёкшим/текущим периодом и продлевает её тем же атомарным платежом
+  // (новый месяц автору, 0% AIAG). Авто-списание НЕ делаем (TON recurring незрелый).
+  async function handleRenew() {
+    if (!token || renewing || !agent?.sub_template_id) return;
+    haptic.impact('medium');
+    setRenewing(true);
+    setRenewErr(null);
+    try {
+      const res = await fetch(`/tg/api/tma/templates/${agent.sub_template_id}/rent`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setRenewErr(
+          body.error === 'insufficient_balance'
+            ? 'Недостаточно кредитов — пополни баланс'
+            : (body.error ?? `HTTP ${res.status}`),
+        );
+        haptic.notify('error');
+        return;
+      }
+      haptic.notify('success');
+      await load();
+    } catch (err) {
+      setRenewErr(err instanceof Error ? err.message : 'renew_failed');
+      haptic.notify('error');
+    } finally {
+      setRenewing(false);
+    }
+  }
 
   function startEdit() {
     if (!agent) return;
@@ -469,6 +557,18 @@ export default function AgentDetailPage() {
       }
       price = parsed;
     }
+    // Месячный лимит трат (кр → центы). Только для платного шаблона; пусто = дефолт.
+    let limit: number | null = null;
+    const limTrimmed = pLimit.trim();
+    if (price !== null && limTrimmed) {
+      const parsedLim = parseCreditsInput(limTrimmed, 10000);
+      if (parsedLim === undefined || parsedLim === null) {
+        setPublishErr('Лимит — число от 0,01 до 10 000 кр (или оставьте пусто)');
+        setPublishing(false);
+        return;
+      }
+      limit = parsedLim;
+    }
     try {
       const res = await fetch(`/tg/api/tma/agents/${id}/publish`, {
         method: 'POST',
@@ -476,7 +576,7 @@ export default function AgentDetailPage() {
           'content-type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ price_credits: price }),
+        body: JSON.stringify({ price_credits: price, rent_monthly_limit_credits: limit }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -560,17 +660,23 @@ export default function AgentDetailPage() {
                   <p className="tma-subtitle">{agent.description}</p>
                 )}
                 <div className="tma-chips" style={{ marginTop: 2 }}>
-                  <span
-                    className={
-                      agent.connection_type === 'external_openai'
-                        ? 'tma-pill tma-pill--ok'
-                        : 'tma-pill tma-pill--accent'
-                    }
-                  >
-                    {agent.connection_type === 'external_openai'
-                      ? 'свой провайдер · 0 комиссии'
-                      : 'наш шлюз · с наценкой'}
-                  </span>
+                  {/* Биллинг-бейдж владельца. Для нанимателя биллинг всегда AIAG-путь
+                      (дебетуется он) → показываем честный «наш шлюз · с наценкой». */}
+                  {isOwner ? (
+                    <span
+                      className={
+                        agent.connection_type === 'external_openai'
+                          ? 'tma-pill tma-pill--ok'
+                          : 'tma-pill tma-pill--accent'
+                      }
+                    >
+                      {agent.connection_type === 'external_openai'
+                        ? 'свой провайдер · 0 комиссии'
+                        : 'наш шлюз · с наценкой'}
+                    </span>
+                  ) : (
+                    <span className="tma-pill tma-pill--accent">наш шлюз · с наценкой</span>
+                  )}
                   {agent.mcp_endpoint_url && (
                     <span className="tma-pill tma-pill--muted">MCP подключён</span>
                   )}
@@ -601,7 +707,10 @@ export default function AgentDetailPage() {
               </div>
             </section>
 
-            {/* P1-6: сегмент-контрол — страница разбита на 4 локальных сегмента. */}
+            {/* P1-6: сегмент-контрол — страница разбита на 4 локальных сегмента.
+                Настройки/Публикация/Расписание — owner-only: наниматель/чужой видит
+                только «Диалог» (его контролы недоступны). */}
+            {isOwner && (
             <div className="tma-segment tma-segment--fit" role="tablist" aria-label="Разделы агента">
               {TABS.map((t) => (
                 <button
@@ -616,6 +725,43 @@ export default function AgentDetailPage() {
                 </button>
               ))}
             </div>
+            )}
+
+            {/* Hire CTA / статус найма (только для не-владельца). */}
+            {!isOwner && (
+              <section className="tma-card" style={{ padding: 16 }}>
+                {isHired ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span
+                      className="tma-pill tma-pill--ok"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+                    >
+                      <Icon d={ICONS.check} /> Нанят
+                    </span>
+                    <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
+                      Свой изолированный инстанс: те же навыки, ваша личная память.
+                      Списывается с вас.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
+                      Свой изолированный инстанс: те же навыки, ваша личная память.
+                      Списывается с вас.
+                    </p>
+                    {hireErr && <div className="tma-error">Ошибка: {hireErr}</div>}
+                    <button
+                      type="button"
+                      onClick={handleHire}
+                      disabled={hiring}
+                      className="tma-btn tma-btn--primary tma-btn--block"
+                    >
+                      {hiring ? 'Нанимаем…' : 'Нанять'}
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* Spec strip — model + budget in one mono-numeric glance. */}
             {tab === 'dialog' && (
@@ -648,6 +794,93 @@ export default function AgentDetailPage() {
                 </div>
               )}
             </section>
+            )}
+
+            {/* Аренда = месячная подписка: честный остаток лимита + дата продления
+                + ручное продление. Видно только владельцу клон-агента, созданного
+                через аренду (sub_template_id != null). */}
+            {tab === 'dialog' && agent.is_owner && agent.sub_template_id && (
+              <section className="tma-card" style={{ marginTop: 12 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                  }}
+                >
+                  <span className="tma-card-title" style={{ margin: 0 }}>
+                    Подписка
+                  </span>
+                  <span
+                    className={
+                      agent.sub_expired ? 'tma-pill tma-pill--muted' : 'tma-pill tma-pill--ok'
+                    }
+                  >
+                    {agent.sub_expired ? '✕ истекла' : '● активна'}
+                  </span>
+                </div>
+
+                <div className="tma-spec" style={{ marginTop: 8 }}>
+                  {agent.sub_monthly_limit_credits && (
+                    <div className="tma-spec-cell">
+                      <span className="tma-spec-label">Лимит / мес</span>
+                      <span className="tma-spec-value">
+                        <span className="tma-num">
+                          {fmtCredits(agent.sub_monthly_limit_credits)}
+                        </span>{' '}
+                        кр
+                      </span>
+                    </div>
+                  )}
+                  {agent.sub_monthly_limit_credits && (
+                    <div className="tma-spec-cell">
+                      <span className="tma-spec-label">Остаток</span>
+                      <span className="tma-spec-value">
+                        <span className="tma-num">
+                          {fmtCredits(
+                            String(
+                              Math.max(
+                                0,
+                                Number(agent.sub_monthly_limit_credits) -
+                                  Number(agent.sub_spent_period_credits ?? '0'),
+                              ),
+                            ),
+                          )}
+                        </span>{' '}
+                        кр
+                      </span>
+                    </div>
+                  )}
+                  {agent.sub_period_end && (
+                    <div className="tma-spec-cell">
+                      <span className="tma-spec-label">
+                        {agent.sub_expired ? 'Истекла' : 'Продление'}
+                      </span>
+                      <span className="tma-spec-value tma-mono">
+                        {formatDateShort(agent.sub_period_end)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {renewErr && (
+                  <div className="tma-error" style={{ marginTop: 8 }}>
+                    Ошибка: {renewErr}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRenew}
+                  disabled={renewing}
+                  className="tma-btn tma-btn--primary tma-btn--block"
+                  style={{ marginTop: 10 }}
+                >
+                  {renewing
+                    ? 'Продлеваем…'
+                    : `Продлить за ${fmtCredits(agent.sub_price_credits ?? '0')} кр/мес`}
+                </button>
+              </section>
             )}
 
             {/* === Сегмент «Монетизация»: публикация шаблона + трансфер === */}
@@ -696,13 +929,39 @@ export default function AgentDetailPage() {
                     className="tma-input tma-mono"
                   />
                 </label>
+                {/* Аренда = месячная подписка: автор задаёт лимит трат, входящий в
+                    цену. Пусто = дефолтный месячный бюджет клона. Только для платного. */}
+                {pPrice.trim() && (
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span className="tma-card-text">
+                      Лимит трат в месяц, кр (пусто = по умолчанию)
+                    </span>
+                    <input
+                      type="number"
+                      value={pLimit}
+                      onChange={(ev) => setPLimit(ev.target.value)}
+                      min={0.01}
+                      max={10000}
+                      step={0.01}
+                      placeholder="по умолчанию"
+                      className="tma-input tma-mono"
+                    />
+                  </label>
+                )}
                 {/* P6: аренда работает (API /rent) — показываем честный итог цены,
                     без «появится позже». */}
                 {pPrice.trim() ? (
                   <p className="tma-card-text tma-text-small">
-                    Платный шаблон: арендатор платит вам{' '}
-                    <span className="tma-mono">{pPrice.trim()}</span> кр/мес. Сумму
-                    получаете полностью — AIAG берёт <span className="tma-mono">0</span> с аренды.
+                    Месячная подписка: подписчик платит вам{' '}
+                    <span className="tma-mono">{pPrice.trim()}</span> кр/мес
+                    {pLimit.trim() && (
+                      <>
+                        {' '}и может потратить до <span className="tma-mono">{pLimit.trim()}</span>{' '}
+                        кр/мес на агента
+                      </>
+                    )}
+                    . Сумму получаете полностью — AIAG берёт{' '}
+                    <span className="tma-mono">0</span> с аренды.
                   </p>
                 ) : (
                   <p className="tma-card-text tma-text-small">
@@ -915,6 +1174,13 @@ export default function AgentDetailPage() {
               </div>
             )}
 
+            {/* Чужой не нанятый агент — композер заблокирован до найма (no dead-end
+                paid flow, PRODUCT.md §1). Hire-CTA выше уже даёт действие. */}
+            {canHire ? (
+              <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
+                Чтобы написать агенту, наймите его — выше.
+              </p>
+            ) : (
             <form onSubmit={handleSend} className="tma-composer">
               {/* K2b: textarea с автовысотой. Enter = отправка, Shift+Enter = перенос. */}
               <textarea
@@ -954,6 +1220,7 @@ export default function AgentDetailPage() {
                 {sending ? '…' : <Icon d={ICONS.send} />}
               </button>
             </form>
+            )}
 
             {/* P0-3: ошибка отправки — рядом с инпутом, с действием. */}
             {sendErr && (
@@ -971,8 +1238,10 @@ export default function AgentDetailPage() {
               </div>
             )}
 
-            {/* R2.1-A4: честная цена ДО отправки — тариф из реестра, не выдумка. */}
-            {agent.connection_type !== 'aiag' ? (
+            {/* R2.1-A4: честная цена ДО отправки — тариф из реестра, не выдумка.
+                «Свой провайдер · 0 комиссии» относится к биллингу ВЛАДЕЛЬЦА (BYOK).
+                Для нанимателя биллинг всегда AIAG-путь → эту ветку не показываем. */}
+            {isOwner && agent.connection_type !== 'aiag' ? (
               <p className="tma-card-text tma-text-small" style={{ margin: 0 }}>
                 Свой провайдер: <span className="tma-mono">0</span> комиссии, платите
                 напрямую своему провайдеру.
@@ -988,7 +1257,9 @@ export default function AgentDetailPage() {
 
             {/* P3: Канбан/swarm — доступен ВСЕГДА. Сам /kanban показывает честный
                 empty-state для не-Hermes агентов, поэтому условие по connection_type
-                убрано (раньше ссылка пряталась для всех, кроме external_openai). */}
+                убрано (раньше ссылка пряталась для всех, кроме external_openai).
+                Скрыт для не-владельца (owner-surface). */}
+            {isOwner && (
             <Link
               href={`/agents/${id}/kanban`}
               className="tma-btn"
@@ -996,6 +1267,7 @@ export default function AgentDetailPage() {
             >
               <Icon d={ICONS.board} /> Канбан (swarm)
             </Link>
+            )}
             </>
             )}
           </>
@@ -1615,6 +1887,17 @@ function formatRunAt(iso: string): string {
     month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+  });
+}
+
+// Дата без времени (для даты продления подписки).
+function formatDateShort(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
   });
 }
 
