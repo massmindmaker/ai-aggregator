@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
 import { beginCell } from '@ton/core';
 import { getTonUsdRate } from '@/lib/ton-rate';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,16 @@ function randomTag(len = 8): string {
 export async function POST(req: NextRequest) {
   const tgUserId = req.headers.get('x-tma-user-id');
   if (!tgUserId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  // App-level spam guard (R2). Fail-open if Redis is down — money truth lives in the
+  // reconciler over the verified on-chain deposit, this only throttles init spam.
+  const rl = await checkRateLimit('topup', tgUserId);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'too_many_requests', retry_after: rl.retryAfter },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } },
+    );
+  }
 
   const receiver = process.env.TMA_TOPUP_WALLET_ADDRESS;
   if (!receiver) {

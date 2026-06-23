@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
 import { generateInvoice, tonToNano } from '@aiag/shared';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!buyerId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   if (!UUID_RE.test(params.id)) {
     return NextResponse.json({ error: 'invalid_id' }, { status: 400 });
+  }
+
+  // App-level spam guard (R2). Fail-open if Redis is down. The pending-charge 409
+  // idempotency + webhook settle remain the authoritative transfer guards.
+  const rl = await checkRateLimit('transfer', buyerId);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'too_many_requests', retry_after: rl.retryAfter },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } },
+    );
   }
 
   let body: Body;

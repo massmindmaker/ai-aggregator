@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 import { fmtCredits, parseCreditsInput } from '@/lib/credits';
 
@@ -28,7 +28,18 @@ interface Props {
   onChanged?: () => void;
 }
 
-type TransferStatus = 'idle' | 'preparing' | 'awaiting_signature' | 'submitted' | 'error';
+type TransferStatus =
+  | 'idle'
+  | 'preparing'
+  | 'awaiting_signature'
+  | 'submitted' // tx подписана → ждём подтверждения минта (поллинг статуса)
+  | 'settled' // передача завершена успешно
+  | 'failed' // минт/передача не прошли
+  | 'error';
+
+// Поллинг статуса передачи: интервал и максимум попыток (≈3 мин при 4с).
+const POLL_INTERVAL_MS = 4000;
+const POLL_MAX_ATTEMPTS = 45;
 
 const editInputStyle: React.CSSProperties = {
   padding: '10px 12px',
@@ -238,6 +249,51 @@ function AcquirerInitiate({
   const [tonConnectUI] = useTonConnectUI();
   const [status, setStatus] = useState<TransferStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [chargeId, setChargeId] = useState<string | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Поллинг статуса передачи после подписи tx. Читает read-only GET .../transfer/status,
+  // крутится до терминального статуса (settled/failed) или таймаута. Деньги/settle не
+  // трогаем — это ТОЛЬКО чтение статуса, источник истины остаётся вебхук.
+  useEffect(() => {
+    if (status !== 'submitted' || !chargeId) return;
+    let attempts = 0;
+    let cancelled = false;
+
+    async function poll() {
+      attempts += 1;
+      try {
+        const res = await fetch(
+          `/tg/api/tma/agents/${agentId}/transfer/status?charge_id=${encodeURIComponent(chargeId!)}`,
+          { headers: { 'content-type': 'application/json' } },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && body.terminal) {
+          setStatus(body.status === 'settled' ? 'settled' : 'failed');
+          if (body.status !== 'settled') {
+            setErrorMsg('Передача не прошла. Минт не подтверждён — средства за газ не списаны при отмене.');
+          }
+          return; // cleanup остановит интервал
+        }
+      } catch {
+        // сетевой сбой одной попытки — игнор, ждём следующий тик / таймаут
+      }
+      if (!cancelled && attempts >= POLL_MAX_ATTEMPTS) {
+        // Таймаут: не объявляем провал (минт мог ещё дойти) — мягкое сообщение.
+        setStatus('error');
+        setErrorMsg('Подтверждение занимает дольше обычного. Проверьте статус агента позже.');
+      }
+    }
+
+    poll(); // первый опрос сразу
+    pollTimer.current = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (pollTimer.current) clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    };
+  }, [status, chargeId, agentId]);
 
   const mintDisplay = mintFeeTon ?? '0.1';
   const ctaLabel =
@@ -268,8 +324,11 @@ function AcquirerInitiate({
         return;
       }
 
+      // chargeId нужен для поллинга статуса после подписи.
+      setChargeId(typeof body.transfer_id === 'string' ? body.transfer_id : null);
       setStatus('awaiting_signature');
       await tonConnectUI.sendTransaction(body.transaction);
+      // tx подписана → переходим в 'submitted'; эффект-поллинг начнёт опрос статуса.
       setStatus('submitted');
     } catch (e) {
       setStatus('error');
@@ -299,9 +358,34 @@ function AcquirerInitiate({
       ) : (
         <>
           {status === 'submitted' ? (
-            <div className="tma-success">
-              ✓ Запрос отправлен. Право на агента перейдёт после подтверждения минта (~1–3 мин).
+            <div
+              className="tma-card-text"
+              style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+            >
+              <span
+                className="aiag-pulse-dot"
+                aria-hidden
+                style={{
+                  flexShrink: 0,
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: 'var(--accent)',
+                  display: 'inline-block',
+                }}
+              />
+              <span>Подтверждаем передачу… Право на агента перейдёт после минта (~1–3 мин).</span>
             </div>
+          ) : status === 'settled' ? (
+            <div className="tma-success">✓ Передача завершена. Агент теперь ваш.</div>
+          ) : status === 'failed' ? (
+            <button
+              type="button"
+              className="tma-btn tma-btn--primary"
+              onClick={handleAcquire}
+            >
+              Передача не прошла — попробовать снова
+            </button>
           ) : (
             <button
               type="button"

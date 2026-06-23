@@ -72,23 +72,40 @@ interface Run {
   }>;
 }
 
+// K-sched: расписания на вкладке агента теперь READ-ONLY список (поддерживает все
+// типы interval/daily/weekly). Раньше вкладка делала LIMIT 1 + форсила kind='interval',
+// молча затирая полноценные daily/weekly — редактирование вынесено на /schedules.
 interface Schedule {
   id: string;
   agent_id: string;
+  name: string | null;
   prompt: string;
-  interval_minutes: number;
+  schedule_kind: 'interval' | 'daily' | 'weekly' | string;
+  interval_minutes: number | null;
+  at_time: string | null; // "HH:MM:SS"
+  weekday: number | null; // 0=Sun..6=Sat
   enabled: boolean;
   next_run_at: string;
-  last_run_at: string | null;
 }
 
-// Interval presets (minutes). Floor is 15m — mirrors the API + migration CHECK.
-const SCHEDULE_INTERVALS: { value: number; label: string }[] = [
-  { value: 15, label: 'каждые 15 минут' },
-  { value: 60, label: 'каждый час' },
-  { value: 360, label: 'каждые 6 часов' },
-  { value: 1440, label: 'каждые 24 часа' },
-];
+const SCHED_WEEKDAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+
+/** Человекочитаемое «когда» из kind+params (read-only показ на вкладке агента). */
+function humanizeScheduleWhen(s: Schedule): string {
+  if (s.schedule_kind === 'interval' && s.interval_minutes != null) {
+    const m = s.interval_minutes;
+    if (m % 1440 === 0) return `каждые ${m / 1440} сут`;
+    if (m % 60 === 0) return `каждые ${m / 60} ч`;
+    return `каждые ${m} мин`;
+  }
+  if (s.schedule_kind === 'daily' && s.at_time) {
+    return `${s.at_time.slice(0, 5)} ежедневно`;
+  }
+  if (s.schedule_kind === 'weekly' && s.at_time && s.weekday != null) {
+    return `${SCHED_WEEKDAYS[s.weekday] ?? '?'} ${s.at_time.slice(0, 5)}`;
+  }
+  return '—';
+}
 
 // P1-6: локальная сегментация перегруженной страницы (useState, без роутинга).
 type TabKey = 'dialog' | 'settings' | 'monetize' | 'schedule';
@@ -168,12 +185,8 @@ export default function AgentDetailPage() {
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthErr, setOauthErr] = useState<string | null>(null);
 
-  // ---- schedule (self-running agent) ----
-  const [schedule, setSchedule] = useState<Schedule | null>(null);
-  const [schPrompt, setSchPrompt] = useState('');
-  const [schInterval, setSchInterval] = useState(1440);
-  const [schEnabled, setSchEnabled] = useState(true);
-  const [schSaving, setSchSaving] = useState(false);
+  // ---- schedule (self-running agent) — READ-ONLY список на вкладке агента ----
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [schErr, setSchErr] = useState<string | null>(null);
 
   const runActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
@@ -355,76 +368,19 @@ export default function AgentDetailPage() {
   // K2a: сегмент «Настройки» по умолчанию READ-ONLY. Авто-startEdit() убран —
   // форма редактирования открывается только по кнопке «Редактировать».
 
+  // READ-ONLY: тянем ВСЕ расписания юзера и фильтруем по этому агенту (поддержка
+  // interval/daily/weekly). Редактирование/создание/удаление — на экране /schedules,
+  // который умеет все типы. Здесь ничего не затираем и не форсим interval.
   useEffect(() => {
     if (!token || !id) return;
-    fetch(`/tg/api/tma/agents/${id}/schedule`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => (r.ok ? r.json() : { schedule: null }))
+    fetch(`/tg/api/tma/me/schedules`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : { schedules: [] }))
       .then((j) => {
-        const s: Schedule | null = j.schedule ?? null;
-        setSchedule(s);
-        if (s) {
-          setSchPrompt(s.prompt);
-          setSchInterval(s.interval_minutes);
-          setSchEnabled(s.enabled);
-        }
+        const all: Schedule[] = Array.isArray(j.schedules) ? j.schedules : [];
+        setSchedules(all.filter((s) => s.agent_id === id));
       })
-      .catch(() => {});
+      .catch(() => setSchErr('Не удалось загрузить расписания.'));
   }, [token, id]);
-
-  async function handleSaveSchedule(e: React.FormEvent) {
-    e.preventDefault();
-    if (!token || !id || !schPrompt.trim()) return;
-    setSchSaving(true);
-    setSchErr(null);
-    try {
-      const res = await fetch(`/tg/api/tma/agents/${id}/schedule`, {
-        method: 'PUT',
-        headers: {
-          'content-type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          prompt: schPrompt.trim(),
-          interval_minutes: schInterval,
-          enabled: schEnabled,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setSchErr(body.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      const data = await res.json();
-      setSchedule(data.schedule ?? null);
-    } catch (err) {
-      setSchErr(err instanceof Error ? err.message : 'save_failed');
-    } finally {
-      setSchSaving(false);
-    }
-  }
-
-  async function handleDeleteSchedule() {
-    if (!token || !id) return;
-    setSchSaving(true);
-    setSchErr(null);
-    try {
-      const res = await fetch(`/tg/api/tma/agents/${id}/schedule`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setSchedule(null);
-        setSchPrompt('');
-        setSchEnabled(true);
-      } else {
-        setSchErr(`HTTP ${res.status}`);
-      }
-    } catch (err) {
-      setSchErr(err instanceof Error ? err.message : 'delete_failed');
-    } finally {
-      setSchSaving(false);
-    }
-  }
 
   useEffect(() => {
     const hasActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
@@ -830,97 +786,94 @@ export default function AgentDetailPage() {
                 <Icon d={ICONS.clock} /> Расписание
               </h2>
               <p className="tma-card-text tma-text-small">
-                Агент сам запускается по расписанию с этим заданием. Каждый запуск
-                тратит кредиты в рамках дневного лимита — как обычный запуск.
+                Агент сам запускается по расписанию с заданием. Каждый запуск тратит
+                кредиты в рамках дневного лимита — как обычный запуск. Создание и
+                редактирование расписаний (интервал / ежедневно / по дням недели) —
+                на отдельном экране.
               </p>
 
-              {schedule?.enabled && (
-                <p className="tma-card-text tma-text-small" style={{ marginTop: 4 }}>
-                  Активно ·{' '}
-                  {SCHEDULE_INTERVALS.find((i) => i.value === schedule.interval_minutes)?.label ??
-                    `каждые ${schedule.interval_minutes} мин`}{' '}
-                  · следующий запуск ~<code>{formatHHMM(schedule.next_run_at)}</code>
-                </p>
-              )}
-              {schedule && !schedule.enabled && (
-                <p className="tma-card-text tma-text-small" style={{ marginTop: 4 }}>
-                  Выключено.
-                </p>
-              )}
-
-              <form
-                onSubmit={handleSaveSchedule}
-                style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}
-              >
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span className="tma-card-text">Задание для запуска</span>
-                  <textarea
-                    value={schPrompt}
-                    onChange={(e) => setSchPrompt(e.target.value)}
-                    rows={3}
-                    maxLength={16000}
-                    placeholder="Например: собери утренний дайджест новостей по теме X"
-                    className="tma-input"
-                    style={{ resize: 'vertical', fontFamily: 'inherit' }}
-                  />
-                </label>
-
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span className="tma-card-text">Частота</span>
-                  <select
-                    value={schInterval}
-                    onChange={(e) => setSchInterval(Number(e.target.value))}
-                    className="tma-input"
-                  >
-                    {SCHEDULE_INTERVALS.map((i) => (
-                      <option key={i.value} value={i.value}>
-                        {i.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={schEnabled}
-                    onChange={(e) => setSchEnabled(e.target.checked)}
-                  />
-                  <span className="tma-card-text">Включить расписание</span>
-                </label>
-
-                {schErr && <div className="tma-error">Ошибка: {schErr}</div>}
-
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {schedule && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteSchedule}
-                      className="tma-btn"
-                      disabled={schSaving}
-                    >
-                      Удалить
-                    </button>
-                  )}
-                  <button
-                    type="submit"
-                    className="tma-btn tma-btn--primary"
-                    disabled={schSaving || !schPrompt.trim()}
-                    style={{ flex: 1 }}
-                  >
-                    {schSaving ? 'Сохранение…' : schedule ? 'Сохранить' : 'Создать расписание'}
-                  </button>
+              {schErr && (
+                <div className="tma-error" style={{ marginTop: 8 }}>
+                  Ошибка: {schErr}
                 </div>
-              </form>
+              )}
+
+              {schedules.length === 0 ? (
+                <p
+                  className="tma-card-text tma-text-small"
+                  style={{ marginTop: 12, opacity: 0.7 }}
+                >
+                  У этого агента пока нет расписаний.
+                </p>
+              ) : (
+                <ul
+                  style={{
+                    listStyle: 'none',
+                    margin: '12px 0 0',
+                    padding: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                  }}
+                >
+                  {schedules.map((s) => (
+                    <li
+                      key={s.id}
+                      className="tma-card"
+                      style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <span className={`tma-pill ${s.enabled ? 'tma-pill--ok' : ''}`}>
+                          {s.enabled ? 'активно' : 'выключено'}
+                        </span>
+                        <span className="tma-card-text tma-text-small tma-mono">
+                          {humanizeScheduleWhen(s)}
+                        </span>
+                        {s.enabled && (
+                          <span
+                            className="tma-card-text tma-text-small"
+                            style={{ opacity: 0.7 }}
+                          >
+                            · следующий ~<span className="tma-mono">{formatHHMM(s.next_run_at)}</span>
+                          </span>
+                        )}
+                      </div>
+                      {s.name && (
+                        <span className="tma-card-text tma-text-small" style={{ fontWeight: 600 }}>
+                          {s.name}
+                        </span>
+                      )}
+                      <span
+                        className="tma-card-text tma-text-small"
+                        style={{
+                          opacity: 0.8,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                        }}
+                      >
+                        {s.prompt}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
               <Link
                 href="/schedules"
-                className="tma-card-text tma-text-small"
-                style={{ display: 'inline-block', marginTop: 12, color: 'var(--accent)' }}
+                className="tma-btn"
+                style={{ display: 'inline-block', marginTop: 12, textAlign: 'center' }}
               >
-                Все расписания →
+                Управлять расписаниями →
               </Link>
             </section>
             )}

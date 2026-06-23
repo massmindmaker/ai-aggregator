@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
+import { checkRateLimit, clientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,9 +28,19 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Rate-limiting (T-16-08b, deploy task):
 //   Add /tg/api/tma/agents/*/transfer-offer to the nginx public-read rate-limit zone
 //   (noted in 16-02-SUMMARY.md as a manual deploy step before going live).
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   if (!UUID_RE.test(params.id)) {
     return NextResponse.json({ error: 'invalid_id' }, { status: 400 });
+  }
+
+  // App-level spam guard (R2). This route is PUBLIC/unauthenticated → key by client IP
+  // (no tg_user_id). Read-only; fail-open if Redis is down.
+  const rl = await checkRateLimit('transfer-offer', clientIp(req));
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'too_many_requests', retry_after: rl.retryAfter },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } },
+    );
   }
 
   try {
