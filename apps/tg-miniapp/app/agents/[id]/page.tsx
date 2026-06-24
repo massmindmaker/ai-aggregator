@@ -1504,7 +1504,7 @@ export default function AgentDetailPage() {
                   (незарегистрированный слаг = 400 в шлюзе + утечка маржи).
                   Свободный ввод слага остаётся только в BYOK-блоке ниже. */}
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span className="tma-card-text">Модель</span>
+                <span className="tma-card-text">Чат-модель</span>
                 <select
                   value={eModelSlug}
                   onChange={(e) => setEModelSlug(e.target.value)}
@@ -1525,45 +1525,59 @@ export default function AgentDetailPage() {
                 </select>
               </label>
 
-              {/* Multimodel per-role: опциональные модели под разные задачи.
-                  Пусто = «как основная» (поле «Модель» выше). */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span className="tma-card-text" style={{ fontWeight: 600 }}>
-                  🎚 Модели по ролям
-                </span>
-                <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -4 }}>
-                  Опционально: разные модели под картинки / голос / зрение. Пусто = «как основная».
+              {/* Aux-модели (Hermes §5.4): чат-модель = основная (поле выше),
+                  остальные — необязательные слоты под задачу. Пусто → бэк сохранит
+                  NULL = «как чат-модель». Контракт API не меняется. */}
+              <details
+                style={{
+                  border: '1px solid var(--line)',
+                  borderRadius: 8,
+                  background: 'var(--bg-surface)',
+                  padding: '10px 12px',
+                }}
+              >
+                <summary
+                  className="tma-card-text"
+                  style={{ cursor: 'pointer', fontWeight: 600, listStyle: 'revert' }}
+                >
+                  Расширенные модели
+                </summary>
+                <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: 8 }}>
+                  Необязательно. Hermes-агент использует отдельную модель под задачу;
+                  пусто = основная.
                 </p>
-                {(
-                  [
-                    { key: 'image', label: 'Картинки', value: eImageModelSlug, set: setEImageModelSlug },
-                    { key: 'voice', label: 'Голос', value: eVoiceModelSlug, set: setEVoiceModelSlug },
-                    { key: 'vision', label: 'Зрение', value: eVisionModelSlug, set: setEVisionModelSlug },
-                  ] as const
-                ).map((r) => (
-                  <label key={r.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <span className="tma-card-text">{r.label}</span>
-                    <select
-                      value={r.value}
-                      onChange={(e) => r.set(e.target.value)}
-                      className="tma-input tma-mono"
-                    >
-                      <option value="">— как основная —</option>
-                      {models.map((m) => (
-                        <option key={m.slug} value={m.slug}>
-                          {m.name} · {m.slug}
-                        </option>
-                      ))}
-                      {r.value && !models.some((m) => m.slug === r.value) && (
-                        <option value={r.value}>
-                          {r.value}
-                          {models.length > 0 ? ' (вне реестра)' : ''}
-                        </option>
-                      )}
-                    </select>
-                  </label>
-                ))}
-              </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                  {(
+                    [
+                      { key: 'vision', label: 'Зрение', value: eVisionModelSlug, set: setEVisionModelSlug },
+                      { key: 'image', label: 'Картинки', value: eImageModelSlug, set: setEImageModelSlug },
+                      { key: 'voice', label: 'Голос', value: eVoiceModelSlug, set: setEVoiceModelSlug },
+                    ] as const
+                  ).map((r) => (
+                    <label key={r.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span className="tma-card-text">{r.label}</span>
+                      <select
+                        value={r.value}
+                        onChange={(e) => r.set(e.target.value)}
+                        className="tma-input tma-mono"
+                      >
+                        <option value="">— по умолчанию = чат-модель —</option>
+                        {models.map((m) => (
+                          <option key={m.slug} value={m.slug}>
+                            {m.name} · {m.slug}
+                          </option>
+                        ))}
+                        {r.value && !models.some((m) => m.slug === r.value) && (
+                          <option value={r.value}>
+                            {r.value}
+                            {models.length > 0 ? ' (вне реестра)' : ''}
+                          </option>
+                        )}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </details>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <span className="tma-card-text">Инструменты</span>

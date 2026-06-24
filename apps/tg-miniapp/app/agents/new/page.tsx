@@ -479,7 +479,7 @@ export default function NewAgentPage() {
               </label>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span className="tma-card-text">Модель</span>
+                <span className="tma-card-text">Чат-модель</span>
                 <select
                   value={modelSlug}
                   onChange={(e) => setModelSlug(e.target.value)}
@@ -498,20 +498,20 @@ export default function NewAgentPage() {
               </label>
 
               <Accordion
-                title="🎚 Модели по ролям"
+                title="Расширенные модели"
                 summary={rolesSummary}
                 open={!!open.roles}
                 onToggle={() => toggle('roles')}
               >
                 <p className="tma-card-text" style={{ fontSize: 11, opacity: 0.7, marginTop: -4 }}>
-                  Опционально: агент может использовать РАЗНЫЕ модели под разные задачи.
-                  Пусто = «как основная» (поле «Модель» выше).
+                  Необязательно. Hermes-агент использует отдельную модель под задачу;
+                  пусто = основная.
                 </p>
                 {(
                   [
+                    { key: 'vision', label: 'Зрение', value: visionModelSlug, set: setVisionModelSlug },
                     { key: 'image', label: 'Картинки', value: imageModelSlug, set: setImageModelSlug },
                     { key: 'voice', label: 'Голос', value: voiceModelSlug, set: setVoiceModelSlug },
-                    { key: 'vision', label: 'Зрение', value: visionModelSlug, set: setVisionModelSlug },
                   ] as const
                 ).map((r) => (
                   <label key={r.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -521,7 +521,7 @@ export default function NewAgentPage() {
                       onChange={(e) => r.set(e.target.value)}
                       className="tma-input tma-mono"
                     >
-                      <option value="">— как основная —</option>
+                      <option value="">— по умолчанию = чат-модель —</option>
                       {r.value && !models.some((m) => m.slug === r.value) && (
                         <option value={r.value}>{r.value}</option>
                       )}
