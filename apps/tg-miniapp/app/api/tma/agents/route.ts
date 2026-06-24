@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import { getTemplate } from '@/lib/agent-templates';
 import { encryptSecret, hintFromSecret } from '@/lib/crypto';
 import { validateExternalUrl } from '@/lib/external-agent';
+import { hasCreatorMembership } from '@/lib/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -123,6 +124,12 @@ interface CreateBody {
 export async function POST(req: NextRequest) {
   const tgUserId = req.headers.get('x-tma-user-id');
   if (!tgUserId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  // Creator-membership gate (founder 2026-06-24): creating from scratch requires a
+  // membership NFT. HIRE/CLONE routes are NOT gated. Fail-closed (no row → 403).
+  if (!(await hasCreatorMembership(tgUserId, sql))) {
+    return NextResponse.json({ error: 'membership_required' }, { status: 403 });
+  }
 
   let body: CreateBody;
   try {

@@ -80,6 +80,10 @@ export default function NewAgentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
+  // Creator-membership gate: создание с нуля доступно только держателям членского
+  // NFT. null = загрузка, затем boolean. false → честная панель вместо формы.
+  const [isMember, setIsMember] = useState<boolean | null>(null);
+
   // Accordion open-state (multiple can be open).
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const toggle = (k: string) => setOpen((p) => ({ ...p, [k]: !p[k] }));
@@ -177,6 +181,15 @@ export default function NewAgentPage() {
       // ignore
     }
   }, [pickedKind]);
+
+  // Membership status once authenticated. На ошибку считаем не-членом (fail-closed UI).
+  useEffect(() => {
+    if (!token) return;
+    fetch('/tg/api/tma/membership', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : { is_member: false }))
+      .then((j) => setIsMember(!!j.is_member))
+      .catch(() => setIsMember(false));
+  }, [token]);
 
   // Load the BYOK provider catalog + model registry once authenticated.
   useEffect(() => {
@@ -313,7 +326,12 @@ export default function NewAgentPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setSubmitErr(body.error ?? `HTTP ${res.status}`);
+        if (body.error === 'membership_required') {
+          setIsMember(false);
+          setSubmitErr('Создание агентов доступно только создателям (нужен членский NFT).');
+        } else {
+          setSubmitErr(body.error ?? `HTTP ${res.status}`);
+        }
         haptic.notify('error');
         return;
       }
@@ -370,7 +388,21 @@ export default function NewAgentPage() {
           </div>
         )}
 
-        {user && !error && !pickedKind && (
+        {/* Гейт: создание с нуля — только для создателей (держателей членского NFT). */}
+        {user && !error && isMember === false && (
+          <section className="tma-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <h1 className="tma-title">Создание агентов — для создателей</h1>
+            <p className="tma-card-text" style={{ fontSize: 13, opacity: 0.8 }}>
+              Чтобы собирать собственных агентов с нуля, нужен членский NFT. Без него
+              по-прежнему можно нанимать и клонировать готовых агентов из каталога.
+            </p>
+            <Link href="/agents?tab=hire" className="tma-btn tma-btn--primary tma-btn--block">
+              Нанять готового →
+            </Link>
+          </section>
+        )}
+
+        {user && !error && isMember !== false && !pickedKind && (
           <>
             {/* AI-builder — «создать агента из слов». Один amber primary в секции. */}
             <section className="tma-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -441,7 +473,7 @@ export default function NewAgentPage() {
           </>
         )}
 
-        {user && !error && pickedKind && (
+        {user && !error && isMember !== false && pickedKind && (
           <>
             <header className="tma-header">
               <h1 className="tma-title">Новый агент</h1>

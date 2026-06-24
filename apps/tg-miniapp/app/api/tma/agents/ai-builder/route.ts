@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import postgres from 'postgres';
 import { safeFetch } from '@/lib/safe-fetch';
+import { hasCreatorMembership } from '@/lib/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const sql = postgres(process.env.DATABASE_URL ?? '', { prepare: false });
 
 /**
  * POST /api/tma/agents/ai-builder
@@ -99,6 +103,12 @@ function resolveUpstream(): { url: string; apiKey: string } | null {
 export async function POST(req: NextRequest) {
   const tgUserId = req.headers.get('x-tma-user-id');
   if (!tgUserId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  // Creator-membership gate (founder 2026-06-24): the AI-builder produces a from-scratch
+  // agent spec, so it's a create surface — gate it like POST /agents. Fail-closed.
+  if (!(await hasCreatorMembership(tgUserId, sql))) {
+    return NextResponse.json({ error: 'membership_required' }, { status: 403 });
+  }
 
   let body: { description?: string };
   try {

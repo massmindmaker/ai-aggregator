@@ -120,6 +120,17 @@ export default function AgentsPage() {
     router.replace(qs, { scroll: false });
   }
 
+  // Creator-membership gate: «Создать с нуля» только для держателей членского NFT.
+  // null = загрузка; false → честное «стань создателем» вместо опций создания.
+  const [isMember, setIsMember] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    fetch('/tg/api/tma/membership', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : { is_member: false }))
+      .then((j) => setIsMember(!!j.is_member))
+      .catch(() => setIsMember(false));
+  }, [token]);
+
   // ── Инбокс «Мои» ───────────────────────────────────────────────────────────
   const [agents, setAgents] = useState<Agent[] | null>(null);
   // Нанятые агенты (active agent_sessions, не владелец) — отдельная секция.
@@ -611,37 +622,62 @@ export default function AgentsPage() {
                   )}
                 </section>
 
-                {/* ── С нуля ── */}
-                <section className="tma-hub-section">
-                  <div className="tma-card">
-                    <div className="tma-section-head">
-                      <h2 className="tma-hub-h2">С нуля</h2>
+                {/* ── Гейт создателя: «С нуля» и AI-builder — только для держателей
+                    членского NFT. Не-членам показываем честное «стань создателем». ── */}
+                {isMember === false ? (
+                  <section className="tma-hub-section">
+                    <div className="tma-card">
+                      <div className="tma-section-head">
+                        <h2 className="tma-hub-h2">Стань создателем</h2>
+                      </div>
+                      <p className="tma-card-text tma-text-small">
+                        Создание агентов с нуля доступно держателям членского NFT.
+                        Без него можно нанимать и клонировать готовых агентов из каталога.
+                      </p>
+                      <button
+                        type="button"
+                        className="tma-btn tma-btn--primary tma-btn--block"
+                        onClick={() => selectTab('hire')}
+                      >
+                        Нанять готового →
+                      </button>
                     </div>
-                    <p className="tma-card-text tma-text-small">
-                      Собери агента по шагам: личность, модель, инструменты и бюджет.
-                    </p>
-                    <Link
-                      href="/agents/new"
-                      className="tma-btn tma-btn--primary tma-btn--block"
-                    >
-                      Создать с нуля →
-                    </Link>
-                  </div>
-                </section>
+                  </section>
+                ) : (
+                  <>
+                    {/* ── С нуля ── */}
+                    <section className="tma-hub-section">
+                      <div className="tma-card">
+                        <div className="tma-section-head">
+                          <h2 className="tma-hub-h2">С нуля</h2>
+                        </div>
+                        <p className="tma-card-text tma-text-small">
+                          Собери агента по шагам: личность, модель, инструменты и бюджет.
+                        </p>
+                        <Link
+                          href="/agents/new"
+                          className="tma-btn tma-btn--primary tma-btn--block"
+                        >
+                          Создать с нуля →
+                        </Link>
+                      </div>
+                    </section>
 
-                {/* ── AI-builder — честная R&D плашка ── */}
-                <section className="tma-hub-section">
-                  <div className="tma-card">
-                    <div className="tma-section-head">
-                      <h2 className="tma-hub-h2">AI-builder</h2>
-                      <span className="tma-pill tma-pill--muted">◷ R&D</span>
-                    </div>
-                    <p className="tma-card-text tma-text-small">
-                      Опиши задачу словами — ИИ соберёт спецификацию агента за тебя.
-                      В разработке.
-                    </p>
-                  </div>
-                </section>
+                    {/* ── AI-builder — честная R&D плашка ── */}
+                    <section className="tma-hub-section">
+                      <div className="tma-card">
+                        <div className="tma-section-head">
+                          <h2 className="tma-hub-h2">AI-builder</h2>
+                          <span className="tma-pill tma-pill--muted">◷ R&D</span>
+                        </div>
+                        <p className="tma-card-text tma-text-small">
+                          Опиши задачу словами — ИИ соберёт спецификацию агента за тебя.
+                          В разработке.
+                        </p>
+                      </div>
+                    </section>
+                  </>
+                )}
               </>
             )}
           </>
