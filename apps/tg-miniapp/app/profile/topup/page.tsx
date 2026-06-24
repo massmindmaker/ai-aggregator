@@ -6,6 +6,7 @@ import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui
 import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { haptic } from '@/lib/haptics';
+import { resolveJettonWallet } from '@/lib/jetton';
 
 type Status =
   | 'idle'
@@ -16,7 +17,9 @@ type Status =
   | 'confirmed'
   | 'error';
 
-interface InitResp {
+type Asset = 'TON' | 'USDT';
+
+interface TonInitResp {
   topup_id: string;
   amount_credits: number;
   amount_nano_ton: string;
@@ -27,6 +30,30 @@ interface InitResp {
     validUntil: number;
     messages: { address: string; amount: string; payload: string }[];
   };
+}
+
+interface UsdtInitResp {
+  topup_id: string;
+  asset: 'USDT';
+  amount_credits: number;
+  amount_usdt: string; // "N.NN"
+  jetton_units: string;
+  jetton_master: string;
+  jetton_decimals: number;
+  receiver: string;
+  comment: string;
+  comment_tag: string;
+  transaction: {
+    validUntil: number;
+    gas_nano_ton: string;
+    payload: string;
+  };
+}
+
+type InitResp = TonInitResp | UsdtInitResp;
+
+function isUsdtInit(i: InitResp): i is UsdtInitResp {
+  return (i as UsdtInitResp).asset === 'USDT';
 }
 
 // D-1: amounts are integer credits (US cents, 1 credit = $0.01).
@@ -59,15 +86,41 @@ export default function TopupPage() {
   const { token, loading: authLoading, error: authError } = useAuth();
   const userAddress = useTonAddress();
   const [tonConnectUI] = useTonConnectUI();
+  const [asset, setAsset] = useState<Asset>('TON');
+  const [usdtAvailable, setUsdtAvailable] = useState(true);
   const [amount, setAmount] = useState<number>(500);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [init, setInit] = useState<InitResp | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
 
   const tonEquivalent = useMemo(
-    () => (init ? nanoToTon(init.amount_nano_ton) : null),
+    () => (init && !isUsdtInit(init) ? nanoToTon(init.amount_nano_ton) : null),
     [init],
   );
+
+  function selectAsset(next: Asset) {
+    if (next === asset) return;
+    if (next === 'USDT' && !usdtAvailable) return;
+    haptic.select();
+    setAsset(next);
+    // Reset any in-flight invoice so instructions/state can't mismatch the asset.
+    setInit(null);
+    setStatus('idle');
+    setErrorMsg(null);
+    setCopied(null);
+  }
+
+  async function copy(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      haptic.impact('light');
+      setCopied(label);
+      setTimeout(() => setCopied((c) => (c === label ? null : c)), 1500);
+    } catch {
+      // clipboard blocked — no-op, the value is still visible on screen
+    }
+  }
 
   async function pollCheck(topupId: string) {
     if (!token) return;
@@ -117,21 +170,58 @@ export default function TopupPage() {
           'content-type': 'application/json',
           authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ amount_credits: amount, wallet_address: userAddress }),
+        body: JSON.stringify({
+          amount_credits: amount,
+          wallet_address: userAddress,
+          asset,
+        }),
       });
       const j = await r.json();
       if (!r.ok) {
+        // USDT not provisioned on the server — soft-degrade to TON, keep the screen alive.
+        if (j.error === 'usdt_not_configured') {
+          setUsdtAvailable(false);
+          setAsset('TON');
+          setStatus('idle');
+          setErrorMsg('Пополнение в USDT скоро — пока доступен TON.');
+          return;
+        }
         setStatus('error');
         setErrorMsg(j.message || j.error || 'Не удалось создать инвойс');
         return;
       }
-      setInit(j as InitResp);
 
+      const resp = j as InitResp;
+      setInit(resp);
       setStatus('awaiting_signature');
-      await tonConnectUI.sendTransaction((j as InitResp).transaction);
-      setStatus('submitted');
 
-      pollCheck((j as InitResp).topup_id);
+      if (isUsdtInit(resp)) {
+        // TEP-74 jetton transfer: the message must target the SENDER's OWN jetton
+        // wallet (resolved from the master), carrying the server-built transfer body.
+        let jettonWallet: string;
+        try {
+          jettonWallet = await resolveJettonWallet(resp.jetton_master, userAddress);
+        } catch {
+          setStatus('error');
+          setErrorMsg('Не удалось определить USDT-кошелёк. Попробуйте ещё раз или выберите TON.');
+          return;
+        }
+        await tonConnectUI.sendTransaction({
+          validUntil: resp.transaction.validUntil,
+          messages: [
+            {
+              address: jettonWallet,
+              amount: resp.transaction.gas_nano_ton,
+              payload: resp.transaction.payload,
+            },
+          ],
+        });
+      } else {
+        await tonConnectUI.sendTransaction(resp.transaction);
+      }
+
+      setStatus('submitted');
+      pollCheck(resp.topup_id);
     } catch (e) {
       setStatus('error');
       const msg = e instanceof Error ? e.message : 'tx_rejected';
@@ -168,6 +258,8 @@ export default function TopupPage() {
     );
   }
 
+  const usdtInit = init && isUsdtInit(init) ? init : null;
+
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
@@ -175,11 +267,42 @@ export default function TopupPage() {
           <Link href="/wallet" className="tma-card-text">
             ← К кошельку
           </Link>
-          <h1 className="tma-title">Пополнение через TON</h1>
+          <h1 className="tma-title">Пополнение баланса</h1>
           <p className="tma-subtitle">
-            Курс актуален 1 минуту. Зачислим после подтверждения сети (1–3 мин).
+            {asset === 'USDT'
+              ? 'USDT-on-TON · 1 USDT = 100 кр. Зачислим после подтверждения сети (1–3 мин).'
+              : 'Курс актуален 1 минуту. Зачислим после подтверждения сети (1–3 мин).'}
           </p>
         </header>
+
+        {/* Asset selector — segment per DESIGN.md (pill, amber active). */}
+        <section className="tma-card">
+          <div
+            className="tma-segment"
+            role="radiogroup"
+            aria-label="Актив для пополнения"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={asset === 'TON'}
+              className={`tma-segment-btn ${asset === 'TON' ? 'is-active' : ''}`}
+              onClick={() => selectAsset('TON')}
+            >
+              TON
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={asset === 'USDT'}
+              disabled={!usdtAvailable}
+              className={`tma-segment-btn ${asset === 'USDT' ? 'is-active' : ''}`}
+              onClick={() => selectAsset('USDT')}
+            >
+              USDT{!usdtAvailable ? ' · скоро' : ''}
+            </button>
+          </div>
+        </section>
 
         <section className="tma-card">
           <div className="tma-row" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -217,13 +340,63 @@ export default function TopupPage() {
               }}
             />
           </div>
-          {tonEquivalent && (
+          {asset === 'TON' && tonEquivalent && (
             <div className="tma-row" style={{ marginTop: 8 }}>
               <span className="tma-card-text">≈</span>
               <span className="tma-mono">{tonEquivalent} TON</span>
             </div>
           )}
+          {asset === 'USDT' && (
+            <div className="tma-row" style={{ marginTop: 8 }}>
+              <span className="tma-card-text">≈</span>
+              <span className="tma-mono">{fmtCredits(amount)} USDT</span>
+            </div>
+          )}
         </section>
+
+        {/* USDT payment instructions — shown once the invoice exists. */}
+        {usdtInit && status !== 'confirmed' && (
+          <section className="tma-card">
+            <p className="tma-card-title">Реквизиты USDT-on-TON</p>
+            <p className="tma-card-text" style={{ fontSize: '0.85em', marginTop: 4 }}>
+              Курс: <span className="tma-mono">1 USDT = 100 кр</span>. Перевод уйдёт через
+              ваш кошелёк — обязательно с меткой ниже.
+            </p>
+
+            <div className="tma-row" style={{ marginTop: 12, alignItems: 'flex-start' }}>
+              <span className="tma-card-text">Сумма</span>
+              <span className="tma-mono">{usdtInit.amount_usdt} USDT</span>
+            </div>
+
+            <div className="tma-row" style={{ marginTop: 8, alignItems: 'flex-start' }}>
+              <span className="tma-card-text">Адрес</span>
+              <button
+                type="button"
+                className="tma-btn tma-btn--ghost tma-mono"
+                style={{ maxWidth: '60%', overflowWrap: 'anywhere', textAlign: 'right' }}
+                onClick={() => copy(usdtInit.receiver, 'addr')}
+              >
+                {copied === 'addr' ? 'Скопировано ✓' : usdtInit.receiver}
+              </button>
+            </div>
+
+            <div className="tma-row" style={{ marginTop: 8, alignItems: 'flex-start' }}>
+              <span className="tma-card-text">Метка (memo)</span>
+              <button
+                type="button"
+                className="tma-btn tma-btn--ghost tma-mono"
+                onClick={() => copy(usdtInit.comment, 'memo')}
+              >
+                {copied === 'memo' ? 'Скопировано ✓' : usdtInit.comment}
+              </button>
+            </div>
+
+            <p className="tma-card-text" style={{ fontSize: '0.8em', marginTop: 10 }}>
+              Без метки <span className="tma-mono">{usdtInit.comment}</span> платёж не
+              зачислится автоматически.
+            </p>
+          </section>
+        )}
 
         <section className="tma-card">
           {!userAddress ? (
@@ -257,14 +430,15 @@ export default function TopupPage() {
               {status === 'creating' && 'Создаём инвойс…'}
               {status === 'awaiting_signature' && 'Подтвердите в кошельке…'}
               {status === 'submitted' && 'Отправлено, ждём блок…'}
-              {status === 'polling' && 'Ждём подтверждения сети…'}
-              {(status === 'idle' || status === 'error') && `Оплатить ${fmtCredits(amount)} кр`}
+              {status === 'polling' && 'Ждём подтверждения в сети…'}
+              {(status === 'idle' || status === 'error') &&
+                `Оплатить ${fmtCredits(amount)} кр${asset === 'USDT' ? ' в USDT' : ''}`}
             </button>
           )}
 
           {errorMsg && <div className="tma-error">{errorMsg}</div>}
 
-          {init && status !== 'confirmed' && (
+          {init && status !== 'confirmed' && !usdtInit && (
             <p className="tma-card-text" style={{ marginTop: 12, fontSize: '0.85em' }}>
               Метка: <span className="tma-mono">{init.comment}</span>
             </p>
