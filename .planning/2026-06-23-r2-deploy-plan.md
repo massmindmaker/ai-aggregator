@@ -12,7 +12,7 @@
 - **Free-first-run:** грант 300 кр новичку при входе, идемпотентно (md5(id)::uuid+uq_ledger_ref)
 
 ## ⚠️ ПЕРЕД деплоем (по порядку)
-1. **Мигрaции к проду ВРУЧНУЮ** (`sudo -u postgres psql aiag`): `0040_hire_sessions_memory_scope.sql` (⚠️ PK-своп на живой `agent_memory` — аккуратно, бэкап), затем `0041_rental_subscriptions.sql`. (free-run миграции НЕ требует.)
+1. **Мигрaции к проду ВРУЧНУЮ** (`sudo -u postgres psql aiag`), ВСЕ 4 по порядку (иначе прогон/реконсилер упадут на отсутствующих колонках): `0040_hire_sessions_memory_scope.sql` (⚠️ PK-своп на живой `agent_memory` — связан с кодом, аккуратно+бэкап), `0041_rental_subscriptions.sql`, `0042_agent_role_models.sql` (vision/image/voice_model_slug — рантайм их читает), `0043_usdt_topup_and_payouts.sql` (tg_topups asset/network + author_payouts). Все идемпотентны (ADD COLUMN IF NOT EXISTS). free-run миграции НЕ требует.
 2. **Env в `/srv/aiag/shared/.env`:**
    - ⚠️ **`TRANSFER_WEBHOOK_SECRET` ДОЛЖЕН быть задан** — вебхук теперь fail-hard (503 если пусто) → иначе передача агента сломается. Проверить что стоит (был shared-токен в callbackUrl).
    - `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (для JWT-отзыва; без них вход работает, отзыв выключен).
