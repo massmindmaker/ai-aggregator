@@ -45,6 +45,7 @@ function makeAgent(overrides: Partial<AgentRow> = {}): AgentRow {
     base_url_override: null,
     mcp_endpoint_url: null,
     mcp_auth_encrypted: null,
+    hermes_profile: null,
     ...overrides,
   };
 }

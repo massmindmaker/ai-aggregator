@@ -27,6 +27,7 @@ import { decryptSecret } from './crypto.js';
 import { safeFetch } from './safe-fetch.js';
 import { openMcp, listMcpToolDefs, callMcpTool, MCP_PREFIX, type McpClient } from './mcp-client.js';
 import { resolveMcpOauthBearer } from './mcp-oauth.js';
+import { hermesEnabled } from './hermes-client.js';
 
 // R0-1: aiag runs route through the :4000 gateway (revenue + white-label).
 // OPENROUTER_URL stays ONLY as the documented degraded fallback when the
@@ -37,7 +38,9 @@ const AIAG_GATEWAY_URL = 'http://127.0.0.1:4000/v1/chat/completions';
 // public-IP validation. Everything else (external/provider user-supplied URLs)
 // is DNS-resolved + IP-validated by safeFetch. '127.0.0.1:4000' is http:// so
 // it MUST be allowlisted (allowlist bypasses the HTTPS check too).
-const SAFE_FETCH_ALLOWLIST = ['127.0.0.1:4000', 'openrouter.ai'];
+// '127.0.0.1:8642' is the reverse-tunnelled Hermes REST endpoint (server #2);
+// http:// so it MUST be allowlisted (bypasses safeFetch's HTTPS-only check too).
+const SAFE_FETCH_ALLOWLIST = ['127.0.0.1:4000', '127.0.0.1:8642', 'openrouter.ai'];
 // Registered gateway slug. The previous default ('nousresearch/hermes-4-405b')
 // is NOT in the gateway model registry, so the :4000 gateway returns a 400
 // "Unknown model" (resolver.ts) instead of serving the run. Use a registered slug.
@@ -73,6 +76,10 @@ interface Upstream {
   apiKey: string;
   model: string;
   isExternal: boolean;  // external = user-supplied; cost stays 0
+  // Optional per-request headers merged into postChat (e.g. the Hermes route's
+  // X-Hermes-Session-Key, which is filled SERVER-SIDE in runAgent from the run
+  // scope — never from the request body).
+  extraHeaders?: Record<string, string>;
 }
 
 /**
@@ -125,6 +132,22 @@ export function detectInputRole(input: string): ModelRole {
 }
 
 export async function resolveUpstream(agent: AgentRow, role: ModelRole = 'chat'): Promise<Upstream> {
+  // Hermes-managed route (migration 0045) — ADDITIVE, highest priority. Runs on
+  // OUR Hermes box (server #2) via the reverse tunnel; the profile is addressed
+  // as `model`. isExternal=false → AIAG path (debit+markup), same as the gateway.
+  // The X-Hermes-Session-Key header is left empty here and filled SERVER-SIDE in
+  // runAgent from the run scope (agentId + hire scope), never from the body.
+  if (agent.connection_type === 'hermes_managed' && agent.hermes_profile) {
+    if (!hermesEnabled()) throw new Error('hermes_disabled');
+    return {
+      url: `${(process.env.HERMES_GATEWAY_URL ?? '').replace(/\/$/, '')}/v1/chat/completions`,
+      apiKey: process.env.HERMES_API_KEY ?? '',
+      model: agent.hermes_profile,
+      isExternal: false,
+      extraHeaders: {},
+    };
+  }
+
   // R0-6: provider-picker path (most specific first). provider_id NOT NULL ⇒
   // the agent was created via the new catalog; route to its chosen provider's
   // decrypted credential. It IS billable through us (isExternal=false).
@@ -246,6 +269,7 @@ async function postChat(
   body: Record<string, unknown>,
   attribution: boolean,
   label: string,
+  extraHeaders?: Record<string, string>,
 ): Promise<Response> {
   const headers: Record<string, string> = {
     authorization: `Bearer ${apiKey}`,
@@ -256,6 +280,11 @@ async function postChat(
   if (attribution) {
     headers['HTTP-Referer'] = 'https://ai-aggregator.ru';
     headers['X-Title'] = 'AIAG TMA';
+  }
+  // Per-request extra headers (e.g. the Hermes route's X-Hermes-Session-Key,
+  // derived server-side). Merged last, before fetch.
+  if (extraHeaders) {
+    for (const [k, v] of Object.entries(extraHeaders)) headers[k] = v;
   }
   // SSRF guard (D-7 / R1-7). safeFetch DNS-resolves the host and rejects
   // private / link-local / loopback / CGNAT / IPv6-ULA targets, pins the socket
@@ -336,7 +365,17 @@ export async function callWithFallback(
 ): Promise<ChatResult> {
   const label = upstream.isExternal ? 'external' : 'upstream';
   const isGateway = upstream.url === AIAG_GATEWAY_URL;
-  const res = await postChat(upstream.url, upstream.apiKey, body, !upstream.isExternal, label);
+  // Pass the upstream's per-request extra headers (Hermes session-key) to the
+  // primary hop only — the OpenRouter degraded fallback below is a different host
+  // and must NOT receive them.
+  const res = await postChat(
+    upstream.url,
+    upstream.apiKey,
+    body,
+    !upstream.isExternal,
+    label,
+    upstream.extraHeaders,
+  );
   if (res.ok) {
     // D-0/D-1: read billing figures BEFORE consuming the body. Only trust them
     // on the real gateway path (not external/OpenRouter, which never set them).
@@ -617,6 +656,17 @@ export async function runAgent(runId: string): Promise<void> {
   // the request body. Owner run ⇒ null (shared memory, legacy). Hirer run ⇒ the
   // hirer's tg_user_id, which namespaces both history and the memory tool.
   const scopeHirerId = await resolveRunScope(agent.id, run.tg_user_id, agent.tg_user_id);
+
+  // ---- Hermes per-tenant isolation: derive X-Hermes-Session-Key SERVER-SIDE ----
+  // Only for the Hermes-managed route (upstream.extraHeaders set by resolveUpstream).
+  // sessionKey = `${agentId}:${scope}` where scope = the per-hirer id (server-derived
+  // from the run, NEVER the request body) or 'owner' for an owner run. Hermes uses
+  // this header to isolate memory/session per tenant. Non-Hermes upstreams are
+  // untouched (extraHeaders undefined → no-op).
+  if (upstream.extraHeaders) {
+    const hermesSessionKey = `${agent.id}:${scopeHirerId ?? 'owner'}`;
+    upstream.extraHeaders['X-Hermes-Session-Key'] = hermesSessionKey;
+  }
 
   // ---- conversation history ----
   const history = await loadHistory(agent.id, runId, 10, scopeHirerId);

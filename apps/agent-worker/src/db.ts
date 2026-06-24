@@ -28,7 +28,7 @@ export interface AgentRow {
   spent_today_credits: string;
   spent_today_date: string;
   status: string;
-  connection_type: 'aiag' | 'external_openai';
+  connection_type: 'aiag' | 'external_openai' | 'hermes_managed';
   external_base_url: string | null;
   external_api_key_encrypted: Buffer | null;
   external_model_slug: string | null;
@@ -42,6 +42,9 @@ export interface AgentRow {
   // mcp_auth_encrypted = AES-256-GCM base64 (crypto.ts), decrypted at run time.
   mcp_endpoint_url: string | null;
   mcp_auth_encrypted: string | null;
+  // Hermes route (migration 0045). When connection_type='hermes_managed' this is
+  // the Hermes profile name addressed as `model` in the REST call. NULL otherwise.
+  hermes_profile: string | null;
 }
 
 export interface AgentRunRow {
@@ -83,7 +86,8 @@ export async function loadAgent(agentId: string): Promise<AgentRow | null> {
            auth_ref::text          AS auth_ref,
            base_url_override,
            mcp_endpoint_url,
-           mcp_auth_encrypted
+           mcp_auth_encrypted,
+           hermes_profile
     FROM agents WHERE id = ${agentId}::uuid LIMIT 1
   `) as unknown as AgentRow[];
   return rows[0] ?? null;
@@ -119,7 +123,8 @@ export async function loadAgentByName(
            auth_ref::text          AS auth_ref,
            base_url_override,
            mcp_endpoint_url,
-           mcp_auth_encrypted
+           mcp_auth_encrypted,
+           hermes_profile
     FROM agents
     WHERE tg_user_id = ${tgUserId}::bigint
       AND lower(name) = lower(${name.trim()})
