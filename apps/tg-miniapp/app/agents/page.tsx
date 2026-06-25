@@ -98,9 +98,10 @@ function priceStat(price: string | null): string {
   return price !== null ? `${fmtCredits(price)} кр/мес` : 'бесплатно';
 }
 
-// Подпись amber-кнопки: платный → ПОДПИСКА с месячной ценой, бесплатный → использовать.
+// Подпись amber-кнопки: платный → ПОДПИСКА с месячной ценой, бесплатный → создание
+// из шаблона (клонирование происходит только в потоке создания агента).
 function actionLabel(price: string | null): string {
-  return price !== null ? `Подписаться · ${fmtCredits(price)} кр/мес` : 'Использовать';
+  return price !== null ? `Подписаться · ${fmtCredits(price)} кр/мес` : 'Создать из шаблона';
 }
 
 export default function AgentsPage() {
@@ -215,17 +216,24 @@ export default function AgentsPage() {
     });
   }, [templates, search]);
 
-  // take(): бесплатный → clone, платный → rent (как /templates/[id] и /market).
-  // На успех — обновляем инбокс и переключаем на «Мои». 402 → инлайн-подсказка.
+  // take(): бесплатный → поток создания агента (клонирование происходит ТОЛЬКО там),
+  // платный → rent (подписка автору, как /templates/[id] и /market). На успех ренту —
+  // обновляем инбокс и переключаем на «Мои». 402 → инлайн-подсказка.
   async function take(t: Template) {
     if (!token || takingId) return;
     const paid = t.price_credits !== null;
+    // Бесплатный шаблон: не клонируем здесь — уводим в форму создания агента
+    // с префиллом из шаблона (?from=<id>). Клон сработает на сабмите формы.
+    if (!paid) {
+      router.push(`/agents/new?from=${t.id}`);
+      return;
+    }
     setTakingId(t.id);
     setTakeErr(null);
     setInsufficientId(null);
     try {
       const res = await authFetch(
-        `/tg/api/tma/templates/${t.id}/${paid ? 'rent' : 'clone'}`,
+        `/tg/api/tma/templates/${t.id}/rent`,
         { method: 'POST' },
       );
       if (res.status === 402) {
@@ -255,7 +263,7 @@ export default function AgentsPage() {
           .catch(() => {});
         return;
       }
-      setTakeErr(paid ? 'rent_failed' : 'clone_failed');
+      setTakeErr('rent_failed');
     } catch (e) {
       setTakeErr(e instanceof Error ? e.message : 'take_failed');
     } finally {

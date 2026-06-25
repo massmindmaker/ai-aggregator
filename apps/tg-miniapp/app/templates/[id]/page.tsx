@@ -52,8 +52,6 @@ export default function TemplateDetailPage() {
 
   const [template, setTemplate] = useState<Template | null>(null);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
-  const [cloning, setCloning] = useState(false);
-  const [cloneErr, setCloneErr] = useState<string | null>(null);
   // Slice 2: paid author-rent. `renting` = request in flight; `insufficient` =
   // the rent route answered 402 (top up first).
   const [renting, setRenting] = useState(false);
@@ -107,33 +105,12 @@ export default function TemplateDetailPage() {
 
   const isPaid = template ? template.price_credits !== null : false;
   const priceNum = template && template.price_credits !== null ? Number(template.price_credits) : 0;
-  const cloneDisabled = cloning;
 
-  async function handleClone() {
-    if (!token || !id) return;
-    setCloning(true);
-    setCloneErr(null);
-    try {
-      const res = await fetch(`/tg/api/tma/templates/${id}/clone`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setCloneErr(body.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      const data = await res.json();
-      if (data.agent_id) {
-        router.push(`/agents/${data.agent_id}`);
-        return;
-      }
-      setCloneErr('clone_failed');
-    } catch (e) {
-      setCloneErr(e instanceof Error ? e.message : 'clone_failed');
-    } finally {
-      setCloning(false);
-    }
+  // Бесплатный шаблон: не клонируем здесь — уводим в поток создания агента
+  // с префиллом из шаблона (?from=<id>). Клонирование живёт ТОЛЬКО в создании.
+  function handleCreateFromTemplate() {
+    if (!id) return;
+    router.push(`/agents/new?from=${id}`);
   }
 
   // Slice 2: pay the author's exact rent → server settles atomically (debit
@@ -309,7 +286,8 @@ export default function TemplateDetailPage() {
             </section>
 
             {/* CTA — the one primary action on this screen. Paid templates rent
-                (pays the author the exact sum, 0% AIAG); free templates clone. */}
+                (pays the author the exact sum, 0% AIAG); free templates go into the
+                create flow, where the clone happens (clone only at creation). */}
             {isPaid ? (
               <button
                 type="button"
@@ -322,11 +300,11 @@ export default function TemplateDetailPage() {
             ) : (
               <button
                 type="button"
-                onClick={handleClone}
-                disabled={cloneDisabled || loading || !!error}
+                onClick={handleCreateFromTemplate}
+                disabled={loading || !!error}
                 className="tma-btn tma-btn--primary"
               >
-                {cloning ? 'Клонирование…' : 'Клонировать'}
+                Создать из шаблона
               </button>
             )}
 
@@ -347,12 +325,10 @@ export default function TemplateDetailPage() {
             {!loading && error && (
               <p className="tma-card-text">
                 {error === 'Не открыто в Telegram'
-                  ? 'Откройте через @aiag_bot, чтобы клонировать'
+                  ? 'Откройте через @aiag_bot, чтобы создать агента из шаблона'
                   : `Ошибка: ${error}`}
               </p>
             )}
-
-            {cloneErr && <div className="tma-error">Ошибка: {cloneErr}</div>}
 
             {template.model_slug && (
               <section className="tma-card">
@@ -462,7 +438,7 @@ export default function TemplateDetailPage() {
             </section>
 
             <p className="tma-card-text tma-text-small">
-              При клонировании настройки переносятся к вам. Ключи и приватные
+              При создании из шаблона настройки переносятся к вам. Ключи и приватные
               данные автора не передаются — подключение настраиваете сами.
             </p>
           </>

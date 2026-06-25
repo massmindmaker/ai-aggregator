@@ -140,9 +140,10 @@ function priceStat(price: string | null): string {
   return price !== null ? `${fmtCredits(price)} кр/мес` : 'бесплатно';
 }
 
-// Подпись amber-кнопки: платный → ПОДПИСКА с месячной ценой, бесплатный → использовать.
+// Подпись amber-кнопки: платный → ПОДПИСКА с месячной ценой, бесплатный → создание
+// из шаблона (клонирование происходит только в потоке создания агента).
 function actionLabel(price: string | null): string {
-  return price !== null ? `Подписаться · ${fmtCredits(price)} кр/мес` : 'Использовать';
+  return price !== null ? `Подписаться · ${fmtCredits(price)} кр/мес` : 'Создать из шаблона';
 }
 
 export default function MarketPage() {
@@ -244,17 +245,24 @@ export default function MarketPage() {
     });
   }, [templates, search, category]);
 
-  // take(): бесплатный → clone, платный → rent (как в templates/[id]). На успех —
-  // в инбокс (/agents). 402 → инлайн-подсказка с пополнением. Mirror error-handling.
+  // take(): бесплатный → поток создания агента (клонирование происходит ТОЛЬКО там),
+  // платный → rent (подписка автору, как в templates/[id]). 402 → инлайн-подсказка
+  // с пополнением. Mirror error-handling по ренту.
   async function take(t: Template) {
     if (!token || takingId) return;
     const paid = t.price_credits !== null;
+    // Бесплатный шаблон: не клонируем здесь — уводим в форму создания агента
+    // с префиллом из шаблона (?from=<id>). Клон сработает на сабмите формы.
+    if (!paid) {
+      router.push(`/agents/new?from=${t.id}`);
+      return;
+    }
     setTakingId(t.id);
     setTakeErr(null);
     setInsufficientId(null);
     try {
       const res = await fetch(
-        `/tg/api/tma/templates/${t.id}/${paid ? 'rent' : 'clone'}`,
+        `/tg/api/tma/templates/${t.id}/rent`,
         { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
       );
       if (res.status === 402) {
@@ -272,7 +280,7 @@ export default function MarketPage() {
         router.push('/agents');
         return;
       }
-      setTakeErr(paid ? 'rent_failed' : 'clone_failed');
+      setTakeErr('rent_failed');
     } catch (e) {
       setTakeErr(e instanceof Error ? e.message : 'take_failed');
     } finally {
