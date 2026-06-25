@@ -331,16 +331,14 @@ export default function AccountPage() {
           </section>
         )}
 
-        {/* Согласия — read-only, информационные. */}
+        {/* Условия использования — информационные строки, без ложного «принято». */}
         <section className="tma-card">
-          <h2 className="tma-card-title">Согласия</h2>
+          <h2 className="tma-card-title">Условия использования</h2>
           <div className="tma-row">
-            <span className="tma-card-text">Согласие на обработку данных (152-ФЗ)</span>
-            <span className="tma-pill tma-pill--ok">✓ принято</span>
+            <span className="tma-card-text">Обработка данных (152-ФЗ)</span>
           </div>
           <div className="tma-row" style={{ marginTop: 10 }}>
             <span className="tma-card-text">Пользовательское соглашение</span>
-            <span className="tma-pill tma-pill--ok">✓ принято</span>
           </div>
         </section>
 

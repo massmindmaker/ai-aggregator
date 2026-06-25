@@ -55,7 +55,7 @@ interface Template {
 
 // ── Сегменты экрана. value = ?tab=… ──────────────────────────────────────────
 const TABS = [
-  { id: 'hire', label: 'Нанять' },
+  { id: 'hire', label: 'Каталог' },
   { id: 'mine', label: 'Мои' },
   { id: 'create', label: 'Создать' },
 ] as const;
@@ -98,10 +98,10 @@ function priceStat(price: string | null): string {
   return price !== null ? `${fmtCredits(price)} кр/мес` : 'бесплатно';
 }
 
-// Подпись amber-кнопки: платный → ПОДПИСКА с месячной ценой, бесплатный → создание
+// Подпись amber-кнопки: платный → АРЕНДА с месячной ценой, бесплатный → создание
 // из шаблона (клонирование происходит только в потоке создания агента).
 function actionLabel(price: string | null): string {
-  return price !== null ? `Подписаться · ${fmtCredits(price)} кр/мес` : 'Создать из шаблона';
+  return price !== null ? `Арендовать · ${fmtCredits(price)} кр/мес` : 'Создать из шаблона';
 }
 
 export default function AgentsPage() {
@@ -125,6 +125,7 @@ export default function AgentsPage() {
   // Creator-membership gate: «Создать с нуля» только для держателей членского NFT.
   // null = загрузка; false → честное «стань создателем» вместо опций создания.
   const [isMember, setIsMember] = useState<boolean | null>(null);
+  const [checkingMember, setCheckingMember] = useState(false);
   useEffect(() => {
     if (!token) return;
     fetch('/tg/api/tma/membership', { headers: { Authorization: `Bearer ${token}` } })
@@ -132,6 +133,25 @@ export default function AgentsPage() {
       .then((j) => setIsMember(!!j.is_member))
       .catch(() => setIsMember(false));
   }, [token]);
+
+  // Ручная синхронизация членства: держатель NFT мог купить его в сети — даём
+  // кнопку «Проверить членство», чтобы перезапросить статус без перезахода.
+  async function recheckMembership() {
+    if (!token || checkingMember) return;
+    setCheckingMember(true);
+    try {
+      const res = await fetch('/tg/api/tma/membership', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = res.ok ? await res.json() : { is_member: false };
+      setIsMember(!!j.is_member);
+    } catch {
+      // оставляем текущий статус — повторить можно тем же тапом
+    } finally {
+      setCheckingMember(false);
+    }
+  }
 
   // ── Инбокс «Мои» ───────────────────────────────────────────────────────────
   const [agents, setAgents] = useState<Agent[] | null>(null);
@@ -285,9 +305,6 @@ export default function AgentsPage() {
             грант уже зачислен на сервере (canon §6). Скрытие = локальный стейт. */}
         {freeGrantCredits != null && freeGrantCredits > 0 && !grantBannerHidden && (
           <div className="tma-hub-banner aiag-fade-up">
-            <span className="tma-hub-banner-icon" aria-hidden>
-              ★
-            </span>
             <span className="tma-hub-banner-text">
               <span className="tma-num">{fmtCredits(freeGrantCredits)}</span> кр на старт
               зачислены — попробуйте агента бесплатно
@@ -605,7 +622,7 @@ export default function AgentsPage() {
                     </Link>
                   </div>
                   <p className="tma-card-text tma-text-small">
-                    Готовый чертёж: клонируешь спек, ключи и память — твои с нуля.
+                    Готовый чертёж: настройки переносятся к тебе, ключи подключаешь свои.
                   </p>
 
                   {tplErr && <div className="tma-error">Ошибка: {tplErr}</div>}
@@ -649,18 +666,17 @@ export default function AgentsPage() {
                   )}
                 </section>
 
-                {/* ── Гейт создателя: «С нуля» и AI-builder — только для держателей
-                    членского NFT. Не-членам показываем честное «стань создателем». ── */}
+                {/* ── Гейт создателя: «С нуля» и AI-builder доступны держателям
+                    членского NFT. Члены создают уже сегодня — гейт лишь про членство,
+                    не про «фичу скоро для всех». ── */}
                 {isMember === false ? (
                   <section className="tma-hub-section">
                     <div className="tma-card">
                       <div className="tma-section-head">
-                        <h2 className="tma-hub-h2">Создание с нуля — ранний доступ</h2>
-                        <span className="tma-pill tma-pill--muted">◷ скоро</span>
+                        <h2 className="tma-hub-h2">Создание агентов — для создателей</h2>
                       </div>
                       <p className="tma-card-text tma-text-small">
-                        Сборка агентов с нуля пока в раннем доступе. Уже сейчас можно
-                        нанять или клонировать готового агента из каталога.
+                        Доступно держателям членского NFT. Покупка членства — скоро.
                       </p>
                       <button
                         type="button"
@@ -668,6 +684,14 @@ export default function AgentsPage() {
                         onClick={() => selectTab('hire')}
                       >
                         Нанять готового →
+                      </button>
+                      <button
+                        type="button"
+                        className="tma-btn tma-btn--ghost tma-btn--block"
+                        onClick={recheckMembership}
+                        disabled={checkingMember}
+                      >
+                        {checkingMember ? 'Проверяю…' : 'Проверить членство'}
                       </button>
                     </div>
                   </section>
@@ -691,17 +715,23 @@ export default function AgentsPage() {
                       </div>
                     </section>
 
-                    {/* ── AI-builder — честная R&D плашка ── */}
+                    {/* ── AI-builder — рабочая фича: генерация спека из слов живёт
+                        в форме создания (/agents/new). Ведём прямо туда. ── */}
                     <section className="tma-hub-section">
                       <div className="tma-card">
                         <div className="tma-section-head">
                           <h2 className="tma-hub-h2">AI-builder</h2>
-                          <span className="tma-pill tma-pill--muted">◷ R&D</span>
                         </div>
                         <p className="tma-card-text tma-text-small">
-                          Опиши задачу словами — ИИ соберёт спецификацию агента за тебя.
-                          В разработке.
+                          Опиши задачу словами — ИИ соберёт черновик спецификации агента
+                          за тебя, а ты проверишь и поправишь.
                         </p>
+                        <Link
+                          href="/agents/new"
+                          className="tma-btn tma-btn--primary tma-btn--block"
+                        >
+                          Создать из слов →
+                        </Link>
                       </div>
                     </section>
                   </>

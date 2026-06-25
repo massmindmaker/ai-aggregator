@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
 import { hueFor } from '@/components/AgentCard';
+import { Icon, ICONS } from '@/components/Icon';
 
 interface Template {
   id: string;
@@ -279,7 +280,12 @@ export default function TemplateDetailPage() {
                 >
                   {priceLabel(template.price_credits)}
                 </span>
-                <span className="tma-mono">⧉ {template.clone_count} клонов</span>
+                <span
+                  className="tma-mono"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                >
+                  <Icon d={ICONS.board} size={13} /> {template.clone_count} клонов
+                </span>
               </div>
             </header>
               </div>

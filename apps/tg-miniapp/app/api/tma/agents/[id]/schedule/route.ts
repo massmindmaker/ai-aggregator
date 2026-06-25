@@ -114,6 +114,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       RETURNING id::text, agent_id::text, prompt, interval_minutes, enabled,
                 next_run_at, last_run_at
     `) as unknown as ScheduleRow[];
+    if (!upd[0]) return NextResponse.json({ error: 'not_found' }, { status: 404 });
     return NextResponse.json({ schedule: upd[0] });
   }
   const ins = (await sql`
@@ -128,6 +129,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
               next_run_at, last_run_at
   `) as unknown as ScheduleRow[];
 
+  if (!ins[0]) return NextResponse.json({ error: 'insert_failed' }, { status: 500 });
   return NextResponse.json({ schedule: ins[0] });
 }
 
@@ -207,6 +209,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
                 interval_minutes, at_time::text AS at_time, weekday, enabled,
                 next_run_at, last_run_at
     `) as unknown as Array<Record<string, unknown>>;
+    if (!rows[0]) return NextResponse.json({ error: 'insert_failed' }, { status: 500 });
     return NextResponse.json({ schedule: rows[0] }, { status: 201 });
   }
 
@@ -278,5 +281,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               next_run_at, last_run_at
   `) as unknown as Array<Record<string, unknown>>;
 
+  if (!rows[0]) return NextResponse.json({ error: 'insert_failed' }, { status: 500 });
   return NextResponse.json({ schedule: rows[0] }, { status: 201 });
 }

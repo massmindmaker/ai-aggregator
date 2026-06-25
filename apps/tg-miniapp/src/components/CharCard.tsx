@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { haptic } from '@/lib/haptics';
+import { monogram, placeholderVariant } from '@/components/AgentCard';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CharCard — полная карточка-персонаж (DESIGN.md / PRODUCT.md «коллекционная
@@ -13,11 +14,6 @@ import { haptic } from '@/lib/haptics';
 // Портрет + голо-фольга переиспользуют машинерию AgentCard (--holo-x/y/rx/ry +
 // .tma-agent-portrait ::before/::after из globals.css).
 // ─────────────────────────────────────────────────────────────────────────────
-
-function monogram(name: string | null): string {
-  const t = (name ?? '?').trim();
-  return (t[0] ?? '?').toUpperCase();
-}
 
 // ── Holo-tilt — зеркалит AgentCard ───────────────────────────────────────────
 function holoMove(e: React.PointerEvent<HTMLAnchorElement>) {
@@ -120,7 +116,12 @@ export function CharCard({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={portraitImage} alt="" className="cc-media" aria-hidden />
       ) : (
-        <span className="tma-mono-placeholder" aria-hidden>
+        <span
+          className="tma-mono-placeholder"
+          data-pattern={placeholderVariant(name ?? href)}
+          aria-hidden
+        >
+          <span className="tma-mono-glyph" />
           <span className="tma-mono-sheen" />
           <span className="tma-agent-monogram">{monogram(name)}</span>
         </span>

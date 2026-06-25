@@ -140,10 +140,10 @@ function priceStat(price: string | null): string {
   return price !== null ? `${fmtCredits(price)} кр/мес` : 'бесплатно';
 }
 
-// Подпись amber-кнопки: платный → ПОДПИСКА с месячной ценой, бесплатный → создание
+// Подпись amber-кнопки: платный → АРЕНДА с месячной ценой, бесплатный → создание
 // из шаблона (клонирование происходит только в потоке создания агента).
 function actionLabel(price: string | null): string {
-  return price !== null ? `Подписаться · ${fmtCredits(price)} кр/мес` : 'Создать из шаблона';
+  return price !== null ? `Арендовать · ${fmtCredits(price)} кр/мес` : 'Создать из шаблона';
 }
 
 export default function MarketPage() {

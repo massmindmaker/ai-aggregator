@@ -264,7 +264,7 @@ export default function DashboardPage() {
                 <div className="tma-skeleton tma-hub-sum-skeleton" aria-hidden />
               ) : (
                 <div className="tma-hub-balance-row">
-                  <Link href="/profile" className="tma-hub-sum">
+                  <Link href="/wallet" className="tma-hub-sum">
                     {balanceErr ? (
                       <span className="tma-hub-sum-unit">недоступен</span>
                     ) : hideBalance ? (

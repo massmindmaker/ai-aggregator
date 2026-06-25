@@ -63,6 +63,9 @@ export default function NewAgentPage() {
   // (клонирование живёт ТОЛЬКО в потоке создания). null = обычное создание.
   const [cloneFromTemplateId, setCloneFromTemplateId] = useState<string | null>(null);
   const [cloneInsufficient, setCloneInsufficient] = useState(false);
+  // Ошибка загрузки спека шаблона по ?from= — показываем явно, а не молча уходим
+  // в обычное (гейтованное) создание.
+  const [cloneFetchErr, setCloneFetchErr] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [modelSlug, setModelSlug] = useState('');
@@ -188,13 +191,22 @@ export default function NewAgentPage() {
     const fromId = new URLSearchParams(window.location.search).get('from');
     if (!fromId) return;
     let cancelled = false;
+    setCloneFetchErr(null);
     (async () => {
       try {
         // Одиночный GET шаблона уже существует — берём полный спек оттуда.
         const res = await fetch(`/tg/api/tma/templates/${fromId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (cancelled || !res.ok) return;
+        if (cancelled) return;
+        if (!res.ok) {
+          setCloneFetchErr(
+            res.status === 404
+              ? 'Шаблон не найден или снят с публикации.'
+              : `Не удалось загрузить шаблон (HTTP ${res.status}).`,
+          );
+          return;
+        }
         const data = await res.json();
         const tpl = data.template as {
           name?: string | null;
@@ -215,7 +227,7 @@ export default function NewAgentPage() {
         setCloneFromTemplateId(fromId);
         setPickedKind('personal');
       } catch {
-        // Сеть/парсинг отвалились — оставляем обычную форму создания.
+        if (!cancelled) setCloneFetchErr('Не удалось загрузить шаблон. Попробуйте ещё раз.');
       }
     })();
     return () => {
@@ -536,16 +548,27 @@ export default function NewAgentPage() {
           </div>
         )}
 
-        {/* Гейт: создание с нуля — только для создателей (держателей членского NFT). */}
-        {user && !error && isMember === false && (
+        {/* Ошибка загрузки шаблона по ?from= — честно сообщаем и не уводим в
+            гейтованное создание с нуля. */}
+        {user && !error && cloneFetchErr && (
+          <div className="tma-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="tma-error">{cloneFetchErr}</div>
+            <Link href="/agents?tab=hire" className="tma-btn tma-btn--ghost tma-btn--block">
+              К каталогу
+            </Link>
+          </div>
+        )}
+
+        {/* Гейт: создание с нуля — для создателей (держателей членского NFT).
+            Клон из шаблона (?from=) бесплатен и открыт всем → гейт не показываем. */}
+        {user && !error && isMember === false && !cloneFromTemplateId && (
           <section className="tma-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="tma-section-head">
-              <h1 className="tma-title">Создание с нуля — ранний доступ</h1>
-              <span className="tma-pill tma-pill--muted">◷ скоро</span>
+              <h1 className="tma-title">Создание агентов — для создателей</h1>
             </div>
             <p className="tma-card-text" style={{ fontSize: 13, opacity: 0.8 }}>
-              Сборка агентов с нуля пока в раннем доступе. Уже сейчас можно нанять
-              или клонировать готового агента из каталога.
+              Доступно держателям членского NFT. Покупка членства — скоро. Уже сейчас
+              можно нанять или клонировать готового агента из каталога.
             </p>
             <Link href="/agents?tab=hire" className="tma-btn tma-btn--primary tma-btn--block">
               Нанять готового →
@@ -624,10 +647,10 @@ export default function NewAgentPage() {
           </>
         )}
 
-        {user && !error && isMember !== false && pickedKind && (
+        {user && !error && (isMember !== false || !!cloneFromTemplateId) && pickedKind && (
           <>
             <header className="tma-header">
-              <h1 className="tma-title">Новый агент</h1>
+              <h1 className="tma-title">{cloneFromTemplateId ? 'Из шаблона' : 'Новый агент'}</h1>
               <p className="tma-subtitle">
                 {aiDraft
                   ? 'Черновик из описания'
@@ -651,6 +674,12 @@ export default function NewAgentPage() {
               </div>
             )}
 
+            {cloneFromTemplateId && (
+              <p className="tma-card-text tma-text-small" style={{ opacity: 0.75 }}>
+                Клон шаблона — поля копируются как есть.
+              </p>
+            )}
+
             <form
               onSubmit={handleSubmit}
               style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
@@ -664,6 +693,7 @@ export default function NewAgentPage() {
                   required
                   maxLength={200}
                   className="tma-input"
+                  disabled={!!cloneFromTemplateId}
                 />
               </label>
 
@@ -673,6 +703,7 @@ export default function NewAgentPage() {
                   value={modelSlug}
                   onChange={(e) => setModelSlug(e.target.value)}
                   className="tma-input"
+                  disabled={!!cloneFromTemplateId}
                 >
                   {!modelSlug && <option value="">— выберите модель —</option>}
                   {modelSlug && !models.some((m) => m.slug === modelSlug) && (
@@ -740,6 +771,7 @@ export default function NewAgentPage() {
                     maxLength={8000}
                     className="tma-input"
                     style={{ resize: 'vertical', fontFamily: 'inherit' }}
+                    disabled={!!cloneFromTemplateId}
                   />
                 </label>
               </Accordion>
@@ -768,6 +800,7 @@ export default function NewAgentPage() {
                           )
                         }
                         style={{ marginTop: 2 }}
+                        disabled={!!cloneFromTemplateId}
                       />
                       <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <span className="tma-card-text" style={{ fontWeight: 600 }}>

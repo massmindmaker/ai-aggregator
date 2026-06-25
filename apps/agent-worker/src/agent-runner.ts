@@ -650,6 +650,14 @@ export async function runAgent(runId: string): Promise<void> {
 
   await markStarted(runId);
 
+  // P0 SAFETY: once the run is 'running', ANY throw below (scope/history/MCP
+  // setup OR the model loop) MUST land the run in a terminal 'failed' state +
+  // notify the user. Without this, an exception in the setup gap (resolveRunScope,
+  // loadHistory, etc.) escaped runAgent, failing the BullMQ job but leaving the DB
+  // row 'running' forever (stuck UI, infinite client polling). mcp is declared out
+  // here so the finally can still close it after the try opens immediately below.
+  let mcp: McpClient | null = null;
+  try {
   // ---- HIRE ISOLATION (OWASP LLM06): resolve per-hirer scope SERVER-SIDE ----
   // scope is derived from the run row (run.tg_user_id = who launched it) vs the
   // agent owner (agent.tg_user_id) + an ACTIVE agent_sessions row — NEVER from
@@ -682,7 +690,6 @@ export async function runAgent(runId: string): Promise<void> {
   // MCP (skills): attach the agent's optional remote MCP server (read-only,
   // SSRF-guarded via safeFetch, billed 0₽). Degrades to built-in tools if the
   // connect/list fails — a misconfigured MCP server must never block the run.
-  let mcp: McpClient | null = null;
   if (agent.mcp_endpoint_url) {
     try {
       // OAuth bearer takes priority: if the agent has an agent_mcp_oauth row,
@@ -735,7 +742,6 @@ export async function runAgent(runId: string): Promise<void> {
     status: 'ok' | 'error';
   }> = [];
 
-  try {
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     let call: ChatResult;
     try {
@@ -942,6 +948,15 @@ export async function runAgent(runId: string): Promise<void> {
 
   await markFailed(runId, 'max_iterations_exceeded');
   await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'max_iterations_exceeded');
+  } catch (e) {
+    // P0 SAFETY NET: any unexpected throw after markStarted (setup gap or an
+    // uncaught error inside the loop) → mark the run terminally failed + notify,
+    // so the DB row never stays 'running'. Mirrors the markFailed/notifyFailed
+    // signatures used on every other failure path above.
+    const msg = `run_failed: ${(e as Error).message.slice(0, 200)}`;
+    await markFailed(runId, msg);
+    await notifyFailed(agent.tg_user_id, agent.name, agent.id, msg);
+    return;
   } finally {
     if (mcp) {
       try {

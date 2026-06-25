@@ -755,15 +755,77 @@ code {
   mix-blend-mode: soft-light;
 }
 
+/* === Deterministic per-id glyph layer ====================================
+ * Поверх per-hue градиента (между виньеткой и сатиновым бликом) — слабый
+ * геометрический паттерн, свой для каждой карты (data-pattern 0..5). Так
+ * плитки различаются ФАКТУРОЙ, а не только оттенком, даже без реального арта.
+ * Только белые/чёрные полупрозрачные слои (без amber-заливок, DESIGN.md);
+ * статичные, reduced-motion-safe по построению. */
+.tma-mono-glyph {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: soft-light;
+}
+/* 0 — диагональная штриховка */
+.tma-mono-placeholder[data-pattern='0'] .tma-mono-glyph {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.06) 0 2px,
+    transparent 2px 12px
+  );
+}
+/* 1 — точечная сетка */
+.tma-mono-placeholder[data-pattern='1'] .tma-mono-glyph {
+  background-image: radial-gradient(
+    rgba(255, 255, 255, 0.08) 1.2px,
+    transparent 1.4px
+  );
+  background-size: 14px 14px;
+}
+/* 2 — концентрические дуги (угол) */
+.tma-mono-placeholder[data-pattern='2'] .tma-mono-glyph {
+  background: repeating-radial-gradient(
+    circle at 82% 14%,
+    rgba(255, 255, 255, 0.06) 0 1px,
+    transparent 1px 16px
+  );
+}
+/* 3 — встречная штриховка (-45°) */
+.tma-mono-placeholder[data-pattern='3'] .tma-mono-glyph {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.05) 0 1px,
+    transparent 1px 10px
+  );
+}
+/* 4 — крупный мягкий блик-эллипс снизу */
+.tma-mono-placeholder[data-pattern='4'] .tma-mono-glyph {
+  background: radial-gradient(
+    120% 80% at 18% 95%,
+    rgba(255, 255, 255, 0.08) 0%,
+    transparent 50%
+  );
+}
+/* 5 — вертикальные полосы */
+.tma-mono-placeholder[data-pattern='5'] .tma-mono-glyph {
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0 1px,
+    transparent 1px 13px
+  );
+}
+
 .tma-agent-monogram {
   position: relative;
   z-index: 1;
   font-family: var(--font-mono);
-  font-size: 38px;
+  font-size: 34px;
   font-weight: 700;
   line-height: 1;
-  opacity: 0.82;
-  letter-spacing: -0.01em;
+  opacity: 0.72;
+  letter-spacing: 0.02em;
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
 }
 
@@ -771,6 +833,10 @@ code {
   position: absolute;
   top: 8px;
   left: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 3px 8px;
   border-radius: 999px;
   background: var(--accent);
@@ -902,7 +968,10 @@ code {
   flex: 0 0 auto;
   width: 84px;
   height: 84px;
+  /* aspect-ratio из .tma-agent-portrait не нужен — задаём фикс-размеры hero. */
+  aspect-ratio: auto;
   border-radius: var(--radius);
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -910,6 +979,10 @@ code {
   font-weight: 700;
   line-height: 1;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+/* Hero-портрет немного крупнее монограммы каталога. */
+.tma-detail-portrait .tma-agent-monogram {
+  font-size: 30px;
 }
 
 .tma-detail-hero-body {

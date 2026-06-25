@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
-import { hueFor } from '@/components/AgentCard';
+import { hueFor, monogram, placeholderVariant } from '@/components/AgentCard';
+import { characterFor } from '@/lib/characters';
 import { RunTrace } from '@/components/RunTrace';
 import { Icon, ICONS } from '@/components/Icon';
 import { fmtCredits, parseCreditsInput } from '@/lib/credits';
@@ -521,17 +522,25 @@ export default function AgentDetailPage() {
   // останавливается (фоновый воркер всё равно дотянет и пришлёт уведомление в чат).
   const POLL_MAX_ATTEMPTS = 80; // 80 × 1500мс = 120с
   const [pollExhausted, setPollExhausted] = useState(false);
+  // hasActiveRun = СТАБИЛЬНЫЙ boolean (а не ссылка на runs[]). Раньше эффект
+  // зависел от runs — новый массив на каждый load() пересоздавал интервал и
+  // обнулял attempts → потолок POLL_MAX_ATTEMPTS НИКОГДА не достигался, опрос
+  // зависшего run крутился вечно. Теперь интервал живёт пока активность есть,
+  // attempts хранится в ref (не пересоздаётся per render).
+  const hasActiveRun = runs.some(
+    (r) => r.status === 'pending' || r.status === 'running'
+  );
+  const pollAttemptsRef = useRef(0);
   useEffect(() => {
-    const hasActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
-    if (!hasActive) {
+    if (!hasActiveRun) {
+      pollAttemptsRef.current = 0;
       setPollExhausted(false);
       return;
     }
     if (pollExhausted) return;
-    let attempts = 0;
     const t = setInterval(() => {
-      attempts += 1;
-      if (attempts >= POLL_MAX_ATTEMPTS) {
+      pollAttemptsRef.current += 1;
+      if (pollAttemptsRef.current >= POLL_MAX_ATTEMPTS) {
         clearInterval(t);
         setPollExhausted(true);
         return;
@@ -539,7 +548,7 @@ export default function AgentDetailPage() {
       load();
     }, 1500);
     return () => clearInterval(t);
-  }, [runs, load, pollExhausted]);
+  }, [hasActiveRun, load, pollExhausted]);
 
   // Тактильный «готово»: когда прогон перестаёт быть активным (был active →
   // стал не-active), даём success-вибро. Ошибочный финал → error-вибро.
@@ -717,15 +726,49 @@ export default function AgentDetailPage() {
           <>
             {/* Hero — the collectible-character card + headline facts. */}
             <section className="tma-detail-hero">
-              <div
-                className="tma-detail-portrait"
-                style={{
-                  background: `linear-gradient(155deg, oklch(0.34 0.09 ${hueFor(agent.id)}), oklch(0.17 0.045 ${hueFor(agent.id)}))`,
-                  color: `oklch(0.93 0.11 ${hueFor(agent.id)})`,
-                }}
-              >
-                {(agent.name?.trim()[0] ?? '?').toUpperCase()}
-              </div>
+              {(() => {
+                // Богатый портрет hero, как в каталоге: реальный арт (если есть
+                // для kind) либо тот же sheen/виньетка/глиф + 2-буквенная монограмма.
+                const char = characterFor(agent.template_kind);
+                return (
+                  <div
+                    className="tma-detail-portrait tma-agent-portrait"
+                    style={{
+                      background: `linear-gradient(155deg, oklch(0.34 0.09 ${hueFor(agent.id)}), oklch(0.17 0.045 ${hueFor(agent.id)}))`,
+                      color: `oklch(0.93 0.11 ${hueFor(agent.id)})`,
+                    }}
+                  >
+                    {char?.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={char.image}
+                        alt=""
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          zIndex: 0,
+                        }}
+                        aria-hidden
+                      />
+                    ) : (
+                      <span
+                        className="tma-mono-placeholder"
+                        data-pattern={placeholderVariant(agent.id)}
+                        aria-hidden
+                      >
+                        <span className="tma-mono-glyph" />
+                        <span className="tma-mono-sheen" />
+                        <span className="tma-agent-monogram">
+                          {monogram(agent.name)}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="tma-detail-hero-body">
                 <h1 className="tma-title">{agent.name}</h1>
                 {agent.description && (

@@ -14,8 +14,13 @@ const CHARACTERS: Record<string, CharacterAsset> = {
     name: 'Алиса',
     image: '/tg/characters/alisa.webp',
   },
-  // public/characters/boyar.{mp4,webp} подготовлен (персонаж-«боярин») —
-  // подключить сюда, когда основатель скажет, какому kind он принадлежит.
+  // Персонаж-«боярин» (основательский арт) — мужской характер, подключён к kind
+  // 'coder' (Программист). Видео = карточный луп, webp = постер/фоллбэк.
+  coder: {
+    name: 'Боярин',
+    image: '/tg/characters/boyar.webp',
+    video: '/tg/characters/boyar.mp4',
+  },
 };
 
 export function characterFor(kind: string | null | undefined): CharacterAsset | null {

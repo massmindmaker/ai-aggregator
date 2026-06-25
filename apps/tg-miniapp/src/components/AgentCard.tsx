@@ -23,9 +23,26 @@ export function hueFor(id: string): number {
   return HUES[h % HUES.length];
 }
 
-function monogram(name: string | null): string {
-  const t = (name ?? '?').trim();
-  return (t[0] ?? '?').toUpperCase();
+// Двухбуквенная монограмма: инициалы первых двух слов, иначе первые 2 символа.
+// Читается как «карта персонажа», а не «одна буква в цветном квадрате».
+export function monogram(name: string | null): string {
+  const t = (name ?? '').trim();
+  if (!t) return '··';
+  const words = t.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return t.slice(0, 2).toUpperCase();
+}
+
+// Детерминированный «вариант фактуры» (0..N-1) из id/имени → у каждой карты
+// свой фоновый глиф/угол поверх общего per-hue градиента, чтобы плитки
+// различались не только оттенком. Используется как data-атрибут (CSS-паттерн).
+const PLACEHOLDER_VARIANTS = 6;
+export function placeholderVariant(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return h % PLACEHOLDER_VARIANTS;
 }
 
 // ── Holo-tilt (R2-design) ────────────────────────────────────────────────────
@@ -112,7 +129,7 @@ export function AgentCard({
   return (
     <Link
       href={href}
-      className={`tma-agent-card${featured ? ' tma-agent-card--featured' : ''}`}
+      className={`tma-agent-card${featured ? ' tma-agent-card--featured aiag-featured-ring' : ''}`}
       onPointerMove={holoMove}
       onPointerLeave={holoReset}
       onPointerCancel={holoReset}
@@ -139,12 +156,30 @@ export function AgentCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={portraitImage} alt="" style={mediaStyle} aria-hidden />
         ) : (
-          <span className="tma-mono-placeholder" aria-hidden>
+          <span
+            className="tma-mono-placeholder"
+            data-pattern={placeholderVariant(name ?? href)}
+            aria-hidden
+          >
+            <span className="tma-mono-glyph" />
             <span className="tma-mono-sheen" />
             <span className="tma-agent-monogram">{monogram(name)}</span>
           </span>
         )}
-        {featured && <span className="tma-agent-featured-tag">★ топ</span>}
+        {featured && (
+          <span className="tma-agent-featured-tag" aria-label="топ">
+            <svg
+              viewBox="0 0 24 24"
+              width="11"
+              height="11"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77 5.82 21l1.18-6.88-5-4.87 7.1-1.01L12 2z" />
+            </svg>
+            топ
+          </span>
+        )}
       </div>
       <div className="tma-agent-body">
         <h3 className="tma-agent-name">{name ?? 'Без имени'}</h3>
