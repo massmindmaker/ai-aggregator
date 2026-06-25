@@ -51,6 +51,7 @@ const ICONS = {
   income: 'M3 17l6-6 4 4 8-8 M15 7h6v6',
   transfer: 'M12 15V3 M7 8l5-5 5 5 M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6',
   more: 'M5 12h.01 M12 12h.01 M19 12h.01',
+  chevron: 'M6 9l6 6 6-6',
   eye: 'M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z M12 15a3 3 0 100-6 3 3 0 000 6z',
   eyeOff:
     'M17.94 17.94A10.5 10.5 0 0112 19c-7 0-11-7-11-7a20 20 0 015.06-5.94 M9.9 4.5A10.9 10.9 0 0112 4c7 0 11 7 11 7a20 20 0 01-3.06 4.06 M1 1l22 22 M9.88 9.88a3 3 0 104.24 4.24',
@@ -98,7 +99,8 @@ export default function DashboardPage() {
 
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [bannerHidden, setBannerHidden] = useState(true);
-  const [sheet, setSheet] = useState<'more' | 'transfer' | null>(null);
+  const [sheet, setSheet] = useState<'transfer' | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   // localStorage только на клиенте.
   useEffect(() => {
@@ -318,11 +320,54 @@ export default function DashboardPage() {
                 <span className="tma-hub-cell-icon"><HubIcon d={ICONS.transfer} /></span>
                 <span className="tma-hub-cell-label">Передать</span>
               </button>
-              <button type="button" className="tma-hub-cell" onClick={() => setSheet('more')}>
-                <span className="tma-hub-cell-icon"><HubIcon d={ICONS.more} /></span>
+              <button
+                type="button"
+                className="tma-hub-cell"
+                onClick={() => setMoreOpen((v) => !v)}
+                aria-expanded={moreOpen}
+                aria-controls="hub-more"
+              >
+                <span
+                  className="tma-hub-cell-icon"
+                  style={{
+                    transform: moreOpen ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 200ms cubic-bezier(.23,1,.32,1)',
+                  }}
+                >
+                  <HubIcon d={ICONS.chevron} />
+                </span>
                 <span className="tma-hub-cell-label">Ещё</span>
               </button>
             </nav>
+
+            {/* ── Инлайн-раскрытие «Ещё» (вместо bottom-sheet) ── */}
+            {moreOpen && (
+              <div id="hub-more" className="tma-hub-section aiag-fade-up">
+                <span className="tma-sheet-section">Агенты</span>
+                <Link href="/schedules" className="tma-sheet-row">
+                  <span>Расписания</span>
+                  <span className="tma-pill tma-pill--ok">● live</span>
+                </Link>
+                <Link href={kanbanHref} className="tma-sheet-row">
+                  <span>Канбан</span>
+                  <span className="tma-pill tma-pill--muted">◷ R&D</span>
+                </Link>
+                <span className="tma-sheet-section">Подключения</span>
+                <Link href="/agents/new" className="tma-sheet-row">
+                  <span>Создать агента</span>
+                  <span className="tma-hub-link">→</span>
+                </Link>
+                <span className="tma-sheet-section">R&D</span>
+                <div className="tma-sheet-row tma-sheet-row--static">
+                  <span>Managed Hermes</span>
+                  <span className="tma-pill tma-pill--muted">◷ R&D</span>
+                </div>
+                <div className="tma-sheet-row tma-sheet-row--static">
+                  <span>Маркет тулов</span>
+                  <span className="tma-pill tma-pill--muted">◷ скоро</span>
+                </div>
+              </div>
+            )}
 
             {fetchErr && <div className="tma-error">Ошибка: {fetchErr}</div>}
 
@@ -399,7 +444,7 @@ export default function DashboardPage() {
                       </span>
                     </span>
                   </Link>
-                  <Link href="/agents/new" className="tma-hub-path">
+                  <Link href="/agents/new?blank=1" className="tma-hub-path">
                     <span className="tma-hub-path-body">
                       <span className="tma-hub-path-label">С нуля</span>
                       <span className="tma-hub-path-sub">
@@ -510,43 +555,6 @@ export default function DashboardPage() {
           </>
         )}
       </main>
-
-      {/* ── Bottom-sheet «Ещё» ── */}
-      {sheet === 'more' && (
-        <div className="tma-sheet-scrim" onClick={() => setSheet(null)}>
-          <div
-            className="tma-sheet"
-            role="dialog"
-            aria-label="Ещё"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="tma-sheet-handle" />
-            <span className="tma-sheet-section">Агенты</span>
-            <Link href="/schedules" className="tma-sheet-row" onClick={() => setSheet(null)}>
-              <span>Расписания</span>
-              <span className="tma-pill tma-pill--ok">● live</span>
-            </Link>
-            <Link href={kanbanHref} className="tma-sheet-row" onClick={() => setSheet(null)}>
-              <span>Канбан</span>
-              <span className="tma-pill tma-pill--muted">◷ R&D</span>
-            </Link>
-            <span className="tma-sheet-section">Подключения</span>
-            <Link href="/agents/new" className="tma-sheet-row" onClick={() => setSheet(null)}>
-              <span>Создать агента</span>
-              <span className="tma-hub-link">→</span>
-            </Link>
-            <span className="tma-sheet-section">R&D</span>
-            <div className="tma-sheet-row tma-sheet-row--static">
-              <span>Managed Hermes</span>
-              <span className="tma-pill tma-pill--muted">◷ R&D</span>
-            </div>
-            <div className="tma-sheet-row tma-sheet-row--static">
-              <span>Маркет тулов</span>
-              <span className="tma-pill tma-pill--muted">◷ скоро</span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Bottom-sheet выбора агента для передачи ── */}
       {sheet === 'transfer' && agents && (

@@ -1364,7 +1364,7 @@ export default function AgentDetailPage() {
               {agent.description && (
                 <div className="tma-spec-cell tma-spec-cell--wide">
                   <span className="tma-spec-label">Описание</span>
-                  <span className="tma-spec-value">{agent.description}</span>
+                  <span className="tma-spec-value tma-spec-value--text">{agent.description}</span>
                 </div>
               )}
               <div className="tma-spec-cell tma-spec-cell--wide">
@@ -1406,15 +1406,19 @@ export default function AgentDetailPage() {
                 <span className="tma-spec-label">MCP</span>
                 <span className="tma-spec-value">
                   {agent.mcp_endpoint_url ? (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%' }}>
                       <span
                         className="tma-pill tma-pill--ok"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flex: 'none' }}
                       >
                         <Icon d={ICONS.check} /> подключён
                         {agent.mcp_oauth_set ? ' (OAuth)' : agent.mcp_auth_set ? ' (токен)' : ''}
                       </span>
-                      <span className="tma-mono" title={agent.mcp_endpoint_url}>
+                      <span
+                        className="tma-mono"
+                        title={agent.mcp_endpoint_url}
+                        style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      >
                         {agent.mcp_endpoint_url}
                       </span>
                     </span>

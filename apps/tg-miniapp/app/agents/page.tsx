@@ -675,7 +675,7 @@ export default function AgentsPage() {
                           Собери агента по шагам: личность, модель, инструменты и бюджет.
                         </p>
                         <Link
-                          href="/agents/new"
+                          href="/agents/new?blank=1"
                           className="tma-btn tma-btn--primary tma-btn--block"
                         >
                           Создать с нуля →

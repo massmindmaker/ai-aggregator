@@ -84,6 +84,9 @@ export default function AccountPage() {
   const [providersLoading, setProvidersLoading] = useState(true);
   const [monthSpend, setMonthSpend] = useState<string | null>(null);
   const [spendLoading, setSpendLoading] = useState(true);
+  // Подтверждение выхода через bottom-sheet (window.confirm не работает в
+  // Telegram iOS WebView — тот же приём, что K1 при удалении агента).
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -264,6 +267,11 @@ export default function AccountPage() {
               </span>
             </div>
           )}
+          <div className="tma-cta" style={{ marginTop: 12 }}>
+            <Link href="/wallet" className="tma-btn">
+              К кошельку →
+            </Link>
+          </div>
         </section>
 
         {/* Провайдеры — каталог доступных провайдеров из /providers (БЕЗ ключей). */}
@@ -336,9 +344,14 @@ export default function AccountPage() {
           </div>
         </section>
 
-        {/* Выход — вторичная кнопка, не amber. Чистит токен и уходит на старт. */}
+        {/* Выход — вторичная кнопка, не amber. Тап открывает подтверждение. */}
         <section className="tma-card">
-          <button type="button" className="tma-btn" onClick={onLogout} style={{ width: '100%' }}>
+          <button
+            type="button"
+            className="tma-btn"
+            onClick={() => setLogoutConfirm(true)}
+            style={{ width: '100%' }}
+          >
             Выход
           </button>
           <p className="tma-card-text tma-text-small" style={{ marginTop: 8 }}>
@@ -346,6 +359,39 @@ export default function AccountPage() {
           </p>
         </section>
       </main>
+
+      {logoutConfirm && (
+        <div className="tma-sheet-scrim" onClick={() => setLogoutConfirm(false)}>
+          <div
+            className="tma-sheet"
+            role="dialog"
+            aria-label="Выйти из аккаунта?"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="tma-sheet-handle" />
+            <h3 className="tma-sheet-title">Выйти из аккаунта?</h3>
+            <p className="tma-card-text">Сессия на этом устройстве будет очищена.</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setLogoutConfirm(false)}
+                className="tma-btn"
+                style={{ flex: 1 }}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={onLogout}
+                className="tma-btn tma-btn--danger"
+                style={{ flex: 1 }}
+              >
+                Выйти
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <BottomNav />
     </>
   );

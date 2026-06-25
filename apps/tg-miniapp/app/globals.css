@@ -310,6 +310,21 @@ code {
   min-width: 0;
 }
 
+/* Леджер/топапы кошелька: левая сумма фикс, правая колонка (лейбл + дата)
+   тянется и переносится — длинные RU-лейблы не распирают строку. */
+.tma-ledger-row > * {
+  min-width: 0;
+}
+.tma-ledger-amount {
+  flex: none;
+}
+.tma-ledger-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 /* Провайдеры (account): имя слева, URL справа в одну строку с многоточием.
    URL никогда не распирает строку шире вьюпорта — обрезается ellipsis. */
 .tma-provider-name {
@@ -944,6 +959,13 @@ code {
   white-space: nowrap;
 }
 
+/* Свободный текст (Описание) — переносится полностью, без обрезки. */
+.tma-spec-value--text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+}
+
 /* === Chips (tools) === */
 .tma-chips {
   display: flex;
@@ -1575,10 +1597,10 @@ code {
   text-decoration: none;
 }
 
-/* === Блок 2: сетка функций 2×4 === */
+/* === Блок 2: сетка функций 3×2 (6 ячеек) === */
 .tma-hub-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px 8px;
 }
 
@@ -1619,7 +1641,7 @@ code {
   color: var(--ink-muted);
 }
 
-/* A3: на узких экранах поджимаем сетку функций, чтобы 4 колонки не резались. */
+/* A3: на узких экранах поджимаем сетку функций, чтобы 3 колонки не резались. */
 @media (max-width: 380px) {
   .tma-hub-grid {
     gap: 12px 4px;

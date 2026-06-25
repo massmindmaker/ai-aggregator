@@ -56,6 +56,8 @@ export default function NewAgentPage() {
   const router = useRouter();
   const { user, token, loading, error } = useAuth();
   const [pickedKind, setPickedKind] = useState<string | null>(null);
+  // ?blank=1 → пустая форма «с нуля» (без сетки шаблонов и без префилла).
+  const [blank, setBlank] = useState(false);
   const [name, setName] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [modelSlug, setModelSlug] = useState('');
@@ -157,11 +159,26 @@ export default function NewAgentPage() {
     }
   }
 
+  // ?blank=1 (вход «С нуля») → сразу пустая форма «personal», без сетки шаблонов
+  // и без префилла. Поля уже пустые по умолчанию — только переключаем экран.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('blank')) {
+      setBlank(true);
+      setName('');
+      setSystemPrompt('');
+      setModelSlug('');
+      setTools([]);
+      setPickedKind('personal');
+    }
+  }, []);
+
   // Prefill form when template chosen. Skipped for AI-builder drafts — those
   // already filled the form from the generated spec; a template overwrite would
-  // clobber it.
+  // clobber it. Also skipped in blank mode (?blank=1) so «С нуля» lands empty.
   useEffect(() => {
-    if (!pickedKind || aiDraft) return;
+    if (!pickedKind || aiDraft || blank) return;
     const t = getTemplate(pickedKind);
     if (!t) return;
     setName(t.name);
@@ -513,7 +530,11 @@ export default function NewAgentPage() {
             <header className="tma-header">
               <h1 className="tma-title">Новый агент</h1>
               <p className="tma-subtitle">
-                {aiDraft ? 'Черновик из описания' : `Шаблон: ${getTemplate(pickedKind)?.name ?? '—'}`}
+                {aiDraft
+                  ? 'Черновик из описания'
+                  : blank
+                    ? 'С нуля'
+                    : `Шаблон: ${getTemplate(pickedKind)?.name ?? '—'}`}
               </p>
             </header>
 

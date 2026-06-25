@@ -269,11 +269,11 @@ export default function WalletPage() {
           <section className="tma-card">
             <h2 className="tma-card-title">Привязанные кошельки</h2>
             {wallets.map((w) => (
-              <div className="tma-row" key={w.id}>
-                <span className="tma-mono">{shortAddr(w.address)}</span>
+              <div className="tma-row tma-ledger-row" key={w.id}>
+                <span className="tma-mono tma-ledger-amount">{shortAddr(w.address)}</span>
                 <span
-                  className="tma-card-text"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                  className="tma-card-text tma-ledger-meta"
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}
                 >
                   <span
                     className={`tma-pill ${w.is_verified ? 'tma-pill--ok' : 'tma-pill--muted'}`}
@@ -295,8 +295,9 @@ export default function WalletPage() {
           {topups
             .filter((t) => t.status !== 'confirmed')
             .map((t) => (
-              <div className="tma-row" key={t.id}>
+              <div className="tma-row tma-ledger-row" key={t.id}>
                 <span
+                  className="tma-ledger-amount"
                   style={{
                     display: 'inline-flex',
                     flexDirection: 'column',
@@ -315,8 +316,8 @@ export default function WalletPage() {
                   )}
                 </span>
                 <span
-                  className="tma-card-text"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                  className="tma-card-text tma-ledger-meta"
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}
                 >
                   <span
                     className={`tma-pill ${
@@ -338,16 +339,16 @@ export default function WalletPage() {
               const delta = Number(e.delta_credits);
               const positive = delta > 0;
               return (
-                <div className="tma-row" key={e.id}>
+                <div className="tma-row tma-ledger-row" key={e.id}>
                   <span
-                    className="tma-mono"
+                    className="tma-mono tma-ledger-amount"
                     style={{ color: positive ? 'var(--success)' : 'var(--ink)' }}
                   >
                     {positive ? '+' : '−'}
                     {fmtCredits(String(Math.abs(delta)))} кр
                   </span>
                   <span
-                    className="tma-card-text"
+                    className="tma-card-text tma-ledger-meta"
                     style={{
                       display: 'inline-flex',
                       flexDirection: 'column',
