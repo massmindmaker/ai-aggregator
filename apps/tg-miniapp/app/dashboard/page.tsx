@@ -391,7 +391,7 @@ export default function DashboardPage() {
                       </span>
                     </span>
                   </Link>
-                  <Link href="/agents/new?provider=1" className="tma-hub-path">
+                  <Link href="/agents/new?hermes=1" className="tma-hub-path">
                     <span className="tma-hub-path-body">
                       <span className="tma-hub-path-label">Подключить свой Hermes</span>
                       <span className="tma-hub-path-sub">

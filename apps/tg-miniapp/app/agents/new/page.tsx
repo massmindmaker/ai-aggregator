@@ -93,6 +93,9 @@ export default function NewAgentPage() {
 
   // "Свой агент" — Path 1 (external OpenAI-compatible endpoint)
   const [useExternal, setUseExternal] = useState(false);
+  // Подрежим внешней секции: 'hermes' = гайд «Свой Hermes», 'custom' = generic.
+  // Оба настраивают те же external_openai-поля; меняются только лейблы/подсказки.
+  const [externalMode, setExternalMode] = useState<'hermes' | 'custom'>('custom');
   const [extBaseUrl, setExtBaseUrl] = useState('');
   const [extApiKey, setExtApiKey] = useState('');
   const [extModelSlug, setExtModelSlug] = useState('');
@@ -182,17 +185,34 @@ export default function NewAgentPage() {
     }
   }, [pickedKind]);
 
-  // Дип-линк ?provider=1 (с дашборда «Подключить свой Hermes») → сразу
-  // раскрываем секцию «Свой провайдер» и включаем тумблер, чтобы обещанный
-  // путь приземлялся на нужный раздел, а не на свёрнутый аккордеон.
+  // Дип-линк ?provider=1 / ?hermes=1 → сразу раскрываем секцию «Свой провайдер»
+  // и включаем тумблер, чтобы обещанный путь приземлялся на нужный раздел.
+  // ?hermes=1 (с дашборда «Подключить свой Hermes») дополнительно ставит
+  // подрежим «Свой Hermes» с честными лейблами/подсказками.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const wantProvider = new URLSearchParams(window.location.search).get('provider');
-    if (wantProvider) {
+    const params = new URLSearchParams(window.location.search);
+    const wantHermes = params.get('hermes');
+    const wantProvider = params.get('provider');
+    if (wantHermes) {
+      setOpen((p) => ({ ...p, provider: true }));
+      setUseExternal(true);
+      setExternalMode('hermes');
+    } else if (wantProvider) {
       setOpen((p) => ({ ...p, provider: true }));
       setUseExternal(true);
     }
   }, []);
+
+  // В режиме «Свой Hermes» провайдер всегда = Custom (requiresBaseUrl), чтобы поле
+  // «Адрес твоего Hermes» отрисовалось. Авто-выбираем его, когда провайдеры загружены.
+  useEffect(() => {
+    if (externalMode !== 'hermes' || providers.length === 0) return;
+    const sel = providers.find((p) => p.id === providerId);
+    if (sel?.requiresBaseUrl) return;
+    const custom = providers.find((p) => p.requiresBaseUrl);
+    if (custom) setProviderId(custom.id);
+  }, [externalMode, providers, providerId]);
 
   // Membership status once authenticated. На ошибку считаем не-членом (fail-closed UI).
   useEffect(() => {
@@ -670,6 +690,44 @@ export default function NewAgentPage() {
 
                 {useExternal && (
                   <>
+                    {/* Гайд-выбор: «Свой Hermes» vs «Другой OpenAI-совместимый».
+                        Оба настраивают те же external_openai-поля. */}
+                    <div className="tma-chips" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {(
+                        [
+                          { id: 'hermes', label: 'Свой Hermes' },
+                          { id: 'custom', label: 'Другой OpenAI-совместимый endpoint' },
+                        ] as const
+                      ).map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          className="tma-chip"
+                          onClick={() => {
+                            setExternalMode(m.id);
+                            setTestResult(null);
+                          }}
+                          style={{
+                            cursor: 'pointer',
+                            ...(externalMode === m.id
+                              ? { borderColor: 'var(--accent)', color: 'var(--accent)' }
+                              : {}),
+                          }}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                    {externalMode === 'hermes' && (
+                      <p
+                        className="tma-card-text"
+                        style={{ fontSize: 12, opacity: 0.8, marginTop: -2 }}
+                      >
+                        Движок — твой Hermes. Комиссия 0% (платишь своему провайдеру).
+                      </p>
+                    )}
+
+                    {externalMode !== 'hermes' && (
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <span className="tma-card-text">Провайдер</span>
                       <select
@@ -689,9 +747,12 @@ export default function NewAgentPage() {
                         ))}
                       </select>
                     </label>
+                    )}
                     {isCustomProvider && (
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <span className="tma-card-text">URL</span>
+                        <span className="tma-card-text">
+                          {externalMode === 'hermes' ? 'Адрес твоего Hermes' : 'URL'}
+                        </span>
                         <input
                           type="url"
                           value={extBaseUrl}
@@ -699,14 +760,25 @@ export default function NewAgentPage() {
                             setExtBaseUrl(e.target.value);
                             setTestResult(null);
                           }}
-                          placeholder="https://example.com/v1"
-                          className="tma-input"
+                          placeholder={
+                            externalMode === 'hermes'
+                              ? 'http://твой-хост:8642/v1'
+                              : 'https://example.com/v1'
+                          }
+                          className={`tma-input${externalMode === 'hermes' ? ' tma-mono' : ''}`}
                           required={isCustomProvider}
                         />
+                        {externalMode === 'hermes' && (
+                          <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>
+                            REST-эндпоинт Hermes (OpenAI-совместимый).
+                          </span>
+                        )}
                       </label>
                     )}
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <span className="tma-card-text">Ключ API</span>
+                      <span className="tma-card-text">
+                        {externalMode === 'hermes' ? 'Ключ Hermes (API_SERVER_KEY)' : 'Ключ API'}
+                      </span>
                       <input
                         type="password"
                         value={extApiKey}
@@ -719,18 +791,32 @@ export default function NewAgentPage() {
                         autoComplete="off"
                         required={useExternal}
                       />
+                      {externalMode === 'hermes' && (
+                        <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>
+                          Bearer-ключ твоего Hermes; хранится в зашифрованном виде, показываем
+                          только последние 4 знака.
+                        </span>
+                      )}
                     </label>
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <span className="tma-card-text">Модель (опционально)</span>
+                      <span className="tma-card-text">
+                        {externalMode === 'hermes' ? 'Профиль / агент' : 'Модель (опционально)'}
+                      </span>
                       <input
                         type="text"
                         value={extModelSlug}
                         onChange={(e) => setExtModelSlug(e.target.value)}
-                        placeholder="например: llama-3.3-70b или gpt-4o"
-                        className="tma-input"
+                        placeholder={
+                          externalMode === 'hermes'
+                            ? 'backend-eng'
+                            : 'например: llama-3.3-70b или gpt-4o'
+                        }
+                        className={`tma-input${externalMode === 'hermes' ? ' tma-mono' : ''}`}
                       />
                       <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>
-                        Если пусто — используется поле «Модель» выше.
+                        {externalMode === 'hermes'
+                          ? 'Имя профиля в твоём Hermes (= «модель» в его API).'
+                          : 'Если пусто — используется поле «Модель» выше.'}
                       </span>
                     </label>
                     <button
