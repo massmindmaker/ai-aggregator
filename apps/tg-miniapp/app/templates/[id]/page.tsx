@@ -93,6 +93,18 @@ export default function TemplateDetailPage() {
     load();
   }, [load]);
 
+  // Нативная BackButton Telegram → возврат к фактическому источнику (router.back()).
+  useEffect(() => {
+    const tg = (window as any).Telegram?.WebApp;
+    tg?.BackButton?.show?.();
+    const h = () => router.back();
+    tg?.BackButton?.onClick?.(h);
+    return () => {
+      tg?.BackButton?.offClick?.(h);
+      tg?.BackButton?.hide?.();
+    };
+  }, [router]);
+
   const isPaid = template ? template.price_credits !== null : false;
   const priceNum = template && template.price_credits !== null ? Number(template.price_credits) : 0;
   const cloneDisabled = cloning;
@@ -205,7 +217,14 @@ export default function TemplateDetailPage() {
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
-        <Link href="/market" className="tma-back-link">
+        <Link
+          href="/market"
+          className="tma-back-link"
+          onClick={(e) => {
+            e.preventDefault();
+            router.back();
+          }}
+        >
           ← К маркету
         </Link>
 

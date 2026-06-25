@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import postgres from 'postgres';
 import { notFound } from 'next/navigation';
 import { BottomNav } from '@/components/BottomNav';
+import { BackLink } from '@/components/BackLink';
 import { fmtCredits } from '@/lib/credits';
 import { TransferPanel } from '../TransferPanel';
 
@@ -61,9 +61,7 @@ export default async function AgentOfferPage({
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
-        <Link href="/market" className="tma-back-link">
-          ← К маркету
-        </Link>
+        <BackLink href="/market">← К маркету</BackLink>
 
         <header className="tma-header">
           <h1 className="tma-title">{offer.name}</h1>

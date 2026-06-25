@@ -463,6 +463,18 @@ export default function AgentDetailPage() {
     load();
   }, [load]);
 
+  // Нативная BackButton Telegram → возврат к фактическому источнику (router.back()).
+  useEffect(() => {
+    const tg = (window as any).Telegram?.WebApp;
+    tg?.BackButton?.show?.();
+    const h = () => router.back();
+    tg?.BackButton?.onClick?.(h);
+    return () => {
+      tg?.BackButton?.offClick?.(h);
+      tg?.BackButton?.hide?.();
+    };
+  }, [router]);
+
   useEffect(() => {
     if (!token) return;
     fetch('/tg/api/tma/providers', { headers: { Authorization: `Bearer ${token}` } })
@@ -677,7 +689,14 @@ export default function AgentDetailPage() {
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
-        <Link href="/agents" className="tma-back-link">
+        <Link
+          href="/agents"
+          className="tma-back-link"
+          onClick={(e) => {
+            e.preventDefault();
+            router.back();
+          }}
+        >
           ← К списку
         </Link>
 
@@ -1181,7 +1200,7 @@ export default function AgentDetailPage() {
               )}
 
               <Link
-                href="/schedules"
+                href={`/schedules?agent=${id}`}
                 className="tma-btn"
                 style={{ display: 'inline-block', marginTop: 12, textAlign: 'center' }}
               >

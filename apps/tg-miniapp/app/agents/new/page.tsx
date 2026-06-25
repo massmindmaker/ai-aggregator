@@ -182,6 +182,18 @@ export default function NewAgentPage() {
     }
   }, [pickedKind]);
 
+  // Дип-линк ?provider=1 (с дашборда «Подключить свой Hermes») → сразу
+  // раскрываем секцию «Свой провайдер» и включаем тумблер, чтобы обещанный
+  // путь приземлялся на нужный раздел, а не на свёрнутый аккордеон.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const wantProvider = new URLSearchParams(window.location.search).get('provider');
+    if (wantProvider) {
+      setOpen((p) => ({ ...p, provider: true }));
+      setUseExternal(true);
+    }
+  }, []);
+
   // Membership status once authenticated. На ошибку считаем не-членом (fail-closed UI).
   useEffect(() => {
     if (!token) return;

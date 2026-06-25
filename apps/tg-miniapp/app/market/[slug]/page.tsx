@@ -1,7 +1,7 @@
 import postgres from 'postgres';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { BottomNav } from '@/components/BottomNav';
+import { BackLink } from '@/components/BackLink';
 import { UseInAgentButton } from './UseInAgentButton';
 
 export const dynamic = 'force-dynamic';
@@ -87,9 +87,7 @@ export default async function MarketDetailPage({
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
-        <Link href="/market" className="tma-back-link">
-          ← К маркету
-        </Link>
+        <BackLink href="/market">← К маркету</BackLink>
 
         <header className="tma-header">
           <span className="tma-eyebrow">Модель</span>

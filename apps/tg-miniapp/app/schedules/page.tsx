@@ -106,7 +106,15 @@ export default function SchedulesPage() {
         const j = (await aRes.json()) as { agents?: AgentLite[] };
         const list = Array.isArray(j.agents) ? j.agents.map((a) => ({ id: a.id, name: a.name })) : [];
         setAgents(list);
-        if (list[0] && !fAgent) setFAgent(list[0].id);
+        // Дип-линк ?agent=<id> со страницы агента → предвыбираем его в форме.
+        if (!fAgent) {
+          const want =
+            typeof window !== 'undefined'
+              ? new URLSearchParams(window.location.search).get('agent')
+              : null;
+          const preselect = (want && list.some((a) => a.id === want) ? want : list[0]?.id) ?? '';
+          if (preselect) setFAgent(preselect);
+        }
       }
     } catch (e) {
       setFetchErr(e instanceof Error ? e.message : 'fetch_failed');
