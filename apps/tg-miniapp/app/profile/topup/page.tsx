@@ -259,6 +259,8 @@ export default function TopupPage() {
   }
 
   const usdtInit = init && isUsdtInit(init) ? init : null;
+  // #5: сумма в допустимом диапазоне? (пусто/NaN/вне границ → CTA отключаем).
+  const amountValid = Number.isFinite(amount) && amount >= MIN && amount <= MAX;
 
   return (
     <>
@@ -326,8 +328,13 @@ export default function TopupPage() {
               type="number"
               min={MIN}
               max={MAX}
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
+              value={Number.isFinite(amount) ? amount : ''}
+              onChange={(e) => {
+                // #5: пустое поле → NaN (а не 0) — отключит CTA и покажет подсказку,
+                // вместо «NaN кр»/тихого нуля.
+                const raw = e.target.value.trim();
+                setAmount(raw === '' ? NaN : Number(raw));
+              }}
               className="tma-mono"
               style={{
                 background: 'transparent',
@@ -346,11 +353,18 @@ export default function TopupPage() {
               <span className="tma-mono">{tonEquivalent} TON</span>
             </div>
           )}
-          {asset === 'USDT' && (
+          {asset === 'USDT' && amountValid && (
             <div className="tma-row" style={{ marginTop: 8 }}>
               <span className="tma-card-text">≈</span>
               <span className="tma-mono">{fmtCredits(amount)} USDT</span>
             </div>
+          )}
+          {/* #5: инлайн-подсказка по диапазону вместо «NaN кр» в CTA. */}
+          {!amountValid && (
+            <p className="tma-card-text tma-text-small" style={{ marginTop: 8, color: 'var(--warning)' }}>
+              Сумма — от <span className="tma-mono">{fmtCredits(MIN)}</span> до{' '}
+              <span className="tma-mono">{fmtCredits(MAX)}</span> кр
+            </p>
           )}
         </section>
 
@@ -421,6 +435,7 @@ export default function TopupPage() {
               className="tma-btn tma-btn--primary"
               onClick={handlePay}
               disabled={
+                !amountValid ||
                 status === 'creating' ||
                 status === 'awaiting_signature' ||
                 status === 'submitted' ||
@@ -432,7 +447,9 @@ export default function TopupPage() {
               {status === 'submitted' && 'Отправлено, ждём блок…'}
               {status === 'polling' && 'Ждём подтверждения в сети…'}
               {(status === 'idle' || status === 'error') &&
-                `Оплатить ${fmtCredits(amount)} кр${asset === 'USDT' ? ' в USDT' : ''}`}
+                (amountValid
+                  ? `Оплатить ${fmtCredits(amount)} кр${asset === 'USDT' ? ' в USDT' : ''}`
+                  : 'Укажите сумму')}
             </button>
           )}
 

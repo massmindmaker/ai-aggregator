@@ -105,7 +105,7 @@ function actionLabel(price: string | null): string {
 
 export default function AgentsPage() {
   const router = useRouter();
-  const { user, token, loading, error, debug, freeGrantCredits } = useAuth();
+  const { user, token, loading, error, debug, freeGrantCredits, authFetch } = useAuth();
   const [grantBannerHidden, setGrantBannerHidden] = useState(false);
 
   // Активная вкладка. null = ещё не выбрана (ждём инбокс, чтобы решить дефолт).
@@ -143,9 +143,7 @@ export default function AgentsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/tg/api/tma/agents', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await authFetch('/tg/api/tma/agents');
         if (cancelled) return;
         if (!res.ok) {
           setFetchErr(`HTTP ${res.status}`);
@@ -163,7 +161,7 @@ export default function AgentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, authFetch]);
 
   // Дефолт вкладки: если URL не задал tab — пустой инбокс (нет ни своих, ни
   // нанятых) → «Нанять», иначе «Мои». Применяем один раз после загрузки инбокса.
@@ -184,9 +182,7 @@ export default function AgentsPage() {
     setTplErr(null);
     (async () => {
       try {
-        const res = await fetch('/tg/api/tma/templates?sort=trending', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await authFetch('/tg/api/tma/templates?sort=trending');
         if (cancelled) return;
         if (!res.ok) {
           setTplErr(`HTTP ${res.status}`);
@@ -201,7 +197,7 @@ export default function AgentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, needTemplates, templates]);
+  }, [token, needTemplates, templates, authFetch]);
 
   // ── «Нанять»: поиск + take() (free clone / paid rent) — mirror /market ──────
   const [search, setSearch] = useState('');
@@ -228,11 +224,13 @@ export default function AgentsPage() {
     setTakeErr(null);
     setInsufficientId(null);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `/tg/api/tma/templates/${t.id}/${paid ? 'rent' : 'clone'}`,
-        { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
+        { method: 'POST' },
       );
       if (res.status === 402) {
+        // #7: чистим takeErr, чтобы не показывать две ошибки за одно действие.
+        setTakeErr(null);
         setInsufficientId(t.id);
         return;
       }
@@ -247,9 +245,7 @@ export default function AgentsPage() {
         // (токен не меняется, поэтому грузим список вручную, а не через эффект).
         router.replace('/agents', { scroll: false });
         setTabState('mine');
-        fetch('/tg/api/tma/agents', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        authFetch('/tg/api/tma/agents')
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => {
             if (!d) return;

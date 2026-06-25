@@ -54,7 +54,7 @@ function shortAddr(a: string): string {
 }
 
 export default function WalletPage() {
-  const { token, loading: authLoading, error: authError } = useAuth();
+  const { token, loading: authLoading, error: authError, authFetch } = useAuth();
   const userAddress = useTonAddress();
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
@@ -132,9 +132,7 @@ export default function WalletPage() {
 
   async function refreshWallets() {
     if (!token) return;
-    const r = await fetch('/tg/api/tma/wallet', {
-      headers: { authorization: `Bearer ${token}` },
-    });
+    const r = await authFetch('/tg/api/tma/wallet');
     if (!r.ok) return;
     const j = (await r.json()) as { wallets: WalletRow[]; balance_credits: string };
     setWallets(j.wallets ?? []);
@@ -143,9 +141,7 @@ export default function WalletPage() {
 
   async function refreshTopups() {
     if (!token) return;
-    const r = await fetch('/tg/api/tma/topup', {
-      headers: { authorization: `Bearer ${token}` },
-    });
+    const r = await authFetch('/tg/api/tma/topup');
     if (!r.ok) return;
     const j = (await r.json()) as { topups: TopupRow[] };
     setTopups(j.topups ?? []);
@@ -153,9 +149,7 @@ export default function WalletPage() {
 
   async function refreshLedger() {
     if (!token) return;
-    const r = await fetch('/tg/api/tma/ledger', {
-      headers: { authorization: `Bearer ${token}` },
-    });
+    const r = await authFetch('/tg/api/tma/ledger');
     if (!r.ok) return;
     const j = (await r.json()) as { entries: LedgerRow[] };
     setLedger(j.entries ?? []);
@@ -166,6 +160,27 @@ export default function WalletPage() {
     refreshWallets();
     refreshTopups();
     refreshLedger();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // #4: TMA держит страницы живыми → баланс мог устареть после топапа/аренды на
+  // другом экране. Перечитываем кошелёк/леджер/топапы, когда страница снова видима
+  // (возврат на вкладку, фокус окна).
+  useEffect(() => {
+    if (!token) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshWallets();
+        refreshTopups();
+        refreshLedger();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 

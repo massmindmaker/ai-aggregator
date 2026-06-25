@@ -136,7 +136,7 @@ export default function AgentDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id;
-  const { token, loading, error } = useAuth();
+  const { token, loading, error, authFetch } = useAuth();
 
   const [agent, setAgent] = useState<Agent | null>(null);
   // P1-6: активный сегмент страницы («Диалог» по умолчанию).
@@ -185,9 +185,11 @@ export default function AgentDetailPage() {
   const [eImageModelSlug, setEImageModelSlug] = useState('');
   const [eVoiceModelSlug, setEVoiceModelSlug] = useState('');
   const [eVisionModelSlug, setEVisionModelSlug] = useState('');
-  const [eBudget, setEBudget] = useState(0);
+  // #6: бюджеты — сырой ввод-строка (кр), как на /agents/new; parseCreditsInput на
+  // сабмите. Раньше Number()/Math.round молча давали 0/NaN при очистке поля.
+  const [eBudget, setEBudget] = useState('');
   // C10: дневной бюджет (кр) — worker-гард daily_budget_credits.
-  const [eDailyBudget, setEDailyBudget] = useState(0);
+  const [eDailyBudget, setEDailyBudget] = useState('');
   const [eTools, setETools] = useState<string[]>([]);
   // connection editing
   const [providers, setProviders] = useState<
@@ -296,8 +298,9 @@ export default function AgentDetailPage() {
     setEImageModelSlug(agent.image_model_slug ?? '');
     setEVoiceModelSlug(agent.voice_model_slug ?? '');
     setEVisionModelSlug(agent.vision_model_slug ?? '');
-    setEBudget(Number(agent.budget_rub_monthly));
-    setEDailyBudget(Number(agent.daily_budget_credits ?? '10000'));
+    // Храним центы → показываем кредиты (÷100) как сырой ввод формы.
+    setEBudget(String((Number(agent.budget_rub_monthly) || 0) / 100));
+    setEDailyBudget(String((Number(agent.daily_budget_credits ?? '10000') || 0) / 100));
     setETools(Array.isArray(agent.tools) ? (agent.tools as string[]) : []);
     setConnSel('');
     setConnKey('');
@@ -317,15 +320,27 @@ export default function AgentDetailPage() {
     e.preventDefault();
     if (!token || !id) return;
     haptic.impact('medium');
+    // #6: единая валидация бюджетов через parseCreditsInput (как на /agents/new):
+    // дневной обязателен (> 0), месячный допускает пусто/0 = без месячного лимита.
+    const dailyCents = parseCreditsInput(eDailyBudget, 1_000_000);
+    if (dailyCents === undefined || dailyCents === null) {
+      setEditErr('Укажи дневной бюджет в кредитах (например 100)');
+      haptic.notify('error');
+      return;
+    }
+    const monthlyParsed = parseCreditsInput(eBudget, 1_000_000);
+    if (monthlyParsed === undefined) {
+      setEditErr('Месячный бюджет указан неверно');
+      haptic.notify('error');
+      return;
+    }
+    const monthlyCents = monthlyParsed ?? 0;
     setSaving(true);
     setEditErr(null);
     try {
-      const res = await fetch(`/tg/api/tma/agents/${id}`, {
+      const res = await authFetch(`/tg/api/tma/agents/${id}`, {
         method: 'PATCH',
-        headers: {
-          'content-type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           name: eName.trim(),
           description: eDescription.trim(),
@@ -335,8 +350,8 @@ export default function AgentDetailPage() {
           image_model_slug: eImageModelSlug.trim(),
           voice_model_slug: eVoiceModelSlug.trim(),
           vision_model_slug: eVisionModelSlug.trim(),
-          budget_rub_monthly: eBudget,
-          daily_budget_credits: Math.round(eDailyBudget),
+          budget_rub_monthly: monthlyCents,
+          daily_budget_credits: dailyCents,
           tools: eTools,
           // Connection change is opt-in: 'aiag' → back to gateway; a provider id →
           // BYOK (external_openai, 0 commission); '' → leave connection untouched.
@@ -426,9 +441,7 @@ export default function AgentDetailPage() {
   const load = useCallback(async () => {
     if (!token || !id) return;
     try {
-      const res = await fetch(`/tg/api/tma/agents/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch(`/tg/api/tma/agents/${id}`);
       if (res.status === 404) {
         setFetchErr('Агент не найден');
         return;
@@ -444,7 +457,7 @@ export default function AgentDetailPage() {
     } catch (e) {
       setFetchErr(e instanceof Error ? e.message : 'fetch_failed');
     }
-  }, [token, id]);
+  }, [token, id, authFetch]);
 
   useEffect(() => {
     load();
@@ -476,21 +489,45 @@ export default function AgentDetailPage() {
   // который умеет все типы. Здесь ничего не затираем и не форсим interval.
   useEffect(() => {
     if (!token || !id) return;
+    // #8: не маскируем !ok как «нет расписаний» — ставим schErr (как inbox/templates).
+    setSchErr(null);
     fetch(`/tg/api/tma/me/schedules`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => (r.ok ? r.json() : { schedules: [] }))
-      .then((j) => {
+      .then(async (r) => {
+        if (!r.ok) {
+          setSchErr(`HTTP ${r.status}`);
+          return;
+        }
+        const j = await r.json().catch(() => ({}));
         const all: Schedule[] = Array.isArray(j.schedules) ? j.schedules : [];
         setSchedules(all.filter((s) => s.agent_id === id));
       })
       .catch(() => setSchErr('Не удалось загрузить расписания.'));
   }, [token, id]);
 
+  // Поллинг статуса прогона с потолком по числу попыток (mirror POLL_MAX_ATTEMPTS
+  // в topup): ~2 мин при шаге 1500мс. По исчерпании — не алармовая заметка, опрос
+  // останавливается (фоновый воркер всё равно дотянет и пришлёт уведомление в чат).
+  const POLL_MAX_ATTEMPTS = 80; // 80 × 1500мс = 120с
+  const [pollExhausted, setPollExhausted] = useState(false);
   useEffect(() => {
     const hasActive = runs.some((r) => r.status === 'pending' || r.status === 'running');
-    if (!hasActive) return;
-    const t = setInterval(load, 1500);
+    if (!hasActive) {
+      setPollExhausted(false);
+      return;
+    }
+    if (pollExhausted) return;
+    let attempts = 0;
+    const t = setInterval(() => {
+      attempts += 1;
+      if (attempts >= POLL_MAX_ATTEMPTS) {
+        clearInterval(t);
+        setPollExhausted(true);
+        return;
+      }
+      load();
+    }, 1500);
     return () => clearInterval(t);
-  }, [runs, load]);
+  }, [runs, load, pollExhausted]);
 
   // Тактильный «готово»: когда прогон перестаёт быть активным (был active →
   // стал не-active), даём success-вибро. Ошибочный финал → error-вибро.
@@ -513,12 +550,9 @@ export default function AgentDetailPage() {
     haptic.impact('medium');
     setSending(true);
     try {
-      const res = await fetch(`/tg/api/tma/agents/${id}/run`, {
+      const res = await authFetch(`/tg/api/tma/agents/${id}/run`, {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ input: input.trim() }),
       });
       if (res.ok) {
@@ -530,6 +564,10 @@ export default function AgentDetailPage() {
         setSendErr(body.error ?? `HTTP ${res.status}`);
         haptic.notify('error');
       }
+    } catch (err) {
+      // P1: сетевой сбой не должен молча гасить спиннер — показываем ошибку у композера.
+      setSendErr(err instanceof Error ? err.message : 'send_failed');
+      haptic.notify('error');
     } finally {
       setSending(false);
     }
@@ -1189,6 +1227,14 @@ export default function AgentDetailPage() {
               </div>
             )}
 
+            {/* P1: поллинг исчерпал лимит попыток — прогон не завис, просто долгий.
+                Не алармуем: воркер дотянет и пришлёт ответ в чат бота. */}
+            {pollExhausted && runActive && (
+              <div className="tma-card-text tma-text-small" role="status" style={{ opacity: 0.8 }}>
+                Ещё выполняется — загляните позже. Ответ придёт в чат бота, как будет готов.
+              </div>
+            )}
+
             {/* Чужой не нанятый агент — композер заблокирован до найма (no dead-end
                 paid flow, PRODUCT.md §1). Hire-CTA выше уже даёт действие. */}
             {canHire ? (
@@ -1620,11 +1666,11 @@ export default function AgentDetailPage() {
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span className="tma-card-text">Бюджет, кр/мес</span>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={eBudget}
-                  onChange={(e) => setEBudget(Number(e.target.value))}
-                  min={0}
-                  step={100}
+                  onChange={(e) => setEBudget(e.target.value)}
+                  placeholder="10"
                   className="tma-input tma-mono"
                 />
               </label>
@@ -1633,12 +1679,11 @@ export default function AgentDetailPage() {
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span className="tma-card-text">Дневной бюджет, кр</span>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={eDailyBudget}
-                  onChange={(e) => setEDailyBudget(Number(e.target.value))}
-                  min={1}
-                  max={1000000}
-                  step={50}
+                  onChange={(e) => setEDailyBudget(e.target.value)}
+                  placeholder="100"
                   className="tma-input tma-mono"
                 />
                 <span className="tma-card-text" style={{ fontSize: 11, opacity: 0.6 }}>

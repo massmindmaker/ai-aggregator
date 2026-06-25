@@ -81,7 +81,7 @@ function priceMetric(price: string | null): string {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, token, loading, error, debug } = useAuth();
+  const { user, token, loading, error, debug, authFetch } = useAuth();
 
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
@@ -113,12 +113,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!token) return;
-    const headers = { Authorization: `Bearer ${token}` };
     let cancelled = false;
 
     (async () => {
       try {
-        const res = await fetch('/tg/api/tma/agents', { headers });
+        const res = await authFetch('/tg/api/tma/agents');
         if (cancelled) return;
         if (!res.ok) {
           setFetchErr(`HTTP ${res.status}`);
@@ -133,7 +132,7 @@ export default function DashboardPage() {
 
     (async () => {
       try {
-        const res = await fetch('/tg/api/tma/wallet', { headers });
+        const res = await authFetch('/tg/api/tma/wallet');
         if (cancelled) return;
         if (!res.ok) {
           setBalanceErr(true);
@@ -148,7 +147,7 @@ export default function DashboardPage() {
 
     (async () => {
       try {
-        const res = await fetch('/tg/api/tma/me/author-income', { headers });
+        const res = await authFetch('/tg/api/tma/me/author-income');
         if (cancelled || !res.ok) return;
         const data = await res.json();
         if (cancelled) return;
@@ -163,7 +162,7 @@ export default function DashboardPage() {
 
     (async () => {
       try {
-        const res = await fetch('/tg/api/tma/templates?sort=trending', { headers });
+        const res = await authFetch('/tg/api/tma/templates?sort=trending');
         if (cancelled) return;
         if (!res.ok) {
           setWeeklyErr(true);
@@ -179,7 +178,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, authFetch]);
 
   const pinned = useMemo(() => {
     if (!agents || agents.length === 0) return null;
