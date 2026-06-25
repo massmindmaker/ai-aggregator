@@ -117,8 +117,8 @@ async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null>
      AND r.status = 'active'
      AND r.rent_period = 'month'
     WHERE agents.id = ${id}::uuid
-      AND tg_user_id = ${tgUserId}::bigint
-      AND status != 'deleted'
+      AND agents.tg_user_id = ${tgUserId}::bigint
+      AND agents.status != 'deleted'
     LIMIT 1
   `) as unknown as AgentRow[];
   return rows[0] ?? null;
