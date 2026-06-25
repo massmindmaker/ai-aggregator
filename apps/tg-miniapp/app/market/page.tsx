@@ -75,6 +75,24 @@ const WORKER_TOOLS: {
   },
 ];
 
+// Живой каталог возможностей Hermes (GET /tg/api/tma/hermes-catalog).
+interface HermesToolset {
+  name: string;
+  label: string;
+  description: string;
+  tools: string[];
+  enabled: boolean;
+}
+interface HermesSkill {
+  name: string;
+  description: string;
+}
+interface HermesCatalog {
+  toolsets: HermesToolset[];
+  skills: HermesSkill[];
+  source: 'hermes' | 'fallback';
+}
+
 // Проверенные MCP-пресеты (зеркало MCP_PRESETS из app/agents/[id]).
 const MCP_PRESETS: { label: string; hint: string; url: string }[] = [
   { label: 'Notion', hint: 'Страницы и базы данных Notion как контекст агента', url: 'https://mcp.notion.com/mcp' },
@@ -178,6 +196,10 @@ export default function MarketPage() {
   // (GET /tg/api/tma/agents → mcp_endpoint_url). Пустой = нет/не загружено.
   const [connectedMcp, setConnectedMcp] = useState<Set<string>>(new Set());
 
+  // Живой каталог Hermes для таба «Скиллы». null = ещё не загружали/в полёте.
+  const [hermes, setHermes] = useState<HermesCatalog | null>(null);
+  const [hermesLoading, setHermesLoading] = useState(false);
+
   useEffect(() => {
     if (!token || tab !== 'agents') return;
     let cancelled = false;
@@ -232,6 +254,41 @@ export default function MarketPage() {
       cancelled = true;
     };
   }, [token, tab]);
+
+  // Таб «Скиллы»: тянем живой каталог возможностей Hermes. Один раз за сессию
+  // (после успеха не перезапрашиваем — на сервере ещё и кэш ~5 мин). При ошибке
+  // /пустом ответе source==='fallback' → UI покажет встроенный список.
+  useEffect(() => {
+    if (!token || tab !== 'skills' || hermes || hermesLoading) return;
+    let cancelled = false;
+    setHermesLoading(true);
+    (async () => {
+      try {
+        const res = await fetch('/tg/api/tma/hermes-catalog', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (cancelled) return;
+        if (!res.ok) {
+          setHermes({ toolsets: [], skills: [], source: 'fallback' });
+          return;
+        }
+        const data = (await res.json()) as HermesCatalog;
+        if (cancelled) return;
+        setHermes({
+          toolsets: data.toolsets ?? [],
+          skills: data.skills ?? [],
+          source: data.source ?? 'fallback',
+        });
+      } catch {
+        if (!cancelled) setHermes({ toolsets: [], skills: [], source: 'fallback' });
+      } finally {
+        if (!cancelled) setHermesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, tab, hermes, hermesLoading]);
 
   // Клиентский фильтр (имя/роль) — поиск + категория. Над списком, не над сетью.
   const visible = useMemo(() => {
@@ -441,31 +498,9 @@ export default function MarketPage() {
           </>
         )}
 
-        {/* ── Раздел: СКИЛЛЫ — листинг встроенных тулов как «скиллов» ──────────── */}
+        {/* ── Раздел: СКИЛЛЫ — живой каталог возможностей Hermes ───────────────── */}
         {tab === 'skills' && (
-          <section className="tma-mkt-rows aiag-stagger" aria-label="Скиллы">
-            {WORKER_TOOLS.map((t) => (
-              <div key={t.id} className="tma-mkt-row">
-                <span className="tma-mkt-row-icon" aria-hidden>
-                  {ICONS[t.id]}
-                </span>
-                <div className="tma-mkt-row-body">
-                  <div className="tma-mkt-row-head">
-                    <span className="tma-mkt-row-name">{t.label}</span>
-                    {t.status === 'live' ? (
-                      <span className="tma-pill tma-pill--ok">
-                        <Dot /> live
-                      </span>
-                    ) : (
-                      <span className="tma-pill tma-pill--muted">◷ скоро</span>
-                    )}
-                  </div>
-                  <p className="tma-mkt-row-hint">{t.hint}</p>
-                </div>
-              </div>
-            ))}
-            <p className="tma-mkt-note">◷ свои скиллы — фаза 2</p>
-          </section>
+          <SkillsTab catalog={hermes} loading={hermesLoading} />
         )}
 
         {/* ── Раздел: MCP — листинг проверенных MCP-пресетов ──────────────────── */}
@@ -524,6 +559,127 @@ export default function MarketPage() {
       </main>
       <BottomNav />
     </>
+  );
+}
+
+// ── Таб «Скиллы» ───────────────────────────────────────────────────────────
+// Живой каталог Hermes (toolsets + skills). Если Hermes недоступен (source
+// 'fallback' или пусто) → откатываемся на встроенный список WORKER_TOOLS, чтобы
+// таб никогда не был пустым. Без error-пугалок — мягкая плашка о встроенных тулах.
+function SkillsTab({
+  catalog,
+  loading,
+}: {
+  catalog: HermesCatalog | null;
+  loading: boolean;
+}) {
+  // Скелетон на время первой загрузки.
+  if (loading && !catalog) {
+    return (
+      <section className="tma-mkt-rows aiag-stagger" aria-label="Скиллы" aria-busy>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="tma-mkt-row">
+            <span className="tma-mkt-row-icon" aria-hidden />
+            <div className="tma-mkt-row-body">
+              <div className="tma-skeleton tma-skeleton-line" />
+              <div className="tma-skeleton tma-skeleton-line tma-skeleton-line--short" />
+            </div>
+          </div>
+        ))}
+      </section>
+    );
+  }
+
+  const live =
+    catalog &&
+    catalog.source === 'hermes' &&
+    (catalog.toolsets.length > 0 || catalog.skills.length > 0);
+
+  // ── Fallback: встроенные тулы воркера (Hermes недоступен) ──────────────────
+  if (!live) {
+    return (
+      <section className="tma-mkt-rows aiag-stagger" aria-label="Скиллы">
+        {WORKER_TOOLS.map((t) => (
+          <div key={t.id} className="tma-mkt-row">
+            <span className="tma-mkt-row-icon" aria-hidden>
+              {ICONS[t.id]}
+            </span>
+            <div className="tma-mkt-row-body">
+              <div className="tma-mkt-row-head">
+                <span className="tma-mkt-row-name">{t.label}</span>
+                {t.status === 'live' ? (
+                  <span className="tma-pill tma-pill--ok">
+                    <Dot /> live
+                  </span>
+                ) : (
+                  <span className="tma-pill tma-pill--muted">◷ скоро</span>
+                )}
+              </div>
+              <p className="tma-mkt-row-hint">{t.hint}</p>
+            </div>
+          </div>
+        ))}
+        <p className="tma-mkt-note">Встроенные инструменты агента</p>
+      </section>
+    );
+  }
+
+  // ── Live: реальные toolsets + skills из Hermes ────────────────────────────
+  return (
+    <section className="tma-mkt-rows aiag-stagger" aria-label="Скиллы">
+      {catalog.toolsets.map((ts) => (
+        <div key={`ts:${ts.name}`} className="tma-mkt-row">
+          <span className="tma-mkt-row-icon" aria-hidden>
+            {ICONS.web_search}
+          </span>
+          <div className="tma-mkt-row-body">
+            <div className="tma-mkt-row-head">
+              <span className="tma-mkt-row-name">{ts.label}</span>
+              {ts.enabled && (
+                <span className="tma-pill tma-pill--ok">
+                  <Dot /> live
+                </span>
+              )}
+            </div>
+            {ts.description && <p className="tma-mkt-row-hint">{ts.description}</p>}
+            {ts.tools.length > 0 && (
+              <div className="tma-chips" style={{ marginTop: 6 }}>
+                {ts.tools.map((tool) => (
+                  <span
+                    key={tool}
+                    className="tma-chip"
+                    style={{ fontFamily: 'var(--font-mono, monospace)' }}
+                  >
+                    {tool}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {catalog.skills.map((sk) => (
+        <div key={`sk:${sk.name}`} className="tma-mkt-row">
+          <span className="tma-mkt-row-icon" aria-hidden>
+            {ICONS.memory}
+          </span>
+          <div className="tma-mkt-row-body">
+            <div className="tma-mkt-row-head">
+              <span
+                className="tma-mkt-row-name"
+                style={{ fontFamily: 'var(--font-mono, monospace)' }}
+              >
+                {sk.name}
+              </span>
+            </div>
+            {sk.description && <p className="tma-mkt-row-hint">{sk.description}</p>}
+          </div>
+        </div>
+      ))}
+
+      <p className="tma-mkt-note">Реальные возможности рантайма Hermes</p>
+    </section>
   );
 }
 
