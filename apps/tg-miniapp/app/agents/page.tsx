@@ -105,7 +105,8 @@ function actionLabel(price: string | null): string {
 
 export default function AgentsPage() {
   const router = useRouter();
-  const { user, token, loading, error, debug } = useAuth();
+  const { user, token, loading, error, debug, freeGrantCredits } = useAuth();
+  const [grantBannerHidden, setGrantBannerHidden] = useState(false);
 
   // Активная вкладка. null = ещё не выбрана (ждём инбокс, чтобы решить дефолт).
   const [tab, setTabState] = useState<TabId | null>(null);
@@ -275,6 +276,28 @@ export default function AgentsPage() {
           <span className="tma-eyebrow">Агенты</span>
           <h1 className="tma-h1">Агенты</h1>
         </header>
+
+        {/* Free-first-run: единоразовый стартовый грант. Баннер surface-only —
+            грант уже зачислен на сервере (canon §6). Скрытие = локальный стейт. */}
+        {freeGrantCredits != null && freeGrantCredits > 0 && !grantBannerHidden && (
+          <div className="tma-hub-banner aiag-fade-up">
+            <span className="tma-hub-banner-icon" aria-hidden>
+              ★
+            </span>
+            <span className="tma-hub-banner-text">
+              <span className="tma-num">{fmtCredits(freeGrantCredits)}</span> кр на старт
+              зачислены — попробуйте агента бесплатно
+            </span>
+            <button
+              type="button"
+              className="tma-hub-banner-close"
+              onClick={() => setGrantBannerHidden(true)}
+              aria-label="Скрыть баннер"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* 3 сегмента (IA-синтез §5.A). На всю ширину. */}
         <div
@@ -628,11 +651,12 @@ export default function AgentsPage() {
                   <section className="tma-hub-section">
                     <div className="tma-card">
                       <div className="tma-section-head">
-                        <h2 className="tma-hub-h2">Стань создателем</h2>
+                        <h2 className="tma-hub-h2">Создание с нуля — ранний доступ</h2>
+                        <span className="tma-pill tma-pill--muted">◷ скоро</span>
                       </div>
                       <p className="tma-card-text tma-text-small">
-                        Создание агентов с нуля доступно держателям членского NFT.
-                        Без него можно нанимать и клонировать готовых агентов из каталога.
+                        Сборка агентов с нуля пока в раннем доступе. Уже сейчас можно
+                        нанять или клонировать готового агента из каталога.
                       </p>
                       <button
                         type="button"

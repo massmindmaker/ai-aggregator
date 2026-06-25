@@ -26,8 +26,6 @@ export const metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: '#0a0a0b',
   // viewport-fit=cover — без него env(safe-area-inset-*) резолвится в 0 и
   // notch/home-indicator паддинги (tg-bar/tabbar в globals.css) мертвы.

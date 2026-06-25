@@ -529,7 +529,7 @@ export default function DashboardPage() {
             </Link>
             <Link href={kanbanHref} className="tma-sheet-row" onClick={() => setSheet(null)}>
               <span>Канбан</span>
-              <span className="tma-pill tma-pill--ok">● live</span>
+              <span className="tma-pill tma-pill--muted">◷ R&D</span>
             </Link>
             <span className="tma-sheet-section">Подключения</span>
             <Link href="/agents/new" className="tma-sheet-row" onClick={() => setSheet(null)}>

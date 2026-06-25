@@ -110,7 +110,7 @@ export default function AuthorIncomePage() {
           <Link href="/profile" className="tma-back-link">
             ← Профиль
           </Link>
-          <span className="tma-badge">Доход автора</span>
+          <span className="tma-eyebrow">Доход автора</span>
           <h1 className="tma-title">Заработок на шаблонах</h1>
           <p className="tma-subtitle">
             Аренда ваших шаблонов идёт вам целиком — AIAG берёт 0%.

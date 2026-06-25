@@ -61,8 +61,8 @@ export default async function AgentOfferPage({
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
-        <Link href="/templates" className="tma-back-link">
-          ← К шаблонам
+        <Link href="/market" className="tma-back-link">
+          ← К маркету
         </Link>
 
         <header className="tma-header">

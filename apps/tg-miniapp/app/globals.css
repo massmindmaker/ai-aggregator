@@ -46,7 +46,7 @@ code {
   background: var(--bg-surface);
   border: 1px solid var(--line);
   border-radius: 6px;
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .tma-shell {
@@ -302,6 +302,9 @@ code {
   align-items: center;
   gap: 12px;
 }
+.tma-row > * {
+  min-width: 0;
+}
 
 .tma-price-strong {
   font-size: 18px;
@@ -397,7 +400,7 @@ code {
   border: 1px solid var(--line);
   background: var(--bg-surface);
   color: var(--ink);
-  font-size: 14px;
+  font-size: 16px;
   outline: none;
 }
 .tma-input:focus-visible {
@@ -1477,6 +1480,10 @@ code {
   padding: 6px;
   cursor: pointer;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
   flex: none;
 }
 
@@ -1865,6 +1872,11 @@ code {
   padding: 4px 6px;
   font-size: 15px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
   flex: none;
 }
 
@@ -2267,7 +2279,6 @@ code {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-mono);
   font-size: 18px;
   font-weight: 700;
   border: 1px solid var(--line);
@@ -2281,7 +2292,7 @@ code {
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--warning);
   box-shadow: 0 0 0 2px var(--bg);
 }
 
@@ -2428,7 +2439,7 @@ code {
 .tma-mkt-note--link {
   display: block;
   padding: 12px;
-  border: 1px dashed var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   color: var(--ink-muted);
   text-decoration: none;
@@ -2446,7 +2457,7 @@ code {
  * pure layout, nothing to disable in reduced-motion. */
 .tma-composer {
   position: sticky;
-  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 8px);
   z-index: 5;
   display: flex;
   gap: 8px;

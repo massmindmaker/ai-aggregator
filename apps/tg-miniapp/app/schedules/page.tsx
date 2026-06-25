@@ -228,7 +228,7 @@ export default function SchedulesPage() {
     <>
       <main className="tma-shell tma-shell--with-nav">
         <header className="tma-header">
-          <span className="tma-badge">Расписания</span>
+          <span className="tma-eyebrow">Расписания</span>
           <h1 className="tma-title">Запуски по расписанию</h1>
           <p className="tma-subtitle">
             Агент сам запускается по расписанию. Каждый запуск тратит кредиты в рамках

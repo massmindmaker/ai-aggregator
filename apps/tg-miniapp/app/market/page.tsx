@@ -3,9 +3,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // /market — «Маркет»: 5 настоящих категоризированных разделов (IA-синтез §5.B).
 // Горизонтальный сегмент через searchParams.tab:
-//   [Агенты] [Скиллы] [MCP] [Тузы] [Базы знаний]
+//   [Агенты] [Скиллы] [MCP] [Базы знаний]
 //   • Агенты (дефолт) = CharCard-грид шаблонов (использовать=free-клон / арендовать).
-//   • Скиллы / Тузы    = листинг встроенных тулов воркера (AVAILABLE_TOOLS).
+//   • Скиллы           = листинг встроенных тулов воркера (AVAILABLE_TOOLS).
 //   • MCP              = листинг проверенных MCP-пресетов (MCP_PRESETS).
 //   • Базы знаний      = честная плашка «◷ фаза 3» + описание концепции.
 // Данные скиллов/MCP/тузов УЖЕ есть в коде (app/agents/new + app/agents/[id]);
@@ -30,7 +30,6 @@ const TABS = [
   { id: 'agents', label: 'Агенты' },
   { id: 'skills', label: 'Скиллы' },
   { id: 'mcp', label: 'MCP' },
-  { id: 'tools', label: 'Тузы' },
   { id: 'knowledge', label: 'Базы знаний' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -499,36 +498,6 @@ export default function MarketPage() {
               + Свой MCP-сервер
             </Link>
           </section>
-        )}
-
-        {/* ── Раздел: ТУЗЫ — сетка инструментов карточками ────────────────────── */}
-        {tab === 'tools' && (
-          <>
-            <section className="tma-agent-grid aiag-stagger" aria-label="Инструменты">
-              {WORKER_TOOLS.map((t) => (
-                <div key={t.id} className="tma-card tma-mkt-tool">
-                  <div className="tma-mkt-row-head">
-                    <span className="tma-mkt-row-icon" aria-hidden>
-                      {ICONS[t.id]}
-                    </span>
-                    {t.status === 'live' ? (
-                      <span className="tma-pill tma-pill--ok">
-                        <Dot /> live
-                      </span>
-                    ) : (
-                      <span className="tma-pill tma-pill--muted">◷ скоро</span>
-                    )}
-                  </div>
-                  <h3 className="tma-card-title">{t.label}</h3>
-                  <p className="tma-card-text">{t.hint}</p>
-                  <p className="tma-mono tma-mt-1">{t.example}</p>
-                </div>
-              ))}
-            </section>
-            <p className="tma-mkt-note">
-              ◷ платные инструменты (Firecrawl, x402-брокер) — позже
-            </p>
-          </>
         )}
 
         {/* ── Раздел: БАЗЫ ЗНАНИЙ — честная плашка (фаза 3) ───────────────────── */}

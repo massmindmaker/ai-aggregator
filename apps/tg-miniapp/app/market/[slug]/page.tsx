@@ -93,7 +93,7 @@ export default async function MarketDetailPage({
 
         <header className="tma-header">
           <span className="tma-eyebrow">Модель</span>
-          <span className="tma-badge">{model.type?.toUpperCase() ?? 'MODEL'}</span>
+          <span className="tma-eyebrow">{model.type?.toUpperCase() ?? 'MODEL'}</span>
           <h1 className="tma-title">{model.name}</h1>
           <p className="tma-subtitle" style={{ wordBreak: 'break-all' }}>
             {model.slug}

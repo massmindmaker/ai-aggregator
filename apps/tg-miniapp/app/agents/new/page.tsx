@@ -391,10 +391,13 @@ export default function NewAgentPage() {
         {/* Гейт: создание с нуля — только для создателей (держателей членского NFT). */}
         {user && !error && isMember === false && (
           <section className="tma-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <h1 className="tma-title">Создание агентов — для создателей</h1>
+            <div className="tma-section-head">
+              <h1 className="tma-title">Создание с нуля — ранний доступ</h1>
+              <span className="tma-pill tma-pill--muted">◷ скоро</span>
+            </div>
             <p className="tma-card-text" style={{ fontSize: 13, opacity: 0.8 }}>
-              Чтобы собирать собственных агентов с нуля, нужен членский NFT. Без него
-              по-прежнему можно нанимать и клонировать готовых агентов из каталога.
+              Сборка агентов с нуля пока в раннем доступе. Уже сейчас можно нанять
+              или клонировать готового агента из каталога.
             </p>
             <Link href="/agents?tab=hire" className="tma-btn tma-btn--primary tma-btn--block">
               Нанять готового →
