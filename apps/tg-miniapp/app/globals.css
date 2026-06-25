@@ -37,6 +37,10 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Глобальная страховка от горизонтального «вылезания»: длинная неразрывная
+     строка (URL, mono-адрес, slug модели) не должна распирать ширину вьюпорта. */
+  overflow-x: clip;
+  overflow-wrap: anywhere;
 }
 
 code {
@@ -304,6 +308,21 @@ code {
 }
 .tma-row > * {
   min-width: 0;
+}
+
+/* Провайдеры (account): имя слева, URL справа в одну строку с многоточием.
+   URL никогда не распирает строку шире вьюпорта — обрезается ellipsis. */
+.tma-provider-name {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.tma-provider-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .tma-price-strong {
@@ -679,11 +698,58 @@ code {
   background: var(--bg-surface);
 }
 
+/* === Designed monogram placeholder (нет арта → не плоский блок) ============
+ * Поверх per-hue градиента портрета: диагональный лёгкий блик + мягкая
+ * виньетка-глубина + 1px внутренний волосок (--line). Монограмма меньше и
+ * приглушённее, чтобы читалась как фактура карты, а не как «одна буква».
+ * Без amber-заливок (DESIGN.md). transform/opacity-only, reduced-motion-safe. */
+.tma-mono-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Виньетка глубины: светлее у верхне-левого угла, темнее к низу. */
+  background:
+    radial-gradient(
+      120% 90% at 28% 22%,
+      rgba(255, 255, 255, 0.1) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      130% 110% at 70% 115%,
+      rgba(0, 0, 0, 0.32) 0%,
+      transparent 55%
+    );
+  /* Внутренний волосок — собирает плоскость в «карту». */
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+/* Диагональный сатиновый блик поверх градиента. */
+.tma-mono-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.04) 26%,
+    transparent 52%,
+    transparent 100%
+  );
+  mix-blend-mode: soft-light;
+}
+
 .tma-agent-monogram {
-  font-size: 44px;
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 38px;
   font-weight: 700;
   line-height: 1;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  opacity: 0.82;
+  letter-spacing: -0.01em;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
 }
 
 .tma-agent-featured-tag {

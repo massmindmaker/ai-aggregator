@@ -139,7 +139,10 @@ export function AgentCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={portraitImage} alt="" style={mediaStyle} aria-hidden />
         ) : (
-          <span className="tma-agent-monogram">{monogram(name)}</span>
+          <span className="tma-mono-placeholder" aria-hidden>
+            <span className="tma-mono-sheen" />
+            <span className="tma-agent-monogram">{monogram(name)}</span>
+          </span>
         )}
         {featured && <span className="tma-agent-featured-tag">★ топ</span>}
       </div>

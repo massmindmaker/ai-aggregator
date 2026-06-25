@@ -120,7 +120,10 @@ export function CharCard({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={portraitImage} alt="" className="cc-media" aria-hidden />
       ) : (
-        <span className="tma-agent-monogram">{monogram(name)}</span>
+        <span className="tma-mono-placeholder" aria-hidden>
+          <span className="tma-mono-sheen" />
+          <span className="tma-agent-monogram">{monogram(name)}</span>
+        </span>
       )}
       {live && <span className="cc-live aiag-pulse-dot" aria-hidden />}
     </div>

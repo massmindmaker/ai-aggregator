@@ -278,10 +278,14 @@ export default function AccountPage() {
             <p className="tma-card-text">Список провайдеров недоступен.</p>
           ) : (
             providers.map((p, i) => (
-              <div className="tma-row" key={p.id} style={i > 0 ? { marginTop: 10 } : undefined}>
-                <span className="tma-card-text">{p.name}</span>
+              <div className="tma-row tma-provider-row" key={p.id} style={i > 0 ? { marginTop: 10 } : undefined}>
+                <span className="tma-card-text tma-provider-name">{p.name}</span>
                 {p.apiBase ? (
-                  <span className="tma-mono" style={{ color: 'var(--ink-faint)' }}>
+                  <span
+                    className="tma-mono tma-provider-url"
+                    style={{ color: 'var(--ink-faint)' }}
+                    title={p.apiBase.replace(/^https?:\/\//, '')}
+                  >
                     {p.apiBase.replace(/^https?:\/\//, '')}
                   </span>
                 ) : (
