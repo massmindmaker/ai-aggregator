@@ -46,6 +46,7 @@ const LEDGER_LABEL: Record<string, string> = {
   rent_credit: 'Доход с аренды',
   transfer_debit: 'Покупка агента',
   transfer_credit: 'Продажа агента',
+  author_payout: 'Выплата автору',
 };
 
 function shortAddr(a: string): string {

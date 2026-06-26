@@ -24,7 +24,22 @@ interface TemplateListRow {
   author_tg_user_id: string;
   author_username: string | null;
   created_at: string;
+  // Архетип-персонаж для карточки (src/lib/characters.ts). agent_templates НЕ
+  // хранит kind-колонки → выводим его из имени шаблона детерминированным CASE
+  // (фиксированный SQL, без интерполяции пользовательского ввода). Так сеяные
+  // официальные карточки (Боярин/Алиса) показывают арт/видео вместо монограммы.
+  template_kind: string | null;
 }
+
+// SQL-фрагмент: derived template_kind по имени шаблона. Совпадает с ключами
+// CHARACTERS в src/lib/characters.ts (coder=Боярин, writer=Алиса). Вынесен, чтобы
+// не дублировать выражение в трёх sort-ветках. Без пользовательской интерполяции.
+const kindExpr = sql`
+  CASE
+    WHEN t.name ILIKE '%боярин%' THEN 'coder'
+    WHEN t.name ILIKE '%алиса%'  THEN 'writer'
+    ELSE NULL
+  END AS template_kind`;
 
 export async function GET(req: NextRequest) {
   // sort: 'trending' (clone_count DESC), 'top' (avg_rating DESC NULLS LAST),
@@ -40,7 +55,8 @@ export async function GET(req: NextRequest) {
                ROUND(AVG(r.stars), 1)::text AS avg_rating,
                COUNT(r.id)::int AS rating_count,
                t.author_tg_user_id::text AS author_tg_user_id,
-               u.username AS author_username, t.created_at
+               u.username AS author_username, t.created_at,
+               ${kindExpr}
         FROM agent_templates t
         LEFT JOIN template_ratings r ON r.template_id = t.id
         LEFT JOIN tg_users u ON u.telegram_id = t.author_tg_user_id
@@ -56,7 +72,8 @@ export async function GET(req: NextRequest) {
                ROUND(AVG(r.stars), 1)::text AS avg_rating,
                COUNT(r.id)::int AS rating_count,
                t.author_tg_user_id::text AS author_tg_user_id,
-               u.username AS author_username, t.created_at
+               u.username AS author_username, t.created_at,
+               ${kindExpr}
         FROM agent_templates t
         LEFT JOIN template_ratings r ON r.template_id = t.id
         LEFT JOIN tg_users u ON u.telegram_id = t.author_tg_user_id
@@ -72,7 +89,8 @@ export async function GET(req: NextRequest) {
                ROUND(AVG(r.stars), 1)::text AS avg_rating,
                COUNT(r.id)::int AS rating_count,
                t.author_tg_user_id::text AS author_tg_user_id,
-               u.username AS author_username, t.created_at
+               u.username AS author_username, t.created_at,
+               ${kindExpr}
         FROM agent_templates t
         LEFT JOIN template_ratings r ON r.template_id = t.id
         LEFT JOIN tg_users u ON u.telegram_id = t.author_tg_user_id

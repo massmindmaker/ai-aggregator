@@ -169,6 +169,9 @@ export default function AgentDetailPage() {
   // Аренда = месячная подписка: месячный лимит трат, входящий в цену (кр). Пусто =
   // дефолт клона. Только для платного шаблона.
   const [pLimit, setPLimit] = useState('');
+  // Видимость шаблона: публичный (в каталоге) / по ссылке (unlisted) / приватный.
+  // API publish уже принимает public|unlisted|private. Дефолт — публичный.
+  const [pVisibility, setPVisibility] = useState<'public' | 'unlisted' | 'private'>('public');
 
   // ---- direct-clone opt-in (2026-06-12) ----
   const [cloneSaving, setCloneSaving] = useState(false);
@@ -650,7 +653,11 @@ export default function AgentDetailPage() {
           'content-type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ price_credits: price, rent_monthly_limit_credits: limit }),
+        body: JSON.stringify({
+          price_credits: price,
+          rent_monthly_limit_credits: limit,
+          visibility: pVisibility,
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -1063,6 +1070,33 @@ export default function AgentDetailPage() {
                     />
                   </label>
                 )}
+                {/* Видимость шаблона: публичный (виден в каталоге) / по ссылке
+                    (только у кого есть ссылка) / приватный (только вы). */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="tma-card-text">Видимость</span>
+                  <div
+                    className="tma-segment"
+                    role="tablist"
+                    aria-label="Видимость шаблона"
+                  >
+                    {([
+                      { id: 'public', label: 'Публичный' },
+                      { id: 'unlisted', label: 'По ссылке' },
+                      { id: 'private', label: 'Приватный' },
+                    ] as const).map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={pVisibility === v.id}
+                        className={`tma-segment-btn${pVisibility === v.id ? ' is-active' : ''}`}
+                        onClick={() => setPVisibility(v.id)}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {/* P6: аренда работает (API /rent) — показываем честный итог цены,
                     без «появится позже». */}
                 {pPrice.trim() ? (

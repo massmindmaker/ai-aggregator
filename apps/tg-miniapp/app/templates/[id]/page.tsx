@@ -295,14 +295,23 @@ export default function TemplateDetailPage() {
                 (pays the author the exact sum, 0% AIAG); free templates go into the
                 create flow, where the clone happens (clone only at creation). */}
             {isPaid ? (
-              <button
-                type="button"
-                onClick={handleRent}
-                disabled={renting || loading || !!error}
-                className="tma-btn tma-btn--primary"
-              >
-                {renting ? 'Аренда…' : `Арендовать за ${priceLabel(String(priceNum))}`}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleRent}
+                  disabled={renting || loading || !!error}
+                  className="tma-btn tma-btn--primary"
+                >
+                  {renting ? 'Аренда…' : `Арендовать за ${priceLabel(String(priceNum))}`}
+                </button>
+                <p
+                  className="tma-card-text tma-text-small"
+                  style={{ marginTop: 8, color: 'var(--ink-muted)' }}
+                >
+                  Подписка покрывает доступ; прогоны модели оплачиваются отдельно из
+                  баланса.
+                </p>
+              </>
             ) : (
               <button
                 type="button"

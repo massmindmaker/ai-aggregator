@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
+import { fmtCredits } from '@/lib/credits';
 
 interface TemplateRow {
   id: string;
@@ -31,17 +32,8 @@ interface IncomeResp {
   recent_entries?: IncomeEntry[];
 }
 
-// D-1: all balances/amounts are integer US cents (1 credit = $0.01). Display as
-// "N.NN кр" — never expose the raw integer. JetBrains/mono via .tma-mono.
-function fmtCredits(s: string): string {
-  const cents = Number(s);
-  if (!Number.isFinite(cents)) return s;
-  return (cents / 100).toLocaleString('ru-RU', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
+// D-1: amounts are integer US cents (1 credit = $0.01). Display via the canonical
+// fmtCredits from @/lib/credits (cents ÷ 100, ru-RU, 2 знака) — single source.
 function fmtDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -50,7 +42,9 @@ function fmtDate(iso: string): string {
 
 // Honest kind label — only kinds that actually exist in the ledger today.
 function kindLabel(kind: string): string {
-  return kind === 'rent_credit' ? 'аренда' : kind;
+  if (kind === 'rent_credit') return 'аренда';
+  if (kind === 'author_payout') return 'выплата автору';
+  return kind;
 }
 
 export default function AuthorIncomePage() {

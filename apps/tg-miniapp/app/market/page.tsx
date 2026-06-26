@@ -137,6 +137,14 @@ interface Template {
 const CATEGORIES = ['Все', 'Текст', 'Образ', 'Голос', 'Код', 'Данные'] as const;
 type Category = (typeof CATEGORIES)[number];
 
+// Сортировки каталога (реальные ORDER BY в templates/route.ts). value = ?sort=…
+const SORTS = [
+  { id: 'trending', label: 'В тренде' },
+  { id: 'top', label: 'Топ' },
+  { id: 'new', label: 'Новые' },
+] as const;
+type SortId = (typeof SORTS)[number]['id'];
+
 // Подсказки фильтра: к какой категории какие слова-маркеры. «Все» = без фильтра.
 const CATEGORY_HINTS: Record<Exclude<Category, 'Все'>, string[]> = {
   Текст: ['текст', 'писат', 'копи', 'статья', 'перевод', 'редакт'],
@@ -186,6 +194,7 @@ export default function MarketPage() {
 
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<Category>('Все');
+  const [sort, setSort] = useState<SortId>('trending');
 
   // take() в полёте: какой шаблон сейчас берём + куда показать ошибку/недостаток.
   const [takingId, setTakingId] = useState<string | null>(null);
@@ -207,7 +216,7 @@ export default function MarketPage() {
     setFetchErr(null);
     (async () => {
       try {
-        const res = await fetch('/tg/api/tma/templates?sort=trending', {
+        const res = await fetch(`/tg/api/tma/templates?sort=${sort}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (cancelled) return;
@@ -226,7 +235,7 @@ export default function MarketPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, tab]);
+  }, [token, tab, sort]);
 
   // P6: в табе MCP подтягиваем агентов юзера, чтобы пометить пресеты, чей URL уже
   // подключён хотя бы к одному агенту. Read-only, без записи.
@@ -402,6 +411,22 @@ export default function MarketPage() {
                   onClick={() => setCategory(c)}
                 >
                   {c}
+                </button>
+              ))}
+            </div>
+
+            {/* Сортировка каталога — реальные ORDER BY (templates/route.ts). */}
+            <div className="tma-segment" role="tablist" aria-label="Сортировка">
+              {SORTS.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={sort === s.id}
+                  className={`tma-segment-btn${sort === s.id ? ' is-active' : ''}`}
+                  onClick={() => setSort(s.id)}
+                >
+                  {s.label}
                 </button>
               ))}
             </div>

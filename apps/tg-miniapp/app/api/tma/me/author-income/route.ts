@@ -120,6 +120,13 @@ export async function GET(req: NextRequest) {
     // Available-to-withdraw = lifetime rent income − income already committed to a
     // payout request (any non-failed author_payouts row). This is what POST can
     // request a cash-out for. Read-only here.
+    //
+    // H1 DOUBLE-COUNT GUARD: rent income lands in the SAME spendable balance
+    // (tg_user_balances) and can already be spent in-app on runs/rent. So
+    // `earned − paid_out` alone over-states what is actually withdrawable once the
+    // author has spent income — when TON_PAYOUTS_ENABLED flips on it would over-pay.
+    // Cap the figure at the current spendable balance (the simplest robust guard):
+    // available = max(0, min(earned − paid_out, spendable_balance)).
     const availRows = (await sql`
       SELECT (
         COALESCE((
@@ -132,8 +139,13 @@ export async function GET(req: NextRequest) {
         ), 0)
       )::text AS available
     `) as unknown as Array<{ available: string }>;
-    const availNum = Number(availRows[0]?.available ?? '0');
-    const available_income_credits = (availNum > 0 ? availNum : 0).toString();
+    const earnedMinusPaid = Number(availRows[0]?.available ?? '0');
+    const spendableNum = Number(spendable_credits);
+    const capped = Math.min(
+      earnedMinusPaid,
+      Number.isFinite(spendableNum) ? spendableNum : 0,
+    );
+    const available_income_credits = (capped > 0 ? capped : 0).toString();
 
     // Recent payout requests (status only — pending until the flag-gated worker
     // batch actually sends). No secrets.

@@ -51,14 +51,36 @@ async function committedPayoutCredits(authorTgUserId: string): Promise<bigint> {
   return BigInt(rows[0]?.total ?? '0');
 }
 
-/** Income an author can still withdraw = lifetime income − committed payouts. */
+/** Current spendable balance (US cents) — rent income lands here too. */
+async function spendableBalanceCredits(authorTgUserId: string): Promise<bigint> {
+  const rows = (await sql`
+    SELECT COALESCE(balance_credits, 0)::text AS bal
+    FROM tg_user_balances
+    WHERE tg_user_id = ${authorTgUserId}::bigint
+    LIMIT 1
+  `) as unknown as Array<{ bal: string }>;
+  return BigInt(rows[0]?.bal ?? '0');
+}
+
+/**
+ * Income an author can still withdraw = lifetime income − committed payouts,
+ * CAPPED by the current spendable balance.
+ *
+ * H1 DOUBLE-COUNT GUARD (mirror of author-income GET): rent income credits land in
+ * the SAME spendable balance the author already spends on runs/rent. So
+ * `income − committed` over-states the withdrawable amount once income was spent —
+ * paying it out would double-count. min(income−committed, spendable_balance) is the
+ * simplest robust cap so the worker never pays more than is actually backed.
+ */
 export async function availableIncomeCredits(authorTgUserId: string): Promise<bigint> {
-  const [income, committed] = await Promise.all([
+  const [income, committed, spendable] = await Promise.all([
     lifetimeIncomeCredits(authorTgUserId),
     committedPayoutCredits(authorTgUserId),
+    spendableBalanceCredits(authorTgUserId),
   ]);
-  const avail = income - committed;
-  return avail > 0n ? avail : 0n;
+  const earnedMinusPaid = income - committed;
+  const capped = earnedMinusPaid < spendable ? earnedMinusPaid : spendable;
+  return capped > 0n ? capped : 0n;
 }
 
 export class InsufficientIncomeError extends Error {

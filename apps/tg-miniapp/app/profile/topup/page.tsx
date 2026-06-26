@@ -7,6 +7,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { haptic } from '@/lib/haptics';
 import { resolveJettonWallet } from '@/lib/jetton';
+import { fmtCredits } from '@/lib/credits';
 
 type Status =
   | 'idle'
@@ -64,11 +65,8 @@ const MAX = 50_000;
 const POLL_INTERVAL_MS = 5_000;
 const POLL_MAX_ATTEMPTS = 120; // 10 min
 
-// Format integer cents as "N.NN" credits for display.
-function fmtCredits(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
-
+// Кредиты для дисплея — канонический fmtCredits из @/lib/credits (центы ÷ 100,
+// ru-RU, 2 знака). Раньше тут был локальный дубль (toFixed) — единый формат теперь.
 function nanoToTon(nano: string): string {
   try {
     const n = BigInt(nano);
