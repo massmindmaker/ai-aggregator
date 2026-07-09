@@ -581,8 +581,16 @@ export async function runAgent(runId: string): Promise<void> {
   }
 
   // ---- budgets (all in credits = US cents) ----
+  // BILLING SUBJECT (issue #5, SECURITY.md hire isolation): the debited/gated
+  // identity is the RUN'S caller — run.tg_user_id, set server-side by the
+  // run route from the authenticated header, NEVER the request body, and
+  // already restricted by the route to (owner OR an active hirer). For an
+  // owner run this equals agent.tg_user_id (unchanged behaviour); for a hire
+  // run it is the HIRER, so the hirer's own monthly spend/balance is gated
+  // and debited — never the agent owner's. agent.tg_user_id must NOT be used
+  // for money gates/debits below (only for owner-facing notifications).
   const monthlyBudget = Number(agent.budget_credits_monthly);
-  const monthlySpend = await sumMonthlySpend(agent.tg_user_id);
+  const monthlySpend = await sumMonthlySpend(run.tg_user_id);
   if (monthlySpend >= monthlyBudget) {
     await markFailed(runId, 'budget_exceeded_monthly');
     await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'budget_exceeded_monthly');
@@ -639,8 +647,11 @@ export async function runAgent(runId: string): Promise<void> {
 
   // ---- R0-2 run-start balance gate (billable runs only) ----
   // A zero/low-balance user can no longer run a billable agent for free.
+  // Gated on run.tg_user_id (the billing subject — see comment above), so a
+  // hire run checks/consumes the HIRER's balance, matching the pre-check the
+  // run route already performs on the caller (issue #5).
   if (!upstream.isExternal) {
-    const bal = await getBalance(agent.tg_user_id);
+    const bal = await getBalance(run.tg_user_id);
     if (bal < MIN_RUN_COST) {
       await markFailed(runId, 'insufficient_balance');
       await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'insufficient_balance');
@@ -837,10 +848,13 @@ export async function runAgent(runId: string): Promise<void> {
       // R0-2 + R0-3: mark completed + atomic daily-spend guard + balance debit
       // in ONE transaction. A failed guard/debit rolls back the completion too,
       // so the run never lands 'completed' without being paid for.
+      // tgUserId = run.tg_user_id, the billing subject (issue #5): debits the
+      // HIRER on a hire run, the owner on an owner run — matching the
+      // monthly-spend/balance gates above, never agent.tg_user_id.
       try {
         await settleRun({
           runId,
-          tgUserId: agent.tg_user_id,
+          tgUserId: run.tg_user_id,
           agentId: agent.id,
           output,
           costCredits: billable,
