@@ -81,7 +81,11 @@ function matchTx(txs: TonCenterTx[], commentTag: string, expectedNano: bigint): 
       typeof rawValue === 'number' ? BigInt(Math.floor(rawValue)) :
       0n;
     if (valueNano < expectedNano) continue;
-    return tx.transaction_id?.hash ?? tx.hash ?? '';
+    // Issue #4: no verifiable on-chain tx hash → NO-match. Never credit a
+    // hash-less deposit, and never let '' act as the global dedup key.
+    const hash = tx.transaction_id?.hash ?? tx.hash ?? '';
+    if (!hash) continue;
+    return hash;
   }
   return null;
 }
@@ -172,43 +176,66 @@ function matchJettonTransfer(
       typeof raw === 'number' ? BigInt(Math.floor(raw)) :
       0n;
     if (units < expectedUnits) continue;
-    return t.transaction_hash ?? t.transaction_id?.hash ?? t.hash ?? '';
+    // Issue #4: same rule as native TON — hash-less transfer is NO-match.
+    const hash = t.transaction_hash ?? t.transaction_id?.hash ?? t.hash ?? '';
+    if (!hash) continue;
+    return hash;
   }
   return null;
 }
 
 /** Confirm + credit ONE matched topup. Mirrors topup/check/[id] exactly:
- *  status-guarded UPDATE → balance upsert → append-only ledger (uq_ledger_ref). */
+ *  tx_hash claim (issue #4 global dedup) → status-guarded UPDATE → balance
+ *  upsert → append-only ledger (uq_ledger_ref), all in one transaction. */
 async function creditTopup(t: PendingTopup, txHash: string): Promise<boolean> {
+  if (!txHash) return false; // defensive: matchers already skip hash-less txs
   let credited = false;
-  await sql.begin(async (sql) => {
-    const upd = (await sql`
-      UPDATE tg_topups
-      SET status = 'confirmed', tx_hash = ${txHash}, confirmed_at = NOW()
-      WHERE id = ${t.id}::uuid AND status = 'pending'
-      RETURNING id::text
-    `) as unknown as Array<{ id: string }>;
-    if (upd.length === 0) return; // already confirmed by a concurrent client poll
+  try {
+    await sql.begin(async (sql) => {
+      // Issue #4 (CRIT): one on-chain tx may credit at most ONE topup row.
+      // The claims PK is the only cross-row guard — a payment whose comment
+      // matches several pending tags must not confirm more than one of them.
+      const claim = (await sql`
+        INSERT INTO tg_topup_tx_claims (tx_hash, topup_id)
+        VALUES (${txHash}, ${t.id}::uuid)
+        ON CONFLICT (tx_hash) DO NOTHING
+        RETURNING tx_hash
+      `) as unknown as Array<{ tx_hash: string }>;
+      if (claim.length === 0) return; // tx already claimed — no new credit
 
-    const bal = (await sql`
-      INSERT INTO tg_user_balances (tg_user_id, balance_credits, updated_at)
-      VALUES (${t.tg_user_id}::bigint, ${t.amount_credits}::bigint, NOW())
-      ON CONFLICT (tg_user_id) DO UPDATE
-        SET balance_credits = tg_user_balances.balance_credits + EXCLUDED.balance_credits,
-            updated_at = NOW()
-      RETURNING balance_credits::text AS balance_credits
-    `) as unknown as Array<{ balance_credits: string }>;
+      const upd = (await sql`
+        UPDATE tg_topups
+        SET status = 'confirmed', tx_hash = ${txHash}, confirmed_at = NOW()
+        WHERE id = ${t.id}::uuid AND status = 'pending'
+        RETURNING id::text
+      `) as unknown as Array<{ id: string }>;
+      // Confirmed by a concurrent client poll — roll back our claim too
+      // (that poll's own transaction holds the claim for this tx).
+      if (upd.length === 0) throw new Error('race_already_confirmed');
 
-    await sql`
-      INSERT INTO tg_ledger_entries
-        (tg_user_id, delta_credits, kind, ref_kind, ref_id, balance_after)
-      VALUES
-        (${t.tg_user_id}::bigint, ${t.amount_credits}::bigint, 'topup',
-         'tg_topup', ${t.id}::uuid, ${bal[0]!.balance_credits}::bigint)
-      ON CONFLICT (ref_kind, ref_id, kind) WHERE ref_id IS NOT NULL DO NOTHING
-    `;
-    credited = true;
-  });
+      const bal = (await sql`
+        INSERT INTO tg_user_balances (tg_user_id, balance_credits, updated_at)
+        VALUES (${t.tg_user_id}::bigint, ${t.amount_credits}::bigint, NOW())
+        ON CONFLICT (tg_user_id) DO UPDATE
+          SET balance_credits = tg_user_balances.balance_credits + EXCLUDED.balance_credits,
+              updated_at = NOW()
+        RETURNING balance_credits::text AS balance_credits
+      `) as unknown as Array<{ balance_credits: string }>;
+
+      await sql`
+        INSERT INTO tg_ledger_entries
+          (tg_user_id, delta_credits, kind, ref_kind, ref_id, balance_after)
+        VALUES
+          (${t.tg_user_id}::bigint, ${t.amount_credits}::bigint, 'topup',
+           'tg_topup', ${t.id}::uuid, ${bal[0]!.balance_credits}::bigint)
+        ON CONFLICT (ref_kind, ref_id, kind) WHERE ref_id IS NOT NULL DO NOTHING
+      `;
+      credited = true;
+    });
+  } catch (e) {
+    if (!(e instanceof Error && e.message === 'race_already_confirmed')) throw e;
+    // race: rolled back, nothing credited by this tick for the row.
+  }
   return credited;
 }
 
