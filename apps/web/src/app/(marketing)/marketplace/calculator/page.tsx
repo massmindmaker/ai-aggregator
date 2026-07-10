@@ -8,7 +8,7 @@ import { ArrowLeft } from 'lucide-react';
 export const metadata: Metadata = {
   title: 'Калькулятор цен — AI Aggregator',
   description:
-    'Посчитайте стоимость использования AI-моделей: GPT, Claude, YandexGPT, DALL-E и других. Цены в рублях, с учётом наценки шлюза 15%.',
+    'Посчитайте стоимость использования AI-моделей: GPT, Claude, YandexGPT, DALL-E и других. Цены в рублях, наценка шлюза уже включена.',
   alternates: { canonical: '/marketplace/calculator' },
 };
 
@@ -26,8 +26,8 @@ export default function CalculatorPage() {
           </h1>
           <p className="text-muted-foreground mt-2 max-w-2xl">
             Прикиньте месячный бюджет для любой модели из каталога. Все цифры — в
-            рублях, с учётом наценки шлюза 15%. Реальные счета могут отличаться
-            в зависимости от длины ответов.
+            рублях, наценка шлюза уже включена в цену. Реальные счета могут
+            отличаться в зависимости от длины ответов.
           </p>
         </header>
 
