@@ -41,4 +41,4 @@ Technical, confident, quietly playful (the characters have personality). Honest 
 6. **Characters are the differentiator** — invest craft there; faces come from founder-supplied references later (stylized placeholders until then).
 
 ## Color strategy
-Committed dark base + amber accent (~10–15% of surface) + per-character accent hues in the catalog. OKLCH throughout; reduce chroma at lightness extremes.
+Committed dark base + amber accent (~10–15% of surface) + per-character accent hues in the catalog. **OKLCH is scoped to the per-character card hues** (decorative accent per agent card, reduce chroma at lightness extremes); the **base palette (bg/ink/accent/line/status) is hex** — source of truth is `apps/web/src/app/globals.css` / `DESIGN.md`, not OKLCH.
