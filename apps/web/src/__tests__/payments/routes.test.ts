@@ -9,6 +9,29 @@ vi.mock('@/auth', () => ({
   auth: vi.fn(),
 }));
 
+// requireAdmin() (used by /api/admin/payments/refund, issue #20) looks the
+// user up by email in the DB and checks the aiag_admin_session step-up
+// cookie — neither is exercised by the non-admin routes in this file, but
+// both must be mocked at module scope for the refund-route tests below.
+const userFindFirst = vi.fn();
+vi.mock('@/lib/db', () => ({
+  db: {
+    query: { users: { findFirst: (...args: unknown[]) => userFindFirst(...args) } },
+  },
+  eq: (a: unknown, b: unknown) => ({ a, b }),
+}));
+
+const cookieGet = vi.fn();
+vi.mock('next/headers', () => ({
+  cookies: async () => ({ get: (...args: unknown[]) => cookieGet(...args) }),
+}));
+
+const verifyAdminSessionMock = vi.fn();
+vi.mock('@/lib/admin/session', () => ({
+  ADMIN_COOKIE_NAME: 'aiag_admin_session',
+  verifyAdminSession: (...args: unknown[]) => verifyAdminSessionMock(...args),
+}));
+
 const mockInitPayment = vi.fn();
 const mockRefund = vi.fn();
 vi.mock('@/lib/payments/providers', () => ({
@@ -49,7 +72,19 @@ beforeEach(() => {
   mockedAuth.mockReset();
   mockInitPayment.mockReset();
   mockRefund.mockReset();
+  userFindFirst.mockReset();
+  cookieGet.mockReset();
+  verifyAdminSessionMock.mockReset();
 });
+
+/** Sign in as an admin with a valid aiag_admin_session step-up cookie — the
+ * happy path requireAdmin() needs before /api/admin/payments/refund proceeds. */
+function signInAsAdminWithStepUp() {
+  mockedAuth.mockResolvedValue({ user: { id: 'u1', email: 'admin@test' } });
+  userFindFirst.mockResolvedValue({ id: 'u1', email: 'admin@test', role: 'admin' });
+  cookieGet.mockReturnValue({ value: 'valid-token' });
+  verifyAdminSessionMock.mockResolvedValue(true);
+}
 
 describe('POST /api/subscriptions/create', () => {
   it('rejects unauthenticated', async () => {
@@ -205,8 +240,9 @@ describe('POST /api/admin/payments/refund', () => {
     expect(r.status).toBe(401);
   });
 
-  it('rejects non-admin role when role explicit', async () => {
-    mockedAuth.mockResolvedValue({ user: { id: 'u1', role: 'user' } });
+  it('rejects non-admin role', async () => {
+    mockedAuth.mockResolvedValue({ user: { id: 'u1', email: 'someone@test' } });
+    userFindFirst.mockResolvedValue({ id: 'u1', email: 'someone@test', role: 'user' });
     const r = await adminRefund(
       makeReq({
         provider: 'tinkoff',
@@ -217,14 +253,31 @@ describe('POST /api/admin/payments/refund', () => {
     expect(r.status).toBe(403);
   });
 
+  // Issue #20 — the step-up cookie (aiag_admin_session) must be enforced
+  // server-side for this route via the shared requireAdmin() helper. A
+  // valid NextAuth admin session alone must NOT be enough.
+  it('rejects admin role without the aiag_admin_session step-up cookie', async () => {
+    mockedAuth.mockResolvedValue({ user: { id: 'u1', email: 'admin@test' } });
+    userFindFirst.mockResolvedValue({ id: 'u1', email: 'admin@test', role: 'admin' });
+    cookieGet.mockReturnValue(undefined);
+    verifyAdminSessionMock.mockResolvedValue(false);
+    const r = await adminRefund(
+      makeReq({ provider: 'tinkoff', providerPaymentId: 'p', amount: 100 }) as never
+    );
+    expect(r.status).toBe(403);
+    const data = await r.json();
+    expect(data.error).toBe('STEPUP_REQUIRED');
+    expect(mockRefund).not.toHaveBeenCalled();
+  });
+
   it('rejects missing required fields', async () => {
-    mockedAuth.mockResolvedValue({ user: { id: 'u1', role: 'admin' } });
+    signInAsAdminWithStepUp();
     const r = await adminRefund(makeReq({ provider: 'tinkoff' }) as never);
     expect(r.status).toBe(400);
   });
 
   it('issues refund through provider', async () => {
-    mockedAuth.mockResolvedValue({ user: { id: 'u1', role: 'admin' } });
+    signInAsAdminWithStepUp();
     mockRefund.mockResolvedValue({ success: true, providerRefundId: 'rf_xx' });
     const r = await adminRefund(
       makeReq({
@@ -241,7 +294,7 @@ describe('POST /api/admin/payments/refund', () => {
   });
 
   it('returns 502 on provider failure', async () => {
-    mockedAuth.mockResolvedValue({ user: { id: 'u1', role: 'admin' } });
+    signInAsAdminWithStepUp();
     mockRefund.mockResolvedValue({ success: false, errorMessage: 'gone' });
     const r = await adminRefund(
       makeReq({ provider: 'tinkoff', providerPaymentId: 'p', amount: 1 }) as never

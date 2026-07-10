@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireAdmin, AdminAuthError } from '@/lib/admin/guard';
 import { getPaymentProvider, type ProviderId } from '@/lib/payments/providers';
 
 export const runtime = 'nodejs';
@@ -16,10 +16,10 @@ interface AdminRefundBody {
 /**
  * POST /api/admin/payments/refund
  *
- * Admin-only manual refund.
+ * Admin-only manual refund. Auth (role + step-up cookie) is enforced by
+ * requireAdmin() — see apps/web/src/lib/admin/guard.ts.
  *
  * TODO (Plan 04 schema):
- *   - require admin role (session.user.role === 'admin')
  *   - SELECT payment (verify status='confirmed')
  *   - call provider.refund
  *   - UPDATE payments SET refundedAmount, refundedAt, refundReason, status='refunded'|'partial_refunded'
@@ -27,20 +27,13 @@ interface AdminRefundBody {
  *   - audit_log
  */
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json(
-      { error: { message: 'Требуется вход', code: 'UNAUTHORIZED' } },
-      { status: 401 }
-    );
-  }
-  // TODO: real admin-role check
-  const role = (session.user as { role?: string }).role;
-  if (role && role !== 'admin') {
-    return NextResponse.json(
-      { error: { message: 'Forbidden', code: 'FORBIDDEN' } },
-      { status: 403 }
-    );
+  try {
+    await requireAdmin();
+  } catch (e) {
+    if (e instanceof AdminAuthError) {
+      return NextResponse.json({ error: e.code }, { status: e.code === 'UNAUTHORIZED' ? 401 : 403 });
+    }
+    throw e;
   }
 
   const body = (await req.json().catch(() => ({}))) as AdminRefundBody;
