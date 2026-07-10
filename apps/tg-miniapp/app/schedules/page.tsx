@@ -278,6 +278,9 @@ export default function SchedulesPage() {
                 className="tma-btn"
                 style={{
                   padding: '4px 12px',
+                  minHeight: 44,
+                  display: 'inline-flex',
+                  alignItems: 'center',
                   fontSize: 12,
                   color: s.enabled ? 'var(--accent-ink)' : 'var(--ink-muted)',
                   background: s.enabled ? 'var(--accent)' : 'transparent',
@@ -321,7 +324,13 @@ export default function SchedulesPage() {
                 onClick={() => remove(s)}
                 disabled={busyId === s.id}
                 className="tma-btn"
-                style={{ padding: '4px 12px', fontSize: 12 }}
+                style={{
+                  padding: '4px 12px',
+                  minHeight: 44,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  fontSize: 12,
+                }}
               >
                 Удалить
               </button>
