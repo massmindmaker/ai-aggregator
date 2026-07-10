@@ -5,6 +5,10 @@ import { rowsOf, firstRow } from '@/lib/admin/rows';
 
 export const dynamic = 'force-dynamic';
 
+// Mirrors DB constraint chk_markup_floor (migration 0047): reject sub-floor markup
+// app-side so it surfaces as a clean 400, not an opaque 500 from the CHECK violation.
+const MIN_MARKUP = 1.2;
+
 function err(e: unknown) {
   if (e instanceof AdminAuthError) {
     return NextResponse.json({ error: e.code }, { status: e.code === 'UNAUTHORIZED' ? 401 : 403 });
@@ -46,6 +50,12 @@ export async function POST(req: NextRequest) {
 
     if (!body.model_id || !body.upstream_id || !body.upstream_model_id) {
       return NextResponse.json({ error: 'BAD_REQUEST' }, { status: 400 });
+    }
+    if (typeof body.markup === 'number' && body.markup < MIN_MARKUP) {
+      return NextResponse.json(
+        { error: 'BAD_MARKUP', message: 'markup must be >= 1.20' },
+        { status: 400 }
+      );
     }
     const markup = typeof body.markup === 'number' && body.markup > 0 ? body.markup : 1.25;
 

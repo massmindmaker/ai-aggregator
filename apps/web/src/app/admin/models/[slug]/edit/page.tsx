@@ -116,7 +116,8 @@ export default async function EditModelPage({
     const pOut = String(formData.get('price_per_1k_output') ?? '0');
     const pImg = String(formData.get('price_per_image') ?? '');
     const pAud = String(formData.get('price_per_audio_sec') ?? '');
-    const markup = String(formData.get('markup') ?? '1.12');
+    // Floor mirrors DB constraint chk_markup_floor (migration 0047): no upstream below 1.20.
+    const markup = String(formData.get('markup') ?? '1.20');
     if (!upstreamId || !upstreamModelId) return;
     await db.execute(sql`
       INSERT INTO model_upstreams
@@ -306,7 +307,7 @@ export default async function EditModelPage({
             </div>
             <div>
               <Label>Markup</Label>
-              <Input name="markup" type="number" step="0.01" defaultValue="1.12" />
+              <Input name="markup" type="number" step="0.01" min="1.20" defaultValue="1.20" />
             </div>
             <div className="col-span-2">
               <Button type="submit">Добавить</Button>
