@@ -339,7 +339,8 @@ export default function TopupPage() {
                 color: 'inherit',
                 border: '1px solid rgba(255,255,255,0.2)',
                 borderRadius: 8,
-                padding: '4px 8px',
+                padding: '12px 10px',
+                minHeight: 44,
                 width: 100,
                 textAlign: 'right',
               }}

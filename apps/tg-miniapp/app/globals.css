@@ -151,6 +151,31 @@ code {
   z-index: 50;
 }
 
+/* === Desktop / wide-viewport framing (issue #22) ===
+   Telegram Desktop can open the Mini App in a wide window (1440×900+). Below
+   this breakpoint the shell already centers via `.tma-shell`'s max-width +
+   margin auto — but the area outside it was plain body background, visually
+   indistinguishable from "empty" screen. >640px: give the shell + bottom nav
+   a matching hairline frame against a slightly elevated backdrop (DESIGN.md:
+   elevation = hairline, not shadow; tokens only, no new colors). Mobile
+   (≤640px, the TMA-native case) is untouched. */
+@media (min-width: 641px) {
+  body {
+    background: var(--bg-elev);
+  }
+
+  .tma-shell {
+    background: var(--bg);
+    border-inline: 1px solid var(--line-strong);
+  }
+
+  .tma-bottom-nav {
+    max-width: 640px;
+    margin-inline: auto;
+    border-inline: 1px solid var(--line-strong);
+  }
+}
+
 .tma-nav-item {
   position: relative;
   flex: 1;
