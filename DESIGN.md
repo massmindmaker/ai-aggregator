@@ -14,6 +14,10 @@ The one design contract for **both surfaces** (TMA mobile + Web) and **both them
 
 **Per-character hues** (functional, agent cards only — NOT global palette): OKLCH duotone per character (Алиса 28, Макс 235, Ника 340/50, Гриша 165, Лея 60, Орион/Нова 290–300). Decoration, not brand.
 
+**OKLCH mandate — scoped (review 2026-07-10):** OKLCH is mandatory **only** for per-character hues above (decorative accent per agent card). The base palette (bg/ink/accent/line/status colors) is hex — that is the source of truth, verbatim from `apps/web/src/app/globals.css`. Do not introduce `oklch()` into the base palette; 0 usages across the repo confirms this was never actually the working format for base tokens, only ever intended for character hues.
+
+**Internal shadcn/Tailwind HSL layer (not a second source of truth):** `apps/web/src/app/globals.css` also defines shadcn-convention HSL triples (`--background`, `--foreground`, `--card`, `--primary`, `--muted`, `--border`, `--input`, `--ring`, etc.) alongside the hex tokens above. These exist only because shadcn/ui components consume Tailwind's `hsl(var(--x))` convention — they are a **derived/internal implementation layer for shadcn component styling**, not an independent palette. When a value can be expressed in both systems (e.g. `--bg` hex vs `--background` HSL), the **hex token is authoritative**; the HSL twin must stay visually equivalent to it. New tokens are added as hex first; only mirror into HSL if a shadcn primitive requires it.
+
 **Accent discipline (VoltAgent rule):** amber is for **CTA + logo + live/active status + featured ring** only. NEVER amber body text, NEVER amber as a large fill except the primary button.
 
 ## Typography
