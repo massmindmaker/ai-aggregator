@@ -674,6 +674,11 @@ export class InsufficientBalanceError extends Error {
  * debit's `RETURNING balance_credits` as `balance_after`. Cached balance and
  * ledger can therefore never diverge — they commit or roll back together. The
  * UNIQUE (ref_kind, ref_id, kind) index makes a settle retry idempotent.
+ *
+ * Idempotency (money A4): the FIRST statement inside `sql.begin` is a guarded
+ * `UPDATE agent_runs … WHERE status <> 'completed' RETURNING id`. A repeat call
+ * for the same runId (BullMQ stalled-job reprocess) matches 0 rows and returns
+ * immediately — no daily-budget increment, no balance debit, no ledger entry.
  */
 export async function settleRun(args: {
   runId: string;
@@ -689,7 +694,12 @@ export async function settleRun(args: {
   // Plain sql.begin → READ COMMITTED (the chosen approach). Use the
   // callback-scoped `sql`, not the module-level one, so queries stay in-tx.
   await sql.begin(async (sql) => {
-    await sql`
+    // Idempotency guard: only a run that is NOT already 'completed' gets marked
+    // completed here. A reprocessed run (e.g. BullMQ stalled-job reprocess)
+    // finds 0 rows and exits early — no debit, no daily-budget increment, no
+    // ledger entry. Per-row lock on the matched row makes this safe under
+    // concurrent settleRun calls for the same runId (READ COMMITTED).
+    const marked = (await sql`
       UPDATE agent_runs
       SET status = 'completed',
           output = ${output},
@@ -698,7 +708,10 @@ export async function settleRun(args: {
           tokens_out = ${tokensOut},
           completed_at = NOW()
       WHERE id = ${runId}::uuid
-    `;
+        AND status <> 'completed'
+      RETURNING id
+    `) as unknown as Array<{ id: string }>;
+    if (marked.length === 0) return; // already settled — idempotent no-op
 
     if (isExternal) return; // user pays their own provider — nothing to debit
 
