@@ -12,7 +12,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/auth', () => ({ auth: vi.fn() }));
-vi.mock('next/headers', () => ({ headers: () => ({ get: () => null }) }));
+vi.mock('next/headers', () => ({
+  headers: () => ({ get: () => null }),
+  cookies: () => ({ get: () => ({ value: 'ok' }) }),
+}));
+vi.mock('@/lib/admin/session', () => ({
+  ADMIN_COOKIE_NAME: 'aiag_admin_session',
+  verifyAdminSession: async () => true,
+}));
 
 const dbExecute = vi.fn();
 const txExecute = vi.fn();

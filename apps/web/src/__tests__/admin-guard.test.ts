@@ -1,11 +1,24 @@
 /**
  * Tests for admin RBAC guard + audit log helper.
- * Verifies role enforcement and audit emission.
+ * Verifies role enforcement, the aiag_admin_session step-up gate
+ * (issue #20 — step-up must be enforced server-side in the shared
+ * helper, not only in the /admin/* UI layout), and audit emission.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/auth', () => ({ auth: vi.fn() }));
-vi.mock('next/headers', () => ({ headers: () => ({ get: () => null }) }));
+
+const cookieGet = vi.fn();
+vi.mock('next/headers', () => ({
+  headers: () => ({ get: () => null }),
+  cookies: async () => ({ get: (...args: unknown[]) => cookieGet(...args) }),
+}));
+
+const verifyAdminSessionMock = vi.fn();
+vi.mock('@/lib/admin/session', () => ({
+  ADMIN_COOKIE_NAME: 'aiag_admin_session',
+  verifyAdminSession: (...args: unknown[]) => verifyAdminSessionMock(...args),
+}));
 
 const dbExecute = vi.fn(async () => ({ rows: [] }));
 const userFindFirst = vi.fn();
@@ -40,13 +53,37 @@ describe('requireAdmin', () => {
     await expect(requireAdmin()).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
-  it('passes when role is admin', async () => {
+  it('throws STEPUP_REQUIRED when role=admin but the aiag_admin_session cookie is missing', async () => {
     (auth as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { email: 'admin@test' },
     });
-    userFindFirst.mockResolvedValue({ email: 'admin@test', role: 'admin' });
+    userFindFirst.mockResolvedValue({ id: 'u-1', email: 'admin@test', role: 'admin' });
+    cookieGet.mockReturnValue(undefined);
+    verifyAdminSessionMock.mockResolvedValue(false);
+    await expect(requireAdmin()).rejects.toBeInstanceOf(AdminAuthError);
+    await expect(requireAdmin()).rejects.toMatchObject({ code: 'STEPUP_REQUIRED' });
+  });
+
+  it('throws STEPUP_REQUIRED when the cookie is present but invalid/expired', async () => {
+    (auth as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { email: 'admin@test' },
+    });
+    userFindFirst.mockResolvedValue({ id: 'u-1', email: 'admin@test', role: 'admin' });
+    cookieGet.mockReturnValue({ value: 'stale-token' });
+    verifyAdminSessionMock.mockResolvedValue(false);
+    await expect(requireAdmin()).rejects.toMatchObject({ code: 'STEPUP_REQUIRED' });
+  });
+
+  it('passes when role is admin and the step-up cookie is valid', async () => {
+    (auth as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { email: 'admin@test' },
+    });
+    userFindFirst.mockResolvedValue({ id: 'u-1', email: 'admin@test', role: 'admin' });
+    cookieGet.mockReturnValue({ value: 'valid-token' });
+    verifyAdminSessionMock.mockResolvedValue(true);
     const r = await requireAdmin();
     expect(r.user.email).toBe('admin@test');
+    expect(verifyAdminSessionMock).toHaveBeenCalledWith('valid-token', 'u-1');
   });
 });
 

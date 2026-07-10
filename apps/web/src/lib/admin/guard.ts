@@ -1,14 +1,25 @@
 import { auth } from '@/auth';
 import { db, eq, sql } from '@/lib/db';
 import { users } from '@aiag/database/schema';
-import { headers } from 'next/headers';
+import { headers, cookies } from 'next/headers';
+import { ADMIN_COOKIE_NAME, verifyAdminSession } from '@/lib/admin/session';
 
 export class AdminAuthError extends Error {
-  constructor(public code: 'UNAUTHORIZED' | 'FORBIDDEN') {
+  constructor(public code: 'UNAUTHORIZED' | 'FORBIDDEN' | 'STEPUP_REQUIRED') {
     super(code);
   }
 }
 
+/**
+ * Two gates, mirrored from the /admin/* UI layout (apps/web/src/app/admin/layout.tsx):
+ *   (1) authenticated NextAuth session with role=admin
+ *   (2) the aiag_admin_session step-up cookie (separate password, set by
+ *       POST /api/admin/auth), verified against the resolved user id.
+ * Every /api/admin/** route (except the step-up endpoints themselves, which
+ * don't call this helper) must go through here — the step-up check must not
+ * live only in the UI layout, or it is trivially bypassed via a direct API
+ * call carrying just a NextAuth session.
+ */
 export async function requireAdmin() {
   const session = await auth();
   if (!session?.user?.email) throw new AdminAuthError('UNAUTHORIZED');
@@ -16,6 +27,12 @@ export async function requireAdmin() {
     where: eq(users.email, session.user.email),
   });
   if (!u || u.role !== 'admin') throw new AdminAuthError('FORBIDDEN');
+
+  const cookieStore = await cookies();
+  const adminCookie = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+  const stepUpOk = await verifyAdminSession(adminCookie, u.id);
+  if (!stepUpOk) throw new AdminAuthError('STEPUP_REQUIRED');
+
   return { user: u, session };
 }
 
