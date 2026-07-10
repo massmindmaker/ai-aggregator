@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { tonToNano } from '@aiag/shared';
+import { tonToNano } from '@aiag/shared/client';
 
 export function NewCollectionForm() {
   const [busy, setBusy] = React.useState(false);
