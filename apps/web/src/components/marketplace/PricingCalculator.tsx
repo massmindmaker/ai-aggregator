@@ -88,15 +88,8 @@ export function PricingCalculator({
                 {formatRub(cost.perMonthRub)}
               </span>
             </div>
-            <div className="pt-2 border-t border-border text-xs text-muted-foreground space-y-1">
-              <div className="flex justify-between">
-                <span>Upstream</span>
-                <span>{formatRub(cost.upstreamRub)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Наценка шлюза ({cost.markupPct}%)</span>
-                <span>{formatRub(cost.markupRub)}</span>
-              </div>
+            <div className="pt-2 border-t border-border text-xs text-muted-foreground">
+              Наценка шлюза уже включена в цену.
             </div>
           </div>
         )}

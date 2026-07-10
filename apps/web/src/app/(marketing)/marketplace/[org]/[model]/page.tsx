@@ -264,7 +264,7 @@ export default function ModelDetailPage({ params }: RouteParams) {
                     </p>
                     <Alert>
                       <AlertDescription>
-                        Цены указаны с учётом наценки шлюза 15%. Оплата в рублях
+                        Наценка шлюза уже включена в цену. Оплата в рублях
                         с баланса — без комиссии банка и VPN.
                       </AlertDescription>
                     </Alert>

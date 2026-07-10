@@ -1,13 +1,13 @@
 /**
  * Plan 06 — Per-modality cost estimator for the marketplace pricing calculator.
  *
- * All prices in RUB. Gateway markup is applied on top of the upstream price
- * so that the public value stays stable when upstream prices fluctuate.
+ * All prices in RUB. Catalog prices (`catalog.generated.ts`, built by
+ * scripts/gen-marketplace-catalog.ts from the DB) already have the upstream
+ * markup baked in — this calculator is a pure display of that price and must
+ * NOT apply any additional markup on top (that would double-charge).
  */
 
 import type { CatalogModel } from './catalog';
-
-export const GATEWAY_MARKUP_PCT = 15;
 
 export interface UsageEstimate {
   /** chat/embedding: requests per day */
@@ -27,15 +27,7 @@ export interface UsageEstimate {
 export interface CostBreakdown {
   perDayRub: number;
   perMonthRub: number;
-  upstreamRub: number;
-  markupRub: number;
-  markupPct: number;
   unit: string;
-}
-
-function withMarkup(amount: number): { total: number; markup: number } {
-  const markup = (amount * GATEWAY_MARKUP_PCT) / 100;
-  return { total: amount + markup, markup };
 }
 
 export function estimateCost(
@@ -43,31 +35,27 @@ export function estimateCost(
   usage: UsageEstimate
 ): CostBreakdown {
   const p = model.pricing;
-  let upstream = 0;
+  let price = 0;
   const unit = p.unit ?? 'unit';
 
   if (p.inputPer1k !== undefined || p.outputPer1k !== undefined) {
     const requests = usage.requestsPerDay ?? 0;
     const inputTok = (usage.avgInputTokens ?? 0) * requests;
     const outputTok = (usage.avgOutputTokens ?? 0) * requests;
-    upstream =
+    price =
       (inputTok / 1000) * (p.inputPer1k ?? 0) +
       (outputTok / 1000) * (p.outputPer1k ?? 0);
   } else if (p.perImage !== undefined) {
-    upstream = (usage.imagesPerDay ?? 0) * p.perImage;
+    price = (usage.imagesPerDay ?? 0) * p.perImage;
   } else if (p.perMinute !== undefined) {
-    upstream = (usage.minutesPerDay ?? 0) * p.perMinute;
+    price = (usage.minutesPerDay ?? 0) * p.perMinute;
   } else if (p.perSecond !== undefined) {
-    upstream = (usage.secondsPerDay ?? 0) * p.perSecond;
+    price = (usage.secondsPerDay ?? 0) * p.perSecond;
   }
 
-  const { total, markup } = withMarkup(upstream);
   return {
-    perDayRub: roundRub(total),
-    perMonthRub: roundRub(total * 30),
-    upstreamRub: roundRub(upstream),
-    markupRub: roundRub(markup),
-    markupPct: GATEWAY_MARKUP_PCT,
+    perDayRub: roundRub(price),
+    perMonthRub: roundRub(price * 30),
     unit,
   };
 }
