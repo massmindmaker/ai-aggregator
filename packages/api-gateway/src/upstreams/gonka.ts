@@ -23,7 +23,7 @@ import type {
   EmbeddingsRequest,
   EmbeddingsResponse,
 } from './interface';
-import { safeFetch } from '@aiag/shared';
+import { safeFetch } from '@aiag/shared/server';
 import { logger } from '../lib/logger';
 
 const GONKA_BASE = 'https://api.gonkagate.com/v1';

@@ -1,4 +1,4 @@
-import { safeFetch, SsrfError } from '@aiag/shared';
+import { safeFetch, SsrfError } from '@aiag/shared/server';
 import type { ProxyRequestOptions, ProxyResponse } from './types';
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds

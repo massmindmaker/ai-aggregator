@@ -1,14 +1,18 @@
 /**
- * Client-safe subset of @aiag/shared (issue #17).
+ * Client-safe subset of @aiag/shared (issue #17, updated by #19).
  *
- * The main entry ('.') re-exports everything, including ./s3 (@aws-sdk/client-s3)
- * and ./safe-fetch (node:dns, node:net) — Node-only modules that break when a
- * 'use client' component imports them, even transitively. tsup bundles
- * src/index.ts as a single non-split chunk, so any import from '@aiag/shared'
- * drags the whole graph in, including those Node builtins.
+ * Originally this entry existed because the main barrel re-exported ./s3
+ * (@aws-sdk) and ./safe-fetch (node:dns, node:net), and tsup's `splitting:
+ * false` made that one indivisible chunk — so a 'use client' component
+ * importing anything from '@aiag/shared' dragged Node builtins in.
  *
- * This entry exports ONLY the pure, browser-safe helpers a client component
- * needs (currently: TON nano-unit conversion for admin NFT forms). Do not
- * re-export ./s3 or ./safe-fetch here.
+ * #19 fixed that at the root: both Node-only modules now live behind
+ * '@aiag/shared/server', and the main barrel is isomorphic.
+ *
+ * This entry is still the right import for 'use client' components: it is the
+ * minimal, explicitly-audited browser surface (currently TON nano-unit
+ * conversion for the admin NFT forms), so a client bundle can never grow a
+ * Node dependency by accident even if the barrel regresses. Never re-export
+ * ./s3 or ./safe-fetch here.
  */
 export { tonToNano, nanoToTon, NANO_PER_TON } from './startonus';
