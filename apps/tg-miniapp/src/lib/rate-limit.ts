@@ -33,6 +33,7 @@ export const RATE_LIMITS = {
   topup: { max: 5, window: 60 },
   transfer: { max: 5, window: 60 },
   'transfer-offer': { max: 10, window: 60 },
+  membership: { max: 5, window: 60 },
 } as const;
 
 export type RateLimitRoute = keyof typeof RATE_LIMITS;
