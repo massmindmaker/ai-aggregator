@@ -3,7 +3,7 @@ import postgres from 'postgres';
 import { getTemplate } from '@/lib/agent-templates';
 import { encryptSecret, hintFromSecret } from '@/lib/crypto';
 import { validateExternalUrl } from '@/lib/external-agent';
-import { hasCreatorMembership } from '@/lib/membership';
+import { hasCreatorMembership, checkAgentQuota } from '@/lib/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -129,6 +129,22 @@ export async function POST(req: NextRequest) {
   // membership NFT. HIRE/CLONE routes are NOT gated. Fail-closed (no row → 403).
   if (!(await hasCreatorMembership(tgUserId, sql))) {
     return NextResponse.json({ error: 'membership_required' }, { status: 403 });
+  }
+
+  // Per-tier agent quota (issue #32): creator→1, builder→5, studio→20, NULL tier
+  // (founder-seed/legacy) → unlimited. Checked BEFORE any insert so a direct API call
+  // can't bypass it — this is the only enforcement point for /agents creates.
+  const quota = await checkAgentQuota(tgUserId, sql);
+  if (!quota.ok) {
+    return NextResponse.json(
+      {
+        error: 'quota_exceeded',
+        quota: quota.quota,
+        count: quota.count,
+        hint: 'Повысьте ярус членства на /membership, чтобы создавать больше агентов.',
+      },
+      { status: 403 },
+    );
   }
 
   let body: CreateBody;

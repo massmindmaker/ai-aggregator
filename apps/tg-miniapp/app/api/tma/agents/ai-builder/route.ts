@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
 import { safeFetch } from '@/lib/safe-fetch';
-import { hasCreatorMembership } from '@/lib/membership';
+import { hasCreatorMembership, checkAgentQuota } from '@/lib/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -108,6 +108,24 @@ export async function POST(req: NextRequest) {
   // agent spec, so it's a create surface — gate it like POST /agents. Fail-closed.
   if (!(await hasCreatorMembership(tgUserId, sql))) {
     return NextResponse.json({ error: 'membership_required' }, { status: 403 });
+  }
+
+  // Per-tier agent quota (issue #32): same gate as POST /agents, checked here too so a
+  // user already at their cap doesn't burn a house-funded generation call for a spec
+  // they won't be able to save. The actual insert still happens only via POST /agents,
+  // which re-checks the quota itself — this is defense-in-depth, not the enforcement
+  // point of record.
+  const quota = await checkAgentQuota(tgUserId, sql);
+  if (!quota.ok) {
+    return NextResponse.json(
+      {
+        error: 'quota_exceeded',
+        quota: quota.quota,
+        count: quota.count,
+        hint: 'Повысьте ярус членства на /membership, чтобы создавать больше агентов.',
+      },
+      { status: 403 },
+    );
   }
 
   let body: { description?: string };
