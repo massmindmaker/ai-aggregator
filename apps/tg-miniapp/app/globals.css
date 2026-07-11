@@ -1436,26 +1436,36 @@ code {
     0 8px 32px rgba(245, 158, 11, 0.08);
 }
 
-/* Shimmer skeleton loader. */
+/* Shimmer skeleton loader.
+ * transform-only (issue #23): the band is a translated ::after overlay, not an
+ * animated `background-position` (off-contract). Mirrors .tma-skeleton below,
+ * which already used this technique. */
 @keyframes aiag-shimmer {
   from {
-    background-position: -200% 0;
+    transform: translateX(-100%);
   }
   to {
-    background-position: 200% 0;
+    transform: translateX(100%);
   }
 }
 
 .aiag-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-elev);
+  border-radius: 4px;
+}
+.aiag-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
   background: linear-gradient(
     90deg,
-    var(--bg-elev) 0%,
-    rgba(245, 158, 11, 0.06) 50%,
-    var(--bg-elev) 100%
+    transparent,
+    rgba(245, 158, 11, 0.06),
+    transparent
   );
-  background-size: 200% 100%;
   animation: aiag-shimmer 1.8s linear infinite;
-  border-radius: 4px;
 }
 
 /* Pulse dot for live indicators (active runs, streaming). The ::after ring
@@ -1554,27 +1564,47 @@ code {
 }
 
 /* Chain-glow for the AIAG logo mark (DESIGN.md aiag-logo-dot) — light runs
- * across the 4 nodes in sequence via per-circle animation-delay. Ported
- * verbatim from apps/web/globals.css; consumer = BrandMark.tsx. */
-@keyframes aiag-logo-dot-glow {
+ * across the 4 nodes in sequence via per-circle animation-delay. Mirrors
+ * apps/web/globals.css; consumer = BrandMark.tsx.
+ *
+ * transform/opacity ONLY (issue #23): the bloom is a real SVG halo layer
+ * (.aiag-logo-halo), not a `filter: drop-shadow`. The node beat is transform
+ * only so each circle keeps its own `opacity` attribute (the 4th is 0.65). */
+@keyframes aiag-logo-dot-pulse {
   0%,
   70%,
   100% {
-    filter: brightness(1);
     transform: scale(1);
   }
   15%,
   35% {
-    filter: brightness(1.4) drop-shadow(0 0 6px rgba(245, 158, 11, 0.95))
-      drop-shadow(0 0 16px rgba(245, 158, 11, 0.55))
-      drop-shadow(0 0 28px rgba(245, 158, 11, 0.25));
     transform: scale(1.12);
   }
 }
 .aiag-logo-dot {
-  animation: aiag-logo-dot-glow 3.2s ease-in-out infinite;
+  animation: aiag-logo-dot-pulse 3.2s cubic-bezier(0.23, 1, 0.32, 1) infinite;
   transform-origin: center;
   transform-box: fill-box;
+}
+
+@keyframes aiag-logo-halo-bloom {
+  0%,
+  70%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  15%,
+  35% {
+    transform: scale(2.1);
+    opacity: 0.3;
+  }
+}
+.aiag-logo-halo {
+  animation: aiag-logo-halo-bloom 3.2s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+  pointer-events: none;
 }
 
 /* Checkmark draw-in for success states (DESIGN.md aiag-check-draw) — agent
@@ -1628,7 +1658,7 @@ code {
  * check-draw). */
 @media (prefers-reduced-motion: reduce) {
   .aiag-fade-up,
-  .aiag-skeleton,
+  .aiag-skeleton::after,
   .aiag-pulse-dot::after,
   .aiag-featured-ring::before,
   .aiag-aurora,
@@ -1651,7 +1681,12 @@ code {
   }
   .aiag-logo-dot {
     animation: none !important;
-    opacity: 0.7 !important;
+    transform: none !important;
+  }
+  /* Halo is pure decoration — hide it rather than freeze a stray amber blob. */
+  .aiag-logo-halo {
+    animation: none !important;
+    opacity: 0 !important;
   }
   .aiag-check-svg path {
     animation: none !important;

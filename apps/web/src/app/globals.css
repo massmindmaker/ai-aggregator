@@ -283,22 +283,32 @@
               0 8px 32px rgba(245, 158, 11, 0.08);
 }
 
-/* 2. Shimmer for skeleton loaders */
+/* 2. Shimmer for skeleton loaders.
+ * transform-only (issue #23): the band is a translated ::after overlay, not an
+ * animated `background-position` (which was off-contract and repaints on the
+ * main thread). Same technique already proven by .tma-skeleton in the TMA. */
 @keyframes aiag-shimmer {
-  from { background-position: -200% 0; }
-  to   { background-position:  200% 0; }
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
 }
 
 .aiag-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-elev, #111114);
+  border-radius: 4px;
+}
+.aiag-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
   background: linear-gradient(
     90deg,
-    var(--bg-elev, #111114) 0%,
-    rgba(245, 158, 11, 0.06) 50%,
-    var(--bg-elev, #111114) 100%
+    transparent,
+    rgba(245, 158, 11, 0.06),
+    transparent
   );
-  background-size: 200% 100%;
   animation: aiag-shimmer 1.8s linear infinite;
-  border-radius: 4px;
 }
 
 /* 3. Aurora-blur drifting accent spots (для hero/landing backgrounds) */
@@ -406,26 +416,46 @@
 
 /* === Chain-glow для логотипа AIAG ===
  * Свет последовательно пробегает по 4 кругам зигзагом
- * (lower-left → upper-mid → lower-right → far-upper).
- * В покое круги амбер с приглушённой яркостью, на пике волны —
- * полный амбер + drop-shadow halo. */
-@keyframes aiag-logo-dot-glow {
+ * (lower-left → upper-mid → lower-right → far-upper) через animation-delay.
+ *
+ * transform/opacity ONLY (issue #23). The halo bloom that used to come from
+ * `filter: brightness() + drop-shadow()` is now a real SVG layer: each node
+ * is preceded by a same-position `.aiag-logo-halo` circle that blooms
+ * (scale + opacity) on the beat. Same read, zero filter — and it composites
+ * on the GPU instead of forcing a filter repaint. */
+/* Node beat = transform only, so each circle keeps its own `opacity`
+ * presentation attribute (the 4th node is intentionally 0.65) — an opacity
+ * keyframe would override it. Brightness is carried by the halo below. */
+@keyframes aiag-logo-dot-pulse {
   0%, 70%, 100% {
-    filter: brightness(1);
     transform: scale(1);
   }
   15%, 35% {
-    filter: brightness(1.4)
-            drop-shadow(0 0 6px rgba(245, 158, 11, 0.95))
-            drop-shadow(0 0 16px rgba(245, 158, 11, 0.55))
-            drop-shadow(0 0 28px rgba(245, 158, 11, 0.25));
     transform: scale(1.12);
   }
 }
 .aiag-logo-dot {
-  animation: aiag-logo-dot-glow 3.2s ease-in-out infinite;
+  animation: aiag-logo-dot-pulse 3.2s cubic-bezier(0.23, 1, 0.32, 1) infinite;
   transform-origin: center;
   transform-box: fill-box;
+}
+
+/* Halo bloom behind each chain node — the drop-shadow replacement. */
+@keyframes aiag-logo-halo-bloom {
+  0%, 70%, 100% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  15%, 35% {
+    transform: scale(2.1);
+    opacity: 0.3;
+  }
+}
+.aiag-logo-halo {
+  animation: aiag-logo-halo-bloom 3.2s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+  pointer-events: none;
 }
 
 /* 8. Checkmark draw-in для success states */
@@ -511,8 +541,13 @@
   pointer-events: none;
 }
 
+/* Duration/delay are parametrised so callers never need an inline
+ * `animation:` shorthand (issue #23 — inline animations cannot be switched off
+ * from a reduced-motion CSS rule). Callers set --fade-dur / --fade-delay;
+ * omitted = 600ms / 0ms. */
 .aiag-fade-up {
-  animation: aiag-fade-up 600ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation: aiag-fade-up var(--fade-dur, 600ms) cubic-bezier(0.23, 1, 0.32, 1)
+    var(--fade-delay, 0ms) both;
 }
 
 .aiag-float-card {
@@ -753,9 +788,15 @@
   animation: aiag-drawer-slide-in 300ms cubic-bezier(.23,1,.32,1) forwards;
 }
 
-/* Sparkline draw-in animation */
+/* Sparkline draw-in animation. `.aiag-sparkline-path` is the carrier class on
+ * the stroke path — Sparkline.tsx sets only stroke-dasharray/-dashoffset
+ * inline (computed from the path length); the animation itself lives here so
+ * reduced-motion can switch it off (issue #23). */
 @keyframes aiag-sparkline-draw {
   to { stroke-dashoffset: 0; }
+}
+.aiag-sparkline-path {
+  animation: aiag-sparkline-draw 1.4s cubic-bezier(.23, 1, .32, 1) forwards;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -777,6 +818,7 @@
     scroll-behavior: auto !important;
   }
 
+  .aiag-fade-up,
   .aiag-hero-lattice,
   .aiag-hero-canvas,
   .aiag-cursor,
@@ -784,8 +826,7 @@
   .aiag-logo-track,
   .aiag-float-card,
   .aiag-aurora,
-  .aiag-glow-pulse,
-  .aiag-skeleton,
+  .aiag-skeleton::after,
   .aiag-pulse-dot::after,
   .aiag-featured-ring::before,
   ::view-transition-old(root),
@@ -803,11 +844,16 @@
 
   .aiag-logo-dot {
     animation: none !important;
-    opacity: 0.7 !important;
+    transform: none !important;
+  }
+  /* Halo is pure decoration — hide it rather than freeze a stray amber blob. */
+  .aiag-logo-halo {
+    animation: none !important;
+    opacity: 0 !important;
   }
 
   .aiag-check-svg path,
-  .aiag-sparkline path {
+  .aiag-sparkline-path {
     animation: none !important;
     stroke-dashoffset: 0 !important;
   }
