@@ -169,12 +169,11 @@ export function CodeTabsDemo() {
             style={{ fontSize: 11, color: 'var(--ink-muted)', letterSpacing: '0.12em' }}
           >
             <span
-              className="inline-block rounded-full"
+              className="aiag-pulse inline-block rounded-full"
               style={{
                 width: 6,
                 height: 6,
                 background: 'var(--success, #22c55e)',
-                animation: 'aiag-pulse 2s ease-in-out infinite',
               }}
             />
             Stream · openai/gpt-4o-mini

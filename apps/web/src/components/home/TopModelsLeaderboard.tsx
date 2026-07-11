@@ -114,12 +114,11 @@ export async function TopModelsLeaderboard() {
           style={{ color: 'var(--ink-muted)' }}
         >
           <span
-            className="inline-block rounded-full"
+            className="aiag-pulse inline-block rounded-full"
             style={{
               width: 6,
               height: 6,
               background: 'var(--success, #22c55e)',
-              animation: 'aiag-pulse 2s ease-in-out infinite',
             }}
           />
           Live · обновляется каждый час

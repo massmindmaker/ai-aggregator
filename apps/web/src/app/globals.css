@@ -188,6 +188,13 @@
     transform: scale(1.35);
   }
 }
+/* Class form of the keyframe above — lets reduced-motion target it directly
+ * instead of relying only on the universal animation-duration override
+ * (issue #23: inline `style={{ animation: 'aiag-pulse …' }}` usages ported
+ * to this class so they are explicitly disableable). */
+.aiag-pulse {
+  animation: aiag-pulse 2s ease-in-out infinite;
+}
 @keyframes aiag-cursor-blink {
   0%,
   50% {
@@ -253,10 +260,18 @@
 /* === New Wave: Supabase-style animation primitives === */
 
 /* 1. Glow border on hover (карточки моделей/контестов) */
-@keyframes aiag-glow-pulse {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.15); }
-  50%      { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.45), 0 0 24px rgba(245, 158, 11, 0.12); }
-}
+/* NOTE (issue #23): `@keyframes aiag-glow-pulse` was removed here — it was
+ * declared with zero consumers and had no surface to claim: an always-on
+ * breathing amber border duplicates `.aiag-glow-hover` (hover emphasis) and
+ * `.aiag-featured-ring` (featured emphasis), and DESIGN.md's accent discipline
+ * forbids stacking two amber effects on one card. The featured pricing tier —
+ * the only candidate surface — now uses `.aiag-featured-ring`, its documented
+ * purpose. Also removed as dead: `.aiag-grid-pulse`/`@keyframes
+ * aiag-grid-line-pulse` (it animated `background-image`, not transform/opacity
+ * — off-contract anyway), `.aiag-count-up` + `@property --aiag-num`
+ * (superseded by components/ui/CountUp.tsx), `.aiag-status-chip`,
+ * `.aiag-grid-bg-masked` and `.aiag-grid-bg-glow-sm` (unused variants; the
+ * `-glow` / `-glow-alt` variants are live). */
 
 .aiag-glow-hover {
   transition: box-shadow 240ms cubic-bezier(.23,1,.32,1),
@@ -351,21 +366,6 @@
   z-index: -1;
 }
 
-/* 6. Count-up для статистики (используется с inline style --num) */
-@property --aiag-num {
-  syntax: '<integer>';
-  inherits: false;
-  initial-value: 0;
-}
-
-.aiag-count-up {
-  counter-reset: aiag-n var(--aiag-num);
-  transition: --aiag-num 1.2s cubic-bezier(.23,1,.32,1);
-}
-.aiag-count-up::after {
-  content: counter(aiag-n);
-}
-
 /* 7. Pulse-dot для live indicators (streaming, online status) */
 @keyframes aiag-pulse-dot {
   0%, 100% { transform: scale(1); opacity: 1; }
@@ -402,20 +402,6 @@
 .aiag-row-hover:hover {
   background-color: rgba(245, 158, 11, 0.04);
   box-shadow: inset 3px 0 0 var(--accent, #f59e0b);
-}
-
-/* Compact "status" chip с цветным borderом для tables */
-.aiag-status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: 9999px;
-  border: 1px solid currentColor;
-  background: color-mix(in srgb, currentColor 8%, transparent);
-  white-space: nowrap;
 }
 
 /* === Chain-glow для логотипа AIAG ===
@@ -650,16 +636,6 @@
   background-position: -1px -1px;
 }
 
-/* Radial-masked grid for hero-section overlay (fades at edges) */
-.aiag-grid-bg-masked {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 24px 24px;
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
-          mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
-}
-
 /* === Glowing grid background variant === */
 .aiag-grid-bg-glow {
   position: relative;
@@ -721,43 +697,6 @@
   will-change: transform, opacity;
 }
 
-/* Tighter variant (16px grid) for bento/feature cards */
-.aiag-grid-bg-glow-sm {
-  position: relative;
-  isolation: isolate;
-  background-image:
-    linear-gradient(rgba(245, 158, 11, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(245, 158, 11, 0.04) 1px, transparent 1px);
-  background-size: 16px 16px;
-}
-.aiag-grid-bg-glow-sm::before {
-  content: '';
-  position: absolute;
-  top: -25%; left: -25%; right: -25%; bottom: -25%;
-  background:
-    radial-gradient(circle at 50% 50%,
-      rgba(245, 158, 11, 0.14) 0%,
-      rgba(245, 158, 11, 0.06) 15%,
-      transparent 38%);
-  filter: blur(30px);
-  pointer-events: none;
-  animation: aiag-grid-spot-drift 24s ease-in-out infinite reverse;
-  z-index: -1;
-}
-
-/* Optional subtle pulse on the lines themselves */
-.aiag-grid-pulse {
-  animation: aiag-grid-line-pulse 6s ease-in-out infinite;
-}
-@keyframes aiag-grid-line-pulse {
-  0%, 100% { background-image:
-    linear-gradient(rgba(245, 158, 11, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(245, 158, 11, 0.04) 1px, transparent 1px); }
-  50%      { background-image:
-    linear-gradient(rgba(245, 158, 11, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(245, 158, 11, 0.08) 1px, transparent 1px); }
-}
-
 /* === Cell-spot — wrapper class для точечного использования cellular animation === */
 .aiag-cells-spot {
   position: relative;
@@ -770,45 +709,6 @@
 .aiag-cells-spot.no-mask {
   -webkit-mask-image: none;
           mask-image: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-  .aiag-hero-lattice,
-  .aiag-cursor,
-  .aiag-logo-track,
-  .aiag-float-card,
-  .aiag-aurora,
-  .aiag-skeleton,
-  .aiag-pulse-dot::after,
-  .aiag-featured-ring::before {
-    animation: none !important;
-  }
-  .aiag-logo-dot {
-    animation: none !important;
-    opacity: 0.7 !important;
-  }
-  .aiag-row-hover { transition: none !important; }
-  .aiag-stagger > * {
-    opacity: 1 !important;
-    animation: none !important;
-  }
-  .aiag-grid-bg-glow::before,
-  .aiag-grid-bg-glow-alt::before,
-  .aiag-grid-bg-glow-sm::before {
-    animation: none !important;
-    opacity: 0.5 !important;
-  }
-  .aiag-grid-pulse {
-    animation: none !important;
-  }
 }
 
 /* === View Transitions API — smooth cross-fade on page swaps === */
@@ -836,13 +736,6 @@
   from { opacity: 0; transform: translateY(8px); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation: none !important;
-  }
-}
-
 /* === Mobile drawer animation === */
 @keyframes aiag-drawer-slide-in {
   from { transform: translateX(-100%); }
@@ -860,21 +753,75 @@
   animation: aiag-drawer-slide-in 300ms cubic-bezier(.23,1,.32,1) forwards;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .aiag-drawer-overlay,
-  .aiag-drawer-panel-enter {
-    animation: none !important;
-  }
-}
-
 /* Sparkline draw-in animation */
 @keyframes aiag-sparkline-draw {
   to { stroke-dashoffset: 0; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * prefers-reduced-motion — ONE consolidated switch for the whole aiag-*
+ * motion library (issue #23: was split across 4 separate @media blocks and
+ * missed .aiag-hero-canvas + the aiag-pulse keyframe entirely). The universal
+ * `*` rule is a blanket safety net (collapses ANY animation/transition to
+ * ~0 duration); the explicit list below additionally forces `animation: none`
+ * so nothing depends on timing-collapse alone, and pins end-states (opacity/
+ * stroke-dashoffset) where a mid-animation freeze would look broken.
+ * ═══════════════════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .aiag-hero-lattice,
+  .aiag-hero-canvas,
+  .aiag-cursor,
+  .aiag-pulse,
+  .aiag-logo-track,
+  .aiag-float-card,
+  .aiag-aurora,
+  .aiag-glow-pulse,
+  .aiag-skeleton,
+  .aiag-pulse-dot::after,
+  .aiag-featured-ring::before,
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  .aiag-drawer-overlay,
+  .aiag-drawer-panel-enter {
+    animation: none !important;
+  }
+
+  /* Hero canvas fades in to a resting opacity (0.55) — reduced motion should
+   * land straight on that end-state, not stay invisible at opacity:0. */
+  .aiag-hero-canvas {
+    opacity: 0.55 !important;
+  }
+
+  .aiag-logo-dot {
+    animation: none !important;
+    opacity: 0.7 !important;
+  }
+
+  .aiag-check-svg path,
   .aiag-sparkline path {
     animation: none !important;
     stroke-dashoffset: 0 !important;
+  }
+
+  .aiag-row-hover { transition: none !important; }
+
+  .aiag-stagger > * {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+
+  .aiag-grid-bg-glow::before,
+  .aiag-grid-bg-glow-alt::before {
+    animation: none !important;
+    opacity: 0.5 !important;
   }
 }

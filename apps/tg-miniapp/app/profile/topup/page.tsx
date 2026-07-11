@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 import { BottomNav } from '@/components/BottomNav';
+import { CheckDraw } from '@/components/Icon';
 import { useAuth } from '@/hooks/useAuth';
 import { haptic } from '@/lib/haptics';
 import { resolveJettonWallet } from '@/lib/jetton';
@@ -420,9 +421,10 @@ export default function TopupPage() {
               </div>
             </>
           ) : status === 'confirmed' ? (
-            <div className="tma-success">
-              ✓ Зачислено {init ? fmtCredits(init.amount_credits) : '0,00'} кр на ваш баланс.
-              <div className="tma-cta" style={{ marginTop: 12 }}>
+            <div className="tma-success" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <CheckDraw size={16} />
+              Зачислено {init ? fmtCredits(init.amount_credits) : '0,00'} кр на ваш баланс.
+              <div className="tma-cta" style={{ marginTop: 12, width: '100%' }}>
                 <Link href="/wallet" className="tma-btn tma-btn--primary">
                   К кошельку
                 </Link>

@@ -65,6 +65,10 @@ code {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  /* Positioning context for .aiag-aurora ambient glow (issue #23) — isolate
+     keeps its z-index:0 scoped here instead of leaking into page stacking. */
+  position: relative;
+  isolation: isolate;
 }
 
 .tma-header {
@@ -1513,6 +1517,84 @@ code {
   z-index: -1;
 }
 
+/* Aurora-blur drifting accent spot (DESIGN.md aiag-aurora) — ambient amber
+ * glow behind the hub. Ported verbatim from apps/web/globals.css so both
+ * surfaces share one definition (issue #23: was missing entirely in TMA). */
+@keyframes aiag-aurora-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.4;
+  }
+  33% {
+    transform: translate3d(40px, -30px, 0) scale(1.15);
+    opacity: 0.55;
+  }
+  66% {
+    transform: translate3d(-30px, 20px, 0) scale(0.95);
+    opacity: 0.35;
+  }
+}
+
+.aiag-aurora {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at center,
+    rgba(245, 158, 11, 0.18) 0%,
+    rgba(245, 158, 11, 0.05) 40%,
+    transparent 70%
+  );
+  filter: blur(60px);
+  pointer-events: none;
+  animation: aiag-aurora-drift 18s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* Chain-glow for the AIAG logo mark (DESIGN.md aiag-logo-dot) — light runs
+ * across the 4 nodes in sequence via per-circle animation-delay. Ported
+ * verbatim from apps/web/globals.css; consumer = BrandMark.tsx. */
+@keyframes aiag-logo-dot-glow {
+  0%,
+  70%,
+  100% {
+    filter: brightness(1);
+    transform: scale(1);
+  }
+  15%,
+  35% {
+    filter: brightness(1.4) drop-shadow(0 0 6px rgba(245, 158, 11, 0.95))
+      drop-shadow(0 0 16px rgba(245, 158, 11, 0.55))
+      drop-shadow(0 0 28px rgba(245, 158, 11, 0.25));
+    transform: scale(1.12);
+  }
+}
+.aiag-logo-dot {
+  animation: aiag-logo-dot-glow 3.2s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+/* Checkmark draw-in for success states (DESIGN.md aiag-check-draw) — agent
+ * created, payment confirmed. Consumer = CheckDraw in Icon.tsx. */
+@keyframes aiag-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.aiag-check-svg path {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 50;
+  stroke-dashoffset: 50;
+  animation: aiag-check-draw 600ms ease-out forwards;
+}
+
 /* === Page transition (app/template.tsx) ===
  * Re-mounted on every navigation → this enter keyframe replays per route.
  * Soft fade + 10px lift, 320ms, canonical ease. Universal fallback; where
@@ -1540,12 +1622,16 @@ code {
   animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* Full reduced-motion off-switch for the aiag-* library (DESIGN.md rule). */
+/* Full reduced-motion off-switch for the aiag-* library (DESIGN.md rule).
+ * One consolidated block for the whole library (issue #23) — covers all 8
+ * DESIGN.md animations, including the 3 added above (aurora/logo-dot/
+ * check-draw). */
 @media (prefers-reduced-motion: reduce) {
   .aiag-fade-up,
   .aiag-skeleton,
   .aiag-pulse-dot::after,
   .aiag-featured-ring::before,
+  .aiag-aurora,
   .tma-page-enter {
     animation: none !important;
   }
@@ -1562,6 +1648,14 @@ code {
   }
   .aiag-glow-hover:hover {
     transform: none !important;
+  }
+  .aiag-logo-dot {
+    animation: none !important;
+    opacity: 0.7 !important;
+  }
+  .aiag-check-svg path {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
   }
   /* Press-spring (табы/кнопки) — без transform в reduce. */
   .tma-nav-item:active,

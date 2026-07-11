@@ -346,12 +346,11 @@ export default function HomePage() {
               }}
             >
               <span
-                className="inline-block rounded-full mr-2"
+                className="aiag-pulse inline-block rounded-full mr-2"
                 style={{
                   width: 6,
                   height: 6,
                   background: 'var(--accent)',
-                  animation: 'aiag-pulse 2s ease-in-out infinite',
                 }}
               />
               400+ моделей · оплата в ₽ · без VPN
@@ -505,11 +504,8 @@ export default function HomePage() {
           </p>
           <div className="relative">
             <div
-              className="flex gap-3 whitespace-nowrap"
-              style={{
-                width: 'max-content',
-                animation: 'aiag-scroll-left 50s linear infinite',
-              }}
+              className="aiag-logo-track whitespace-nowrap"
+              style={{ gap: 12 }}
             >
               {[...providers, ...providers].map((name, i) => (
                 <div
@@ -1048,7 +1044,7 @@ export default function HomePage() {
             {pricingTiers.map((p) => (
               <div
                 key={p.tier}
-                className="relative transition-all hover:-translate-y-0.5"
+                className={`relative transition-all hover:-translate-y-0.5${p.featured ? ' aiag-featured-ring' : ''}`}
                 style={{
                   background: p.featured
                     ? 'linear-gradient(180deg, rgba(245,158,11,0.08) 0%, var(--bg-surface) 100%)'

@@ -219,6 +219,12 @@ export default function DashboardPage() {
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
+        {/* Ambient amber glow behind the hub (DESIGN.md aiag-aurora, issue #23).
+            z-index:-1 (not 0): siblings below are plain in-flow .tma-card
+            sections, which paint before z-index:0 positioned content per the
+            CSS stacking spec — only a negative z-index reliably sits behind
+            them. .tma-shell's `isolation: isolate` bounds this to the shell. */}
+        <div className="aiag-aurora" aria-hidden style={{ top: -40, left: '15%', zIndex: -1 }} />
         {loading && (
           <>
             <section className="tma-card tma-hub-balance" aria-hidden>
