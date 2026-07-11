@@ -10,6 +10,13 @@ export const dynamic = 'force-dynamic';
 
 const sql = postgres(process.env.DATABASE_URL ?? '', { prepare: false });
 
+/**
+ * How long an unpaid 'pending' charge blocks a new purchase (HIGH-1). A charge older than
+ * this can no longer be paid — the TON Connect invoice it belongs to has expired — so it is
+ * swept to 'expired' and stops blocking. Generous enough to cover a slow wallet confirm.
+ */
+const PENDING_TTL_MIN = 15;
+
 interface Body {
   tier: string;
   recipient_address: string;
@@ -51,27 +58,55 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'recipient_address_required' }, { status: 400 });
   }
 
-  // A pending charge already in flight for this user → let it resolve first (mirrors
-  // the transfer route's single-pending-charge rule; avoids double invoices/mints).
-  const pend = (await sql`
-    SELECT id::text FROM tg_membership_charges
-    WHERE tg_user_id = ${tgUserId}::bigint AND status = 'pending' LIMIT 1
-  `) as unknown as Array<{ id: string }>;
-  if (pend.length > 0) {
-    return NextResponse.json({ error: 'purchase_pending' }, { status: 409 });
-  }
+  // HIGH-1 (issue #29 review): a pending charge used to be a PERMANENT lock. If the user
+  // rejected the wallet prompt or closed Telegram, no callback ever arrived, the row stayed
+  // 'pending' forever, and EVERY future purchase 409'd — the screen became a dead end for
+  // that user. Sweep pendings older than the TTL to 'expired': they can no longer be settled
+  // anyway (the TON Connect invoice's validUntil has long passed).
+  //
+  // CRITICAL GUARD — never expire a charge that carries PAYMENT EVIDENCE (tx_hash/item_address
+  // written by the webhook the moment a mint callback arrives). Such a charge is paid but not
+  // yet finalized (e.g. the on-chain re-check hit a transient RPC failure and 503'd for a
+  // retry). Expiring it would re-open the purchase screen and let the user pay a SECOND time
+  // for a membership they already bought. A paid-but-unsettled charge keeps blocking (409) —
+  // which is correct: they must not be charged twice.
+  await sql`
+    UPDATE tg_membership_charges
+    SET status = 'expired'
+    WHERE tg_user_id = ${tgUserId}::bigint
+      AND status = 'pending'
+      AND created_at < NOW() - ${`${PENDING_TTL_MIN} minutes`}::interval
+      AND tx_hash IS NULL
+      AND item_address IS NULL
+  `;
 
   const priceTon = MEMBERSHIP_TIERS[tier].priceTon;
   const amountNanoTon = tonToNano(priceTon);
 
-  const ins = (await sql`
-    INSERT INTO tg_membership_charges (tg_user_id, tier, amount_nano_ton, status, created_at)
-    VALUES (${tgUserId}::bigint, ${tier}, ${amountNanoTon.toString()}::bigint, 'pending', NOW())
-    RETURNING id::text
-  `) as unknown as Array<{ id: string }>;
-  const chargeId = ins[0]?.id;
-  if (!chargeId) {
-    return NextResponse.json({ error: 'insert_failed' }, { status: 500 });
+  // MEDIUM-2 (TOCTOU): no SELECT-then-INSERT race. The partial UNIQUE
+  // uq_membership_charges_one_pending (tg_user_id) WHERE status='pending' (migration 0048)
+  // is the invariant; a still-live pending charge (or a concurrent second call) makes this
+  // INSERT raise 23505, which we map to a clean 409.
+  let chargeId: string;
+  try {
+    const ins = (await sql`
+      INSERT INTO tg_membership_charges (
+        tg_user_id, tier, amount_nano_ton, status, recipient_address, created_at
+      )
+      VALUES (
+        ${tgUserId}::bigint, ${tier}, ${amountNanoTon.toString()}::bigint, 'pending',
+        ${recipient_address}, NOW()
+      )
+      RETURNING id::text
+    `) as unknown as Array<{ id: string }>;
+    const id = ins[0]?.id;
+    if (!id) return NextResponse.json({ error: 'insert_failed' }, { status: 500 });
+    chargeId = id;
+  } catch (e) {
+    if ((e as { code?: string }).code === '23505') {
+      return NextResponse.json({ error: 'purchase_pending' }, { status: 409 });
+    }
+    throw e;
   }
 
   // ONE env var names the membership collection — the SAME one the ownership check reads
@@ -88,11 +123,15 @@ export async function POST(req: NextRequest) {
   }
 
   const publicBase = process.env.PUBLIC_BASE_URL ?? 'https://app.ai-aggregator.ru';
-  // Same shared secret as the transfer webhook (issue #29 contract: "под тем же
-  // shared-токеном, что transfer-вебхук").
+  // Same shared secret as the transfer webhook (issue #29 contract). It rides in the query
+  // string because `generateInvoice` only accepts a `callbackUrl` — the Startonus API has
+  // NO header option (packages/shared/src/startonus.ts:49-50), so we cannot move it to a
+  // header on the outbound side. The webhook therefore ACCEPTS the token in a header (for
+  // an nginx-injected / future path) and falls back to the query param, and — because a
+  // query token can leak into access logs — the grant additionally requires an ON-CHAIN
+  // ownership re-check. The token alone does not authorize a grant (MEDIUM-1).
   const webhookToken = process.env.TRANSFER_WEBHOOK_SECRET;
   const callbackUrl = `${publicBase}/tg/api/tma/membership/webhook${webhookToken ? `?token=${encodeURIComponent(webhookToken)}` : ''}`;
-  const tierMeta = MEMBERSHIP_TIERS[tier];
 
   try {
     const invoice = await generateInvoice({
@@ -101,12 +140,11 @@ export async function POST(req: NextRequest) {
       secret,
       owner: { tgId: Number(tgUserId), wallet: recipient_address },
       nftPrice: amountNanoTon,
-      nftData: {
-        name: `AIAG Membership — ${tierMeta.label}`,
-        description: `Членство уровня ${tierMeta.label}: создание агентов с нуля, лимит ${tierMeta.agentLimit} агент(ов).`,
-        image: `${publicBase}/tg/og/membership/${tier}.png`,
-        attributes: [{ type: 'tier', value: tier }],
-      },
+      // LOW-2: no `nftData` — the card's name/description/image come from the Startonus
+      // mint-set template (`templateId`), configured once in the minter panel. The previous
+      // code pointed `image` at /tg/og/membership/<tier>.png, a route that does NOT exist:
+      // that 404 would have been frozen into the NFT's on-chain metadata forever. Tier is
+      // recorded in OUR DB (tg_memberships.tier), which is the source of truth anyway.
       userData: chargeId,
       callbackUrl,
     });
