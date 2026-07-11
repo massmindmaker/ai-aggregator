@@ -1,24 +1,52 @@
 // On-chain membership-NFT ownership check (TonCenter v3).
 //
 // Used by the membership sync route to verify that a user's verified TON wallet owns an
-// NFT item in the membership collection. Disabled (returns false) until
-// MEMBERSHIP_NFT_COLLECTION_ADDRESS is configured — so the gate degrades to the founder
-// seed + manual grants while no collection exists. Never throws: any error / timeout →
-// false (fail-closed for the gate).
+// NFT item in the membership collection.
+//
+// ONE env var names the membership collection: MEMBERSHIP_NFT_COLLECTION_ADDRESS. The
+// purchase/mint path (app/api/tma/membership/purchase) MUST read the SAME var — minting
+// into one collection while checking ownership against another means a user pays and the
+// system never sees their membership (issue #29 review). Never introduce a second address
+// var for this collection.
+//
+// Never throws. Returns a DISCRIMINATED outcome instead of a bare boolean: an unconfigured
+// collection and an RPC failure are NOT the same thing as "this wallet owns nothing", and
+// callers must be able to tell them apart (a silent `false` reads as a definitive "not a
+// member" and hides a misconfiguration).
 //
 // Env style mirrors jetton.ts: TONCENTER_API_URL (default https://toncenter.com/api/v3)
 // + optional X-API-Key from TONCENTER_API_KEY.
 
 const TONCENTER_BASE = process.env.TONCENTER_API_URL ?? 'https://toncenter.com/api/v3';
 
+export type OwnershipCheck =
+  /** MEMBERSHIP_NFT_COLLECTION_ADDRESS is not set — the on-chain path is OFF. Not a verdict. */
+  | { result: 'unconfigured' }
+  /** No wallet to check (caller has no verified TON wallet). Not a verdict about the chain. */
+  | { result: 'no_wallet' }
+  /** RPC unreachable / non-2xx / timeout. Not a verdict — the chain was never answered. */
+  | { result: 'error' }
+  /** The chain answered: the wallet holds at least one item in the collection. */
+  | { result: 'owned' }
+  /** The chain answered: the wallet holds no item in the collection. */
+  | { result: 'not_owned' };
+
+/** The single source of truth for the membership collection address (see note above). */
+export function membershipCollectionAddress(): string | null {
+  const v = process.env.MEMBERSHIP_NFT_COLLECTION_ADDRESS?.trim();
+  return v ? v : null;
+}
+
 /**
- * True if `walletAddress` owns at least one NFT item in the membership collection.
- * Returns false (does NOT throw) when the collection is unconfigured or on any RPC error.
+ * Does `walletAddress` own an NFT item in the membership collection?
+ *
+ * Only 'owned' authorizes a grant. Every other outcome is a REASON, not a denial the
+ * caller may present as "you are not a member".
  */
-export async function ownsMembershipNft(walletAddress: string): Promise<boolean> {
-  const collection = process.env.MEMBERSHIP_NFT_COLLECTION_ADDRESS?.trim();
-  if (!collection) return false; // on-chain path disabled until the collection exists
-  if (!walletAddress?.trim()) return false;
+export async function checkMembershipNft(walletAddress: string): Promise<OwnershipCheck> {
+  const collection = membershipCollectionAddress();
+  if (!collection) return { result: 'unconfigured' };
+  if (!walletAddress?.trim()) return { result: 'no_wallet' };
 
   const base = TONCENTER_BASE.replace(/\/$/, '');
   const url =
@@ -35,16 +63,20 @@ export async function ownsMembershipNft(walletAddress: string): Promise<boolean>
     if (apiKey) headers['X-API-Key'] = apiKey;
 
     const res = await fetch(url, { method: 'GET', headers, cache: 'no-store', signal: ctrl.signal });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      console.error('[nft-ownership] TonCenter non-2xx:', res.status);
+      return { result: 'error' };
+    }
     const j = (await res.json()) as { nft_items?: unknown[]; items?: unknown[] };
     const items = Array.isArray(j.nft_items)
       ? j.nft_items
       : Array.isArray(j.items)
         ? j.items
         : [];
-    return items.length > 0;
-  } catch {
-    return false;
+    return items.length > 0 ? { result: 'owned' } : { result: 'not_owned' };
+  } catch (e) {
+    console.error('[nft-ownership] TonCenter check failed:', e);
+    return { result: 'error' };
   } finally {
     clearTimeout(timer);
   }

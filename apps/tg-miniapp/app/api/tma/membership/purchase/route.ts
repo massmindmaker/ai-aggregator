@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import { generateInvoice, tonToNano } from '@aiag/shared';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { MEMBERSHIP_TIERS, isMembershipTier } from '@/lib/membership';
+import { membershipCollectionAddress } from '@/lib/nft-ownership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -73,8 +74,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'insert_failed' }, { status: 500 });
   }
 
+  // ONE env var names the membership collection — the SAME one the ownership check reads
+  // (src/lib/nft-ownership.ts). Minting into collection A while checking ownership against
+  // collection B would let a user pay and never be seen as a member (issue #29 review).
+  // STARTONUS_MEMBERSHIP_MINT_TEMPLATE_ID is a DIFFERENT entity: a Startonus mint-set
+  // template id (an integer), not an address — mirrors STARTONUS_AGENT_MINT_TEMPLATE_ID.
   const secret = process.env.STARTONUS_SECRET;
-  const collectionAddress = process.env.STARTONUS_MEMBERSHIP_COLLECTION_ADDRESS;
+  const collectionAddress = membershipCollectionAddress();
   const mintTemplateId = process.env.STARTONUS_MEMBERSHIP_MINT_TEMPLATE_ID;
   if (!secret || !collectionAddress || !mintTemplateId) {
     await sql`UPDATE tg_membership_charges SET status='failed' WHERE id = ${chargeId}::uuid`;
