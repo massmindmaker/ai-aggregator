@@ -2,13 +2,19 @@
 export * from './revshare';
 export * from './tax';
 
-// S3 upload helper
-export * from './s3';
+// S3 upload helper moved off the main barrel (issue #19) — Node-only
+// (@aws-sdk/client-s3), no bare-barrel consumer. Import from
+// '@aiag/shared/server' instead.
 
 // Startonus NFT minter API client (Phase 15 — TG Mini-App)
 export * from './startonus';
 
-// SSRF-hardened outbound fetch (synthesis D-7 / R1-7)
+// SSRF-hardened outbound fetch (synthesis D-7 / R1-7).
+// Stays exported here (not moved to /server) because packages/api-gateway
+// imports it from the bare '@aiag/shared' specifier and must not be edited
+// (issue #19). See packages/shared/src/server.ts for the full rationale.
+// No 'use client' component may import the bare barrel — use
+// '@aiag/shared/client' for browser-safe helpers.
 export * from './safe-fetch';
 
 // Constants
