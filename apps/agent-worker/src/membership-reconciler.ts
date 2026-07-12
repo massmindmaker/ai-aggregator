@@ -18,28 +18,45 @@ import { sql } from './db.js';
 // forged callback cannot mint a membership: nothing is granted until an item is actually
 // found ON CHAIN, in OUR collection, owned by the charge's ton-proof VERIFIED wallet.
 //
-// 🔴 TIER SAFETY (issue #29 P0-1). The chain does NOT tell us which charge an item belongs
-// to: there is ONE mint template for all three tiers, so a minted item carries no tier and
-// no charge id. We therefore cannot "look up" the tier — we can only make over-granting
-// IMPOSSIBLE. Three rules do that together:
+// 🔴 TIER SAFETY (issue #29, P0-1 — REWORKED round 6). The earlier revision matched items to
+// charges by "lowest-tier-first" heuristic because ONE mint template served all three tiers,
+// so a minted item carried no tier of its own. That is fixed at the source now: the purchase
+// route (apps/tg-miniapp/app/api/tma/membership/purchase/route.ts) mints through a SEPARATE
+// Startonus template PER TIER (env STARTONUS_MINT_TEMPLATE_ID_CREATOR/_BUILDER/_STUDIO), and
+// each template bakes a `Tier` attribute into the item's own off-chain metadata. The tier is
+// therefore read from the CHAIN (the item's `metadata.attributes`), never from
+// `tg_membership_charges.tier` — that DB column is only the buyer's REQUESTED tier and is
+// treated as untrusted input, exactly like the request body that seeded it.
+//
+// Matching an item to a specific charge still needs care (the chain has no notion of "this
+// item belongs to charge X"), so three rules apply together:
 //   (1) a verified wallet maps to exactly ONE tg account (partial UNIQUE in 0048); if the DB
 //       still shows several owners for a wallet, we refuse to grant and shout;
 //   (2) candidate charges are restricted to that single owner — an item can never satisfy a
 //       charge belonging to a different account;
-//   (3) among that owner's candidate charges we grant the LOWEST tier (`byTierAsc`) — a
-//       fail-safe that can only ever UNDER-deliver, never over-deliver.
-// Opus's attack (account A opens `studio` and never pays; account B pays 2 TON for `creator`
-// with the SAME wallet; A's studio charge swallows the item) dies at (1) and again at (2).
-// PROPER LONG-TERM FIX: one mint template PER TIER, so the tier is readable from the item's
-// on-chain metadata. That needs founder config in the Startonus panel + a live mint to verify
-// the metadata shape — both out of bounds for this issue. Until then, rules (1)-(3) hold.
-
+//   (3) FAIL-CLOSED on tier: for each candidate charge, we grant only against an item whose
+//       OWN on-chain tier equals the charge's requested tier (`resolveGrantItem`). If the
+//       webhook already hinted a specific item (`charge.item_address`) and THAT item's tier
+//       attribute cannot be read, we do NOT fall back to the DB tier — the charge is flagged
+//       `needs_review` with a loud log instead. "Take the tier from the charge like before"
+//       is exactly the bug being closed here; it is never an acceptable fallback.
 const TICK_MS = 30_000; // 30s — a user is waiting on the purchase screen (topups use 2 min)
 const ITEMS_PAGE_LIMIT = 100;
 const TONAPI_TIMEOUT_MS = 8_000; // never let a hung tonapi call wedge the tick
-const FRESH_LIMIT = 200; // fresh pendings — the path a paying user is actually waiting on
+const FRESH_LIMIT = 200; // DB rows considered per fresh-pool query per tick
 const STUCK_LIMIT = 25; // stuck pool — small, and only swept every Nth tick
 const STUCK_EVERY_N_TICKS = 20; // ≈ every 10 min at a 30s tick
+
+// HIGH-3 (issue #29 round 6): a `pending` charge is FREE to create (rate-limited, but no
+// payment required) and costs one tonapi request per DISTINCT wallet, per tick, for up to
+// 7 days (EXPIRE_DAYS) before it ages out. A sybil could open hundreds of these to burn the
+// tick's tonapi budget and delay a PAYING user's grant. The fix: split the fresh pool into
+// evidence-bearing charges (tx_hash/item_address already seen — a real payment signal) and
+// bare charges (free, sybil-prone), and spend the tick's tonapi-request budget on the
+// evidence pool FIRST, unconditionally, before a single request goes to a bare charge. Bare
+// charges only get whatever budget is left over.
+const REQUEST_BUDGET_NO_KEY = 20; // public tonapi ≈1 rps; margin under the 30s-tick ceiling
+const REQUEST_BUDGET_WITH_KEY = 100; // keyed tonapi tolerates far more; still capped per tick
 
 // Ageing out stale 'pending' rows. A charge must always reach a terminal state so the user is
 // never permanently blocked from re-buying (DoD 6), but WHICH terminal state depends on
@@ -54,13 +71,44 @@ interface PendingCharge {
   tg_user_id: string;
   tier: string;
   recipient_address: string;
+  /** The webhook's (unauthoritative) hint of which on-chain item this charge minted. */
+  item_address: string | null;
 }
 
-/** tonapi.io NFT item (docs.tonconsole.com/tonapi/rest-api/nft). */
+/** tonapi.io NFT item (docs.tonconsole.com/tonapi/rest-api/nft). `metadata` carries the
+ *  parsed off-chain TEP-64 content (name/description/image/attributes) — tonapi resolves it
+ *  automatically on this endpoint, no extra query param needed. This is where the mint-time
+ *  `Tier` attribute lives (P0-1 fix, issue #29 round 6). */
 interface TonapiNftItem {
   address?: string;
   owner?: { address?: string };
   collection?: { address?: string };
+  metadata?: { attributes?: Array<{ trait_type?: string; value?: unknown }> };
+}
+
+type Tier = 'creator' | 'builder' | 'studio';
+const VALID_TIERS: readonly Tier[] = ['creator', 'builder', 'studio'];
+
+/**
+ * P0-1 FIX (issue #29 round 6): the tier is read from the ITEM'S OWN on-chain metadata,
+ * never from `tg_membership_charges.tier` (a DB row seeded by the buyer's own request body
+ * — untrustworthy as a grant input). Fail-CLOSED: any metadata shape we don't recognize
+ * returns null, and null NEVER grants (see `resolveGrantItem`).
+ */
+function extractTierFromItem(item: TonapiNftItem): Tier | null {
+  const attrs = item.metadata?.attributes;
+  if (!Array.isArray(attrs)) return null;
+  for (const a of attrs) {
+    const key = String(a?.trait_type ?? '')
+      .trim()
+      .toLowerCase();
+    if (key !== 'tier') continue;
+    const v = String(a?.value ?? '')
+      .trim()
+      .toLowerCase();
+    if ((VALID_TIERS as readonly string[]).includes(v)) return v as Tier;
+  }
+  return null;
 }
 
 /**
@@ -106,10 +154,43 @@ async function fetchOwnedCollectionItems(
   }
 }
 
-/** Tier order. Used to grant the LOWEST candidate tier (fail-safe) and to never downgrade. */
+/** Tier order — used ONLY to never downgrade an existing membership on grant (below). Tier
+ *  MATCHING (which item satisfies which charge) no longer uses rank; see resolveGrantItem. */
 const TIER_RANK: Record<string, number> = { creator: 1, builder: 2, studio: 3 };
-const byTierAsc = (a: PendingCharge, b: PendingCharge): number =>
-  (TIER_RANK[a.tier] ?? 99) - (TIER_RANK[b.tier] ?? 99);
+
+/**
+ * Resolve, for ONE candidate charge, which on-chain item (if any) satisfies it — or that it
+ * must be flagged `needs_review` because the only evidence we have points at an item whose
+ * tier we cannot read (P0-1 fail-closed, issue #29 round 6).
+ *
+ *   1. If the webhook already hinted a specific item (`c.item_address`) and that address is
+ *      one of THIS owner's items with an UNREADABLE tier → 'needs_review'. This is the exact
+ *      fail-closed case: we know precisely which item is this charge's, and we refuse to
+ *      grant off `c.tier` (untrusted DB input) when the chain can't confirm it.
+ *   2. If that hinted address instead resolves to a READABLE tier → grant against it (most
+ *      precise match available).
+ *   3. Otherwise (no hint yet, or the hinted item isn't currently visible) fall back to
+ *      matching by the charge's requested tier against the owner's readable-tier items. Safe
+ *      because at most one charge per user is ever 'pending' at a time (0048's partial
+ *      UNIQUE); the rare multi-charge case (stuck pool) still only grants a tier-EXACT match.
+ */
+function resolveGrantItem(
+  c: PendingCharge,
+  byTier: Map<Tier, string[]>,
+  unknownItems: string[],
+): { addr: string; tier: Tier } | 'needs_review' | null {
+  if (c.item_address) {
+    if (unknownItems.includes(c.item_address)) return 'needs_review';
+    for (const [tier, addrs] of byTier) {
+      if (addrs.includes(c.item_address)) return { addr: c.item_address, tier };
+    }
+    // hinted item not in the current owned-items snapshot (indexing lag, or it was already
+    // claimed by another charge) — fall through to a tier-based match below.
+  }
+  const tier = c.tier as Tier;
+  const addrs = byTier.get(tier) ?? [];
+  return addrs.length > 0 ? { addr: addrs[0]!, tier } : null;
+}
 
 /**
  * The single tg account that has ton-proof VERIFIED this wallet.
@@ -137,19 +218,21 @@ async function soleVerifiedOwner(address: string): Promise<string | null> {
 /**
  * Grant ONE membership against ONE on-chain item, exactly once.
  *
- * The claim table (PK = onchain_key = the item's on-chain address) is the exactly-once guard,
- * exactly like tg_topup_tx_claims for top-ups (lesson of issue #4). Claim + grant + settle
- * happen in ONE transaction: if the claim insert returns 0 rows the item was already used, so
- * we grant nothing and settle nothing here.
+ * `tier` is the CHAIN-derived tier (from `resolveGrantItem`/`extractTierFromItem`), never
+ * `c.tier` — P0-1's whole point is that the grant must never trust the DB row for the tier
+ * it hands out. The claim table (PK = onchain_key = the item's on-chain address) is the
+ * exactly-once guard, exactly like tg_topup_tx_claims for top-ups (lesson of issue #4).
+ * Claim + grant + settle happen in ONE transaction: if the claim insert returns 0 rows the
+ * item was already used, so we grant nothing and settle nothing here.
  */
-async function grantAgainstItem(c: PendingCharge, itemAddress: string): Promise<boolean> {
+async function grantAgainstItem(c: PendingCharge, itemAddress: string, tier: Tier): Promise<boolean> {
   if (!itemAddress) return false;
   let granted = false;
 
   await sql.begin(async (sql) => {
     const claim = (await sql`
       INSERT INTO tg_membership_tx_claims (onchain_key, charge_id, tg_user_id, tier)
-      VALUES (${itemAddress}, ${c.id}::uuid, ${c.tg_user_id}::bigint, ${c.tier})
+      VALUES (${itemAddress}, ${c.id}::uuid, ${c.tg_user_id}::bigint, ${tier})
       ON CONFLICT (onchain_key) DO NOTHING
       RETURNING onchain_key
     `) as unknown as Array<{ onchain_key: string }>;
@@ -158,10 +241,10 @@ async function grantAgainstItem(c: PendingCharge, itemAddress: string): Promise<
     // tg_memberships PK = tg_user_id (one row per user); a higher tier upgrades, never down.
     await sql`
       INSERT INTO tg_memberships (tg_user_id, tier, nft_address, source)
-      VALUES (${c.tg_user_id}::bigint, ${c.tier}, ${itemAddress}, 'nft')
+      VALUES (${c.tg_user_id}::bigint, ${tier}, ${itemAddress}, 'nft')
       ON CONFLICT (tg_user_id) DO UPDATE SET
         tier = CASE
-          WHEN ${TIER_RANK[c.tier] ?? 0} >
+          WHEN ${TIER_RANK[tier] ?? 0} >
                COALESCE(CASE tg_memberships.tier
                  WHEN 'studio'  THEN 3
                  WHEN 'builder' THEN 2
@@ -174,11 +257,14 @@ async function grantAgainstItem(c: PendingCharge, itemAddress: string): Promise<
         source      = 'nft'
     `;
 
-    // SETTLE (terminal). Also recovers a 'needs_review'/'failed' row whose item finally showed
-    // up: the charge settles and its failure_reason clears — the anomaly resolves itself.
+    // SETTLE (terminal). `tier` is overwritten with the chain-confirmed value — the charge
+    // row now records what was ACTUALLY granted, not merely what was requested. Also
+    // recovers a 'needs_review'/'failed' row whose item finally showed up: the charge
+    // settles and its failure_reason clears — the anomaly resolves itself.
     await sql`
       UPDATE tg_membership_charges
-      SET status='settled', item_address = ${itemAddress}, failure_reason = NULL, settled_at = NOW()
+      SET status='settled', item_address = ${itemAddress}, tier = ${tier},
+          failure_reason = NULL, settled_at = NOW()
       WHERE id = ${c.id}::uuid AND status <> 'settled'
     `;
     granted = true;
@@ -190,10 +276,16 @@ async function grantAgainstItem(c: PendingCharge, itemAddress: string): Promise<
 /**
  * Reconcile ONE pool of charges against the chain.
  *
- * Shared by the fresh-pending pass and the (rare) stuck pass so both get the identical safety
- * rules. Groups by wallet → one tonapi call per wallet, not per charge.
+ * Shared by every pass so all get the identical safety rules. Groups by wallet → one tonapi
+ * call per wallet, not per charge. `walletBudget` caps how many DISTINCT wallets this call
+ * may spend a tonapi request on (HIGH-3) — the rest are left for the next tick. Returns how
+ * many requests were actually spent, so the caller can deduct it from the tick's budget.
  */
-async function reconcilePool(pool: PendingCharge[], collection: string): Promise<void> {
+async function reconcilePool(
+  pool: PendingCharge[],
+  collection: string,
+  walletBudget: number,
+): Promise<number> {
   const byRecipient = new Map<string, PendingCharge[]>();
   for (const c of pool) {
     const list = byRecipient.get(c.recipient_address) ?? [];
@@ -201,7 +293,10 @@ async function reconcilePool(pool: PendingCharge[], collection: string): Promise
     byRecipient.set(c.recipient_address, list);
   }
 
+  let requestsUsed = 0;
   for (const [recipient, charges] of byRecipient) {
+    if (requestsUsed >= walletBudget) break; // HIGH-3: budget exhausted — retry next tick
+
     // P0-1 rule (1): the wallet must map to exactly one tg account.
     const owner = await soleVerifiedOwner(recipient);
     if (!owner) continue;
@@ -210,6 +305,7 @@ async function reconcilePool(pool: PendingCharge[], collection: string): Promise
     const candidates = charges.filter((c) => c.tg_user_id === owner);
     if (candidates.length === 0) continue;
 
+    requestsUsed++;
     const items = await fetchOwnedCollectionItems(recipient, collection);
     if (items === null) continue; // could not ask the chain — retry next tick, age out nothing
 
@@ -222,37 +318,69 @@ async function reconcilePool(pool: PendingCharge[], collection: string): Promise
       WHERE id = ANY(${candidates.map((c) => c.id)}::uuid[])
     `;
 
-    const addresses = items.map((i) => i.address).filter((a): a is string => !!a);
-    if (addresses.length === 0) continue; // chain says: nothing minted (yet)
+    // P0-1 rule (3): bucket every owned item by ITS OWN on-chain tier. An item whose tier
+    // attribute is missing/unrecognized goes in `unknownItems` and can only ever push a
+    // charge to `needs_review` — never a grant off the DB tier.
+    const byTier = new Map<Tier, string[]>();
+    const unknownItems: string[] = [];
+    for (const item of items) {
+      if (!item.address) continue;
+      const t = extractTierFromItem(item);
+      if (t) byTier.set(t, [...(byTier.get(t) ?? []), item.address]);
+      else unknownItems.push(item.address);
+    }
+    if (byTier.size === 0 && unknownItems.length === 0) continue; // chain says: nothing minted (yet)
 
-    // P0-1 rule (3): LOWEST tier first — we cannot tell which charge an item belongs to, so we
-    // may only ever under-deliver. (An honest user has exactly one candidate, so this is a
-    // no-op for them; it only bites in the anomalous multi-charge case.)
-    for (const c of [...candidates].sort(byTierAsc)) {
-      for (const addr of addresses) {
+    for (const c of candidates) {
+      const resolved = resolveGrantItem(c, byTier, unknownItems);
+
+      if (resolved === 'needs_review') {
         try {
-          // HIGH-3: the reconciler writes the payment evidence ITSELF the moment it sees the
-          // item on chain. Evidence no longer depends on the (unreliable) callback arriving.
-          await sql`
+          const flagged = (await sql`
             UPDATE tg_membership_charges
-            SET item_address = COALESCE(item_address, ${addr})
+            SET status = 'needs_review',
+                failure_reason = 'tier_unreadable: the item this charge minted (per the webhook hint) has no recognizable Tier attribute on chain — refusing to grant off the DB tier (P0-1 fail-closed)'
             WHERE id = ${c.id}::uuid AND status = 'pending'
-          `;
-          const granted = await grantAgainstItem(c, addr);
-          if (granted) {
-            console.log(
-              `[membership-reconciler] granted charge=${c.id} user=${c.tg_user_id} tier=${c.tier} item=${addr}`,
+            RETURNING id
+          `) as unknown as Array<{ id: string }>;
+          if (flagged.length > 0) {
+            console.error(
+              `[membership-reconciler] NEEDS REVIEW (fail-closed) — charge=${c.id} user=${c.tg_user_id}: hinted item=${c.item_address} has no readable Tier attribute; NOT granting from DB tier.`,
             );
-            break;
           }
         } catch (e) {
           console.error(
-            `[membership-reconciler] grant failed charge=${c.id} item=${addr}: ${(e as Error).message}`,
+            `[membership-reconciler] fail-closed flag failed charge=${c.id}: ${(e as Error).message}`,
           );
         }
+        continue;
+      }
+
+      if (!resolved) continue; // nothing to match yet — retry next tick
+
+      const { addr, tier } = resolved;
+      try {
+        // HIGH-3: the reconciler writes the payment evidence ITSELF the moment it sees the
+        // item on chain. Evidence no longer depends on the (unreliable) callback arriving.
+        await sql`
+          UPDATE tg_membership_charges
+          SET item_address = COALESCE(item_address, ${addr})
+          WHERE id = ${c.id}::uuid AND status = 'pending'
+        `;
+        const granted = await grantAgainstItem(c, addr, tier);
+        if (granted) {
+          console.log(
+            `[membership-reconciler] granted charge=${c.id} user=${c.tg_user_id} tier=${tier} item=${addr}`,
+          );
+        }
+      } catch (e) {
+        console.error(
+          `[membership-reconciler] grant failed charge=${c.id} item=${addr}: ${(e as Error).message}`,
+        );
       }
     }
   }
+  return requestsUsed;
 }
 
 let tickCount = 0;
@@ -271,40 +399,68 @@ export async function runMembershipReconcileTick(): Promise<void> {
   tickCount += 1;
 
   try {
-    // ── Pass 1: FRESH pendings. Priority path — a user is on the screen waiting. ──────────
-    // P0-2: this pool is queried ALONE. Previously `status IN ('pending','needs_review')` with
-    // one LIMIT 200 meant a growing (and permanent) needs_review backlog would crowd out every
-    // new purchase — we would take money and never grant. The pools are now separate queries
-    // with separate limits, so needs_review can NEVER starve a fresh purchase.
-    let fresh: PendingCharge[] = [];
+    const requestBudget = process.env.TONAPI_KEY ? REQUEST_BUDGET_WITH_KEY : REQUEST_BUDGET_NO_KEY;
+    let budgetLeft = requestBudget;
+
+    // ── Pass 1a: EVIDENCE-bearing fresh pendings. Priority path — real payment already seen
+    // (tx_hash/item_address), a user is on the screen waiting. HIGH-3: queried and spent
+    // FIRST, unconditionally, before a single tonapi request goes to a free/evidence-free row.
+    let evidenceFresh: PendingCharge[] = [];
     try {
-      fresh = (await sql`
-        SELECT id::text, tg_user_id::text AS tg_user_id, tier, recipient_address
+      evidenceFresh = (await sql`
+        SELECT id::text, tg_user_id::text AS tg_user_id, tier, recipient_address, item_address
         FROM tg_membership_charges
         WHERE status = 'pending' AND recipient_address IS NOT NULL
+          AND (tx_hash IS NOT NULL OR item_address IS NOT NULL)
         ORDER BY created_at ASC
         LIMIT ${FRESH_LIMIT}
       `) as unknown as PendingCharge[];
     } catch (e) {
-      console.error(`[membership-reconciler] pending query failed: ${(e as Error).message}`);
+      console.error(`[membership-reconciler] evidence-pending query failed: ${(e as Error).message}`);
     }
-    if (fresh.length > 0) await reconcilePool(fresh, collection);
+    if (evidenceFresh.length > 0) {
+      budgetLeft -= await reconcilePool(evidenceFresh, collection, budgetLeft);
+    }
 
-    // ── Pass 2: STUCK pool — paid, but the chain never showed the item. Rare + rate-limited.
-    // Includes 'failed' rows that carry payment evidence (HIGH-4): a forged/erroneous error
-    // callback must not be able to bury a charge the user actually paid for.
+    // ── Pass 1b: BARE fresh pendings — free to create, the sybil surface (HIGH-3). Only
+    // spends whatever tonapi-request budget Pass 1a left over, so a pile of free pending rows
+    // can, at worst, delay OTHER free rows — never a charge that has already shown payment.
+    if (budgetLeft > 0) {
+      let bareFresh: PendingCharge[] = [];
+      try {
+        bareFresh = (await sql`
+          SELECT id::text, tg_user_id::text AS tg_user_id, tier, recipient_address, item_address
+          FROM tg_membership_charges
+          WHERE status = 'pending' AND recipient_address IS NOT NULL
+            AND tx_hash IS NULL AND item_address IS NULL
+          ORDER BY created_at ASC
+          LIMIT ${FRESH_LIMIT}
+        `) as unknown as PendingCharge[];
+      } catch (e) {
+        console.error(`[membership-reconciler] bare-pending query failed: ${(e as Error).message}`);
+      }
+      if (bareFresh.length > 0) await reconcilePool(bareFresh, collection, budgetLeft);
+    }
+
+    // ── Pass 2: STUCK pool — paid-or-uncertain, chain never (yet) settled it. Rare + rate-
+    // limited (every STUCK_EVERY_N_TICKS). MEDIUM-1 (round 6): NO evidence filter here
+    // anymore — every 'needs_review'/'failed' row is swept, not just ones already carrying
+    // tx_hash/item_address. A charge that an error callback flipped to 'failed' BEFORE any
+    // evidence existed used to be invisible to every pool forever (the webhook route's
+    // HIGH-4 guard only protects evidence-bearing rows); now it is still periodically
+    // re-checked against the chain and can self-heal to 'settled' if the mint actually went
+    // through despite the error report.
     if (tickCount % STUCK_EVERY_N_TICKS === 0) {
       try {
         const stuck = (await sql`
-          SELECT id::text, tg_user_id::text AS tg_user_id, tier, recipient_address
+          SELECT id::text, tg_user_id::text AS tg_user_id, tier, recipient_address, item_address
           FROM tg_membership_charges
           WHERE status IN ('needs_review', 'failed')
             AND recipient_address IS NOT NULL
-            AND (tx_hash IS NOT NULL OR item_address IS NOT NULL)
           ORDER BY created_at ASC
           LIMIT ${STUCK_LIMIT}
         `) as unknown as PendingCharge[];
-        if (stuck.length > 0) await reconcilePool(stuck, collection);
+        if (stuck.length > 0) await reconcilePool(stuck, collection, STUCK_LIMIT);
 
         // VISIBILITY: the stuck pool must never grow silently (it is money we owe).
         const cnt = (await sql`
@@ -325,8 +481,12 @@ export async function runMembershipReconcileTick(): Promise<void> {
     // ── Ageing out old 'pending' rows — the two cases are NOT the same ────────────────────
     //
     // (1) NO payment evidence → abandoned invoice. The user never paid (rejected the wallet
-    //     prompt / closed Telegram), so expiring it loses nothing. `chain_checked_at` is NOT
-    //     required here: after EXPIRE_DAYS the TON Connect invoice is long dead anyway.
+    //     prompt / closed Telegram), so expiring it SHOULD lose nothing — but only if the
+    //     chain has actually been checked RECENTLY (decision B, round 6): requiring merely
+    //     "chain_checked_at is set" (even from once, days ago, before e.g.
+    //     MEMBERSHIP_NFT_COLLECTION_ADDRESS was unset or tonapi was down) does NOT prove a
+    //     payment landing just before this sweep would have been seen. Only a check inside
+    //     the last day — well under EXPIRE_DAYS — is trusted as a live negative answer.
     try {
       const expired = (await sql`
         UPDATE tg_membership_charges SET status = 'expired'
@@ -334,6 +494,8 @@ export async function runMembershipReconcileTick(): Promise<void> {
           AND created_at < NOW() - make_interval(days => ${EXPIRE_DAYS})
           AND tx_hash IS NULL
           AND item_address IS NULL
+          AND chain_checked_at IS NOT NULL
+          AND chain_checked_at > NOW() - INTERVAL '1 day'
         RETURNING id::text
       `) as unknown as Array<{ id: string }>;
       if (expired.length > 0) {

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHmac } from 'node:crypto';
 import postgres from 'postgres';
 import { generateInvoice, tonToNano } from '@aiag/shared';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { MEMBERSHIP_TIERS, isMembershipTier } from '@/lib/membership';
+import { MEMBERSHIP_TIERS, isMembershipTier, currentMembershipTier } from '@/lib/membership';
 import { membershipCollectionAddress } from '@/lib/nft-ownership';
 
 export const runtime = 'nodejs';
@@ -17,8 +18,58 @@ const sql = postgres(process.env.DATABASE_URL ?? '', { prepare: false });
  */
 const PENDING_TTL_MIN = 15;
 
+/**
+ * How fresh `chain_checked_at` must be, RELATIVE TO NOW, for the TTL sweep below to trust
+ * "no evidence" as a definitive negative (issue #29 round 6, decision B). A single stamp
+ * made once, right after the charge was created, does NOT prove the chain has been checked
+ * recently enough to have caught a payment that landed just before this sweep runs — the
+ * reconciler could have died minutes ago. Requiring RECENCY (not just "after created_at")
+ * means the sweep can only fire while the reconciler is demonstrably alive and has looked
+ * at this exact wallet inside the last few ticks.
+ */
+const CHAIN_CHECK_FRESHNESS_MIN = 5;
+
+/** Per-tier Startonus mint-set template env var (issue #29 round 6, P0-1). ONE template per
+ * tier — not one shared template for all three — so the tier is bakeable into the item's
+ * own on-chain metadata (a `Tier` attribute) and readable by the reconciler from the CHAIN,
+ * never from this request body / the `tg_membership_charges.tier` column it seeds. */
+const MINT_TEMPLATE_ENV: Record<string, string> = {
+  creator: 'STARTONUS_MINT_TEMPLATE_ID_CREATOR',
+  builder: 'STARTONUS_MINT_TEMPLATE_ID_BUILDER',
+  studio: 'STARTONUS_MINT_TEMPLATE_ID_STUDIO',
+};
+
 interface Body {
   tier: string;
+}
+
+interface PendingRow {
+  id: string;
+  tier: string;
+  amount_nano_ton: string;
+  invoice_to: string | null;
+  invoice_amount: string | null;
+  invoice_payload: string | null;
+  invoice_valid_until: string | null;
+}
+
+function invoiceResponse(c: PendingRow) {
+  return NextResponse.json({
+    charge_id: c.id,
+    tier: c.tier,
+    amount_nano_ton: c.amount_nano_ton,
+    transaction: {
+      validUntil: Number(c.invoice_valid_until),
+      messages: [
+        {
+          address: c.invoice_to,
+          amount: c.invoice_amount,
+          payload: c.invoice_payload,
+        },
+      ],
+    },
+    idempotent: true,
+  });
 }
 
 /**
@@ -29,14 +80,12 @@ interface Body {
  * Connect transaction to sign. Payment is on-chain TON — no crypto-credit debit.
  *
  * The membership is NOT granted here. It is granted when the CHAIN confirms the mint —
- * by the reconciler (apps/agent-worker/src/membership-reconciler.ts, the authoritative
- * path) or, as a fast path, by the webhook. The Startonus callback is never trusted on
- * its own: it is unsigned, unretried, and has no status endpoint to ask.
+ * by the reconciler (apps/agent-worker/src/membership-reconciler.ts, the ONLY authoritative
+ * path). The Startonus callback is never trusted on its own: it is unsigned, unretried, and
+ * has no status endpoint to ask.
  *
  * 🔴 HIGH-A: the mint recipient is read from `ton_wallets` (ton-proof VERIFIED wallets
- * only) — NEVER from the request body. Taking it from the body let a caller mint the NFT
- * they paid for onto an arbitrary address, and, worse, made the recipient a client-chosen
- * value that the on-chain grant check is keyed on.
+ * only) — NEVER from the request body.
  */
 export async function POST(req: NextRequest) {
   const tgUserId = req.headers.get('x-tma-user-id');
@@ -61,11 +110,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid_tier' }, { status: 400 });
   }
 
-  // HIGH-A: recipient = the caller's latest ton-proof-VERIFIED wallet. Any address in the
-  // request body is ignored outright. No verified wallet → no purchase (the user must
-  // connect + prove their wallet first), because the on-chain grant check is keyed on this
-  // address: a client-supplied one would let the caller point the check at someone else's
-  // wallet that already holds a collection item.
+  // HIGH-A: recipient = the caller's latest ton-proof-VERIFIED wallet. No verified wallet →
+  // no purchase (the user must connect + prove their wallet first).
   const wal = (await sql`
     SELECT address
     FROM ton_wallets
@@ -78,27 +124,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'wallet_not_verified' }, { status: 403 });
   }
 
-  // HIGH-1 (issue #29 review): a pending charge used to be a PERMANENT lock. If the user
-  // rejected the wallet prompt or closed Telegram, no callback ever arrived, the row stayed
-  // 'pending' forever, and EVERY future purchase 409'd — the screen became a dead end for
-  // that user. Sweep pendings older than the TTL to 'expired': they can no longer be settled
-  // anyway (the TON Connect invoice's validUntil has long passed).
+  // MEDIUM (issue #29 round 6): buying a tier ≤ what the caller already holds takes real
+  // TON and grants nothing new. Reject on the way in, with an explicit reason.
+  const heldTier = await currentMembershipTier(tgUserId, sql);
+  if (heldTier && MEMBERSHIP_TIERS[tier].rank <= MEMBERSHIP_TIERS[heldTier].rank) {
+    return NextResponse.json(
+      { error: 'tier_not_higher', current_tier: heldTier },
+      { status: 400 },
+    );
+  }
+
+  // HIGH-1 (issue #29 review): sweep abandoned pendings so a rejected wallet prompt doesn't
+  // permanently 409 every future purchase.
   //
-  // CRITICAL GUARD — never expire a charge that carries PAYMENT EVIDENCE (tx_hash/item_address
-  // written by the webhook the moment a mint callback arrives). Such a charge is paid but not
-  // yet finalized (e.g. the on-chain re-check hit a transient RPC failure and 503'd for a
-  // retry). Expiring it would re-open the purchase screen and let the user pay a SECOND time
-  // for a membership they already bought. A paid-but-unsettled charge keeps blocking (409) —
-  // which is correct: they must not be charged twice.
-  //
-  // 🔴 HIGH-3: "no evidence" is NOT enough to expire — evidence (item_address) is written by
-  // the CALLBACK, and the callback is exactly the channel we declared unreliable. A lost
-  // callback + a rate-limited tonapi would leave a PAID charge with no evidence, expire it
-  // here, drop it out of the reconciler's pending pool, and the user would pay twice.
-  // So we additionally require a DEFINITIVE on-chain negative: `chain_checked_at` is stamped
-  // by the reconciler ONLY when tonapi actually answered (never on 429/timeout — it
-  // distinguishes `[]` from `null`), and it must be NEWER than the charge itself. In short:
-  // expire only what the chain has looked at, after this charge existed, and not found.
+  // 🔴 HIGH-3 / decision B (round 6): "no evidence" is NOT enough to expire — evidence is
+  // written by the callback/reconciler, and both are declared unreliable. We additionally
+  // require chain_checked_at to be RECENT (not merely "after created_at" — a single stamp
+  // from minutes ago, before the reconciler stalled, used to satisfy that). Only a chain
+  // check made in roughly the last reconciler tick may retire a charge as unpaid; anything
+  // older means we cannot vouch that a just-landed payment would already be visible, so we
+  // do NOT expire — better a charge sits pending a little longer than a paid user gets
+  // billed twice.
   await sql`
     UPDATE tg_membership_charges
     SET status = 'expired'
@@ -108,16 +154,39 @@ export async function POST(req: NextRequest) {
       AND tx_hash IS NULL
       AND item_address IS NULL
       AND chain_checked_at IS NOT NULL
-      AND chain_checked_at > created_at
+      AND chain_checked_at > NOW() - ${`${CHAIN_CHECK_FRESHNESS_MIN} minutes`}::interval
   `;
+
+  // Decision B (issue #29 round 6): AT MOST ONE active charge per user, and a repeat "buy"
+  // returns the SAME invoice — never a second one. Minting a second Startonus invoice for a
+  // charge that already has a live, signable TON Connect transaction risks a genuine double
+  // payment for a single grant (the user could sign both). So: if a pending charge already
+  // exists, hand back its STORED invoice instead of creating anything.
+  const existing = (await sql`
+    SELECT id::text, tier, amount_nano_ton::text AS amount_nano_ton,
+           invoice_to, invoice_amount, invoice_payload, invoice_valid_until::text AS invoice_valid_until
+    FROM tg_membership_charges
+    WHERE tg_user_id = ${tgUserId}::bigint AND status = 'pending'
+    LIMIT 1
+  `) as unknown as Array<PendingRow>;
+  if (existing[0]) {
+    const c = existing[0];
+    if (c.invoice_to && c.invoice_amount && c.invoice_payload && c.invoice_valid_until) {
+      return invoiceResponse(c);
+    }
+    // Pending but the invoice was never persisted (e.g. crashed between INSERT and the
+    // invoice UPDATE below) — nothing safe to replay yet. Ask the client to retry shortly;
+    // do NOT mint a second invoice for the same charge.
+    return NextResponse.json({ error: 'purchase_pending' }, { status: 409 });
+  }
 
   const priceTon = MEMBERSHIP_TIERS[tier].priceTon;
   const amountNanoTon = tonToNano(priceTon);
 
-  // MEDIUM-2 (TOCTOU): no SELECT-then-INSERT race. The partial UNIQUE
-  // uq_membership_charges_one_pending (tg_user_id) WHERE status='pending' (migration 0048)
-  // is the invariant; a still-live pending charge (or a concurrent second call) makes this
-  // INSERT raise 23505, which we map to a clean 409.
+  // MEDIUM-2 (TOCTOU): no SELECT-then-INSERT race beyond the read above — the partial
+  // UNIQUE uq_membership_charges_one_pending (tg_user_id) WHERE status='pending' (0048) is
+  // the invariant; a concurrent second call collides on 23505, handled below by re-reading
+  // and replaying the winner's invoice (same contract as the `existing` branch above).
   let chargeId: string;
   try {
     const ins = (await sql`
@@ -135,34 +204,53 @@ export async function POST(req: NextRequest) {
     chargeId = id;
   } catch (e) {
     if ((e as { code?: string }).code === '23505') {
+      const winner = (await sql`
+        SELECT id::text, tier, amount_nano_ton::text AS amount_nano_ton,
+               invoice_to, invoice_amount, invoice_payload, invoice_valid_until::text AS invoice_valid_until
+        FROM tg_membership_charges
+        WHERE tg_user_id = ${tgUserId}::bigint AND status = 'pending'
+        LIMIT 1
+      `) as unknown as Array<PendingRow>;
+      if (winner[0]?.invoice_to) return invoiceResponse(winner[0]);
       return NextResponse.json({ error: 'purchase_pending' }, { status: 409 });
     }
     throw e;
   }
 
-  // ONE env var names the membership collection — the SAME one the ownership check reads
-  // (src/lib/nft-ownership.ts). Minting into collection A while checking ownership against
-  // collection B would let a user pay and never be seen as a member (issue #29 review).
-  // STARTONUS_MEMBERSHIP_MINT_TEMPLATE_ID is a DIFFERENT entity: a Startonus mint-set
-  // template id (an integer), not an address — mirrors STARTONUS_AGENT_MINT_TEMPLATE_ID.
+  // P0-1 (issue #29 round 6): ONE mint-set template PER TIER — the collection address is
+  // still shared (the ownership/reconciler check is keyed on the collection, unchanged),
+  // but the template picks the metadata (incl. a `Tier` attribute) baked into the minted
+  // item, which is how the reconciler reads the tier from the CHAIN instead of trusting
+  // this row. Without the tier's own template id, we refuse to mint at all — fail-closed,
+  // never fall back to a shared/default template.
   const secret = process.env.STARTONUS_SECRET;
   const collectionAddress = membershipCollectionAddress();
-  const mintTemplateId = process.env.STARTONUS_MEMBERSHIP_MINT_TEMPLATE_ID;
-  if (!secret || !collectionAddress || !mintTemplateId) {
+  const mintTemplateId = process.env[MINT_TEMPLATE_ENV[tier]!];
+  // MEDIUM (issue #29 round 6): a dedicated webhook secret for membership, separate from
+  // Phase-16's TRANSFER_WEBHOOK_SECRET, so a leak on one surface does not compromise both.
+  const webhookSecret = process.env.MEMBERSHIP_WEBHOOK_SECRET;
+  if (!secret || !collectionAddress || !mintTemplateId || !webhookSecret) {
+    console.error(
+      `[membership/purchase] not configured for tier=${tier}: ` +
+        `secret=${!!secret} collection=${!!collectionAddress} ` +
+        `template(${MINT_TEMPLATE_ENV[tier]})=${!!mintTemplateId} webhookSecret=${!!webhookSecret}`,
+    );
     await sql`UPDATE tg_membership_charges SET status='failed' WHERE id = ${chargeId}::uuid`;
     return NextResponse.json({ error: 'minter_not_configured' }, { status: 503 });
   }
 
   const publicBase = process.env.PUBLIC_BASE_URL ?? 'https://app.ai-aggregator.ru';
-  // Same shared secret as the transfer webhook (issue #29 contract). It rides in the query
-  // string because `generateInvoice` only accepts a `callbackUrl` — the Startonus API has
-  // NO header option (packages/shared/src/startonus.ts:49-50), so we cannot move it to a
-  // header on the outbound side. The webhook therefore ACCEPTS the token in a header (for
-  // an nginx-injected / future path) and falls back to the query param, and — because a
-  // query token can leak into access logs — the grant additionally requires an ON-CHAIN
-  // ownership re-check. The token alone does not authorize a grant (MEDIUM-1).
-  const webhookToken = process.env.TRANSFER_WEBHOOK_SECRET;
-  const callbackUrl = `${publicBase}/tg/api/tma/membership/webhook${webhookToken ? `?token=${encodeURIComponent(webhookToken)}` : ''}`;
+  // Startonus cannot send custom headers on its callback (only a plain callbackUrl —
+  // packages/shared/src/startonus.ts:49-50 / their OpenAPI has no header option), so SOME
+  // token must ride in the query string, where it can leak into access logs. We reduce the
+  // blast radius two ways: (1) a secret dedicated to this route (above), and (2) the token
+  // itself is NOT the raw secret — it's HMAC-SHA256(MEMBERSHIP_WEBHOOK_SECRET, chargeId), so
+  // a leaked token authenticates callbacks for THIS ONE charge only. Even a fully leaked
+  // token cannot be replayed against any other charge, and cannot be used to derive the
+  // master secret. The webhook route still accepts a header first (for a future/nginx-
+  // injected path) and additionally never grants on the callback alone (see webhook route).
+  const chargeToken = createHmac('sha256', webhookSecret).update(chargeId).digest('hex');
+  const callbackUrl = `${publicBase}/tg/api/tma/membership/webhook?token=${encodeURIComponent(chargeToken)}`;
 
   try {
     const invoice = await generateInvoice({
@@ -171,17 +259,22 @@ export async function POST(req: NextRequest) {
       secret,
       owner: { tgId: Number(tgUserId), wallet: recipientAddress },
       nftPrice: amountNanoTon,
-      // LOW-2: no `nftData` — the card's name/description/image come from the Startonus
-      // mint-set template (`templateId`), configured once in the minter panel. The previous
-      // code pointed `image` at /tg/og/membership/<tier>.png, a route that does NOT exist:
-      // that 404 would have been frozen into the NFT's on-chain metadata forever. Tier is
-      // recorded in OUR DB (tg_memberships.tier), which is the source of truth anyway.
+      // LOW-2: no `nftData` — the card's name/description/image/attributes (incl. `Tier`)
+      // come from the per-tier Startonus mint-set template, configured once per tier in the
+      // minter panel.
       userData: chargeId,
       callbackUrl,
     });
 
+    // Decision B: PERSIST the invoice so a repeat "buy" call can replay it instead of
+    // minting a second one.
     await sql`
-      UPDATE tg_membership_charges SET startonus_invoice_id = ${invoice.id}
+      UPDATE tg_membership_charges
+      SET startonus_invoice_id = ${invoice.id},
+          invoice_to = ${invoice.to},
+          invoice_amount = ${invoice.value},
+          invoice_payload = ${invoice.payload},
+          invoice_valid_until = ${invoice.validUntil}
       WHERE id = ${chargeId}::uuid
     `;
 

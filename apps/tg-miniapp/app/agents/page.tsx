@@ -134,8 +134,10 @@ export default function AgentsPage() {
       .catch(() => setIsMember(false));
   }, [token]);
 
-  // Ручная синхронизация членства: держатель NFT мог купить его в сети — даём
-  // кнопку «Проверить членство», чтобы перезапросить статус без перезахода.
+  // Ручное обновление статуса членства: грант приходит асинхронно от reconciler'а
+  // (issue #29 round 6 — POST здесь больше не проверяет цепь и не грантит сам, только
+  // перечитывает tg_memberships), поэтому даём кнопку «Проверить членство», чтобы
+  // перезапросить статус без перезахода.
   async function recheckMembership() {
     if (!token || checkingMember) return;
     setCheckingMember(true);

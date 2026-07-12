@@ -138,6 +138,8 @@ export default function MembershipPage() {
           setErrorMsg('Подтвердите владение кошельком (подпись ton-proof), затем повторите.');
         } else if (res.status === 503 && j.error === 'minter_not_configured') {
           setErrorMsg('Покупка членства временно недоступна.');
+        } else if (res.status === 400 && j.error === 'tier_not_higher') {
+          setErrorMsg('У вас уже есть членство этого уровня или выше.');
         } else {
           setErrorMsg(j.error ?? `HTTP ${res.status}`);
         }

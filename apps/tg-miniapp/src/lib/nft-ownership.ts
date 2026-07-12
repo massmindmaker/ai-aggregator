@@ -1,7 +1,14 @@
 // On-chain membership-NFT ownership check (TonCenter v3).
 //
-// Used by the membership sync route to verify that a user's verified TON wallet owns an
-// NFT item in the membership collection.
+// 🔴 issue #29 round 6 (P0-2): as of this round, NOTHING in the app calls this module.
+// The on-chain sync route (app/api/tma/membership/route.ts) used to call it to GRANT a
+// membership on bare wallet ownership — that was the P0-2 hole (Startonus items are not
+// soulbound; the same paid item, forwarded wallet-to-wallet, minted unlimited free
+// memberships). The route no longer does that; the only grant path is
+// apps/agent-worker/src/membership-reconciler.ts, keyed on a PAID charge + a chain-claimed
+// item, not on bare ownership. This module is kept — read-only, harmless on its own — for
+// a possible future "your wallet holds a membership item" INFO banner. It must NEVER be
+// wired to a grant again; ownership ≠ payment.
 //
 // ONE env var names the membership collection: MEMBERSHIP_NFT_COLLECTION_ADDRESS. The
 // purchase/mint path (app/api/tma/membership/purchase) MUST read the SAME var — minting
