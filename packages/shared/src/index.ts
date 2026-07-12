@@ -1,15 +1,21 @@
+// ISOMORPHIC BARREL (issue #19) — this entry must stay browser-safe.
+//
+// tsup builds with `splitting: false`, so this file is ONE indivisible chunk:
+// whatever it re-exports is dragged into every consumer of '@aiag/shared'.
+// Therefore NOTHING here may import a Node builtin (node:dns/net/fs/tls) or a
+// Node-only SDK (@aws-sdk/*). Both Node-only modules now live behind the
+// server subpath:
+//   ./s3         (@aws-sdk)            → import from '@aiag/shared/server'
+//   ./safe-fetch (node:dns, node:net)  → import from '@aiag/shared/server'
+// Browser-safe subset for 'use client' components → '@aiag/shared/client'.
+
 // Plan 07 Supply: revshare tiers + RU tax withholding
 export * from './revshare';
 export * from './tax';
 
-// S3 upload helper
-export * from './s3';
-
-// Startonus NFT minter API client (Phase 15 — TG Mini-App)
+// Startonus NFT minter API client (Phase 15 — TG Mini-App).
+// Isomorphic: plain fetch + BigInt math, no Node builtins.
 export * from './startonus';
-
-// SSRF-hardened outbound fetch (synthesis D-7 / R1-7)
-export * from './safe-fetch';
 
 // Constants
 

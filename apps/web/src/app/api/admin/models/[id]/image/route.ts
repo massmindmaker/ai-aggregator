@@ -13,7 +13,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdmin } from '@/lib/admin/api';
-import { uploadToS3 } from '@aiag/shared';
+import { uploadToS3 } from '@aiag/shared/server';
 import { db, sql } from '@/lib/db';
 
 export const runtime = 'nodejs';

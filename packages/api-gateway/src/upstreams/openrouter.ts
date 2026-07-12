@@ -14,7 +14,7 @@ import type {
   EmbeddingsRequest,
   EmbeddingsResponse,
 } from './interface';
-import { safeFetch } from '@aiag/shared';
+import { safeFetch } from '@aiag/shared/server';
 import { logger } from '../lib/logger';
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';

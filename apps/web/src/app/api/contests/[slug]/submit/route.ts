@@ -8,7 +8,7 @@ import {
   evaluatorScripts,
 } from '@aiag/database/schema';
 import { eq, and } from '@aiag/database';
-import { uploadToS3, getSignedDownloadUrl } from '@aiag/shared';
+import { uploadToS3, getSignedDownloadUrl } from '@aiag/shared/server';
 
 export const runtime = 'nodejs';
 
