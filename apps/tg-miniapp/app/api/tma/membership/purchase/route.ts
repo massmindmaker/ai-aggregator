@@ -37,6 +37,25 @@ const CHAIN_CHECK_FRESHNESS_MIN = 5;
  */
 const INVOICE_REPLAY_SAFETY_S = 30;
 
+/**
+ * 🔴 F4 (round 9 — double-payment window). Once an invoice HAS been issued for a charge
+ * (`startonus_invoice_id` set), the user was handed a signable TON Connect transaction — a
+ * real, if weak, intent-to-pay signal. If they then paid but the Startonus callback was lost
+ * (a pm2 restart mid-deploy is an explicitly-modelled case) AND tonapi has not yet indexed
+ * the fresh mint, then `tx_hash`/`item_address` are still NULL and the reconciler keeps
+ * stamping `chain_checked_at` on empty answers — so the 15-minute TTL sweep above would
+ * expire the PAID charge, free the one-pending UNIQUE, and an impatient user pays a SECOND
+ * time. The brake: a charge that already has an invoice is NOT eligible for the fast unpaid-
+ * expiry until this much wall-time has passed since it was created (≈ when the invoice was
+ * issued — the invoice is minted in the same request). It must comfortably exceed realistic
+ * mint + tonapi-indexing lag, which can run well past PENDING_TTL_MIN. A truly abandoned
+ * invoiced charge still expires — just later (here) or via the reconciler's 7-day sweep — and
+ * meanwhile the reconciler grants the moment the item indexes, so the charge normally never
+ * reaches this expiry at all. Charges with NO invoice issued are unaffected: they expire at
+ * PENDING_TTL_MIN as before (the user created a charge and never went to pay).
+ */
+const INVOICE_INDEXING_GRACE_MIN = 120;
+
 /** Per-tier Startonus mint-set template env var (issue #29 round 6, P0-1). ONE template per
  * tier — not one shared template for all three — so the tier is bakeable into the item's
  * own on-chain metadata (a `Tier` attribute) and readable by the reconciler from the CHAIN,
@@ -257,6 +276,14 @@ export async function POST(req: NextRequest) {
   // older means we cannot vouch that a just-landed payment would already be visible, so we
   // do NOT expire — better a charge sits pending a little longer than a paid user gets
   // billed twice.
+  //
+  // 🔴 F4 (round 9): the `startonus_invoice_id IS NULL OR created_at < NOW() - GRACE` clause
+  // is the double-payment brake. An invoice was ISSUED for this charge ⇒ the user held a
+  // signable transaction ⇒ they may well have paid, with the callback lost and tonapi still
+  // indexing — so an invoiced charge is NOT swept at PENDING_TTL_MIN; only a truly abandoned
+  // charge that never got an invoice is. An invoiced charge only becomes fast-expirable after
+  // INVOICE_INDEXING_GRACE_MIN (well past any realistic indexing lag); until then it stays
+  // pending and blocks a second purchase, which is exactly what prevents the double payment.
   await sql`
     UPDATE tg_membership_charges
     SET status = 'expired'
@@ -267,6 +294,10 @@ export async function POST(req: NextRequest) {
       AND item_address IS NULL
       AND chain_checked_at IS NOT NULL
       AND chain_checked_at > NOW() - ${`${CHAIN_CHECK_FRESHNESS_MIN} minutes`}::interval
+      AND (
+        startonus_invoice_id IS NULL
+        OR created_at < NOW() - ${`${INVOICE_INDEXING_GRACE_MIN} minutes`}::interval
+      )
   `;
 
   // Decision B (issue #29 round 6): AT MOST ONE active charge per user, and a repeat "buy"
