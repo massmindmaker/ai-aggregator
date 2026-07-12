@@ -1,3 +1,4 @@
+import { Address } from '@ton/core';
 import { sql } from './db.js';
 
 // Server-side reconciler for membership-NFT purchases (issue #29).
@@ -28,18 +29,60 @@ import { sql } from './db.js';
 // `tg_membership_charges.tier` — that DB column is only the buyer's REQUESTED tier and is
 // treated as untrusted input, exactly like the request body that seeded it.
 //
+// 🔴 ROUND 7 — two closes on top of round 6's item-matching:
+//
+//   P0-A (deadlock on a claimed sibling item): round 6 picked `byTier.get(tier)[0]` — the
+//   FIRST item of the matching tier in the wallet, unconditionally. If that wallet ALSO
+//   holds an item of the same tier that was already claimed by an earlier charge — which is
+//   the ordinary shape of issue #35's NFT-transfer feature, not an edge case — `[0]` could BE
+//   that claimed item forever. `grantAgainstItem`'s claim insert then conflicts every single
+//   tick, nothing ever changes, and a user who paid real TON never receives a membership, with
+//   no log and no needs_review to make it visible. Fixed by resolveGrantCandidates below:
+//   every owned item of the tier is fetched fresh from `tg_membership_tx_claims` THIS tick,
+//   already-claimed addresses are filtered OUT before a candidate is ever tried, and if every
+//   currently-visible candidate still conflicts (a genuine concurrent race, now rare), the
+//   charge is loudly flagged `needs_review` instead of silently retried into eternity.
+//
+//   HIGH-B (evidence written before payment is confirmed): round 6 had the caller write
+//   `item_address` onto the charge the moment tonapi returned a match, BEFORE calling
+//   `grantAgainstItem` — so a charge whose claim then conflicted (P0-A's exact failure mode)
+//   ended up with `item_address` set despite NOTHING being granted. That evidence permanently
+//   blocked the purchase-route TTL sweep (`item_address IS NULL` is one of its "abandoned,
+//   unpaid" conditions) from ever expiring the charge, even though the user got nothing —
+//   locked out of buying again, with an alert that (wrongly) reads "this is real money, do
+//   not touch it". Fixed by deleting that pre-write entirely: `item_address` is now written
+//   ONLY inside `grantAgainstItem`'s `sql.begin`, as part of the same statement that settles
+//   the charge — it can never exist without a successful grant behind it. (The webhook's own
+//   `item_address` hint write is unaffected — it is unauthoritative by design and only ever
+//   used as a matching hint / anti-double-charge evidence signal, never trusted for a grant.)
+//
 // Matching an item to a specific charge still needs care (the chain has no notion of "this
-// item belongs to charge X"), so three rules apply together:
+// item belongs to charge X"), so these rules apply together:
 //   (1) a verified wallet maps to exactly ONE tg account (partial UNIQUE in 0048); if the DB
 //       still shows several owners for a wallet, we refuse to grant and shout;
 //   (2) candidate charges are restricted to that single owner — an item can never satisfy a
 //       charge belonging to a different account;
 //   (3) FAIL-CLOSED on tier: for each candidate charge, we grant only against an item whose
-//       OWN on-chain tier equals the charge's requested tier (`resolveGrantItem`). If the
+//       OWN on-chain tier equals the charge's requested tier, or — more precisely — whichever
+//       tier the webhook-hinted item itself carries on chain (resolveGrantCandidates). If the
 //       webhook already hinted a specific item (`charge.item_address`) and THAT item's tier
 //       attribute cannot be read, we do NOT fall back to the DB tier — the charge is flagged
 //       `needs_review` with a loud log instead. "Take the tier from the charge like before"
 //       is exactly the bug being closed here; it is never an acceptable fallback.
+//   (4) NEVER a claimed item (round 7, P0-A): every candidate is checked against
+//       `tg_membership_tx_claims` before it is tried, so an already-used item (this user's own
+//       earlier grant, or someone else's — e.g. a transferred-in item, issue #35) can never
+//       shadow an unclaimed item of the same tier sitting in the same wallet.
+//
+// 🔴 ROUND 7 MEDIUM — address normalization. tonapi.io returns item/owner addresses in RAW
+// form (`0:hex…`); Startonus's callback (`item.address`) and Startonus's invoice `owner.wallet`
+// echo commonly arrive in user-friendly form (`EQ…`/`UQ…`). Comparing these as bare strings
+// (round 6's `addrs.includes(c.item_address)`) silently NEVER matches even when they name the
+// exact same on-chain item — which made the P0-1 fail-closed branch effectively dead code (a
+// genuinely unreadable-tier hinted item would never be *found* at all, so it always fell
+// through to the tier-based fallback instead of triggering `needs_review`). `normalizeTonAddress`
+// below canonicalizes every address to raw form before any comparison or map key use — this is
+// the ONE place addresses are compared in this file, per the fix.
 const TICK_MS = 30_000; // 30s — a user is waiting on the purchase screen (topups use 2 min)
 const ITEMS_PAGE_LIMIT = 100;
 const TONAPI_TIMEOUT_MS = 8_000; // never let a hung tonapi call wedge the tick
@@ -90,10 +133,26 @@ type Tier = 'creator' | 'builder' | 'studio';
 const VALID_TIERS: readonly Tier[] = ['creator', 'builder', 'studio'];
 
 /**
+ * Canonicalize a TON address to its RAW `wc:hex` form (round 7 MEDIUM). tonapi and
+ * Startonus encode the same on-chain address differently (raw vs. user-friendly
+ * base64) — every comparison and every claims-table key in this file MUST go through
+ * this function first, or matches silently fail. Returns null on anything unparsable;
+ * callers must treat null as "cannot compare this", never as a match.
+ */
+export function normalizeTonAddress(addr: string | null | undefined): string | null {
+  if (!addr) return null;
+  try {
+    return Address.parse(addr).toRawString();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * P0-1 FIX (issue #29 round 6): the tier is read from the ITEM'S OWN on-chain metadata,
  * never from `tg_membership_charges.tier` (a DB row seeded by the buyer's own request body
  * — untrustworthy as a grant input). Fail-CLOSED: any metadata shape we don't recognize
- * returns null, and null NEVER grants (see `resolveGrantItem`).
+ * returns null, and null NEVER grants (see `resolveGrantCandidates`).
  */
 function extractTierFromItem(item: TonapiNftItem): Tier | null {
   const attrs = item.metadata?.attributes;
@@ -155,75 +214,117 @@ async function fetchOwnedCollectionItems(
 }
 
 /** Tier order — used ONLY to never downgrade an existing membership on grant (below). Tier
- *  MATCHING (which item satisfies which charge) no longer uses rank; see resolveGrantItem. */
+ *  MATCHING (which item satisfies which charge) no longer uses rank; see
+ *  resolveGrantCandidates. */
 const TIER_RANK: Record<string, number> = { creator: 1, builder: 2, studio: 3 };
 
 /**
- * Resolve, for ONE candidate charge, which on-chain item (if any) satisfies it — or that it
- * must be flagged `needs_review` because the only evidence we have points at an item whose
- * tier we cannot read (P0-1 fail-closed, issue #29 round 6).
- *
- *   1. If the webhook already hinted a specific item (`c.item_address`) and that address is
- *      one of THIS owner's items with an UNREADABLE tier → 'needs_review'. This is the exact
- *      fail-closed case: we know precisely which item is this charge's, and we refuse to
- *      grant off `c.tier` (untrusted DB input) when the chain can't confirm it.
- *   2. If that hinted address instead resolves to a READABLE tier → grant against it (most
- *      precise match available).
- *   3. Otherwise (no hint yet, or the hinted item isn't currently visible) fall back to
- *      matching by the charge's requested tier against the owner's readable-tier items. Safe
- *      because at most one charge per user is ever 'pending' at a time (0048's partial
- *      UNIQUE); the rare multi-charge case (stuck pool) still only grants a tier-EXACT match.
+ * Item addresses already consumed by ANY charge, ever — a fresh read of
+ * `tg_membership_tx_claims` (PK = onchain_key) for this exact candidate set, taken THIS
+ * tick (round 7, P0-A). This is what lets the matcher skip past an already-claimed item
+ * (this user's own earlier grant, or someone else's transferred-in item, issue #35)
+ * instead of picking it and deadlocking on the claim conflict forever.
  */
-function resolveGrantItem(
-  c: PendingCharge,
-  byTier: Map<Tier, string[]>,
-  unknownItems: string[],
-): { addr: string; tier: Tier } | 'needs_review' | null {
-  if (c.item_address) {
-    if (unknownItems.includes(c.item_address)) return 'needs_review';
-    for (const [tier, addrs] of byTier) {
-      if (addrs.includes(c.item_address)) return { addr: c.item_address, tier };
-    }
-    // hinted item not in the current owned-items snapshot (indexing lag, or it was already
-    // claimed by another charge) — fall through to a tier-based match below.
-  }
-  const tier = c.tier as Tier;
-  const addrs = byTier.get(tier) ?? [];
-  return addrs.length > 0 ? { addr: addrs[0]!, tier } : null;
+async function claimedItemAddresses(addrs: string[]): Promise<Set<string>> {
+  if (addrs.length === 0) return new Set();
+  const rows = (await sql`
+    SELECT onchain_key FROM tg_membership_tx_claims WHERE onchain_key = ANY(${addrs})
+  `) as unknown as Array<{ onchain_key: string }>;
+  return new Set(rows.map((r) => r.onchain_key));
 }
 
 /**
- * The single tg account that has ton-proof VERIFIED this wallet.
- * Returns null if zero — or, critically, MORE THAN ONE (0048 forbids that going forward; a
- * legacy duplicate is an anomaly we refuse to grant on rather than guess).
+ * Resolve, for ONE candidate charge, an ORDERED list of on-chain items worth attempting a
+ * grant against — or a `{ needsReview }` verdict when the hint points at an item whose tier
+ * cannot be read (P0-1 fail-closed) OR whose readable tier does not match the paid tier
+ * (F2 fail-closed). The carried reason string is persisted verbatim on the charge.
+ *
+ * Round 7 rework of round 6's `resolveGrantItem`. Two changes:
+ *   - P0-A: candidates are filtered against `claimed` (this tick's fresh read of
+ *     tg_membership_tx_claims) BEFORE being offered — an already-claimed item, of the hint
+ *     OR of the fallback tier match, is never returned. The caller tries candidates in
+ *     order and only gives up (→ needs_review) once every one of them has conflicted.
+ *   - returns a LIST, not a single winner, so a genuine concurrent-claim race on the first
+ *     candidate does not need to wait a whole tick to try the next one.
+ *
+ * Addresses in `c.item_address`, `byTier` and `unknownItems` are compared via
+ * normalizeTonAddress — the caller is responsible for having normalized `byTier`/
+ * `unknownItems` when building them from the tonapi response; this function normalizes
+ * `c.item_address` itself since it is the only caller that reads it.
  */
-async function soleVerifiedOwner(address: string): Promise<string | null> {
-  const rows = (await sql`
-    SELECT DISTINCT tg_user_id::text AS tg_user_id
-    FROM ton_wallets
-    WHERE address = ${address} AND is_verified = true
-    LIMIT 2
-  `) as unknown as Array<{ tg_user_id: string }>;
-  if (rows.length !== 1) {
-    if (rows.length > 1) {
-      console.error(
-        `[membership-reconciler] AMBIGUOUS WALLET ${address} verified by multiple accounts — refusing to grant (P0-1 guard)`,
-      );
-    }
-    return null;
+function resolveGrantCandidates(
+  c: PendingCharge,
+  byTier: Map<Tier, string[]>,
+  unknownItems: string[],
+  claimed: Set<string>,
+): { addr: string; tier: Tier }[] | { needsReview: string } {
+  const hint = normalizeTonAddress(c.item_address);
+
+  // Rule 1 (fail-closed on unreadable tier): the webhook's hinted item exists in THIS owner's
+  // current snapshot but its tier attribute is unreadable. This must ALWAYS become
+  // needs_review — claim state is irrelevant here, because an unreadably-tiered item can never
+  // satisfy any charge, claimed or not, and guessing its tier from `c.tier` (untrusted input)
+  // is exactly the bug P0-1 closed.
+  if (hint && unknownItems.includes(hint)) {
+    return {
+      needsReview:
+        'tier_unreadable: the item this charge minted (per the webhook hint) has no recognizable Tier attribute on chain — refusing to grant off the DB tier (P0-1 fail-closed)',
+    };
   }
-  return rows[0]!.tg_user_id;
+
+  const chargeTier = c.tier as Tier;
+  const out: { addr: string; tier: Tier }[] = [];
+
+  // Rule 2 (F2, round 8): the hinted item resolves to a READABLE tier. Grant against it ONLY
+  // if that on-chain tier EQUALS the charge's requested/paid tier — the invariant this whole
+  // file rests on (grant exactly the tier that was paid for). If the hint points at an item
+  // of a DIFFERENT tier (reachable via a leaked per-charge webhook token forging item.address,
+  // or a mis-baked mint template), we must NOT grant that tier — that is the "грант не того
+  // яруса" bug. Fail-closed to needs_review + log, do NOT silently fall through to rule 3 (a
+  // mismatched hint is a genuine anomaly a human should see, not something to paper over by
+  // quietly granting some other item). If the tiers MATCH, try it first (most precise match),
+  // but only while unclaimed — an already-claimed hint (e.g. a transferred-in item, issue #35)
+  // is not itself an anomaly; just skip to rule 3.
+  if (hint) {
+    for (const [tier, addrs] of byTier) {
+      if (!addrs.includes(hint)) continue;
+      if (tier !== chargeTier) {
+        return {
+          needsReview: `tier_mismatch: webhook-hinted item ${hint} is tier '${tier}' on chain but this charge is for '${chargeTier}' — refusing to grant a tier that was not paid for (F2 fail-closed)`,
+        };
+      }
+      if (!claimed.has(hint)) out.push({ addr: hint, tier });
+    }
+  }
+
+  // Rule 3 (P0-A): fall back to the charge's REQUESTED tier, over every UNCLAIMED item the
+  // owner currently holds of that tier — every one of them, in the order tonapi returned
+  // them, not merely the first. Safe because at most one charge per user is ever 'pending'
+  // at a time (0048's partial UNIQUE); the rare multi-charge case (stuck pool) still only
+  // grants a tier-EXACT, unclaimed match.
+  for (const addr of byTier.get(chargeTier) ?? []) {
+    if (!claimed.has(addr) && !out.some((o) => o.addr === addr)) out.push({ addr, tier: chargeTier });
+  }
+
+  return out;
 }
 
 /**
  * Grant ONE membership against ONE on-chain item, exactly once.
  *
- * `tier` is the CHAIN-derived tier (from `resolveGrantItem`/`extractTierFromItem`), never
- * `c.tier` — P0-1's whole point is that the grant must never trust the DB row for the tier
- * it hands out. The claim table (PK = onchain_key = the item's on-chain address) is the
+ * `tier` is the CHAIN-derived tier (from `resolveGrantCandidates`/`extractTierFromItem`),
+ * never `c.tier` — P0-1's whole point is that the grant must never trust the DB row for the
+ * tier it hands out. The claim table (PK = onchain_key = the item's on-chain address) is the
  * exactly-once guard, exactly like tg_topup_tx_claims for top-ups (lesson of issue #4).
  * Claim + grant + settle happen in ONE transaction: if the claim insert returns 0 rows the
  * item was already used, so we grant nothing and settle nothing here.
+ *
+ * Round 7 HIGH-B: `item_address` is written to `tg_membership_charges` ONLY inside this
+ * transaction, as part of the settle UPDATE below — it can never be persisted without a
+ * successful claim+grant behind it. (Round 6 had the CALLER pre-write it the moment tonapi
+ * returned a match, before this function even ran — so a charge whose claim then conflicted
+ * ended up "paid-looking" with nothing actually granted, permanently blocking the
+ * purchase-route TTL sweep from ever letting the user try again. That pre-write is gone.)
  */
 async function grantAgainstItem(c: PendingCharge, itemAddress: string, tier: Tier): Promise<boolean> {
   if (!itemAddress) return false;
@@ -254,13 +355,16 @@ async function grantAgainstItem(c: PendingCharge, itemAddress: string, tier: Tie
           ELSE tg_memberships.tier
         END,
         nft_address = COALESCE(EXCLUDED.nft_address, tg_memberships.nft_address),
-        source      = 'nft'
+        source      = 'nft',
+        revoked_at  = NULL,
+        revoked_reason = NULL
     `;
 
     // SETTLE (terminal). `tier` is overwritten with the chain-confirmed value — the charge
     // row now records what was ACTUALLY granted, not merely what was requested. Also
     // recovers a 'needs_review'/'failed' row whose item finally showed up: the charge
-    // settles and its failure_reason clears — the anomaly resolves itself.
+    // settles and its failure_reason clears — the anomaly resolves itself. `item_address`
+    // is written HERE, atomically with the grant (round 7 HIGH-B) — never before.
     await sql`
       UPDATE tg_membership_charges
       SET status='settled', item_address = ${itemAddress}, tier = ${tier},
@@ -318,34 +422,44 @@ async function reconcilePool(
       WHERE id = ANY(${candidates.map((c) => c.id)}::uuid[])
     `;
 
-    // P0-1 rule (3): bucket every owned item by ITS OWN on-chain tier. An item whose tier
-    // attribute is missing/unrecognized goes in `unknownItems` and can only ever push a
-    // charge to `needs_review` — never a grant off the DB tier.
+    // P0-1 rule (3) + MEDIUM (address normalization, round 7): bucket every owned item by
+    // ITS OWN on-chain tier, addresses canonicalized so later comparisons against the
+    // webhook's `item_address` hint (a different address encoding) actually work. An item
+    // whose tier attribute is missing/unrecognized goes in `unknownItems` and can only ever
+    // push a charge to `needs_review` — never a grant off the DB tier.
     const byTier = new Map<Tier, string[]>();
     const unknownItems: string[] = [];
     for (const item of items) {
-      if (!item.address) continue;
+      const addr = normalizeTonAddress(item.address);
+      if (!addr) continue;
       const t = extractTierFromItem(item);
-      if (t) byTier.set(t, [...(byTier.get(t) ?? []), item.address]);
-      else unknownItems.push(item.address);
+      if (t) byTier.set(t, [...(byTier.get(t) ?? []), addr]);
+      else unknownItems.push(addr);
     }
     if (byTier.size === 0 && unknownItems.length === 0) continue; // chain says: nothing minted (yet)
 
-    for (const c of candidates) {
-      const resolved = resolveGrantItem(c, byTier, unknownItems);
+    // P0-A (round 7): fetch which of these exact addresses are already claimed, ONCE per
+    // wallet per tick — the matcher below must never offer a claimed item as a candidate.
+    const allAddrs = [...unknownItems, ...[...byTier.values()].flat()];
+    const claimed = await claimedItemAddresses(allAddrs);
 
-      if (resolved === 'needs_review') {
+    for (const c of candidates) {
+      const resolved = resolveGrantCandidates(c, byTier, unknownItems, claimed);
+
+      if (!Array.isArray(resolved)) {
+        // Fail-closed: either an unreadable-tier hint (P0-1) or a tier MISMATCH (F2, round 8)
+        // — the carried reason distinguishes them and is persisted verbatim.
         try {
           const flagged = (await sql`
             UPDATE tg_membership_charges
             SET status = 'needs_review',
-                failure_reason = 'tier_unreadable: the item this charge minted (per the webhook hint) has no recognizable Tier attribute on chain — refusing to grant off the DB tier (P0-1 fail-closed)'
+                failure_reason = ${resolved.needsReview}
             WHERE id = ${c.id}::uuid AND status = 'pending'
             RETURNING id
           `) as unknown as Array<{ id: string }>;
           if (flagged.length > 0) {
             console.error(
-              `[membership-reconciler] NEEDS REVIEW (fail-closed) — charge=${c.id} user=${c.tg_user_id}: hinted item=${c.item_address} has no readable Tier attribute; NOT granting from DB tier.`,
+              `[membership-reconciler] NEEDS REVIEW (fail-closed) — charge=${c.id} user=${c.tg_user_id}: ${resolved.needsReview}`,
             );
           }
         } catch (e) {
@@ -356,31 +470,80 @@ async function reconcilePool(
         continue;
       }
 
-      if (!resolved) continue; // nothing to match yet — retry next tick
+      if (resolved.length === 0) continue; // nothing UNCLAIMED to match yet — retry next tick
 
-      const { addr, tier } = resolved;
-      try {
-        // HIGH-3: the reconciler writes the payment evidence ITSELF the moment it sees the
-        // item on chain. Evidence no longer depends on the (unreliable) callback arriving.
-        await sql`
-          UPDATE tg_membership_charges
-          SET item_address = COALESCE(item_address, ${addr})
-          WHERE id = ${c.id}::uuid AND status = 'pending'
-        `;
-        const granted = await grantAgainstItem(c, addr, tier);
-        if (granted) {
-          console.log(
-            `[membership-reconciler] granted charge=${c.id} user=${c.tg_user_id} tier=${tier} item=${addr}`,
+      // Round 7 P0-A/HIGH-B: try every unclaimed candidate in order; a claim conflict on one
+      // (a genuine concurrent race — `claimed` was already filtered fresh above) moves to the
+      // next instead of giving up. Only if EVERY candidate conflicts is this logged loudly
+      // and the charge flagged `needs_review` — never a silent `continue` on a paid charge.
+      let grantedOk = false;
+      for (const { addr, tier } of resolved) {
+        try {
+          const granted = await grantAgainstItem(c, addr, tier);
+          if (granted) {
+            grantedOk = true;
+            claimed.add(addr); // don't let a sibling charge in THIS tick reuse it
+            console.log(
+              `[membership-reconciler] granted charge=${c.id} user=${c.tg_user_id} tier=${tier} item=${addr}`,
+            );
+            break;
+          }
+          claimed.add(addr); // conflicted — unusable for the rest of this tick either
+          console.error(
+            `[membership-reconciler] grant race — item=${addr} claimed by a concurrent writer while resolving charge=${c.id}; trying next candidate`,
+          );
+        } catch (e) {
+          console.error(
+            `[membership-reconciler] grant failed charge=${c.id} item=${addr}: ${(e as Error).message}`,
           );
         }
-      } catch (e) {
-        console.error(
-          `[membership-reconciler] grant failed charge=${c.id} item=${addr}: ${(e as Error).message}`,
-        );
+      }
+      if (!grantedOk) {
+        try {
+          const flagged = (await sql`
+            UPDATE tg_membership_charges
+            SET status = 'needs_review',
+                failure_reason = 'grant_race: every unclaimed on-chain candidate conflicted with a concurrent claim this tick — still retried by the stuck pool'
+            WHERE id = ${c.id}::uuid AND status = 'pending'
+            RETURNING id
+          `) as unknown as Array<{ id: string }>;
+          if (flagged.length > 0) {
+            console.error(
+              `[membership-reconciler] NEEDS REVIEW (grant race) — charge=${c.id} user=${c.tg_user_id}: all candidates conflicted this tick.`,
+            );
+          }
+        } catch (e) {
+          console.error(
+            `[membership-reconciler] grant-race flag failed charge=${c.id}: ${(e as Error).message}`,
+          );
+        }
       }
     }
   }
   return requestsUsed;
+}
+
+/**
+ * The single tg account that has ton-proof VERIFIED this wallet.
+ * Returns null if zero — or, critically, MORE THAN ONE (0048 forbids that going forward; a
+ * legacy duplicate is an anomaly we refuse to grant on rather than guess).
+ */
+async function soleVerifiedOwner(address: string): Promise<string | null> {
+  const rows = (await sql`
+    SELECT DISTINCT tg_user_id::text AS tg_user_id
+    FROM ton_wallets
+    WHERE address = ${address} AND is_verified = true
+    LIMIT 2
+  `) as unknown as Array<{ tg_user_id: string }>;
+  if (rows.length !== 1) {
+    if (rows.length > 1) {
+      console.error(
+        `[membership-reconciler] AMBIGUOUS WALLET ${address} verified by multiple accounts — refusing to grant (P0-1 guard)`,
+      );
+    }
+    return null;
+  }
+  return rows[0]!.tg_user_id;
 }
 
 let tickCount = 0;
@@ -449,7 +612,9 @@ export async function runMembershipReconcileTick(): Promise<void> {
     // evidence existed used to be invisible to every pool forever (the webhook route's
     // HIGH-4 guard only protects evidence-bearing rows); now it is still periodically
     // re-checked against the chain and can self-heal to 'settled' if the mint actually went
-    // through despite the error report.
+    // through despite the error report. Round 7: this is also where a P0-A/HIGH-2
+    // `needs_review` (grant_race / tier_unreadable) gets a fresh shot every sweep, with a
+    // freshly re-fetched `claimed` set — so a transient race self-heals here.
     if (tickCount % STUCK_EVERY_N_TICKS === 0) {
       try {
         const stuck = (await sql`
@@ -470,7 +635,7 @@ export async function runMembershipReconcileTick(): Promise<void> {
         const n = Number(cnt[0]?.n ?? '0');
         if (n > 0) {
           console.error(
-            `[membership-reconciler] ALERT: ${n} charge(s) in needs_review (paid, undelivered). Still retried; investigate.`,
+            `[membership-reconciler] ALERT: ${n} charge(s) in needs_review (paid, undelivered). Still retried; investigate — see scripts/membership-review.ts.`,
           );
         }
       } catch (e) {

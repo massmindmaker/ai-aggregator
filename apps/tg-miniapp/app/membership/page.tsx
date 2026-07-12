@@ -6,6 +6,10 @@ import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui
 import { useAuth } from '@/hooks/useAuth';
 import { haptic } from '@/lib/haptics';
 import { MEMBERSHIP_TIERS, type MembershipTier } from '@/lib/membership';
+// Client-safe subpath ONLY (issue #17/#29 round 7) — the main '@aiag/shared' entry drags in
+// node:dns/node:net (./safe-fetch) and @aws-sdk/client-s3 (./s3) even for a single unused
+// export, which breaks the client bundle. See packages/shared/src/client.ts.
+import { tonToNano } from '@aiag/shared/client';
 
 // sessionStorage flag set by "продолжить бесплатно" (skip) so this screen shows once
 // per app session for a non-member, not on every /agents navigation — see app/page.tsx.
@@ -134,6 +138,10 @@ export default function MembershipPage() {
         setStatus('error');
         if (res.status === 409 && j.error === 'purchase_pending') {
           setErrorMsg('Покупка уже запрошена. Подождите подтверждения.');
+        } else if (res.status === 409 && j.error === 'pending_other_tier') {
+          setErrorMsg(
+            j.message ?? `У вас уже есть незавершённая покупка яруса ${j.current_tier}. Дождитесь подтверждения или истечения, затем повторите.`,
+          );
         } else if (res.status === 403 && j.error === 'wallet_not_verified') {
           setErrorMsg('Подтвердите владение кошельком (подпись ton-proof), затем повторите.');
         } else if (res.status === 503 && j.error === 'minter_not_configured') {
@@ -145,6 +153,25 @@ export default function MembershipPage() {
         }
         return;
       }
+
+      // Round 7 HIGH-C: the server may legitimately hand back an invoice for an EXISTING
+      // pending charge (idempotent replay) — but it must always be for the tier the user
+      // just clicked, at the expected price. Never sign a transaction whose tier or amount
+      // the user did not ask for; a client-side check is the last line of defence in case a
+      // server-side bug ever again returns the wrong invoice.
+      const expectedNanoTon = tonToNano(MEMBERSHIP_TIERS[tier].priceTon).toString();
+      const gotAmount = j?.transaction?.messages?.[0]?.amount;
+      if (j.tier !== tier || String(j.amount_nano_ton ?? gotAmount) !== expectedNanoTon || String(gotAmount) !== expectedNanoTon) {
+        console.error('[membership] invoice tier/amount mismatch — refusing to sign', {
+          requested: tier,
+          expectedNanoTon,
+          got: j,
+        });
+        setStatus('error');
+        setErrorMsg('Не удалось проверить сумму счёта. Попробуйте ещё раз.');
+        return;
+      }
+
       setStatus('awaiting_signature');
       await tonConnectUI.sendTransaction(j.transaction);
       setStatus('submitted');

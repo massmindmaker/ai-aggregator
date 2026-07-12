@@ -10,7 +10,8 @@
     "dev": "tsx watch src/index.ts",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "membership-review": "tsx src/scripts/membership-review.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

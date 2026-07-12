@@ -34,6 +34,14 @@ export function isMembershipTier(v: unknown): v is MembershipTier {
 /**
  * True if `tgUserId` has a creator membership. Fail-CLOSED: any error returns false
  * (deny creation) — safer than fail-open for an access gate.
+ *
+ * 🔴 CONTRACT (issue #29 HIGH-D, migration 0052): a row with `tier IS NULL` counts ONLY
+ * when `source = 'founder'` (0044's seed — the one deliberate infinite-access row). Any
+ * other NULL-tier row is a legacy free grant from the removed pre-round-6 sync route
+ * (bare NFT ownership, no payment) and must NOT pass this gate — that was exactly the bug
+ * (a free membership beating a paid `studio`). `revoked_at IS NOT NULL` (the backfill flag
+ * 0052 sets on those legacy rows) is excluded outright, belt-and-suspenders on top of the
+ * source/tier check.
  */
 export async function hasCreatorMembership(
   tgUserId: string | number,
@@ -41,7 +49,11 @@ export async function hasCreatorMembership(
 ): Promise<boolean> {
   try {
     const rows = (await sql`
-      SELECT 1 FROM tg_memberships WHERE tg_user_id = ${tgUserId}::bigint LIMIT 1
+      SELECT 1 FROM tg_memberships
+      WHERE tg_user_id = ${tgUserId}::bigint
+        AND revoked_at IS NULL
+        AND (source = 'founder' OR tier IS NOT NULL)
+      LIMIT 1
     `) as unknown as Array<unknown>;
     return rows.length > 0;
   } catch {
@@ -51,8 +63,10 @@ export async function hasCreatorMembership(
 
 /**
  * The caller's current PAID tier, or null (no membership / founder-seed row with no
- * tier). Used by the purchase route to reject "buy a tier ≤ what I already have"
- * (issue #29 round 6 MEDIUM) — never used to GRANT anything.
+ * tier / revoked legacy row). Used by the purchase route to reject "buy a tier ≤ what I
+ * already have" (issue #29 round 6 MEDIUM) — never used to GRANT anything. Excludes
+ * `revoked_at IS NOT NULL` rows (issue #29 HIGH-D, migration 0052) so a neutralized legacy
+ * grant can never be read as "already holds a tier" either.
  */
 export async function currentMembershipTier(
   tgUserId: string | number,
@@ -60,7 +74,9 @@ export async function currentMembershipTier(
 ): Promise<MembershipTier | null> {
   try {
     const rows = (await sql`
-      SELECT tier FROM tg_memberships WHERE tg_user_id = ${tgUserId}::bigint LIMIT 1
+      SELECT tier FROM tg_memberships
+      WHERE tg_user_id = ${tgUserId}::bigint AND revoked_at IS NULL
+      LIMIT 1
     `) as unknown as Array<{ tier: string | null }>;
     const t = rows[0]?.tier;
     return t && isMembershipTier(t) ? t : null;

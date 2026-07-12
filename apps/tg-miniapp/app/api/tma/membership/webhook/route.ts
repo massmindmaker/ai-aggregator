@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { Address } from '@ton/core';
 import postgres from 'postgres';
 
 export const runtime = 'nodejs';
@@ -61,6 +62,34 @@ interface MembershipCallback {
  * master secret. Combined with "this route grants nothing" (above), a leaked token buys an
  * attacker at most a forged hint/failure on one already-known charge id, never a membership.
  * Header form (`x-webhook-token`) is still accepted first, for a future/nginx-injected path.
+ *
+ * ROUND 7 MEDIUM — the token authenticates `userData` (the charge id), NOT the rest of the
+ * body.
+ *
+ * EVIDENCE (checked against bot.startonus.com/docs, 2026-07-12 — do NOT restate this from
+ * memory, re-check it if it ever matters again): the documented generate-invoice request body
+ * is `{id, address, secret, owner, referrers, nftPrice, nftAmount, nftData, callbackUrl,
+ * userData}`. `callbackUrl` is documented as nothing more than "url куда минтер пошлет POST
+ * запрос после удачного минта" — there is NO field for custom callback headers, and NO
+ * signature/HMAC field anywhere in the request or in the documented callback payload
+ * (`{success, item, owner, referrers, mint, userData}` / `{success:false, error:{code,
+ * message}}`). So: a body signature is NOT OFFERED BY THEIR DOCUMENTED API. That is a
+ * statement about the docs, not a proof of impossibility — an undocumented feature could
+ * exist; nobody has asked them. If body integrity ever becomes load-bearing (today it is
+ * not — see below), ASK STARTONUS before assuming either way.
+ *
+ * Residual risk, stated honestly rather than papered over:
+ *   - a leaked token lets an attacker POST a FORGED body for that one charge id — e.g. a
+ *     fake `success:false` (flips the charge to needs_review/failed) or a fake
+ *     `item.address` (recorded as an unauthoritative HINT only, and now validated as a
+ *     parseable TON address before being stored at all — see below);
+ *   - neither can cause a wrong GRANT: the reconciler (membership-reconciler.ts, round 7)
+ *     re-derives everything from the CHAIN — a forged item.address that does not correspond
+ *     to a real chain item currently owned by the wallet is simply never matched to
+ *     anything, and a forged failed/needs_review status is periodically re-swept and
+ *     self-heals once the real chain state is seen (round 6's stuck-pool fix). The blast
+ *     radius of a leaked token is bounded to alert-noise on one already-known charge, never
+ *     to money.
  */
 export async function POST(req: NextRequest) {
   const WEBHOOK_SECRET = process.env.MEMBERSHIP_WEBHOOK_SECRET;
@@ -134,15 +163,30 @@ export async function POST(req: NextRequest) {
   }
 
   // SUCCESS HINT. `item.address` is the on-chain identity; anything else is noise.
-  const itemAddress = typeof item?.address === 'string' ? item.address : null;
+  // Round 7 MEDIUM: validate it is even a parseable TON address before storing it — this is
+  // an UNAUTHENTICATED-body field (see the auth note above), so garbage/malicious input must
+  // never land in the column at all, not merely fail to match anything downstream.
+  const rawItemAddress = typeof item?.address === 'string' ? item.address : null;
+  let itemAddress: string | null = null;
+  if (rawItemAddress) {
+    try {
+      Address.parse(rawItemAddress); // throws on anything that isn't a real TON address
+      itemAddress = rawItemAddress;
+    } catch {
+      console.warn(
+        `[membership/webhook] success callback with unparseable item.address charge=${c.id} raw=${rawItemAddress}`,
+      );
+    }
+  }
   if (!itemAddress) {
-    console.warn(`[membership/webhook] success callback without item.address charge=${c.id}`);
+    console.warn(`[membership/webhook] success callback without a usable item.address charge=${c.id}`);
     return NextResponse.json({ ok: true, ignored: 'no_item_address' });
   }
 
   // Record the hint + the payment evidence. NOT a grant: the reconciler verifies this item
-  // against the chain and grants there. Guarded on 'pending' so a settled/failed charge is
-  // never rewritten by a late or replayed callback.
+  // against the chain — matching it by its OWN normalized address (membership-reconciler.ts,
+  // round 7) — and grants there. Guarded on 'pending' so a settled/failed charge is never
+  // rewritten by a late or replayed callback.
   await sql`
     UPDATE tg_membership_charges
     SET item_address = COALESCE(item_address, ${itemAddress})

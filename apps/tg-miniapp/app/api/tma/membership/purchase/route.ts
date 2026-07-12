@@ -29,6 +29,14 @@ const PENDING_TTL_MIN = 15;
  */
 const CHAIN_CHECK_FRESHNESS_MIN = 5;
 
+/**
+ * Round 7 HIGH-C: a stored TON Connect invoice is only safe to replay while it is still
+ * signable. `validUntil` is a Startonus-issued unix-seconds deadline; this margin means we
+ * stop offering it a little BEFORE it actually expires, so the client never gets handed a
+ * transaction that dies mid-signature-flow.
+ */
+const INVOICE_REPLAY_SAFETY_S = 30;
+
 /** Per-tier Startonus mint-set template env var (issue #29 round 6, P0-1). ONE template per
  * tier — not one shared template for all three — so the tier is bakeable into the item's
  * own on-chain metadata (a `Tier` attribute) and readable by the reconciler from the CHAIN,
@@ -70,6 +78,110 @@ function invoiceResponse(c: PendingRow) {
     },
     idempotent: true,
   });
+}
+
+/**
+ * Round 7 HIGH-C: mint (or re-mint) the Startonus invoice for `chargeId` and persist it.
+ * Shared by the fresh-charge path and the "existing charge, but its invoice expired" replay
+ * path — a repeat "buy" call for a tier MUST always end up minting for the SAME tier/amount
+ * it was asked for, never a stale or foreign one.
+ *
+ * `invoice.value` is verified against our own computed `amountNanoTon` (round 7 MEDIUM) —
+ * Startonus is an external system; blindly trusting whatever amount it echoes back would
+ * let a misconfigured/compromised minter hand the client a transaction for the wrong sum.
+ * A mismatch fails CLOSED (502), never "close enough".
+ */
+async function mintAndPersistInvoice(
+  chargeId: string,
+  tier: string,
+  amountNanoTon: bigint,
+  tgUserId: string,
+  recipientAddress: string,
+): Promise<NextResponse> {
+  const secret = process.env.STARTONUS_SECRET;
+  const collectionAddress = membershipCollectionAddress();
+  const mintTemplateId = process.env[MINT_TEMPLATE_ENV[tier]!];
+  const webhookSecret = process.env.MEMBERSHIP_WEBHOOK_SECRET;
+  if (!secret || !collectionAddress || !mintTemplateId || !webhookSecret) {
+    console.error(
+      `[membership/purchase] not configured for tier=${tier}: ` +
+        `secret=${!!secret} collection=${!!collectionAddress} ` +
+        `template(${MINT_TEMPLATE_ENV[tier]})=${!!mintTemplateId} webhookSecret=${!!webhookSecret}`,
+    );
+    await sql`UPDATE tg_membership_charges SET status='failed' WHERE id = ${chargeId}::uuid`;
+    return NextResponse.json({ error: 'minter_not_configured' }, { status: 503 });
+  }
+
+  const publicBase = process.env.PUBLIC_BASE_URL ?? 'https://app.ai-aggregator.ru';
+  // Startonus cannot send custom headers on its callback (only a plain callbackUrl —
+  // packages/shared/src/startonus.ts:49-50 / their OpenAPI has no header option), so SOME
+  // token must ride in the query string, where it can leak into access logs. We reduce the
+  // blast radius two ways: (1) a secret dedicated to this route (above), and (2) the token
+  // itself is NOT the raw secret — it's HMAC-SHA256(MEMBERSHIP_WEBHOOK_SECRET, chargeId), so
+  // a leaked token authenticates callbacks for THIS ONE charge only. Even a fully leaked
+  // token cannot be replayed against any other charge, and cannot be used to derive the
+  // master secret. The webhook route still accepts a header first (for a future/nginx-
+  // injected path) and additionally never grants on the callback alone (see webhook route).
+  const chargeToken = createHmac('sha256', webhookSecret).update(chargeId).digest('hex');
+  const callbackUrl = `${publicBase}/tg/api/tma/membership/webhook?token=${encodeURIComponent(chargeToken)}`;
+
+  try {
+    const invoice = await generateInvoice({
+      templateId: Number(mintTemplateId),
+      address: collectionAddress,
+      secret,
+      owner: { tgId: Number(tgUserId), wallet: recipientAddress },
+      nftPrice: amountNanoTon,
+      // LOW-2: no `nftData` — the card's name/description/image/attributes (incl. `Tier`)
+      // come from the per-tier Startonus mint-set template, configured once per tier in the
+      // minter panel.
+      userData: chargeId,
+      callbackUrl,
+    });
+
+    // Round 7 MEDIUM: the minter is an external system — never trust its echoed amount
+    // blind. It must match exactly what we asked it to charge.
+    if (invoice.value !== amountNanoTon.toString()) {
+      console.error(
+        `[membership/purchase] MINTER PRICE MISMATCH charge=${chargeId} tier=${tier} ` +
+          `expected=${amountNanoTon.toString()} got=${invoice.value} — refusing to hand this to the client`,
+      );
+      await sql`UPDATE tg_membership_charges SET status='failed' WHERE id = ${chargeId}::uuid`;
+      return NextResponse.json({ error: 'minter_unavailable' }, { status: 502 });
+    }
+
+    // Decision B: PERSIST the invoice so a repeat "buy" call can replay it instead of
+    // minting a second one.
+    await sql`
+      UPDATE tg_membership_charges
+      SET startonus_invoice_id = ${invoice.id},
+          invoice_to = ${invoice.to},
+          invoice_amount = ${invoice.value},
+          invoice_payload = ${invoice.payload},
+          invoice_valid_until = ${invoice.validUntil}
+      WHERE id = ${chargeId}::uuid
+    `;
+
+    return NextResponse.json({
+      charge_id: chargeId,
+      tier,
+      amount_nano_ton: amountNanoTon.toString(),
+      transaction: {
+        validUntil: invoice.validUntil,
+        messages: [
+          {
+            address: invoice.to,
+            amount: invoice.value,
+            payload: invoice.payload,
+          },
+        ],
+      },
+    });
+  } catch (e) {
+    console.error('membership invoice failed:', e);
+    await sql`UPDATE tg_membership_charges SET status='failed' WHERE id = ${chargeId}::uuid`;
+    return NextResponse.json({ error: 'minter_unavailable' }, { status: 502 });
+  }
 }
 
 /**
@@ -160,8 +272,15 @@ export async function POST(req: NextRequest) {
   // Decision B (issue #29 round 6): AT MOST ONE active charge per user, and a repeat "buy"
   // returns the SAME invoice — never a second one. Minting a second Startonus invoice for a
   // charge that already has a live, signable TON Connect transaction risks a genuine double
-  // payment for a single grant (the user could sign both). So: if a pending charge already
-  // exists, hand back its STORED invoice instead of creating anything.
+  // payment for a single grant (the user could sign both).
+  //
+  // 🔴 Round 7 HIGH-C: that replay is ONLY safe when the pending charge is for the SAME
+  // tier the client is asking to buy right now. Round 6 replayed whatever pending charge
+  // existed regardless of tier — so a leftover `studio` (30 TON) pending charge from an
+  // earlier abandoned attempt would be handed back to a client that clicked "Купить за 2
+  // TON" (creator), and the client (round 6's page.tsx) signed whatever transaction the
+  // server returned without checking. A tier mismatch is now a clean, actionable 409
+  // instead of a silent price swap.
   const existing = (await sql`
     SELECT id::text, tier, amount_nano_ton::text AS amount_nano_ton,
            invoice_to, invoice_amount, invoice_payload, invoice_valid_until::text AS invoice_valid_until
@@ -171,8 +290,27 @@ export async function POST(req: NextRequest) {
   `) as unknown as Array<PendingRow>;
   if (existing[0]) {
     const c = existing[0];
+    if (c.tier !== tier) {
+      return NextResponse.json(
+        {
+          error: 'pending_other_tier',
+          current_tier: c.tier,
+          message: `У вас уже есть незавершённая покупка яруса ${c.tier}. Дождитесь подтверждения или её истечения (до ${PENDING_TTL_MIN} мин без оплаты), затем повторите.`,
+        },
+        { status: 409 },
+      );
+    }
     if (c.invoice_to && c.invoice_amount && c.invoice_payload && c.invoice_valid_until) {
-      return invoiceResponse(c);
+      // Round 7 HIGH-C / MEDIUM: a stale invoice cannot be signed — Startonus's
+      // `validUntil` has (or is about to) pass. Re-mint for the SAME charge row rather than
+      // handing the client a dead transaction; this does not create a second charge or a
+      // second live invoice, only refreshes the one that already exists.
+      const nowS = Math.floor(Date.now() / 1000);
+      if (Number(c.invoice_valid_until) > nowS + INVOICE_REPLAY_SAFETY_S) {
+        return invoiceResponse(c);
+      }
+      const amountNanoTon = tonToNano(MEMBERSHIP_TIERS[tier].priceTon);
+      return mintAndPersistInvoice(c.id, tier, amountNanoTon, tgUserId, recipientAddress);
     }
     // Pending but the invoice was never persisted (e.g. crashed between INSERT and the
     // invoice UPDATE below) — nothing safe to replay yet. Ask the client to retry shortly;
@@ -211,7 +349,18 @@ export async function POST(req: NextRequest) {
         WHERE tg_user_id = ${tgUserId}::bigint AND status = 'pending'
         LIMIT 1
       `) as unknown as Array<PendingRow>;
-      if (winner[0]?.invoice_to) return invoiceResponse(winner[0]);
+      const w = winner[0];
+      if (w && w.tier !== tier) {
+        return NextResponse.json(
+          {
+            error: 'pending_other_tier',
+            current_tier: w.tier,
+            message: `У вас уже есть незавершённая покупка яруса ${w.tier}. Дождитесь подтверждения или её истечения (до ${PENDING_TTL_MIN} мин без оплаты), затем повторите.`,
+          },
+          { status: 409 },
+        );
+      }
+      if (w?.invoice_to) return invoiceResponse(w);
       return NextResponse.json({ error: 'purchase_pending' }, { status: 409 });
     }
     throw e;
@@ -223,79 +372,5 @@ export async function POST(req: NextRequest) {
   // item, which is how the reconciler reads the tier from the CHAIN instead of trusting
   // this row. Without the tier's own template id, we refuse to mint at all — fail-closed,
   // never fall back to a shared/default template.
-  const secret = process.env.STARTONUS_SECRET;
-  const collectionAddress = membershipCollectionAddress();
-  const mintTemplateId = process.env[MINT_TEMPLATE_ENV[tier]!];
-  // MEDIUM (issue #29 round 6): a dedicated webhook secret for membership, separate from
-  // Phase-16's TRANSFER_WEBHOOK_SECRET, so a leak on one surface does not compromise both.
-  const webhookSecret = process.env.MEMBERSHIP_WEBHOOK_SECRET;
-  if (!secret || !collectionAddress || !mintTemplateId || !webhookSecret) {
-    console.error(
-      `[membership/purchase] not configured for tier=${tier}: ` +
-        `secret=${!!secret} collection=${!!collectionAddress} ` +
-        `template(${MINT_TEMPLATE_ENV[tier]})=${!!mintTemplateId} webhookSecret=${!!webhookSecret}`,
-    );
-    await sql`UPDATE tg_membership_charges SET status='failed' WHERE id = ${chargeId}::uuid`;
-    return NextResponse.json({ error: 'minter_not_configured' }, { status: 503 });
-  }
-
-  const publicBase = process.env.PUBLIC_BASE_URL ?? 'https://app.ai-aggregator.ru';
-  // Startonus cannot send custom headers on its callback (only a plain callbackUrl —
-  // packages/shared/src/startonus.ts:49-50 / their OpenAPI has no header option), so SOME
-  // token must ride in the query string, where it can leak into access logs. We reduce the
-  // blast radius two ways: (1) a secret dedicated to this route (above), and (2) the token
-  // itself is NOT the raw secret — it's HMAC-SHA256(MEMBERSHIP_WEBHOOK_SECRET, chargeId), so
-  // a leaked token authenticates callbacks for THIS ONE charge only. Even a fully leaked
-  // token cannot be replayed against any other charge, and cannot be used to derive the
-  // master secret. The webhook route still accepts a header first (for a future/nginx-
-  // injected path) and additionally never grants on the callback alone (see webhook route).
-  const chargeToken = createHmac('sha256', webhookSecret).update(chargeId).digest('hex');
-  const callbackUrl = `${publicBase}/tg/api/tma/membership/webhook?token=${encodeURIComponent(chargeToken)}`;
-
-  try {
-    const invoice = await generateInvoice({
-      templateId: Number(mintTemplateId),
-      address: collectionAddress,
-      secret,
-      owner: { tgId: Number(tgUserId), wallet: recipientAddress },
-      nftPrice: amountNanoTon,
-      // LOW-2: no `nftData` — the card's name/description/image/attributes (incl. `Tier`)
-      // come from the per-tier Startonus mint-set template, configured once per tier in the
-      // minter panel.
-      userData: chargeId,
-      callbackUrl,
-    });
-
-    // Decision B: PERSIST the invoice so a repeat "buy" call can replay it instead of
-    // minting a second one.
-    await sql`
-      UPDATE tg_membership_charges
-      SET startonus_invoice_id = ${invoice.id},
-          invoice_to = ${invoice.to},
-          invoice_amount = ${invoice.value},
-          invoice_payload = ${invoice.payload},
-          invoice_valid_until = ${invoice.validUntil}
-      WHERE id = ${chargeId}::uuid
-    `;
-
-    return NextResponse.json({
-      charge_id: chargeId,
-      tier,
-      amount_nano_ton: amountNanoTon.toString(),
-      transaction: {
-        validUntil: invoice.validUntil,
-        messages: [
-          {
-            address: invoice.to,
-            amount: invoice.value,
-            payload: invoice.payload,
-          },
-        ],
-      },
-    });
-  } catch (e) {
-    console.error('membership invoice failed:', e);
-    await sql`UPDATE tg_membership_charges SET status='failed' WHERE id = ${chargeId}::uuid`;
-    return NextResponse.json({ error: 'minter_unavailable' }, { status: 502 });
-  }
+  return mintAndPersistInvoice(chargeId, tier, amountNanoTon, tgUserId, recipientAddress);
 }
