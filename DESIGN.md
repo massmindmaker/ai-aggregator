@@ -60,9 +60,20 @@ The one design contract for **both surfaces** (TMA mobile + Web) and **both them
 
 `aiag-logo-dot` is always paired with `aiag-logo-halo` — the halo circle sits behind each node and carries the glow bloom via `transform`+`opacity` (it replaced a `filter: drop-shadow`, which was off-contract).
 
-**Web-only (marketing/landing/admin surfaces):** `aiag-pulse` (live dot on hero/leaderboard/stream badges) · `aiag-cursor` (terminal blink) · `aiag-hero-canvas`, `aiag-hero-lattice`, `aiag-hero-overlay`, `aiag-hero`, `aiag-hero-grid` (hero backdrop + layout) · `aiag-float-card` (floating model cards) · `aiag-logo-track` (provider-logo marquee) · `aiag-grid-bg-sm`, `aiag-grid-bg-glow`, `aiag-grid-bg-glow-alt` (grid backdrops; the `-glow*` ones drift) · `aiag-cells-spot` (cellular-automaton mask) · `aiag-drawer-overlay`, `aiag-drawer-panel-enter` (mobile drawer) · `aiag-sparkline-path` (draw-in) · `aiag-row-hover` (admin tables) · `aiag-pulse-dot-success`, `aiag-pulse-dot-danger`, `aiag-pulse-dot-muted` (dot colour modifiers).
+**Cross-page transition (both apps):** `aiag-vt-fade-out` / `aiag-vt-fade-in` — the View Transitions cross-fade keyframes bound to `::view-transition-old(root)` / `::view-transition-new(root)`. They have **no class carrier** (they attach to the pseudo-elements directly), which is exactly why they are easy to lose — enumerate them here.
+
+**Web-only (marketing/landing/admin surfaces):** `aiag-pulse` (live dot on hero/leaderboard/stream badges) · `aiag-cursor` (terminal blink) · `aiag-hero-canvas`, `aiag-hero-lattice` (animated hero backdrop) · `aiag-float-card` (floating model cards) · `aiag-logo-track` (provider-logo marquee) · `aiag-grid-bg-glow`, `aiag-grid-bg-glow-alt` (drifting grid spot) · `aiag-drawer-overlay`, `aiag-drawer-panel-enter` (mobile drawer) · `aiag-sparkline-path` (draw-in) · `aiag-row-hover` (admin tables) · `aiag-pulse-dot-success`, `aiag-pulse-dot-danger`, `aiag-pulse-dot-muted` (dot colour modifiers).
+
+**Static `aiag-*` helpers (no animation — layout/decor only, listed so they are never mistaken for a motion gap):** `aiag-hero`, `aiag-hero-grid`, `aiag-hero-overlay`, `aiag-hero-badge`, `aiag-hero-stats`, `aiag-hero-terminal`, `aiag-pricing-grid`, `aiag-floating-cards` (hero/pricing geometry + responsive rules) · `aiag-grid-bg-sm` (static grid backdrop) · `aiag-cells-spot` (cellular-automaton mask).
 
 **TMA-only:** `tma-page-enter` (route enter) · `tma-sheet-*` (bottom-sheet) · `aiag-holo-drift` (collectible-card foil).
+
+### Perimeter of this section (so "is the doc complete?" is decidable, not a judgement call)
+This section enumerates exactly two kinds of `aiag-*` symbol, and any check for drift must use the same set:
+1. **every `aiag-*` class** declared in `apps/web/src/app/globals.css` + `apps/tg-miniapp/app/globals.css` — animated *and* static (the static ones are listed above precisely so a scanner does not report them as missing);
+2. **every `@keyframes aiag-*` that has no `.aiag-*` class carrier** — i.e. referenced only from a pseudo-element or a non-`aiag` selector. Today there are exactly three: `aiag-vt-fade-in`, `aiag-vt-fade-out` (bound to `::view-transition-*`) and `aiag-holo-drift` (bound to `.tma-agent-card … ::before`, documented below as a known exception).
+
+**Deliberately NOT enumerated:** `@keyframes` names that merely back a documented class (`aiag-shimmer` ← `.aiag-skeleton`, `aiag-conic-spin` ← `.aiag-featured-ring`, `aiag-logo-dot-pulse` ← `.aiag-logo-dot`, `aiag-logo-halo-bloom` ← `.aiag-logo-halo`, `aiag-aurora-drift` ← `.aiag-aurora`, `aiag-grid-spot-drift`, `aiag-lattice-drift`, `aiag-bg-fade-in`, `aiag-cursor-blink`, `aiag-scroll-left`, `aiag-float-1/2/3`, `aiag-drawer-slide-in`, `aiag-overlay-fade-in`). Their names are implementation detail of a class that *is* documented; the class is the public surface. Listing them would duplicate, not clarify.
 
 **Rules:** **`transform`/`opacity` only** — no `filter`, no `background-image`, no `box-shadow` keyframes. Ease `cubic-bezier(.23,1,.32,1)`, no bounce.
 - **No inline `animation:`** in TSX — an inline style cannot be switched off by a reduced-motion CSS rule. Always attach a carrier class; parametrise with CSS vars if the timing varies (`.aiag-fade-up` takes `--fade-dur` / `--fade-delay`).
