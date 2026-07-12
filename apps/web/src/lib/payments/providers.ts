@@ -127,10 +127,26 @@ class YooKassaProvider implements PaymentProvider {
 
 /* ------------------------------- Registry -------------------------------- */
 
+/**
+ * SINGLE source of truth for the Tinkoff terminal password. Both payment
+ * initiation (Init request signing) and webhook signature verification MUST
+ * resolve the secret through here so they can never diverge — a mismatch would
+ * make CONFIRMED callbacks fail verification and silently lose the payment.
+ * Returns null when neither env var is set (caller decides: build-safe
+ * placeholder for Init, fail-closed rejection for verify).
+ */
+export function resolveTinkoffSecret(): string | null {
+  return process.env.TINKOFF_PASSWORD || process.env.TINKOFF_SECRET_KEY || null;
+}
+
 export function getTinkoffClient(): TinkoffAcquiring {
   return createTinkoffClient({
     terminalKey: process.env.TINKOFF_TERMINAL_KEY || 'placeholder_terminal',
-    secretKey: process.env.TINKOFF_PASSWORD || process.env.TINKOFF_SECRET_KEY || 'placeholder_secret',
+    // Placeholder only keeps build/import from crashing when env is unset; a
+    // real Init to the bank needs a real secret anyway. The webhook must NOT
+    // trust this placeholder (it is guessable from source) — it fail-closes via
+    // resolveTinkoffSecret() before verifying. See /api/webhooks/tinkoff.
+    secretKey: resolveTinkoffSecret() ?? 'placeholder_secret',
     apiUrl: process.env.TINKOFF_API_URL,
   });
 }

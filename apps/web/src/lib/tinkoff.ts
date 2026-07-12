@@ -1,17 +1,17 @@
-import { createTinkoffClient, TinkoffAcquiring } from '@aiag/tinkoff';
+import { TinkoffAcquiring } from '@aiag/tinkoff';
+import { getTinkoffClient } from '@/lib/payments/providers';
 
 // Create a global instance to reuse
 const globalForTinkoff = globalThis as unknown as {
   tinkoff: TinkoffAcquiring | undefined;
 };
 
-export const tinkoff =
-  globalForTinkoff.tinkoff ??
-  createTinkoffClient({
-    terminalKey: process.env.TINKOFF_TERMINAL_KEY!,
-    secretKey: process.env.TINKOFF_SECRET_KEY!,
-    apiUrl: process.env.TINKOFF_API_URL,
-  });
+// Verify (webhook) and Init (providers.ts) share ONE client factory so the
+// terminal secret is resolved identically (TINKOFF_PASSWORD || TINKOFF_SECRET_KEY
+// via resolveTinkoffSecret). Previously this read TINKOFF_SECRET_KEY only, so a
+// prod terminal configured under TINKOFF_PASSWORD would fail CONFIRMED
+// verification and lose the payment.
+export const tinkoff = globalForTinkoff.tinkoff ?? getTinkoffClient();
 
 if (process.env.NODE_ENV !== 'production') {
   globalForTinkoff.tinkoff = tinkoff;

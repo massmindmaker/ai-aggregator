@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tinkoff } from '@/lib/tinkoff';
+import { resolveTinkoffSecret } from '@/lib/payments/providers';
 import { db } from '@/lib/db';
 import { eq, and, ne, sql } from '@aiag/database';
 import { payments, subscriptions, balanceTransactions, users } from '@aiag/database/schema';
@@ -10,10 +11,19 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
+    // Fail-closed: if no terminal secret is configured, refuse to verify at all
+    // rather than fall back to the guessable 'placeholder_secret' (which would
+    // let a forged callback pass). A misconfigured prod must reject, not mint.
+    if (!resolveTinkoffSecret()) {
+      console.error('[webhook/tinkoff] terminal secret not configured — rejecting');
+      return NextResponse.json({ error: 'Not configured' }, { status: 400 });
+    }
+
     const payload = (await request.json()) as WebhookNotification;
 
-    // Verify webhook signature (Tinkoff HMAC token, see @aiag/tinkoff). Never
-    // trust an unsigned callback with money-moving side effects.
+    // Verify webhook signature (Tinkoff HMAC token, see @aiag/tinkoff). The
+    // secret is resolved via the SAME chain as Init (TINKOFF_PASSWORD ||
+    // TINKOFF_SECRET_KEY) so a legitimately-signed CONFIRMED always validates.
     const webhookData = tinkoff.parseWebhook(payload);
 
     if (!webhookData.isValid) {
@@ -81,9 +91,24 @@ export async function POST(request: NextRequest) {
           await creditBalance(tx, confirmed, webhookData);
         }
       });
+    } else if (webhookData.status === 'REFUNDED' || webhookData.status === 'PARTIAL_REFUNDED') {
+      // Refund is a LEGITIMATE post-confirmation transition — allowed to move a
+      // confirmed payment to a refunded state.
+      await db
+        .update(payments)
+        .set({
+          status: mapTinkoffStatus(webhookData.status),
+          tinkoffStatus: webhookData.status,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, payment.id));
+      await handleRefund(payment.id, webhookData);
     } else {
-      // Non-credit status transitions (pending/authorized/rejected/etc.) —
-      // bookkeeping only, no money moves.
+      // Non-terminal / rejection bookkeeping. Guard `status <> 'confirmed'`:
+      // a late NEW/AUTHORIZING/REJECTED callback must NOT downgrade an already
+      // confirmed (terminal) payment back into an unfinished state — that would
+      // reopen the idempotency gate. 0 rows updated on a confirmed payment; we
+      // still return 200 so the bank stops retrying (no 500 loop).
       const newStatus = mapTinkoffStatus(webhookData.status);
       await db
         .update(payments)
@@ -94,11 +119,7 @@ export async function POST(request: NextRequest) {
           tinkoffRebillId: webhookData.rebillId,
           updatedAt: new Date(),
         })
-        .where(eq(payments.id, payment.id));
-
-      if (webhookData.status === 'REFUNDED' || webhookData.status === 'PARTIAL_REFUNDED') {
-        await handleRefund(payment.id, webhookData);
-      }
+        .where(and(eq(payments.id, payment.id), ne(payments.status, 'confirmed')));
     }
 
     return NextResponse.json({ success: true });
@@ -204,10 +225,11 @@ async function activateSubscriptionTier(
     ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
     : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
-  // Guarded UPDATE: only flips a subscription that is not already active. Even
-  // though the payment gate already guarantees single execution, this keeps the
-  // tier activation itself idempotent and self-describing. credits_limit was
-  // set from TIERS at creation; we grant a fresh period by zeroing usage.
+  // Guarded UPDATE: activate ONLY the pending subscription this purchase
+  // created (`status = 'pending'`). Using eq('pending') — not ne('active') —
+  // means a CONFIRMED callback can never resurrect a cancelled/expired
+  // subscription into active. credits_limit was set from TIERS at creation; we
+  // grant a fresh period by zeroing usage.
   await tx
     .update(subscriptions)
     .set({
@@ -220,7 +242,7 @@ async function activateSubscriptionTier(
       usedTokens: 0,
       updatedAt: now,
     })
-    .where(and(eq(subscriptions.id, payment.subscriptionId!), ne(subscriptions.status, 'active')));
+    .where(and(eq(subscriptions.id, payment.subscriptionId!), eq(subscriptions.status, 'pending')));
 
   // TODO (recurring renewal): webhookData.rebillId is now bound to the
   // subscription; a scheduled job charging it each period to renew the tier is

@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getPaymentProvider, getTier, TIERS, ALL_PROVIDERS } from '../providers';
+import { getPaymentProvider, getTier, TIERS, ALL_PROVIDERS, getTinkoffClient, resolveTinkoffSecret } from '../providers';
+import { generateToken } from '@aiag/tinkoff';
+import type { WebhookNotification } from '@aiag/tinkoff';
 
 describe('payments/providers — registry', () => {
   it('returns Tinkoff provider', () => {
@@ -75,5 +77,73 @@ describe('payments/providers — provider matrix', () => {
     const mod = await import('../providers?reload=' + Date.now());
     const enabled = (mod.ALL_PROVIDERS as typeof ALL_PROVIDERS).filter((p) => p.enabled);
     expect(enabled.length).toBeLessThanOrEqual(ALL_PROVIDERS.length);
+  });
+});
+
+describe('payments/providers — Tinkoff secret resolution (HIGH: Init/verify parity)', () => {
+  let prevPassword: string | undefined;
+  let prevSecret: string | undefined;
+
+  beforeEach(() => {
+    prevPassword = process.env.TINKOFF_PASSWORD;
+    prevSecret = process.env.TINKOFF_SECRET_KEY;
+  });
+  afterEach(() => {
+    if (prevPassword !== undefined) process.env.TINKOFF_PASSWORD = prevPassword;
+    else delete process.env.TINKOFF_PASSWORD;
+    if (prevSecret !== undefined) process.env.TINKOFF_SECRET_KEY = prevSecret;
+    else delete process.env.TINKOFF_SECRET_KEY;
+  });
+
+  function makeSignedWebhook(secret: string): WebhookNotification {
+    const base = {
+      TerminalKey: 'term_1',
+      OrderId: 'sub_1',
+      Success: true,
+      Status: 'CONFIRMED' as const,
+      PaymentId: 12345,
+      ErrorCode: '0',
+      Amount: 99000,
+    };
+    // The bank signs with the terminal PASSWORD; Token = SHA256 over sorted
+    // params + Password. Reproduce exactly what Tinkoff would send.
+    const Token = generateToken(base as unknown as Record<string, unknown>, secret);
+    return { ...base, Token };
+  }
+
+  it('resolveTinkoffSecret prefers TINKOFF_PASSWORD, falls back to TINKOFF_SECRET_KEY', () => {
+    process.env.TINKOFF_PASSWORD = 'pw';
+    process.env.TINKOFF_SECRET_KEY = 'sk';
+    expect(resolveTinkoffSecret()).toBe('pw');
+    delete process.env.TINKOFF_PASSWORD;
+    expect(resolveTinkoffSecret()).toBe('sk');
+  });
+
+  it('fail-closed: returns null when NEITHER env var is set', () => {
+    delete process.env.TINKOFF_PASSWORD;
+    delete process.env.TINKOFF_SECRET_KEY;
+    expect(resolveTinkoffSecret()).toBeNull();
+  });
+
+  // The actual HIGH bug: a CONFIRMED signed with TINKOFF_PASSWORD must verify.
+  it('a webhook signed with TINKOFF_PASSWORD passes verification', () => {
+    process.env.TINKOFF_PASSWORD = 'terminal_password_123';
+    delete process.env.TINKOFF_SECRET_KEY;
+    const parsed = getTinkoffClient().parseWebhook(makeSignedWebhook('terminal_password_123'));
+    expect(parsed.isValid).toBe(true);
+  });
+
+  it('a webhook signed with TINKOFF_SECRET_KEY still passes (fallback intact)', () => {
+    delete process.env.TINKOFF_PASSWORD;
+    process.env.TINKOFF_SECRET_KEY = 'legacy_secret_key';
+    const parsed = getTinkoffClient().parseWebhook(makeSignedWebhook('legacy_secret_key'));
+    expect(parsed.isValid).toBe(true);
+  });
+
+  it('a webhook signed with the WRONG secret is rejected', () => {
+    process.env.TINKOFF_PASSWORD = 'correct_password';
+    delete process.env.TINKOFF_SECRET_KEY;
+    const parsed = getTinkoffClient().parseWebhook(makeSignedWebhook('attacker_guess'));
+    expect(parsed.isValid).toBe(false);
   });
 });
