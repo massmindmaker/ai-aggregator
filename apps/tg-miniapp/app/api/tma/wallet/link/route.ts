@@ -51,16 +51,18 @@ export async function POST(req: NextRequest) {
     verified = true;
   }
 
-  const rows = (await sql`
-    INSERT INTO ton_wallets (tg_user_id, address, public_key, is_verified, linked_at, last_seen_at)
-    VALUES (${tgUserId}::bigint, ${address}, ${public_key ?? null}, ${verified}, NOW(), NOW())
-    ON CONFLICT (tg_user_id, address) DO UPDATE
-      SET last_seen_at = NOW(),
-          public_key = COALESCE(EXCLUDED.public_key, ton_wallets.public_key),
-          is_verified = ton_wallets.is_verified OR EXCLUDED.is_verified
-    RETURNING id::text, tg_user_id::text AS tg_user_id, address, public_key, is_verified,
-              linked_at, last_seen_at
-  `) as unknown as Array<{
+  // migration 0048 added a partial UNIQUE uq_ton_wallets_verified_address
+  // (address) WHERE is_verified=true — a wallet can be the VERIFIED wallet of
+  // at most one account (the reconciler's ownership check depends on this).
+  // The ON CONFLICT target above only covers (tg_user_id, address); a verified
+  // link attempt on an address already verified by a DIFFERENT tg_user_id does
+  // not hit that target — it falls through to the INSERT/UPDATE and trips the
+  // partial index instead, which Postgres raises as 23505. Catch exactly that
+  // constraint and answer with a clean 409; do NOT reassign/steal the wallet —
+  // ownership stays with whoever verified it first (money-path invariant,
+  // canon §29 review). Anything else (e.g. a different 23505) is a bug, not an
+  // expected race, and must keep propagating as a 500.
+  let rows: Array<{
     id: string;
     tg_user_id: string;
     address: string;
@@ -69,6 +71,35 @@ export async function POST(req: NextRequest) {
     linked_at: string;
     last_seen_at: string;
   }>;
+  try {
+    rows = (await sql`
+      INSERT INTO ton_wallets (tg_user_id, address, public_key, is_verified, linked_at, last_seen_at)
+      VALUES (${tgUserId}::bigint, ${address}, ${public_key ?? null}, ${verified}, NOW(), NOW())
+      ON CONFLICT (tg_user_id, address) DO UPDATE
+        SET last_seen_at = NOW(),
+            public_key = COALESCE(EXCLUDED.public_key, ton_wallets.public_key),
+            is_verified = ton_wallets.is_verified OR EXCLUDED.is_verified
+      RETURNING id::text, tg_user_id::text AS tg_user_id, address, public_key, is_verified,
+                linked_at, last_seen_at
+    `) as unknown as Array<{
+      id: string;
+      tg_user_id: string;
+      address: string;
+      public_key: string | null;
+      is_verified: boolean;
+      linked_at: string;
+      last_seen_at: string;
+    }>;
+  } catch (e) {
+    const err = e as { code?: string; constraint_name?: string };
+    if (err.code === '23505' && err.constraint_name === 'uq_ton_wallets_verified_address') {
+      return NextResponse.json(
+        { error: 'wallet_already_linked', message: 'Этот кошелёк уже привязан к другому аккаунту' },
+        { status: 409 },
+      );
+    }
+    throw e;
+  }
 
   return NextResponse.json({ wallet: rows[0] });
 }
