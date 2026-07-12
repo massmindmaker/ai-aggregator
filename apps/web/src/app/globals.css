@@ -654,15 +654,11 @@
   }
 }
 
-/* === Grid pattern background (static, used as decorative bg) === */
-.aiag-grid-bg {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  background-size: 24px 24px;
-  background-position: -1px -1px;
-}
-
+/* === Grid pattern background (static, used as decorative bg) ===
+ * NOTE (issue #23): the base `.aiag-grid-bg` (24px, white lines) was removed —
+ * grep-proven zero consumers (only `-sm`, `-glow` and `-glow-alt` are used in
+ * TSX). It is a static utility, not an animation; the live variants below are
+ * untouched. */
 .aiag-grid-bg-sm {
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),

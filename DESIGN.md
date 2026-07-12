@@ -60,15 +60,20 @@ The one design contract for **both surfaces** (TMA mobile + Web) and **both them
 
 `aiag-logo-dot` is always paired with `aiag-logo-halo` — the halo circle sits behind each node and carries the glow bloom via `transform`+`opacity` (it replaced a `filter: drop-shadow`, which was off-contract).
 
-**Web-only (marketing/landing/admin surfaces):** `aiag-pulse` (live dot on hero/leaderboard/stream badges) · `aiag-cursor` (terminal blink) · `aiag-hero-canvas`, `aiag-hero-lattice`, `aiag-hero-overlay`, `aiag-hero`, `aiag-hero-grid` (hero backdrop + layout) · `aiag-float-card` (floating model cards) · `aiag-logo-track` (provider-logo marquee) · `aiag-grid-bg`, `aiag-grid-bg-sm`, `aiag-grid-bg-glow`, `aiag-grid-bg-glow-alt` (grid backdrops; the `-glow*` ones drift) · `aiag-cells-spot` (cellular-automaton mask) · `aiag-drawer-overlay`, `aiag-drawer-panel-enter` (mobile drawer) · `aiag-sparkline-path` (draw-in) · `aiag-row-hover` (admin tables) · `aiag-pulse-dot-success` / `-danger` / `-muted` (dot colour modifiers).
+**Web-only (marketing/landing/admin surfaces):** `aiag-pulse` (live dot on hero/leaderboard/stream badges) · `aiag-cursor` (terminal blink) · `aiag-hero-canvas`, `aiag-hero-lattice`, `aiag-hero-overlay`, `aiag-hero`, `aiag-hero-grid` (hero backdrop + layout) · `aiag-float-card` (floating model cards) · `aiag-logo-track` (provider-logo marquee) · `aiag-grid-bg-sm`, `aiag-grid-bg-glow`, `aiag-grid-bg-glow-alt` (grid backdrops; the `-glow*` ones drift) · `aiag-cells-spot` (cellular-automaton mask) · `aiag-drawer-overlay`, `aiag-drawer-panel-enter` (mobile drawer) · `aiag-sparkline-path` (draw-in) · `aiag-row-hover` (admin tables) · `aiag-pulse-dot-success`, `aiag-pulse-dot-danger`, `aiag-pulse-dot-muted` (dot colour modifiers).
 
 **TMA-only:** `tma-page-enter` (route enter) · `tma-sheet-*` (bottom-sheet) · `aiag-holo-drift` (collectible-card foil).
 
 **Rules:** **`transform`/`opacity` only** — no `filter`, no `background-image`, no `box-shadow` keyframes. Ease `cubic-bezier(.23,1,.32,1)`, no bounce.
 - **No inline `animation:`** in TSX — an inline style cannot be switched off by a reduced-motion CSS rule. Always attach a carrier class; parametrise with CSS vars if the timing varies (`.aiag-fade-up` takes `--fade-dur` / `--fade-delay`).
-- **`prefers-reduced-motion: reduce` = ONE consolidated `@media` block per app** (bottom of each `globals.css`) that kills every `aiag-*` — a universal `*` timing-collapse safety net plus an explicit `animation: none` list, with end-states pinned where a freeze would look broken (`.aiag-hero-canvas` → `opacity:.55`, `.aiag-check-svg path` / `.aiag-sparkline-path` → `stroke-dashoffset:0`, `.aiag-stagger > *` → `opacity:1`, `.aiag-logo-halo` → `opacity:0`).
-- **No `aiag-*` declared without a consumer**, and none outside that off-switch (issue #23).
-- **Known exception:** `aiag-holo-drift` (TMA collectible-card foil) animates `background-position` — pre-existing, off-contract, kept deliberately as the card signature; it has its own reduced-motion switch.
+- **No `aiag-*` declared without a consumer** (issue #23).
+- **`prefers-reduced-motion: reduce` — coverage must be total; block count differs per app:**
+  - **web:** exactly **one** consolidated `@media` block at the bottom of `globals.css` — a universal `*` timing-collapse safety net plus an explicit `animation: none` list.
+  - **TMA:** **one** consolidated block for the whole `aiag-*` library, plus **5 local blocks** sitting next to the `tma-*` definitions they switch off (`tma-agent-card`/holo, `tma-skeleton`, `tma-acc-body`, `tma-sheet` ×2). This is deliberate, not drift: the last one is **nested inside `@supports (transition-behavior: allow-discrete)`** and therefore *cannot* be hoisted into a single top-level block without changing what it overrides. Coverage is complete either way — every animated `aiag-*` and `tma-*` selector is switched off.
+  - End-states are pinned wherever a freeze would look broken: `.aiag-hero-canvas` → `opacity:.55`, `.aiag-check-svg path` / `.aiag-sparkline-path` → `stroke-dashoffset:0`, `.aiag-stagger > *` → `opacity:1`, `.aiag-logo-halo` → `opacity:0`.
+- **Known exceptions to transform/opacity (all three deliberate, all pinned or switched off under reduce):**
+  1. `aiag-check-draw` and `aiag-sparkline-draw` animate **`stroke-dashoffset`** — an SVG stroke draw-in is not expressible via `transform`/`opacity` (it reveals path length, not position or alpha). Under reduce both are pinned to their end state (`stroke-dashoffset: 0` = fully drawn), so the shape is complete and static.
+  2. `aiag-holo-drift` (TMA collectible-card foil) animates **`background-position`** — pre-existing, kept as the card signature; it has its own reduced-motion switch.
 
 ## Themes
 Dark = TMA + default. Light = web. Token-driven `.dark`/`.light` on `<html>` (next-themes). Same components, swap variables. The `showcase.html` proves the matrix (web/mobile × dark/light).
