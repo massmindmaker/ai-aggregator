@@ -59,13 +59,13 @@ export default function NewAgentPage() {
   // ?blank=1 → пустая форма «с нуля» (без сетки шаблонов и без префилла).
   const [blank, setBlank] = useState(false);
   // ?from=<id> → создание из опубликованного шаблона: форма префиллится спеком
-  // шаблона, а на сабмите вызывается санкционированный clone-маршрут шаблона
-  // (клонирование живёт ТОЛЬКО в потоке создания). null = обычное создание.
-  const [cloneFromTemplateId, setCloneFromTemplateId] = useState<string | null>(null);
-  const [cloneInsufficient, setCloneInsufficient] = useState(false);
+  // шаблона, а на сабмите вызывается санкционированный create-маршрут шаблона
+  // (создание агента из шаблона живёт ТОЛЬКО в потоке создания). null = обычное создание.
+  const [fromTemplateId, setFromTemplateId] = useState<string | null>(null);
+  const [templateInsufficient, setTemplateInsufficient] = useState(false);
   // Ошибка загрузки спека шаблона по ?from= — показываем явно, а не молча уходим
   // в обычное (гейтованное) создание.
-  const [cloneFetchErr, setCloneFetchErr] = useState<string | null>(null);
+  const [templateFetchErr, setTemplateFetchErr] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [modelSlug, setModelSlug] = useState('');
@@ -185,13 +185,13 @@ export default function NewAgentPage() {
   // ?from=<templateId> (вход «Создать из шаблона» из маркета / «Нанять») →
   // создание из ОПУБЛИКОВАННОГО шаблона. Тянем спек шаблона и префиллим форму;
   // ставим pickedKind='personal' (показываем форму, а не сетку шаблонов) и
-  // запоминаем cloneFromTemplateId — на сабмите вызовем clone-маршрут шаблона.
+  // запоминаем fromTemplateId — на сабмите вызовем create-маршрут шаблона.
   useEffect(() => {
     if (typeof window === 'undefined' || !token) return;
     const fromId = new URLSearchParams(window.location.search).get('from');
     if (!fromId) return;
     let cancelled = false;
-    setCloneFetchErr(null);
+    setTemplateFetchErr(null);
     (async () => {
       try {
         // Одиночный GET шаблона уже существует — берём полный спек оттуда.
@@ -200,7 +200,7 @@ export default function NewAgentPage() {
         });
         if (cancelled) return;
         if (!res.ok) {
-          setCloneFetchErr(
+          setTemplateFetchErr(
             res.status === 404
               ? 'Шаблон не найден или снят с публикации.'
               : `Не удалось загрузить шаблон (HTTP ${res.status}).`,
@@ -224,10 +224,10 @@ export default function NewAgentPage() {
           (Array.isArray(tpl.tools) ? (tpl.tools as unknown[]) : [])
             .filter((id): id is string => typeof id === 'string' && AVAILABLE_TOOL_IDS.has(id)),
         );
-        setCloneFromTemplateId(fromId);
+        setFromTemplateId(fromId);
         setPickedKind('personal');
       } catch {
-        if (!cancelled) setCloneFetchErr('Не удалось загрузить шаблон. Попробуйте ещё раз.');
+        if (!cancelled) setTemplateFetchErr('Не удалось загрузить шаблон. Попробуйте ещё раз.');
       }
     })();
     return () => {
@@ -240,7 +240,7 @@ export default function NewAgentPage() {
   // clobber it. Also skipped in blank mode (?blank=1) and create-from-template
   // (?from=, prefilled from the fetched spec) so neither path gets clobbered.
   useEffect(() => {
-    if (!pickedKind || aiDraft || blank || cloneFromTemplateId) return;
+    if (!pickedKind || aiDraft || blank || fromTemplateId) return;
     const t = getTemplate(pickedKind);
     if (!t) return;
     setName(t.name);
@@ -254,7 +254,7 @@ export default function NewAgentPage() {
   // Handoff from /market/[slug] — pre-fill modelSlug from localStorage.
   // Пропускаем при создании из шаблона (?from=) — там модель берётся из спека.
   useEffect(() => {
-    if (cloneFromTemplateId) return;
+    if (fromTemplateId) return;
     try {
       const slug = localStorage.getItem('aiag_selected_model_slug');
       if (slug) {
@@ -264,7 +264,7 @@ export default function NewAgentPage() {
     } catch {
       // ignore
     }
-  }, [pickedKind, cloneFromTemplateId]);
+  }, [pickedKind, fromTemplateId]);
 
   // Дип-линк ?provider=1 / ?hermes=1 → сразу раскрываем секцию «Свой провайдер»
   // и включаем тумблер, чтобы обещанный путь приземлялся на нужный раздел.
@@ -384,21 +384,21 @@ export default function NewAgentPage() {
     e.preventDefault();
     if (!token || !pickedKind) return;
 
-    // Создание из шаблона (?from=): санкционированный клон-на-создании. Вызываем
-    // существующий clone-маршрут шаблона (сохраняет provenance/clone_count), а не
+    // Создание из шаблона (?from=): санкционированное создание-при-создании. Вызываем
+    // существующий create-маршрут шаблона (сохраняет provenance/clone_count), а не
     // POST /agents. На успех — в инбокс /agents (как в маркете). 402 → пополнение.
-    if (cloneFromTemplateId) {
+    if (fromTemplateId) {
       haptic.impact('medium');
       setSubmitting(true);
       setSubmitErr(null);
-      setCloneInsufficient(false);
+      setTemplateInsufficient(false);
       try {
-        const res = await fetch(`/tg/api/tma/templates/${cloneFromTemplateId}/clone`, {
+        const res = await fetch(`/tg/api/tma/templates/${fromTemplateId}/create`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.status === 402) {
-          setCloneInsufficient(true);
+          setTemplateInsufficient(true);
           haptic.notify('error');
           return;
         }
@@ -419,7 +419,7 @@ export default function NewAgentPage() {
           router.push('/agents');
           return;
         }
-        setSubmitErr('clone_failed');
+        setSubmitErr('create_failed');
         haptic.notify('error');
       } catch (err) {
         setSubmitErr(err instanceof Error ? err.message : 'submit_failed');
@@ -550,9 +550,9 @@ export default function NewAgentPage() {
 
         {/* Ошибка загрузки шаблона по ?from= — честно сообщаем и не уводим в
             гейтованное создание с нуля. */}
-        {user && !error && cloneFetchErr && (
+        {user && !error && templateFetchErr && (
           <div className="tma-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div className="tma-error">{cloneFetchErr}</div>
+            <div className="tma-error">{templateFetchErr}</div>
             <Link href="/agents?tab=hire" className="tma-btn tma-btn--ghost tma-btn--block">
               К каталогу
             </Link>
@@ -560,15 +560,15 @@ export default function NewAgentPage() {
         )}
 
         {/* Гейт: создание с нуля — для создателей (держателей членского NFT).
-            Клон из шаблона (?from=) бесплатен и открыт всем → гейт не показываем. */}
-        {user && !error && isMember === false && !cloneFromTemplateId && (
+            Создание из шаблона (?from=) бесплатно и открыто всем → гейт не показываем. */}
+        {user && !error && isMember === false && !fromTemplateId && (
           <section className="tma-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="tma-section-head">
               <h1 className="tma-title">Создание агентов — для создателей</h1>
             </div>
             <p className="tma-card-text" style={{ fontSize: 13, opacity: 0.8 }}>
               Доступно держателям членского NFT. Покупка членства — скоро. Уже сейчас
-              можно нанять или клонировать готового агента из каталога.
+              можно нанять готового агента или создать своего из шаблона в каталоге.
             </p>
             <Link href="/agents?tab=hire" className="tma-btn tma-btn--primary tma-btn--block">
               Нанять готового →
@@ -647,14 +647,14 @@ export default function NewAgentPage() {
           </>
         )}
 
-        {user && !error && (isMember !== false || !!cloneFromTemplateId) && pickedKind && (
+        {user && !error && (isMember !== false || !!fromTemplateId) && pickedKind && (
           <>
             <header className="tma-header">
-              <h1 className="tma-title">{cloneFromTemplateId ? 'Из шаблона' : 'Новый агент'}</h1>
+              <h1 className="tma-title">{fromTemplateId ? 'Из шаблона' : 'Новый агент'}</h1>
               <p className="tma-subtitle">
                 {aiDraft
                   ? 'Черновик из описания'
-                  : cloneFromTemplateId
+                  : fromTemplateId
                     ? 'Из шаблона — проверь и поправь перед созданием'
                     : blank
                       ? 'С нуля'
@@ -674,9 +674,9 @@ export default function NewAgentPage() {
               </div>
             )}
 
-            {cloneFromTemplateId && (
+            {fromTemplateId && (
               <p className="tma-card-text tma-text-small" style={{ opacity: 0.75 }}>
-                Клон шаблона — поля копируются как есть.
+                Из шаблона — поля скопированы как есть.
               </p>
             )}
 
@@ -693,7 +693,7 @@ export default function NewAgentPage() {
                   required
                   maxLength={200}
                   className="tma-input"
-                  disabled={!!cloneFromTemplateId}
+                  disabled={!!fromTemplateId}
                 />
               </label>
 
@@ -703,7 +703,7 @@ export default function NewAgentPage() {
                   value={modelSlug}
                   onChange={(e) => setModelSlug(e.target.value)}
                   className="tma-input"
-                  disabled={!!cloneFromTemplateId}
+                  disabled={!!fromTemplateId}
                 >
                   {!modelSlug && <option value="">— выберите модель —</option>}
                   {modelSlug && !models.some((m) => m.slug === modelSlug) && (
@@ -771,7 +771,7 @@ export default function NewAgentPage() {
                     maxLength={8000}
                     className="tma-input"
                     style={{ resize: 'vertical', fontFamily: 'inherit' }}
-                    disabled={!!cloneFromTemplateId}
+                    disabled={!!fromTemplateId}
                   />
                 </label>
               </Accordion>
@@ -800,7 +800,7 @@ export default function NewAgentPage() {
                           )
                         }
                         style={{ marginTop: 2 }}
-                        disabled={!!cloneFromTemplateId}
+                        disabled={!!fromTemplateId}
                       />
                       <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <span className="tma-card-text" style={{ fontWeight: 600 }}>
@@ -1106,7 +1106,7 @@ export default function NewAgentPage() {
                 )}
               </Accordion>
 
-              {cloneInsufficient && (
+              {templateInsufficient && (
                 <div className="tma-card" style={{ padding: 14 }}>
                   <p className="tma-card-text">
                     Недостаточно кредитов. Пополните баланс и попробуйте снова.
@@ -1125,8 +1125,8 @@ export default function NewAgentPage() {
                   onClick={() => {
                     setPickedKind(null);
                     setAiDraft(false);
-                    setCloneFromTemplateId(null);
-                    setCloneInsufficient(false);
+                    setFromTemplateId(null);
+                    setTemplateInsufficient(false);
                   }}
                   className="tma-btn"
                   disabled={submitting}

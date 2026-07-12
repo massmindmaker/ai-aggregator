@@ -204,7 +204,7 @@ export default function AuthorIncomePage() {
                   шаблон
                 </span>
                 <span className="tma-mono" style={{ width: 56, textAlign: 'right' }}>
-                  клоны
+                  создано
                 </span>
                 <span className="tma-mono" style={{ width: 56, textAlign: 'right' }}>
                   аренды

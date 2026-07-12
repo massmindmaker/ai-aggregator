@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const tpl = rows[0] ?? null;
   if (!tpl) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
-  // Free templates are cloned via …/clone, not rented.
+  // Free templates are created via …/create, not rented.
   if (tpl.price_credits === null) {
     return NextResponse.json({ error: 'not_a_paid_template' }, { status: 400 });
   }

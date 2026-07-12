@@ -44,9 +44,6 @@ interface AgentRow {
   transferable: boolean;
   transfer_price_credits: string | null;
   nft_address: string | null;
-  // Direct-clone opt-in (2026-06-12): owner allows others to clone this agent's
-  // spec via POST …/agents/[id]/clone. Spec-only; no secrets/memory copied.
-  cloneable: boolean;
   // Аренда = месячная подписка (founder 2026-06-14). NULL во всех полях = агент
   // создан НЕ через аренду (обычный клон/с нуля) → подписочной плашки нет.
   // Все поля приходят из активной template_rentals(rent_period='month') клона.
@@ -94,7 +91,6 @@ async function loadAgent(id: string, tgUserId: string): Promise<AgentRow | null>
            agents.transferable,
            agents.transfer_price_credits::text AS transfer_price_credits,
            agents.nft_address,
-           agents.cloneable,
            (agents.mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
            (o.agent_id IS NOT NULL) AS mcp_oauth_set,
            o.scope AS mcp_oauth_scope,
@@ -142,7 +138,6 @@ async function loadAgentForViewer(id: string, tgUserId: string): Promise<AgentVi
            agents.daily_budget_credits::text,
            agents.status, agents.created_at, agents.updated_at,
            agents.connection_type,
-           agents.cloneable,
            (s.id IS NOT NULL) AS hired
     FROM agents
     LEFT JOIN agent_sessions s
@@ -167,7 +162,6 @@ async function loadAgentForViewer(id: string, tgUserId: string): Promise<AgentVi
     created_at: string;
     updated_at: string;
     connection_type: string;
-    cloneable: boolean;
     hired: boolean;
   }>;
   const r = rows[0];
@@ -203,7 +197,6 @@ async function loadAgentForViewer(id: string, tgUserId: string): Promise<AgentVi
     transferable: false,
     transfer_price_credits: null,
     nft_address: null,
-    cloneable: r.cloneable,
     sub_template_id: null,
     sub_price_credits: null,
     sub_monthly_limit_credits: null,
@@ -298,8 +291,6 @@ interface PatchBody {
   mcp_endpoint_url?: string;
   mcp_auth?: string;
   reset_mcp?: boolean;
-  // Direct-clone opt-in toggle (2026-06-12). Spec-data column only, no money path.
-  cloneable?: boolean;
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -354,10 +345,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     body.daily_budget_credits <= 1_000_000
       ? body.daily_budget_credits
       : Number(existing.daily_budget_credits);
-
-  // Direct-clone opt-in: only a boolean flips it; anything else keeps the current value.
-  const cloneable =
-    typeof body.cloneable === 'boolean' ? body.cloneable : existing.cloneable;
 
   // ---- Connection editing (opt-in) ----
   // Mirrors the create route: BYOK via the catalog routes through external_openai
@@ -452,7 +439,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         vision_model_slug = ${visionModelSlug},
         budget_credits_monthly = ${budget},
         daily_budget_credits = ${dailyBudget},
-        cloneable = ${cloneable},
         updated_at = NOW()${setConn}${setMcp}
     WHERE id = ${params.id}::uuid
       AND tg_user_id = ${tgUserId}::bigint
@@ -465,7 +451,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
               connection_type, external_base_url, external_api_key_hint,
               external_model_slug,
               mcp_endpoint_url,
-              cloneable,
               (mcp_auth_encrypted IS NOT NULL) AS mcp_auth_set,
               EXISTS (SELECT 1 FROM agent_mcp_oauth o WHERE o.agent_id = agents.id) AS mcp_oauth_set,
               (SELECT o.scope FROM agent_mcp_oauth o WHERE o.agent_id = agents.id) AS mcp_oauth_scope,

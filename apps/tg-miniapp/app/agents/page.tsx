@@ -15,7 +15,7 @@ import { characterFor } from '@/lib/characters';
 // /agents — экран «Агенты», 3 сегмента (IA-синтез §5.A):
 //   [Нанять] [Мои] [Создать]  — через ?tab=…
 //   • Мои (дефолт)  = мессенджер-инбокс агентов (строки-чаты, live-дот, превью).
-//   • Нанять        = CharCard-грид готовых шаблонов (free-клон / аренда автору) —
+//   • Нанять        = CharCard-грид готовых шаблонов (создать из шаблона / аренда автору) —
 //                     переиспользует GET /tg/api/tma/templates + take() как /market.
 //   • Создать       = «Из шаблона» (рейл→/templates/[id]) + «С нуля» (→/agents/new)
 //                     + «AI-builder» (честная ◷ R&D плашка).
@@ -100,7 +100,7 @@ function priceStat(price: string | null): string {
 }
 
 // Подпись amber-кнопки: платный → АРЕНДА с месячной ценой, бесплатный → создание
-// из шаблона (клонирование происходит только в потоке создания агента).
+// из шаблона (создание агента происходит только в потоке создания).
 function actionLabel(price: string | null): string {
   return price !== null ? `Арендовать · ${fmtCredits(price)} кр/мес` : 'Создать из шаблона';
 }
@@ -223,7 +223,7 @@ export default function AgentsPage() {
     };
   }, [token, needTemplates, templates, authFetch]);
 
-  // ── «Нанять»: поиск + take() (free clone / paid rent) — mirror /market ──────
+  // ── «Нанять»: поиск + take() (free create-from-template / paid rent) — mirror /market ──
   const [search, setSearch] = useState('');
   const [takingId, setTakingId] = useState<string | null>(null);
   const [takeErr, setTakeErr] = useState<string | null>(null);
@@ -239,14 +239,14 @@ export default function AgentsPage() {
     });
   }, [templates, search]);
 
-  // take(): бесплатный → поток создания агента (клонирование происходит ТОЛЬКО там),
-  // платный → rent (подписка автору, как /templates/[id] и /market). На успех ренту —
-  // обновляем инбокс и переключаем на «Мои». 402 → инлайн-подсказка.
+  // take(): бесплатный → поток создания агента (создание из шаблона происходит ТОЛЬКО
+  // там), платный → rent (подписка автору, как /templates/[id] и /market). На успех
+  // ренту — обновляем инбокс и переключаем на «Мои». 402 → инлайн-подсказка.
   async function take(t: Template) {
     if (!token || takingId) return;
     const paid = t.price_credits !== null;
-    // Бесплатный шаблон: не клонируем здесь — уводим в форму создания агента
-    // с префиллом из шаблона (?from=<id>). Клон сработает на сабмите формы.
+    // Бесплатный шаблон: не создаём агента здесь — уводим в форму создания агента
+    // с префиллом из шаблона (?from=<id>). Создание сработает на сабмите формы.
     if (!paid) {
       router.push(`/agents/new?from=${t.id}`);
       return;
@@ -585,11 +585,9 @@ export default function AgentsPage() {
                               t.author_username ? `@${t.author_username}` : 'официальный'
                             }
                             stats={{
-                              runs: String(t.clone_count),
                               rating: t.avg_rating ?? undefined,
                               price: priceStat(t.price_credits),
                             }}
-                            demoStats={!t.clone_count && !t.avg_rating}
                             actionLabel={
                               isTaking ? 'Берём…' : actionLabel(t.price_credits)
                             }

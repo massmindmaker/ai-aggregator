@@ -9,7 +9,8 @@ const sql = postgres(process.env.DATABASE_URL ?? '', { prepare: false });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // One template's full SHAREABLE spec. Still no secrets (the table has none); this is
-// the spec a cloner sees before cloning. mcp_endpoint_url is the shareable URL only.
+// the spec a creator sees before creating an agent from it. mcp_endpoint_url is the
+// shareable URL only.
 interface TemplateRow {
   id: string;
   name: string | null;
