@@ -54,6 +54,8 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', [
   'cancelled',
   'expired',
   'trial',
+  // Created at payment initiation, not yet paid. CONFIRMED webhook -> 'active'.
+  'pending',
 ]);
 
 // Payment status

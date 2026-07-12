@@ -14,9 +14,33 @@ vi.mock('@/auth', () => ({
 // cookie — neither is exercised by the non-admin routes in this file, but
 // both must be mocked at module scope for the refund-route tests below.
 const userFindFirst = vi.fn();
+// fix/rub-payments-tinkoff: after a successful provider.initPayment(),
+//   - /payments/topup       → db.insert(payments).values(...)            (awaited)
+//   - /subscriptions/create → db.transaction(tx => tx.insert(subscriptions)
+//                             .values(...).returning() + tx.insert(payments)...)
+// Mock db.insert / db.transaction so those writes don't throw in route tests.
+// `valuesResult` is BOTH awaitable (thenable, for the payments insert) and
+// exposes .returning() (for the subscriptions insert that needs the new id).
+const dbInsertValues = vi.fn();
+const valuesResult = {
+  returning: () => Promise.resolve([{ id: 'sub_test' }]),
+  then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+    Promise.resolve(undefined).then(resolve, reject),
+};
+const insertStub = () => ({
+  values: (...args: unknown[]) => {
+    dbInsertValues(...args);
+    return valuesResult;
+  },
+});
 vi.mock('@/lib/db', () => ({
   db: {
     query: { users: { findFirst: (...args: unknown[]) => userFindFirst(...args) } },
+    // Lazy arrows so the hoisted factory doesn't touch insertStub before its
+    // const is initialized (TDZ).
+    insert: (...args: unknown[]) => insertStub(...(args as [])),
+    transaction: (fn: (tx: unknown) => unknown) =>
+      fn({ insert: (...args: unknown[]) => insertStub(...(args as [])) }),
   },
   eq: (a: unknown, b: unknown) => ({ a, b }),
 }));
@@ -75,6 +99,7 @@ beforeEach(() => {
   userFindFirst.mockReset();
   cookieGet.mockReset();
   verifyAdminSessionMock.mockReset();
+  dbInsertValues.mockReset().mockResolvedValue(undefined);
 });
 
 /** Sign in as an admin with a valid aiag_admin_session step-up cookie — the

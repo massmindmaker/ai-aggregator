@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTinkoffClient, getYooKassaClient, type ProviderId } from '@/lib/payments/providers';
+import { getYooKassaClient, type ProviderId } from '@/lib/payments/providers';
 import { isYooKassaIp, mapYooKassaStatus } from '@aiag/yookassa';
-import { isFinalStatus, isSuccessfulStatus } from '@aiag/tinkoff';
-import type { WebhookNotification as TinkoffWebhook } from '@aiag/tinkoff';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,18 +8,18 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/subscriptions/webhook/[provider]
  *
- * Provider-agnostic webhook handler. Verifies signature/identity, normalizes
- * to internal status, then settles subscription credits.
+ * Provider-agnostic webhook handler.
  *
- * Tinkoff:  HMAC token signature in payload.Token
- * YooKassa: IP whitelist + re-fetch payment by id
+ * Tinkoff is deliberately NOT handled here anymore (fix/rub-payments-tinkoff):
+ * this route used to verify the signature, `console.log`, and return "OK"
+ * without ever touching the DB — a silent payment-loss trap. Both initiators
+ * (`/api/subscriptions/create`, `/api/payments/topup`) now point Tinkoff's
+ * `notificationUrl` at `/api/webhooks/tinkoff`, the handler that actually
+ * persists + settles. A `tinkoff` callback landing here means a stale/cached
+ * NotificationURL from before this fix — 410 so it fails loud, not silent.
  *
- * TODO (Plan 04 schema):
- *   - INSERT payment_webhook_logs row (raw payload + signatureValid)
- *   - SELECT payment by metadata.order_id
- *   - On succeeded: UPDATE payments.status, UPDATE subscriptions.status='active',
- *     UPDATE organizations.subscription_credits += tier.credits,
- *     INSERT balance_transactions (type='deposit')
+ * YooKassa: IP whitelist + re-fetch payment by id. Persist+settle is still a
+ * TODO (Plan 04 schema) — out of scope for the Tinkoff money-path fix.
  */
 export async function POST(
   req: NextRequest,
@@ -30,7 +28,10 @@ export async function POST(
   const provider = params.provider as ProviderId;
 
   if (provider === 'tinkoff') {
-    return handleTinkoffWebhook(req);
+    return NextResponse.json(
+      { error: { message: 'Moved to /api/webhooks/tinkoff', code: 'GONE' } },
+      { status: 410 }
+    );
   }
   if (provider === 'yookassa' || provider === 'sbp') {
     return handleYooKassaWebhook(req);
@@ -40,33 +41,6 @@ export async function POST(
     { error: { message: 'Unknown provider', code: 'UNKNOWN_PROVIDER' } },
     { status: 400 }
   );
-}
-
-async function handleTinkoffWebhook(req: NextRequest) {
-  let payload: TinkoffWebhook;
-  try {
-    payload = (await req.json()) as TinkoffWebhook;
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
-
-  const client = getTinkoffClient();
-  const parsed = client.parseWebhook(payload);
-  if (!parsed.isValid) {
-    console.warn('[webhook/tinkoff] invalid signature', { orderId: parsed.orderId });
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
-  }
-
-  console.log('[webhook/tinkoff] verified', {
-    orderId: parsed.orderId,
-    status: parsed.status,
-    final: isFinalStatus(parsed.status),
-    success: isSuccessfulStatus(parsed.status),
-  });
-
-  // TODO: persist + settle. For now respond OK.
-  // Tinkoff requires plain "OK" body for success.
-  return new NextResponse('OK', { status: 200 });
 }
 
 async function handleYooKassaWebhook(req: NextRequest) {

@@ -72,14 +72,22 @@ export const subscriptions = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    // Nullable since migration 0054: a paid TIER (Basic/Starter/Pro) is not
+    // scoped to a single model, unlike the legacy per-model subscription.
     modelId: uuid('model_id')
-      .notNull()
       .references(() => aiModels.id, { onDelete: 'cascade' }),
     planId: uuid('plan_id')
       .references(() => pricingPlans.id, { onDelete: 'set null' }),
 
     // Subscription status
     status: subscriptionStatusEnum('status').default('active').notNull(),
+
+    // Tier state (migration 0054) — read by dashboard/overview.ts. plan_name =
+    // TIERS[tier].name; creditsLimit = TIERS[tier].credits (a COUNT of monthly
+    // credits, NOT rubles); creditsUsed = consumption this period.
+    planName: text('plan_name'),
+    creditsLimit: integer('credits_limit'),
+    creditsUsed: integer('credits_used').default(0).notNull(),
 
     // Billing
     currentPeriodStart: timestamp('current_period_start', { mode: 'date' }).notNull(),

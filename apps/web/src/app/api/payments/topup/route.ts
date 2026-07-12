@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { getPaymentProvider, type ProviderId } from '@/lib/payments/providers';
+import { db } from '@/lib/db';
+import { payments } from '@aiag/database/schema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,12 +20,9 @@ const MAX_TOPUP = 100000;  // 100 000 ₽ — single-shot guardrail
 /**
  * POST /api/payments/topup
  *
- * Pay-per-use balance top-up. On webhook success → org.payg_credits += amount.
- *
- * TODO (Plan 04 schema):
- *   - INSERT payments row { type='topup', status='pending', amount }
- *   - On webhook succeeded: UPDATE organizations SET payg_credits += amount
- *   - INSERT balance_transactions row
+ * Pay-per-use balance top-up. For Tinkoff, `/api/webhooks/tinkoff` is the live
+ * handler: it matches the callback to the `payments` row inserted below (by
+ * `tinkoff_payment_id`) and credits `users.balance` idempotently on CONFIRMED.
  */
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -48,21 +47,36 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const userId = (session.user as { id?: string }).id;
+  if (!userId) {
+    return NextResponse.json(
+      { error: { message: 'Invalid session', code: 'NO_USER_ID' } },
+      { status: 401 }
+    );
+  }
+
   const providerId: ProviderId = body.provider || 'tinkoff';
   const provider = getPaymentProvider(providerId);
   const orderId = `topup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-aggregator.ru';
+  const description = `Пополнение баланса AIAG: ${amount} ₽`;
 
   const result = await provider.initPayment({
     orderId,
     amountRub: amount,
-    description: `Пополнение баланса AIAG: ${amount} ₽`,
+    description,
     returnUrl: `${baseUrl}/dashboard/billing?status=success&order=${orderId}`,
-    notificationUrl: `${baseUrl}/api/subscriptions/webhook/${providerId}`,
+    // Tinkoff → the real webhook that persists+settles (see /api/webhooks/tinkoff).
+    // yookassa/sbp still land on the provider-agnostic stub (unchanged, out of
+    // scope here) — see /api/subscriptions/webhook/[provider].
+    notificationUrl:
+      providerId === 'tinkoff'
+        ? `${baseUrl}/api/webhooks/tinkoff`
+        : `${baseUrl}/api/subscriptions/webhook/${providerId}`,
     email: body.email || (session.user as { email?: string }).email,
     phone: body.phone,
     metadata: {
-      user_id: String((session.user as { id?: string }).id || ''),
+      user_id: userId,
       kind: 'topup',
     },
   });
@@ -73,6 +87,24 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
+
+  // Persist the pending payment now — the webhook matches purely on
+  // tinkoff_payment_id, so without this row a real CONFIRMED callback 404s
+  // and the money is lost (see fix/rub-payments-tinkoff).
+  await db.insert(payments).values({
+    userId,
+    amount: String(amount),
+    currency: 'RUB',
+    status: 'pending',
+    tinkoffPaymentId: providerId === 'tinkoff' ? result.providerPaymentId : undefined,
+    tinkoffOrderId: orderId,
+    paymentMethod: providerId,
+    description,
+    metadata: {
+      kind: 'topup',
+      provider: providerId,
+    },
+  });
 
   return NextResponse.json({
     success: true,

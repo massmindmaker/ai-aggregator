@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tinkoff } from '@/lib/tinkoff';
 import { db } from '@/lib/db';
-import { eq } from '@aiag/database';
+import { eq, and, ne, sql } from '@aiag/database';
 import { payments, subscriptions, balanceTransactions, users } from '@aiag/database/schema';
 import type { WebhookNotification } from '@aiag/tinkoff';
 
@@ -12,7 +12,8 @@ export async function POST(request: NextRequest) {
   try {
     const payload = (await request.json()) as WebhookNotification;
 
-    // Verify webhook signature
+    // Verify webhook signature (Tinkoff HMAC token, see @aiag/tinkoff). Never
+    // trust an unsigned callback with money-moving side effects.
     const webhookData = tinkoff.parseWebhook(payload);
 
     if (!webhookData.isValid) {
@@ -30,29 +31,74 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
     }
 
-    // Update payment status based on webhook
-    const newStatus = mapTinkoffStatus(webhookData.status);
+    const isConfirming = webhookData.success && webhookData.status === 'CONFIRMED';
 
-    await db
-      .update(payments)
-      .set({
-        status: newStatus,
-        tinkoffStatus: webhookData.status,
-        cardPan: webhookData.cardPan,
-        tinkoffRebillId: webhookData.rebillId,
-        confirmedAt: webhookData.success ? new Date() : undefined,
-        updatedAt: new Date(),
-      })
-      .where(eq(payments.id, payment.id));
+    if (isConfirming) {
+      // Idempotent credit path. Bank retries a CONFIRMED callback until it
+      // gets a 2xx (and can also fire concurrently) — the guarded
+      // UPDATE ... WHERE status <> 'confirmed' ... RETURNING is the atomic
+      // gate: only the delivery that actually flips the row to 'confirmed'
+      // proceeds to credit the balance below. Under Postgres READ COMMITTED,
+      // a concurrent UPDATE on the same row blocks on the row lock until the
+      // first commits, then re-evaluates the WHERE against the now-committed
+      // row and returns 0 rows — so every retry/duplicate/parallel delivery
+      // after the first is a guaranteed no-op. Everything (gate + credit +
+      // ledger insert) runs in one transaction so a failure after the gate
+      // rolls back the status flip too (the bank will retry, and the retry
+      // will see status still not 'confirmed' and can succeed cleanly).
+      await (db as unknown as {
+        transaction: <T>(fn: (tx: typeof db) => Promise<T>) => Promise<T>;
+      }).transaction(async (tx) => {
+        const [confirmed] = await tx
+          .update(payments)
+          .set({
+            status: 'confirmed',
+            tinkoffStatus: webhookData.status,
+            cardPan: webhookData.cardPan,
+            tinkoffRebillId: webhookData.rebillId,
+            confirmedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(and(eq(payments.id, payment.id), ne(payments.status, 'confirmed')))
+          .returning();
 
-    // Handle successful payment
-    if (webhookData.success && webhookData.status === 'CONFIRMED') {
-      await handleSuccessfulPayment(payment.id, payment.userId, webhookData);
-    }
+        if (!confirmed) {
+          // Already confirmed by an earlier delivery of this same webhook —
+          // this is exactly what makes repeated CONFIRMED callbacks safe.
+          console.log('[webhook/tinkoff] duplicate CONFIRMED, already settled', {
+            paymentId: payment.id,
+          });
+          return;
+        }
 
-    // Handle refund
-    if (webhookData.status === 'REFUNDED' || webhookData.status === 'PARTIAL_REFUNDED') {
-      await handleRefund(payment.id, payment.userId, webhookData);
+        // Explicit, unambiguous fork on payment type. A payment with a
+        // subscriptionId is a TIER purchase -> activate the tier (grant the
+        // tier's credit allowance, NOT the ruble sum). Anything else is a
+        // balance top-up -> credit users.balance in rubles.
+        if (confirmed.subscriptionId) {
+          await activateSubscriptionTier(tx, confirmed, webhookData);
+        } else {
+          await creditBalance(tx, confirmed, webhookData);
+        }
+      });
+    } else {
+      // Non-credit status transitions (pending/authorized/rejected/etc.) —
+      // bookkeeping only, no money moves.
+      const newStatus = mapTinkoffStatus(webhookData.status);
+      await db
+        .update(payments)
+        .set({
+          status: newStatus,
+          tinkoffStatus: webhookData.status,
+          cardPan: webhookData.cardPan,
+          tinkoffRebillId: webhookData.rebillId,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, payment.id));
+
+      if (webhookData.status === 'REFUNDED' || webhookData.status === 'PARTIAL_REFUNDED') {
+        await handleRefund(payment.id, webhookData);
+      }
     }
 
     return NextResponse.json({ success: true });
@@ -85,87 +131,107 @@ function mapTinkoffStatus(tinkoffStatus: string): 'pending' | 'authorized' | 'co
   return statusMap[tinkoffStatus] || 'pending';
 }
 
-async function handleSuccessfulPayment(
-  paymentId: string,
-  userId: string,
+/**
+ * TOPUP path. Runs INSIDE the transaction opened by the guarded gate above —
+ * `tx` already proved this payment just transitioned into 'confirmed' for the
+ * first time, so this runs at most once per payment, ever. Credits the ruble
+ * sum into the user's pay-per-use balance.
+ */
+async function creditBalance(
+  tx: typeof db,
+  payment: typeof payments.$inferSelect,
   webhookData: ReturnType<typeof tinkoff.parseWebhook>
 ) {
-  // Get current user balance
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
+  const amountStr = webhookData.amount.toString();
 
-  if (!user) return;
-
-  const currentBalance = parseFloat(user.balance || '0');
-  const newBalance = currentBalance + webhookData.amount;
-
-  // Update user balance
-  await db
+  // Atomic increment (`UPDATE ... SET balance = balance + $amount ... RETURNING`)
+  // instead of read-then-write: two different CONFIRMED payments for the same
+  // user settling concurrently must not lose an update. `balance` is stored as
+  // `text` (see schema/users.ts), hence the explicit ::numeric round-trip.
+  const [updatedUser] = await tx
     .update(users)
     .set({
-      balance: newBalance.toString(),
+      balance: sql`(COALESCE(${users.balance}, '0')::numeric + ${amountStr}::numeric)::text`,
       updatedAt: new Date(),
     })
-    .where(eq(users.id, userId));
+    .where(eq(users.id, payment.userId))
+    .returning({ balance: users.balance });
 
-  // Create balance transaction
-  await db.insert(balanceTransactions).values({
-    userId,
-    paymentId,
+  if (!updatedUser) {
+    console.error('[webhook/tinkoff] user not found for payment', {
+      paymentId: payment.id,
+      userId: payment.userId,
+    });
+    return;
+  }
+
+  const balanceAfter = parseFloat(updatedUser.balance || '0');
+  const balanceBefore = balanceAfter - webhookData.amount;
+
+  // Belt-and-suspenders: UNIQUE(payment_id, type) on balance_transactions
+  // (migration 0053) makes a second 'deposit' row for the same payment a DB
+  // error, not silent data — so even a bug in the gate above can't double-credit.
+  await tx.insert(balanceTransactions).values({
+    userId: payment.userId,
+    paymentId: payment.id,
     type: 'deposit',
-    amount: webhookData.amount.toString(),
-    balanceBefore: currentBalance.toString(),
-    balanceAfter: newBalance.toString(),
+    amount: amountStr,
+    balanceBefore: balanceBefore.toString(),
+    balanceAfter: balanceAfter.toString(),
     description: 'Payment deposit',
     referenceType: 'payment',
-    referenceId: paymentId,
+    referenceId: payment.id,
   });
+}
 
-  // Update subscription if rebillId is present (recurring payment)
-  if (webhookData.rebillId) {
-    const payment = await db.query.payments.findFirst({
-      where: eq(payments.id, paymentId),
-      with: {
-        subscription: true,
-      },
-    });
+/**
+ * TIER (subscription) path. Runs INSIDE the same guarded transaction, so it
+ * fires at most once per payment. Flips the pending subscription to active,
+ * sets the billing period (month/year from the payment metadata), binds the
+ * rebillId for future recurring charges, and resets the period's credit
+ * counter. It does NOT touch users.balance — a tier grants credits
+ * (subscriptions.credits_limit, set at creation from TIERS[tier].credits), not
+ * spendable rubles.
+ */
+async function activateSubscriptionTier(
+  tx: typeof db,
+  payment: typeof payments.$inferSelect,
+  webhookData: ReturnType<typeof tinkoff.parseWebhook>
+) {
+  const yearly = (payment.metadata as { billing?: string } | null)?.billing === 'yearly';
+  const now = new Date();
+  const periodEnd = yearly
+    ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+    : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
-    if (payment?.subscriptionId) {
-      const now = new Date();
-      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  // Guarded UPDATE: only flips a subscription that is not already active. Even
+  // though the payment gate already guarantees single execution, this keeps the
+  // tier activation itself idempotent and self-describing. credits_limit was
+  // set from TIERS at creation; we grant a fresh period by zeroing usage.
+  await tx
+    .update(subscriptions)
+    .set({
+      status: 'active',
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd,
+      tinkoffRebillId: webhookData.rebillId,
+      creditsUsed: 0,
+      usedRequests: 0,
+      usedTokens: 0,
+      updatedAt: now,
+    })
+    .where(and(eq(subscriptions.id, payment.subscriptionId!), ne(subscriptions.status, 'active')));
 
-      await db
-        .update(subscriptions)
-        .set({
-          status: 'active',
-          currentPeriodStart: now,
-          currentPeriodEnd: nextMonth,
-          tinkoffRebillId: webhookData.rebillId,
-          usedRequests: 0,
-          usedTokens: 0,
-          updatedAt: now,
-        })
-        .where(eq(subscriptions.id, payment.subscriptionId));
-    }
-  }
+  // TODO (recurring renewal): webhookData.rebillId is now bound to the
+  // subscription; a scheduled job charging it each period to renew the tier is
+  // a separate build and intentionally not implemented here. First payment
+  // yields a working active tier, which is the requirement.
 }
 
 async function handleRefund(
   paymentId: string,
-  userId: string,
   webhookData: ReturnType<typeof tinkoff.parseWebhook>
 ) {
-  // Get current user balance
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
-
-  if (!user) return;
-
-  // Note: For refunds, we might want to reduce the balance if the original payment increased it
-  // This depends on business logic - user.balance available if needed
-
   await db
     .update(payments)
     .set({

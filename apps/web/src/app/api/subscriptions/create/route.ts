@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { getPaymentProvider, getTier, type ProviderId } from '@/lib/payments/providers';
+import { db } from '@/lib/db';
+import { payments, subscriptions } from '@aiag/database/schema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,14 +18,16 @@ interface CreateSubBody {
 /**
  * POST /api/subscriptions/create
  *
- * Creates a pending payment via selected provider, returns the redirect URL or
- * SBP QR payload. Webhook (`/api/subscriptions/webhook/[provider]`) marks the
- * subscription `active` on success.
+ * Sells a TIER (Basic/Starter/Pro — see TIERS in lib/payments/providers.ts).
+ * Creates a *pending* `subscriptions` row (plan_name + credits_limit from the
+ * tier) and a *pending* `payments` row linked to it via `subscriptionId`, then
+ * inits the provider payment. For Tinkoff, `/api/webhooks/tinkoff` matches the
+ * CONFIRMED callback to the payment by `tinkoff_payment_id` and — because the
+ * payment carries a `subscriptionId` — ACTIVATES the tier (subscription ->
+ * active, credits granted) instead of crediting rubles into the balance.
  *
- * TODO (Plan 04 schema):
- *   - INSERT subscriptions row with status='pending' before creating payment
- *   - INSERT payments row with provider+orderId+pendingstatus
- *   - subscription/payment id round-trip via metadata.order_id
+ * TODO (recurring): the first payment binds `rebillId`; charging it monthly to
+ * renew the tier is a separate build (not implemented here).
  */
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -49,23 +53,38 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const userId = (session.user as { id?: string }).id;
+  if (!userId) {
+    return NextResponse.json(
+      { error: { message: 'Invalid session', code: 'NO_USER_ID' } },
+      { status: 401 }
+    );
+  }
+
   const providerId: ProviderId = body.provider || 'tinkoff';
   const provider = getPaymentProvider(providerId);
 
   const amount = body.yearly ? tier.yearly : tier.monthly;
   const orderId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-aggregator.ru';
+  const description = `Подписка ${tier.name} (${body.yearly ? 'год' : 'месяц'})`;
 
   const result = await provider.initPayment({
     orderId,
     amountRub: amount,
-    description: `Подписка ${tier.name} (${body.yearly ? 'год' : 'месяц'})`,
+    description,
     returnUrl: `${baseUrl}/dashboard/billing?status=success&order=${orderId}`,
-    notificationUrl: `${baseUrl}/api/subscriptions/webhook/${providerId}`,
+    // Tinkoff → the real webhook that persists+settles (see /api/webhooks/tinkoff).
+    // yookassa/sbp still land on the provider-agnostic stub (unchanged, out of
+    // scope here) — see /api/subscriptions/webhook/[provider].
+    notificationUrl:
+      providerId === 'tinkoff'
+        ? `${baseUrl}/api/webhooks/tinkoff`
+        : `${baseUrl}/api/subscriptions/webhook/${providerId}`,
     email: body.email || (session.user as { email?: string }).email,
     phone: body.phone,
     metadata: {
-      user_id: String((session.user as { id?: string }).id || ''),
+      user_id: userId,
       tier_id: body.tierId!,
       billing: body.yearly ? 'yearly' : 'monthly',
     },
@@ -78,6 +97,48 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
+
+  // Persist a pending subscription (the TIER the user is buying) + a pending
+  // payment linked to it, atomically. The webhook matches on tinkoff_payment_id
+  // and activates the tier via payments.subscriptionId — without these rows a
+  // real CONFIRMED callback 404s and the money is lost. modelId stays NULL: a
+  // tier is not model-scoped (migration 0054). Period fields are placeholders
+  // (now/now) until the webhook sets the real active period on CONFIRMED.
+  const now = new Date();
+  await (db as unknown as {
+    transaction: <T>(fn: (tx: typeof db) => Promise<T>) => Promise<T>;
+  }).transaction(async (tx) => {
+    const [sub] = await tx
+      .insert(subscriptions)
+      .values({
+        userId,
+        status: 'pending',
+        planName: tier.name,
+        creditsLimit: tier.credits,
+        creditsUsed: 0,
+        currentPeriodStart: now,
+        currentPeriodEnd: now,
+      })
+      .returning({ id: subscriptions.id });
+
+    await tx.insert(payments).values({
+      userId,
+      subscriptionId: sub.id,
+      amount: String(amount),
+      currency: 'RUB',
+      status: 'pending',
+      tinkoffPaymentId: providerId === 'tinkoff' ? result.providerPaymentId : undefined,
+      tinkoffOrderId: orderId,
+      paymentMethod: providerId,
+      description,
+      metadata: {
+        kind: 'subscription',
+        tier_id: body.tierId,
+        billing: body.yearly ? 'yearly' : 'monthly',
+        provider: providerId,
+      },
+    });
+  });
 
   return NextResponse.json({
     success: true,
