@@ -556,6 +556,16 @@ async function runSubAgent(
   return { output, cost_credits: cost };
 }
 
+// ISSUE #12: the recipient of a run notification is the PAYER of the run, not
+// necessarily the agent owner. After issue #5, settleRun/the budget+balance
+// gates all bill run.tg_user_id (owner on an owner run, the hirer on a hire
+// run) — the notification must go to that same identity, or a hirer who was
+// just debited never sees the outcome. Every call site below already has
+// `run` in scope, so this is a same-identity swap: owner run ⇒
+// run.tg_user_id === agent.tg_user_id (unchanged behaviour); hire run ⇒
+// run.tg_user_id is the hirer (the actual payer). Owner-side notification is
+// intentionally NOT sent here (out of scope per issue #12: "владельцу —
+// опционально/вторично"; boundaries say don't add channels).
 async function notifyCompleted(
   tgUserId: string, agentName: string, agentId: string, costCredits: number, output: string,
 ): Promise<void> {
@@ -588,18 +598,20 @@ export async function runAgent(runId: string): Promise<void> {
   // owner run this equals agent.tg_user_id (unchanged behaviour); for a hire
   // run it is the HIRER, so the hirer's own monthly spend/balance is gated
   // and debited — never the agent owner's. agent.tg_user_id must NOT be used
-  // for money gates/debits below (only for owner-facing notifications).
+  // for money gates/debits below. NOTIFY SUBJECT (issue #12): notifications
+  // below use run.tg_user_id too — the same payer identity — so the hirer who
+  // was actually debited is the one who sees the run outcome.
   const monthlyBudget = Number(agent.budget_credits_monthly);
   const monthlySpend = await sumMonthlySpend(run.tg_user_id);
   if (monthlySpend >= monthlyBudget) {
     await markFailed(runId, 'budget_exceeded_monthly');
-    await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'budget_exceeded_monthly');
+    await notifyFailed(run.tg_user_id, agent.name, agent.id, 'budget_exceeded_monthly');
     return;
   }
   const daily = await getOrResetDailyBucket(agent.id);
   if (daily.spent_today_credits >= daily.daily_budget_credits) {
     await markFailed(runId, 'budget_exceeded_daily');
-    await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'budget_exceeded_daily');
+    await notifyFailed(run.tg_user_id, agent.name, agent.id, 'budget_exceeded_daily');
     return;
   }
 
@@ -615,7 +627,7 @@ export async function runAgent(runId: string): Promise<void> {
   if (rentalSub) {
     if (rentalSub.expired) {
       await markFailed(runId, 'rental_expired');
-      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'rental_expired');
+      await notifyFailed(run.tg_user_id, agent.name, agent.id, 'rental_expired');
       return;
     }
     if (rentalSub.monthly_limit_credits !== null && rentalSub.period_start) {
@@ -623,7 +635,7 @@ export async function runAgent(runId: string): Promise<void> {
       subPeriodSpend = await sumPeriodSpendForAgent(agent.id, rentalSub.period_start);
       if (subPeriodSpend >= subLimit) {
         await markFailed(runId, 'rental_limit_exceeded');
-        await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'rental_limit_exceeded');
+        await notifyFailed(run.tg_user_id, agent.name, agent.id, 'rental_limit_exceeded');
         return;
       }
     }
@@ -641,7 +653,7 @@ export async function runAgent(runId: string): Promise<void> {
   } catch (e) {
     const msg = `upstream_misconfigured: ${(e as Error).message.slice(0, 160)}`;
     await markFailed(runId, msg);
-    await notifyFailed(agent.tg_user_id, agent.name, agent.id, msg);
+    await notifyFailed(run.tg_user_id, agent.name, agent.id, msg);
     return;
   }
 
@@ -654,7 +666,7 @@ export async function runAgent(runId: string): Promise<void> {
     const bal = await getBalance(run.tg_user_id);
     if (bal < MIN_RUN_COST) {
       await markFailed(runId, 'insufficient_balance');
-      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'insufficient_balance');
+      await notifyFailed(run.tg_user_id, agent.name, agent.id, 'insufficient_balance');
       return;
     }
   }
@@ -760,7 +772,7 @@ export async function runAgent(runId: string): Promise<void> {
     } catch (e) {
       const msg = `upstream_error: ${(e as Error).message.slice(0, 200)}`;
       await markFailed(runId, msg);
-      await notifyFailed(agent.tg_user_id, agent.name, agent.id, msg);
+      await notifyFailed(run.tg_user_id, agent.name, agent.id, msg);
       return;
     }
     const resp = call.response;
@@ -802,25 +814,25 @@ export async function runAgent(runId: string): Promise<void> {
     // Mid-run budget cutoff (monthly + daily)
     if (monthlySpend + totalCostCredits > monthlyBudget) {
       await markFailed(runId, 'budget_exceeded_monthly_mid_run');
-      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'budget_exceeded_monthly_mid_run');
+      await notifyFailed(run.tg_user_id, agent.name, agent.id, 'budget_exceeded_monthly_mid_run');
       return;
     }
     if (daily.spent_today_credits + totalCostCredits > daily.daily_budget_credits) {
       await markFailed(runId, 'budget_exceeded_daily_mid_run');
-      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'budget_exceeded_daily_mid_run');
+      await notifyFailed(run.tg_user_id, agent.name, agent.id, 'budget_exceeded_daily_mid_run');
       return;
     }
     // Аренда-подписка: period-scoped лимит (mid-run). subLimit=0 ⇒ нет подписки/лимита.
     if (subLimit > 0 && subPeriodSpend + totalCostCredits > subLimit) {
       await markFailed(runId, 'rental_limit_exceeded_mid_run');
-      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'rental_limit_exceeded_mid_run');
+      await notifyFailed(run.tg_user_id, agent.name, agent.id, 'rental_limit_exceeded_mid_run');
       return;
     }
 
     const choice = resp.choices[0];
     if (!choice) {
       await markFailed(runId, 'empty_response');
-      await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'empty_response');
+      await notifyFailed(run.tg_user_id, agent.name, agent.id, 'empty_response');
       return;
     }
 
@@ -870,13 +882,13 @@ export async function runAgent(runId: string): Promise<void> {
               ? 'budget_exceeded_daily_settle'
               : `settle_failed: ${(e as Error).message.slice(0, 120)}`;
         await markFailed(runId, reason);
-        await notifyFailed(agent.tg_user_id, agent.name, agent.id, reason);
+        await notifyFailed(run.tg_user_id, agent.name, agent.id, reason);
         return;
       }
       // Additive observability: persist captured tool steps as a SEPARATE UPDATE
       // after settleRun (outside its tx). Self-swallowing — never affects the run.
       await recordToolCalls(runId, capturedToolCalls);
-      await notifyCompleted(agent.tg_user_id, agent.name, agent.id, billable, output);
+      await notifyCompleted(run.tg_user_id, agent.name, agent.id, billable, output);
       return;
     }
 
@@ -961,7 +973,7 @@ export async function runAgent(runId: string): Promise<void> {
   }
 
   await markFailed(runId, 'max_iterations_exceeded');
-  await notifyFailed(agent.tg_user_id, agent.name, agent.id, 'max_iterations_exceeded');
+  await notifyFailed(run.tg_user_id, agent.name, agent.id, 'max_iterations_exceeded');
   } catch (e) {
     // P0 SAFETY NET: any unexpected throw after markStarted (setup gap or an
     // uncaught error inside the loop) → mark the run terminally failed + notify,
@@ -969,7 +981,7 @@ export async function runAgent(runId: string): Promise<void> {
     // signatures used on every other failure path above.
     const msg = `run_failed: ${(e as Error).message.slice(0, 200)}`;
     await markFailed(runId, msg);
-    await notifyFailed(agent.tg_user_id, agent.name, agent.id, msg);
+    await notifyFailed(run.tg_user_id, agent.name, agent.id, msg);
     return;
   } finally {
     if (mcp) {
