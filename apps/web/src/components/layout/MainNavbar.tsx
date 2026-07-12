@@ -9,6 +9,7 @@ import { AiagLogo } from '@/components/ui/AiagLogo';
 
 const mainMenu = [
   { title: 'Маркетплейс', href: '/marketplace' },
+  { title: 'Агенты', href: '/agentmarket' },
   { title: 'Конкурсы', href: '/contests' },
   { title: 'Документация', href: '/docs' },
   { title: 'Тарифы', href: '/pricing' },
