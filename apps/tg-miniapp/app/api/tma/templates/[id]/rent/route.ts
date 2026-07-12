@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
+import { assertAgentQuota, QuotaExceededError, quotaExceededBody } from '@/lib/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -141,6 +142,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   let duplicate = false; // a concurrent active rental won the uq_rental_active slot
   try {
     await sql.begin(async (sql) => {
+      // a0) Per-tier agent quota (issue #32). A FIRST-TIME rent clones the template into
+      //     an agent the renter OWNS → it counts against their tier cap exactly like a
+      //     create or a free clone. A RENEWAL clones nothing (the agent already exists),
+      //     so it must NOT be quota-checked — otherwise a renter at their cap could not
+      //     renew a subscription they already pay for.
+      //     Checked FIRST, inside this same transaction: assertAgentQuota's FOR UPDATE
+      //     serializes concurrent creates by this renter, and throwing here rolls back
+      //     BEFORE the debit — a renter over quota is never charged for an agent they
+      //     don't receive.
+      if (!renewal) {
+        await assertAgentQuota(renterId, sql);
+      }
+
       // a) Get/claim the subscription row.
       let rentalId: string;
       if (renewal) {
@@ -289,6 +303,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
     });
   } catch (e) {
+    // Over the tier's agent cap (issue #32). Thrown before the debit, and the throw
+    // rolled the whole tx back — no rental, no charge, no money moved.
+    if (e instanceof QuotaExceededError) {
+      return NextResponse.json(quotaExceededBody(e), { status: 403 });
+    }
     if (insufficient) {
       return NextResponse.json({ error: 'insufficient_balance' }, { status: 402 });
     }

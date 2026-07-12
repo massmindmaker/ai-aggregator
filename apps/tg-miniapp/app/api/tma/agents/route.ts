@@ -3,7 +3,12 @@ import postgres from 'postgres';
 import { getTemplate } from '@/lib/agent-templates';
 import { encryptSecret, hintFromSecret } from '@/lib/crypto';
 import { validateExternalUrl } from '@/lib/external-agent';
-import { hasCreatorMembership } from '@/lib/membership';
+import {
+  hasCreatorMembership,
+  assertAgentQuota,
+  QuotaExceededError,
+  quotaExceededBody,
+} from '@/lib/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -250,46 +255,66 @@ export async function POST(req: NextRequest) {
     if (mcpToken) mcpAuthEncrypted = encryptSecret(mcpToken).toString('base64');
   }
 
-  const ins = (await sql`
-    INSERT INTO agents (
-      tg_user_id, template_kind, name, description,
-      system_prompt, tools, model_slug,
-      image_model_slug, voice_model_slug, vision_model_slug,
-      budget_credits_monthly,
-      daily_budget_credits,
-      connection_type, external_base_url, external_api_key_encrypted,
-      external_api_key_hint, external_model_slug,
-      mcp_endpoint_url, mcp_auth_encrypted
-    )
-    VALUES (
-      ${tgUserId}::bigint,
-      ${templateKind},
-      ${name},
-      ${description},
-      ${systemPrompt},
-      ${sql.json(tools as never)},
-      ${modelSlug},
-      ${imageModelSlug},
-      ${voiceModelSlug},
-      ${visionModelSlug},
-      ${budget},
-      ${dailyBudget},
-      ${connectionType},
-      ${externalBaseUrl},
-      ${externalApiKeyEncrypted},
-      ${externalApiKeyHint},
-      ${externalModelSlug},
-      ${mcpEndpointUrl},
-      ${mcpAuthEncrypted}
-    )
-    RETURNING id::text, tg_user_id::text, template_kind, name, description,
-              system_prompt, tools, model_slug,
-              image_model_slug, voice_model_slug, vision_model_slug,
-              budget_credits_monthly::text AS budget_rub_monthly,
-              daily_budget_credits::text,
-              status, created_at, updated_at, connection_type,
-              external_base_url, external_api_key_hint, external_model_slug
-  `) as unknown as AgentRow[];
+  // Per-tier agent quota (issue #32): creator→1, builder→5, studio→20; NULL tier
+  // (founder-seed) / no membership row → unlimited. The check and the INSERT run in
+  // ONE transaction so the FOR UPDATE lock inside assertAgentQuota serializes
+  // concurrent creates by the same user (see the helper's doc comment) — two parallel
+  // requests at count = cap-1 cannot both pass. Server-side and before the INSERT, so
+  // calling this endpoint directly (bypassing the UI) hits the exact same gate.
+  let agent: AgentRow;
+  try {
+    agent = await sql.begin(async (tx) => {
+      await assertAgentQuota(tgUserId, tx);
 
-  return NextResponse.json({ agent: ins[0] }, { status: 201 });
+      const ins = (await tx`
+        INSERT INTO agents (
+          tg_user_id, template_kind, name, description,
+          system_prompt, tools, model_slug,
+          image_model_slug, voice_model_slug, vision_model_slug,
+          budget_credits_monthly,
+          daily_budget_credits,
+          connection_type, external_base_url, external_api_key_encrypted,
+          external_api_key_hint, external_model_slug,
+          mcp_endpoint_url, mcp_auth_encrypted
+        )
+        VALUES (
+          ${tgUserId}::bigint,
+          ${templateKind},
+          ${name},
+          ${description},
+          ${systemPrompt},
+          ${tx.json(tools as never)},
+          ${modelSlug},
+          ${imageModelSlug},
+          ${voiceModelSlug},
+          ${visionModelSlug},
+          ${budget},
+          ${dailyBudget},
+          ${connectionType},
+          ${externalBaseUrl},
+          ${externalApiKeyEncrypted},
+          ${externalApiKeyHint},
+          ${externalModelSlug},
+          ${mcpEndpointUrl},
+          ${mcpAuthEncrypted}
+        )
+        RETURNING id::text, tg_user_id::text, template_kind, name, description,
+                  system_prompt, tools, model_slug,
+                  image_model_slug, voice_model_slug, vision_model_slug,
+                  budget_credits_monthly::text AS budget_rub_monthly,
+                  daily_budget_credits::text,
+                  status, created_at, updated_at, connection_type,
+                  external_base_url, external_api_key_hint, external_model_slug
+      `) as unknown as AgentRow[];
+
+      return ins[0]!;
+    });
+  } catch (e) {
+    if (e instanceof QuotaExceededError) {
+      return NextResponse.json(quotaExceededBody(e), { status: 403 });
+    }
+    throw e;
+  }
+
+  return NextResponse.json({ agent }, { status: 201 });
 }
