@@ -34,6 +34,10 @@ export async function GET(req: NextRequest) {
   const c = rows[0];
   if (!c) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
-  const terminal = c.status === 'settled' || c.status === 'failed';
+  // Terminal = anything the reconciler will not turn into a grant on its own within the
+  // client's polling window. 'expired' (abandoned, unpaid) and 'needs_review' (paid but the
+  // chain never showed the item — flagged for a human, still retried server-side) are both
+  // terminal FOR THE CLIENT: it must stop polling rather than spin forever.
+  const terminal = ['settled', 'failed', 'expired', 'needs_review'].includes(c.status);
   return NextResponse.json({ status: c.status, tier: c.tier, terminal });
 }

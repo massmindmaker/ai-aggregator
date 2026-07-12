@@ -43,23 +43,36 @@ ALTER TABLE tg_memberships
 
 -- ---------------------------------------------------------------------------
 -- tg_membership_charges — the idempotency anchor for one membership purchase.
--- pending → settled exactly once, guarded by the on-chain claim insert below.
 --
--- recipient_address is load-bearing, not decoration: the webhook re-verifies ON CHAIN
--- that THIS wallet actually holds an item in the membership collection before granting,
--- so a forged callback cannot mint a membership out of thin air (issue #29 review,
--- MEDIUM-1 — Startonus does not sign its callbacks).
+-- recipient_address is load-bearing, not decoration: it is the ton-proof VERIFIED wallet
+-- (from ton_wallets) that the reconciler asks the CHAIN about. It is never taken from a
+-- request body — a client-chosen address would let a caller point the on-chain grant check
+-- at someone else's wallet that already holds a collection item.
+--
+-- STATUS MACHINE (terminal = anything except 'pending'):
+--   pending      — invoice created, chain has not confirmed a mint yet.
+--   settled      — chain confirmed the mint; membership granted. Final.
+--   failed       — the minter reported an explicit failure (callback error branch). Final.
+--   expired      — invoice abandoned WITHOUT any payment evidence. Safe to discard.
+--   needs_review — 🔴 PAID (we hold on-chain payment evidence: tx_hash/item_address) but the
+--                  chain still has not shown the item after MEMBERSHIP_STUCK_DAYS. This is an
+--                  anomaly, not garbage: the user's money is real. It is a TERMINAL status for
+--                  the "one live purchase per user" UNIQUE below (so the user is never blocked
+--                  from buying again), yet the reconciler KEEPS retrying these rows — if the
+--                  indexer was merely down for days, the membership is still granted when it
+--                  recovers. A charge carrying payment evidence must NEVER become 'expired'.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tg_membership_charges (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tg_user_id       BIGINT NOT NULL,
   tier             TEXT NOT NULL,
   amount_nano_ton  BIGINT NOT NULL CHECK (amount_nano_ton > 0),
-  -- 'pending' | 'settled' | 'failed' | 'expired' (TTL-swept, see idx below)
+  -- 'pending' | 'settled' | 'failed' | 'expired' | 'needs_review' (see status machine above)
   status           VARCHAR(16) NOT NULL DEFAULT 'pending',
-  recipient_address TEXT,                  -- the buyer's TON wallet (mint target + on-chain re-check)
-  tx_hash          TEXT,                   -- TON mint tx hash, when the callback carries one
-  item_address     TEXT,                   -- minted TEP-62 item address (the callback's `item`)
+  recipient_address TEXT,                  -- the buyer's ton-proof VERIFIED TON wallet (mint target + chain check)
+  tx_hash          TEXT,                   -- payment evidence, when a callback carries a tx hash
+  item_address     TEXT,                   -- payment evidence: minted TEP-62 item address (callback's `item.address`)
+  failure_reason   TEXT,                   -- why a charge ended in 'failed' / 'needs_review' (never silent)
   startonus_invoice_id TEXT,               -- Startonus invoice id for reconciliation
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   settled_at       TIMESTAMPTZ
@@ -68,7 +81,8 @@ CREATE TABLE IF NOT EXISTS tg_membership_charges (
 -- Re-runnable ADDs for a 0048 applied from an earlier revision of this file.
 ALTER TABLE tg_membership_charges
   ADD COLUMN IF NOT EXISTS recipient_address TEXT,
-  ADD COLUMN IF NOT EXISTS item_address      TEXT;
+  ADD COLUMN IF NOT EXISTS item_address      TEXT,
+  ADD COLUMN IF NOT EXISTS failure_reason    TEXT;
 
 ALTER TABLE tg_membership_charges DROP CONSTRAINT IF EXISTS chk_tg_membership_charges_tier;
 ALTER TABLE tg_membership_charges
@@ -91,11 +105,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_membership_charges_one_pending
 -- tg_membership_tx_claims — GLOBAL dedup by ON-CHAIN IDENTITY (issue #4 pattern).
 -- One on-chain mint <-> at most one membership grant, ever.
 --
--- `onchain_key` = COALESCE(callback.txHash, callback.item). The documented live Startonus
--- callback (packages/shared/src/startonus.ts:72-81) carries `item` (the minted NFT item
--- address — unique on chain) and does NOT promise a txHash, so keying dedup on tx_hash
--- alone would leave the real callback unguarded. We accept whichever the acquirer sends
--- and key on it; both are on-chain-unique identifiers of the SAME mint.
+-- `onchain_key` = the minted item's ON-CHAIN ADDRESS (`item.address`), read from the chain
+-- by the reconciler (apps/agent-worker/src/membership-reconciler.ts) via tonapi — NOT from
+-- the callback, which is unsigned and never retried and therefore cannot be trusted.
+-- (Superseded design note: an earlier revision keyed on COALESCE(txHash, item). That was
+-- wrong twice over — the Startonus callback's `item` is an OBJECT {index,address,owner,meta},
+-- so it would have stringified to "[object Object]" and collapsed every mint into one claim.)
 --
 -- The PK is the UNIQUE constraint; `ON CONFLICT (onchain_key) DO NOTHING RETURNING`
 -- inside the webhook's sql.begin is what makes a replayed callback a no-op.
