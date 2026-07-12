@@ -527,9 +527,6 @@ export default function DashboardPage() {
                               ? { value: t.avg_rating, count: t.rating_count }
                               : null
                           }
-                          countLabel={
-                            t.avg_rating === null ? `${t.clone_count} клонов` : null
-                          }
                           featured={idx === 0}
                         />
                       </div>

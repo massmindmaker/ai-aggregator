@@ -4,7 +4,7 @@
 // /market — «Маркет»: 5 настоящих категоризированных разделов (IA-синтез §5.B).
 // Горизонтальный сегмент через searchParams.tab:
 //   [Агенты] [Скиллы] [MCP] [Базы знаний]
-//   • Агенты (дефолт) = CharCard-грид шаблонов (использовать=free-клон / арендовать).
+//   • Агенты (дефолт) = CharCard-грид шаблонов (использовать=создать из шаблона / арендовать).
 //   • Скиллы           = листинг встроенных тулов воркера (AVAILABLE_TOOLS).
 //   • MCP              = листинг проверенных MCP-пресетов (MCP_PRESETS).
 //   • Базы знаний      = честная плашка «◷ фаза 3» + описание концепции.
@@ -167,7 +167,7 @@ function priceStat(price: string | null): string {
 }
 
 // Подпись amber-кнопки: платный → АРЕНДА с месячной ценой, бесплатный → создание
-// из шаблона (клонирование происходит только в потоке создания агента).
+// из шаблона (создание агента происходит только в потоке создания).
 function actionLabel(price: string | null): string {
   return price !== null ? `Арендовать · ${fmtCredits(price)} кр/мес` : 'Создать из шаблона';
 }
@@ -311,14 +311,14 @@ export default function MarketPage() {
     });
   }, [templates, search, category]);
 
-  // take(): бесплатный → поток создания агента (клонирование происходит ТОЛЬКО там),
-  // платный → rent (подписка автору, как в templates/[id]). 402 → инлайн-подсказка
+  // take(): бесплатный → поток создания агента (создание из шаблона происходит ТОЛЬКО
+  // там), платный → rent (подписка автору, как в templates/[id]). 402 → инлайн-подсказка
   // с пополнением. Mirror error-handling по ренту.
   async function take(t: Template) {
     if (!token || takingId) return;
     const paid = t.price_credits !== null;
-    // Бесплатный шаблон: не клонируем здесь — уводим в форму создания агента
-    // с префиллом из шаблона (?from=<id>). Клон сработает на сабмите формы.
+    // Бесплатный шаблон: не создаём агента здесь — уводим в форму создания агента
+    // с префиллом из шаблона (?from=<id>). Создание сработает на сабмите формы.
     if (!paid) {
       router.push(`/agents/new?from=${t.id}`);
       return;
@@ -494,11 +494,9 @@ export default function MarketPage() {
                     trait={t.trait ?? undefined}
                     author={t.author_username ? `@${t.author_username}` : 'официальный'}
                     stats={{
-                      runs: String(t.clone_count),
                       rating: t.avg_rating ?? undefined,
                       price: priceStat(t.price_credits),
                     }}
-                    demoStats={!t.clone_count && !t.avg_rating}
                     actionLabel={isTaking ? 'Берём…' : actionLabel(t.price_credits)}
                     onAction={() => take(t)}
                   />

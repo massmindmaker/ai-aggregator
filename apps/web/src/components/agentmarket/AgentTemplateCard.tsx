@@ -83,10 +83,11 @@ export function AgentTemplateCard({ template }: { template: AgentTemplateRow }) 
             <span className="text-[12px] font-mono text-amber-500 truncate">
               {priceLabel(template.price_credits)}
             </span>
-            <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 flex items-center gap-2">
-              {rating !== null && <span>★ {rating.toFixed(1)}</span>}
-              <span>{template.clone_count} клонов</span>
-            </span>
+            {rating !== null && (
+              <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 flex items-center gap-2">
+                <span>★ {rating.toFixed(1)}</span>
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>

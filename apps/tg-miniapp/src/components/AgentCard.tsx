@@ -7,8 +7,8 @@ import Link from 'next/link';
 // One component, used in BOTH /agents (user's agents) and /templates (catalog),
 // so the catalog speaks ONE card language instead of three. Per-character OKLCH
 // hue, a portrait area (monogram-in-gradient now, ready for real art later),
-// name, role one-liner, the main model (mono), runs/clones + ★ rating, a budget
-// or price line (mono кр), and a featured 2px-accent ring.
+// name, role one-liner, the main model (mono), a fallback count + ★ rating, a
+// budget or price line (mono кр), and a featured 2px-accent ring.
 //
 // Replaces the legacy `tma-nft-*` markup (NFT was removed) with `tma-agent-card`.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ export interface AgentCardProps {
   metricLabel: string;
   /** true → metric is the amber price (paid template); false → muted. */
   metricAccent?: boolean;
-  /** ★ average rating (already formatted) + count, OR a runs/clones fallback. */
+  /** ★ average rating (already formatted) + count, OR a `countLabel` fallback. */
   rating?: { value: string; count: number } | null;
   /** Fallback metric shown when there is no rating (e.g. «12 запусков»). */
   countLabel?: string | null;

@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
 import { hueFor } from '@/components/AgentCard';
-import { Icon, ICONS } from '@/components/Icon';
 
 interface Template {
   id: string;
@@ -61,7 +60,7 @@ export default function TemplateDetailPage() {
 
   // Rating widget. `ratingStars` = the 1..5 the user picked; `ratingComment`
   // optional. `rateState` drives the honest UI: 'idle' | 'sending' | 'done'
-  // (thanks) | 'ineligible' (403 not_eligible → «оцените после клонирования»).
+  // (thanks) | 'ineligible' (403 not_eligible → «оцените после создания агента»).
   const [ratingStars, setRatingStars] = useState(0);
   const [ratingComment, setRatingComment] = useState('');
   const [rateState, setRateState] = useState<'idle' | 'sending' | 'done' | 'ineligible'>('idle');
@@ -107,8 +106,8 @@ export default function TemplateDetailPage() {
   const isPaid = template ? template.price_credits !== null : false;
   const priceNum = template && template.price_credits !== null ? Number(template.price_credits) : 0;
 
-  // Бесплатный шаблон: не клонируем здесь — уводим в поток создания агента
-  // с префиллом из шаблона (?from=<id>). Клонирование живёт ТОЛЬКО в создании.
+  // Бесплатный шаблон: не создаём агента здесь — уводим в поток создания агента
+  // с префиллом из шаблона (?from=<id>). Создание из шаблона живёт ТОЛЬКО в создании.
   function handleCreateFromTemplate() {
     if (!id) return;
     router.push(`/agents/new?from=${id}`);
@@ -150,8 +149,9 @@ export default function TemplateDetailPage() {
   }
 
   // Submit a 1..5 rating + optional comment. The server enforces eligibility
-  // (must have cloned/rented this template) and returns 403 not_eligible for
-  // drive-by raters — we surface that as an honest disabled state, not an error.
+  // (must have created an agent from / rented this template) and returns 403
+  // not_eligible for drive-by raters — we surface that as an honest disabled
+  // state, not an error.
   async function handleRate() {
     if (!token || !id || ratingStars < 1) return;
     setRateState('sending');
@@ -280,12 +280,6 @@ export default function TemplateDetailPage() {
                 >
                   {priceLabel(template.price_credits)}
                 </span>
-                <span
-                  className="tma-mono"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                >
-                  <Icon d={ICONS.board} size={13} /> {template.clone_count} клонов
-                </span>
               </div>
             </header>
               </div>
@@ -293,7 +287,8 @@ export default function TemplateDetailPage() {
 
             {/* CTA — the one primary action on this screen. Paid templates rent
                 (pays the author the exact sum, 0% AIAG); free templates go into the
-                create flow, where the clone happens (clone only at creation). */}
+                create flow, where the agent is created from the template (only at
+                creation). */}
             {isPaid ? (
               <>
                 <button
@@ -410,8 +405,8 @@ export default function TemplateDetailPage() {
                 <p className="tma-success">Спасибо за оценку</p>
               ) : rateState === 'ineligible' ? (
                 <p className="tma-card-text tma-text-small">
-                  Оцените после клонирования — оценки доступны тем, кто запускал
-                  этого агента.
+                  Оцените после создания агента из шаблона — оценки доступны тем, кто
+                  запускал этого агента.
                 </p>
               ) : (
                 <>

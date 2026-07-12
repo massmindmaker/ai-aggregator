@@ -126,7 +126,8 @@ export async function POST(req: NextRequest) {
   if (!tgUserId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   // Creator-membership gate (founder 2026-06-24): creating from scratch requires a
-  // membership NFT. HIRE/CLONE routes are NOT gated. Fail-closed (no row → 403).
+  // membership NFT. HIRE and create-from-template routes are NOT gated. Fail-closed
+  // (no row → 403).
   if (!(await hasCreatorMembership(tgUserId, sql))) {
     return NextResponse.json({ error: 'membership_required' }, { status: 403 });
   }
@@ -139,9 +140,10 @@ export async function POST(req: NextRequest) {
   }
 
   // SECURITY: a client may pick a seed kind (writer/coder/…) or 'personal', but must
-  // NOT forge a clone-provenance kind 'tpl:<uuid>' — only the server-side clone/rent
-  // routes stamp those. A forged tpl: kind would otherwise pass the rating-eligibility
-  // guard (templates/[id]/rate) + fake fork-lineage, with no clone/rent. Strip it.
+  // NOT forge a template-provenance kind 'tpl:<uuid>' — only the server-side
+  // create-from-template/rent routes stamp those. A forged tpl: kind would otherwise
+  // pass the rating-eligibility guard (templates/[id]/rate) + fake fork-lineage, with
+  // no real create/rent behind it. Strip it.
   const rawKind = (body.template_kind || 'personal').slice(0, 40);
   const templateKind = /^tpl:/i.test(rawKind) ? 'personal' : rawKind;
   const template = getTemplate(templateKind);

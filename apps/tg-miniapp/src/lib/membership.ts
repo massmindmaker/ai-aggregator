@@ -1,7 +1,8 @@
 // Creator membership gate (founder decision 2026-06-24).
 //
 // A membership = a row in `tg_memberships`. Holders may CREATE agents from scratch;
-// non-holders are blocked at the create endpoints (but HIRE/CLONE stay open). The flag
+// non-holders are blocked at the create endpoints (but HIRE and create-from-template
+// stay open). The flag
 // is backed by NFT ownership when a collection is configured (see nft-ownership.ts) and
 // synced into this table via POST /api/tma/membership. Founder is seeded by migration
 // 0044 so the gate never fully locks creation out.

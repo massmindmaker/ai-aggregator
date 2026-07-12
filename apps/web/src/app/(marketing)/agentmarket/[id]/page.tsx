@@ -85,7 +85,6 @@ export default async function AgentMarketDetailPage({ params }: RouteParams) {
                   ★ {rating.toFixed(1)} ({template.rating_count})
                 </span>
               )}
-              <span>{template.clone_count} клонов</span>
             </div>
           </div>
         </header>

@@ -8,12 +8,12 @@ const sql = postgres(process.env.DATABASE_URL ?? '', { prepare: false });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Default monthly budget for a cloned agent (US cents). $100/mo.
+// Default monthly budget for an agent created from a template (US cents). $100/mo.
 const DEFAULT_BUDGET_CREDITS = 10_000;
 
 // The shareable spec we copy into the new agent. The template table has no secret
-// columns, so cloning structurally cannot carry a secret. The cloner wires their own
-// keys/provider afterwards via PATCH …/agents/[id] (BYOK flow).
+// columns, so creating an agent from it structurally cannot carry a secret. The
+// creator wires their own keys/provider afterwards via PATCH …/agents/[id] (BYOK flow).
 interface TemplateSpecRow {
   name: string | null;
   description: string | null;
@@ -43,9 +43,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const tpl = rows[0] ?? null;
   if (!tpl) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
-  // Slice 1 is FREE-clone only. A non-null price means the author set author-rent;
-  // paid rent (debit + author payout) is Slice 2. Do NOT silently clone a paid
-  // template for free — reject with 402 until rent exists.
+  // Slice 1 is FREE-create only. A non-null price means the author set author-rent;
+  // paid rent (debit + author payout) is Slice 2. Do NOT silently create an agent
+  // from a paid template for free — reject with 402 until rent exists.
   if (tpl.price_credits !== null) {
     return NextResponse.json({ error: 'rent_not_available_yet' }, { status: 402 });
   }
@@ -56,9 +56,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const systemPrompt = (tpl.system_prompt ?? '').slice(0, 8000);
   const tools = Array.isArray(tpl.tools) ? tpl.tools : [];
 
-  // Atomic: create the caller-owned clone AND bump the template's clone_count in one
-  // transaction. connection_type='aiag' (caller wires their own keys/provider later);
-  // every external_*/mcp_auth secret column is left at its NULL default — no secret copied.
+  // Atomic: create the caller-owned agent AND bump the template's clone_count (a
+  // usage counter — column name kept, not renamed, to avoid a schema migration) in
+  // one transaction. connection_type='aiag' (caller wires their own keys/provider
+  // later); every external_*/mcp_auth secret column is left at its NULL default —
+  // no secret copied.
   let newAgentId = '';
   await sql.begin(async (sql) => {
     const ins = (await sql`

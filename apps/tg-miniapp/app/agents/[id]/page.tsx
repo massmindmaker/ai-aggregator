@@ -38,7 +38,6 @@ interface Agent {
   transferable?: boolean;
   transfer_price_credits?: string | null;
   nft_address?: string | null;
-  cloneable?: boolean;
   // Hire-aware view flags (API: GET /api/tma/agents/[id]). Owner controls render
   // only when is_owner; a non-owner gets "Нанять" (→ hired) and a dialog-only view.
   is_owner?: boolean;
@@ -172,10 +171,6 @@ export default function AgentDetailPage() {
   // Видимость шаблона: публичный (в каталоге) / по ссылке (unlisted) / приватный.
   // API publish уже принимает public|unlisted|private. Дефолт — публичный.
   const [pVisibility, setPVisibility] = useState<'public' | 'unlisted' | 'private'>('public');
-
-  // ---- direct-clone opt-in (2026-06-12) ----
-  const [cloneSaving, setCloneSaving] = useState(false);
-  const [cloneErr, setCloneErr] = useState<string | null>(null);
 
   // ---- edit mode ----
   const [editing, setEditing] = useState(false);
@@ -674,34 +669,6 @@ export default function AgentDetailPage() {
     }
   }
 
-  // Toggle direct-clone opt-in (PATCH cloneable). Spec-data only, no money path.
-  async function handleToggleCloneable(next: boolean) {
-    if (!token || !id || cloneSaving) return;
-    haptic.impact('light');
-    setCloneSaving(true);
-    setCloneErr(null);
-    try {
-      const res = await fetch(`/tg/api/tma/agents/${id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ cloneable: next }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setCloneErr(body.error ?? `HTTP ${res.status}`);
-        haptic.notify('error');
-        return;
-      }
-      const data = await res.json();
-      if (data.agent) setAgent(data.agent);
-    } catch (err) {
-      setCloneErr(err instanceof Error ? err.message : 'save_failed');
-      haptic.notify('error');
-    } finally {
-      setCloneSaving(false);
-    }
-  }
-
   return (
     <>
       <main className="tma-shell tma-shell--with-nav">
@@ -1114,7 +1081,8 @@ export default function AgentDetailPage() {
                   </p>
                 ) : (
                   <p className="tma-card-text tma-text-small">
-                    Бесплатный шаблон: другие смогут клонировать настройку без оплаты автору.
+                    Бесплатный шаблон: другие смогут создать агента из этой настройки без
+                    оплаты автору.
                   </p>
                 )}
                 {publishErr && <div className="tma-error">Ошибка: {publishErr}</div>}
@@ -1138,41 +1106,6 @@ export default function AgentDetailPage() {
                 </div>
               </form>
             )}
-
-            {/* Прямое клонирование — разрешить другим клонировать настройку
-                этого агента по ссылке (без ключей, памяти и истории — только спек). */}
-            <div className="tma-card" style={{ padding: 16 }}>
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  cursor: cloneSaving ? 'default' : 'pointer',
-                }}
-              >
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span className="tma-card-title" style={{ margin: 0 }}>
-                    Разрешить клонирование
-                  </span>
-                  <span className="tma-card-text tma-text-small">
-                    Другие смогут клонировать настройку этого агента. Передаётся только
-                    спек — ключи, память и история остаются у вас.
-                  </span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={!!agent.cloneable}
-                  disabled={cloneSaving}
-                  onChange={(e) => handleToggleCloneable(e.target.checked)}
-                />
-              </label>
-              {cloneErr && (
-                <div className="tma-error" style={{ marginTop: 8 }}>
-                  Ошибка: {cloneErr}
-                </div>
-              )}
-            </div>
 
             <TransferPanel
               agentId={id!}

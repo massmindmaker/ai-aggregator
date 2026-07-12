@@ -25,14 +25,14 @@ interface ShareSpecRow {
   tools: unknown;
   model_slug: string | null;
   mcp_endpoint_url: string | null;
-  // Provenance: if this agent is itself a clone, template_kind = 'tpl:<uuid>'.
+  // Provenance: if this agent was created from a template, template_kind = 'tpl:<uuid>'.
   template_kind: string | null;
 }
 
 async function loadShareSpec(id: string, tgUserId: string): Promise<ShareSpecRow | null> {
   // Ownership guard (id + tg_user_id), mirrors loadAgent in ../route.ts. Selects the
   // share-subset ONLY — no *_encrypted / *_hint / *_auth columns are referenced.
-  // template_kind carries the remix provenance ('tpl:<uuid>' for a clone).
+  // template_kind carries the remix provenance ('tpl:<uuid>' for a template-created agent).
   const rows = (await sql`
     SELECT name, description, system_prompt, tools, model_slug, mcp_endpoint_url,
            template_kind
@@ -47,8 +47,9 @@ async function loadShareSpec(id: string, tgUserId: string): Promise<ShareSpecRow
 
 const TPL_KIND_RE = /^tpl:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
-// REMIX-LINEAGE: if the published agent is itself a clone (template_kind = 'tpl:<uuid>'),
-// resolve that source template's uuid as the new template's fork_parent_id — but ONLY
+// REMIX-LINEAGE: if the published agent was itself created from a template
+// (template_kind = 'tpl:<uuid>'), resolve that source template's uuid as the new
+// template's fork_parent_id — but ONLY
 // if it's a real agent_templates row (else leave NULL, e.g. a since-deleted parent or a
 // hardcoded-seed template_kind that is not a uuid).
 async function resolveForkParent(templateKind: string | null): Promise<string | null> {
