@@ -90,6 +90,15 @@ export async function POST(req: NextRequest) {
   // retry). Expiring it would re-open the purchase screen and let the user pay a SECOND time
   // for a membership they already bought. A paid-but-unsettled charge keeps blocking (409) —
   // which is correct: they must not be charged twice.
+  //
+  // 🔴 HIGH-3: "no evidence" is NOT enough to expire — evidence (item_address) is written by
+  // the CALLBACK, and the callback is exactly the channel we declared unreliable. A lost
+  // callback + a rate-limited tonapi would leave a PAID charge with no evidence, expire it
+  // here, drop it out of the reconciler's pending pool, and the user would pay twice.
+  // So we additionally require a DEFINITIVE on-chain negative: `chain_checked_at` is stamped
+  // by the reconciler ONLY when tonapi actually answered (never on 429/timeout — it
+  // distinguishes `[]` from `null`), and it must be NEWER than the charge itself. In short:
+  // expire only what the chain has looked at, after this charge existed, and not found.
   await sql`
     UPDATE tg_membership_charges
     SET status = 'expired'
@@ -98,6 +107,8 @@ export async function POST(req: NextRequest) {
       AND created_at < NOW() - ${`${PENDING_TTL_MIN} minutes`}::interval
       AND tx_hash IS NULL
       AND item_address IS NULL
+      AND chain_checked_at IS NOT NULL
+      AND chain_checked_at > created_at
   `;
 
   const priceTon = MEMBERSHIP_TIERS[tier].priceTon;

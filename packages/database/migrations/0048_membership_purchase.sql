@@ -79,10 +79,22 @@ CREATE TABLE IF NOT EXISTS tg_membership_charges (
 );
 
 -- Re-runnable ADDs for a 0048 applied from an earlier revision of this file.
+--
+-- chain_checked_at: the last time tonapi gave a DEFINITIVE answer about this charge's
+-- recipient wallet (an answer, empty or not — never a 429/timeout/network failure). The
+-- 15-minute TTL sweep in the purchase route may only expire a charge whose absence has
+-- actually been confirmed on chain; without this, a lost callback + a rate-limited tonapi
+-- would expire a PAID charge and the user would pay twice (issue #29, HIGH-3).
 ALTER TABLE tg_membership_charges
   ADD COLUMN IF NOT EXISTS recipient_address TEXT,
   ADD COLUMN IF NOT EXISTS item_address      TEXT,
-  ADD COLUMN IF NOT EXISTS failure_reason    TEXT;
+  ADD COLUMN IF NOT EXISTS failure_reason    TEXT,
+  ADD COLUMN IF NOT EXISTS chain_checked_at  TIMESTAMPTZ;
+
+-- Reconciler pool lookups: fresh pendings and the (rare) stuck pool are queried separately
+-- so a growing needs_review backlog can never starve new purchases (issue #29, P0-2).
+CREATE INDEX IF NOT EXISTS idx_membership_charges_status_created
+  ON tg_membership_charges(status, created_at);
 
 ALTER TABLE tg_membership_charges DROP CONSTRAINT IF EXISTS chk_tg_membership_charges_tier;
 ALTER TABLE tg_membership_charges
@@ -113,7 +125,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_membership_charges_one_pending
 -- so it would have stringified to "[object Object]" and collapsed every mint into one claim.)
 --
 -- The PK is the UNIQUE constraint; `ON CONFLICT (onchain_key) DO NOTHING RETURNING`
--- inside the webhook's sql.begin is what makes a replayed callback a no-op.
+-- inside the reconciler's sql.begin is what makes a replayed grant attempt a no-op.
+--
+-- ⚠️ FALSE-IDEMPOTENCY FIX: an earlier revision of THIS file created the table with PK
+-- `tx_hash`. `CREATE TABLE IF NOT EXISTS` would silently keep that stale structure on any
+-- DB where the old revision had already been applied, and every `ON CONFLICT (onchain_key)`
+-- would then error at runtime. Prod is clean (0048 has never been applied), but "it happens
+-- to be fine" is not idempotency — so we repair the structure explicitly instead of trusting
+-- IF NOT EXISTS.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'tg_membership_tx_claims' AND column_name = 'tx_hash'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'tg_membership_tx_claims' AND column_name = 'onchain_key'
+  ) THEN
+    ALTER TABLE tg_membership_tx_claims RENAME COLUMN tx_hash TO onchain_key;
+  END IF;
+END $$;
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tg_membership_tx_claims (
   onchain_key TEXT PRIMARY KEY,
@@ -125,5 +156,33 @@ CREATE TABLE IF NOT EXISTS tg_membership_tx_claims (
 
 CREATE INDEX IF NOT EXISTS idx_membership_tx_claims_charge
   ON tg_membership_tx_claims(charge_id);
+
+-- ---------------------------------------------------------------------------
+-- ONE VERIFIED WALLET <-> ONE TELEGRAM ACCOUNT (issue #29, P0-1 second vector).
+--
+-- 0019 constrains only UNIQUE (tg_user_id, address), so the SAME wallet could be ton-proof
+-- verified from TWO tg accounts. Combined with "one pending charge per USER", that let an
+-- attacker open a `studio` charge on account A (and never pay), pay 2 TON for `creator` on
+-- account B with the same wallet, and have the single minted item satisfy A's studio charge.
+-- Paid 2, received 30.
+--
+-- The chain cannot tell us which charge an item belongs to (one mint template for all tiers),
+-- so the wallet->account mapping must be unambiguous. Pretch first, then constrain:
+--   (1) if a wallet is currently verified by several accounts, keep the EARLIEST verification
+--       and demote the others to is_verified=false (rows are KEPT — no history is deleted;
+--       a demoted user can simply re-verify with their own wallet);
+--   (2) then enforce it going forward.
+UPDATE ton_wallets w
+SET is_verified = false
+FROM (
+  SELECT id,
+         ROW_NUMBER() OVER (PARTITION BY address ORDER BY linked_at, id) AS rn
+  FROM ton_wallets
+  WHERE is_verified = true
+) d
+WHERE w.id = d.id AND d.rn > 1;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ton_wallets_verified_address
+  ON ton_wallets (address) WHERE is_verified = true;
 
 COMMIT;

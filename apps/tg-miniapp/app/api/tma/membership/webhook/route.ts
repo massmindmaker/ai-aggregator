@@ -82,21 +82,37 @@ export async function POST(req: NextRequest) {
   }
 
   const rows = (await sql`
-    SELECT id::text, status FROM tg_membership_charges
+    SELECT id::text, status, tx_hash, item_address FROM tg_membership_charges
     WHERE id = ${userData}::uuid LIMIT 1
-  `) as unknown as Array<{ id: string; status: string }>;
+  `) as unknown as Array<{
+    id: string;
+    status: string;
+    tx_hash: string | null;
+    item_address: string | null;
+  }>;
   const c = rows[0];
   if (!c) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   // FAILED MINT — the documented error branch. Never silent: log the reason and make the
   // charge terminal so the user is not stuck behind the one-pending-per-user UNIQUE.
+  //
+  // 🔴 HIGH-4: `failed` is NOT swept by the reconciler's fresh pass, so flipping a charge to
+  // `failed` on an UNSIGNED callback used to be a way to BURY a charge the user had already
+  // paid for — grantable only by hand-written SQL (which DoD 6 forbids). A forged callback
+  // could not grant, but it could TAKE AWAY. So: an error callback may only fail a charge
+  // that carries NO payment evidence. With evidence, the money is real — it goes to
+  // `needs_review` instead, which the reconciler keeps retrying and which is loudly alerted.
   if (success === false || error) {
+    const hasEvidence = !!c.tx_hash || !!c.item_address;
+    const reason = `minter_error: code=${error?.code ?? 'n/a'} message=${error?.message ?? 'n/a'}`;
     console.error(
-      `[membership/webhook] mint failed charge=${c.id} code=${error?.code ?? 'n/a'} message=${error?.message ?? 'n/a'}`,
+      `[membership/webhook] mint failed charge=${c.id} hasEvidence=${hasEvidence} ${reason}`,
     );
     await sql`
-      UPDATE tg_membership_charges SET status='failed'
-      WHERE id = ${c.id}::uuid AND status NOT IN ('settled', 'failed')
+      UPDATE tg_membership_charges
+      SET status = ${hasEvidence ? 'needs_review' : 'failed'},
+          failure_reason = ${reason}
+      WHERE id = ${c.id}::uuid AND status NOT IN ('settled', 'failed', 'needs_review')
     `;
     return NextResponse.json({ ok: true });
   }
