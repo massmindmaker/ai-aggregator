@@ -65,6 +65,10 @@ code {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  /* Positioning context for .aiag-aurora ambient glow (issue #23) — isolate
+     keeps its z-index:0 scoped here instead of leaking into page stacking. */
+  position: relative;
+  isolation: isolate;
 }
 
 .tma-header {
@@ -1432,26 +1436,36 @@ code {
     0 8px 32px rgba(245, 158, 11, 0.08);
 }
 
-/* Shimmer skeleton loader. */
+/* Shimmer skeleton loader.
+ * transform-only (issue #23): the band is a translated ::after overlay, not an
+ * animated `background-position` (off-contract). Mirrors .tma-skeleton below,
+ * which already used this technique. */
 @keyframes aiag-shimmer {
   from {
-    background-position: -200% 0;
+    transform: translateX(-100%);
   }
   to {
-    background-position: 200% 0;
+    transform: translateX(100%);
   }
 }
 
 .aiag-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-elev);
+  border-radius: 4px;
+}
+.aiag-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
   background: linear-gradient(
     90deg,
-    var(--bg-elev) 0%,
-    rgba(245, 158, 11, 0.06) 50%,
-    var(--bg-elev) 100%
+    transparent,
+    rgba(245, 158, 11, 0.06),
+    transparent
   );
-  background-size: 200% 100%;
   animation: aiag-shimmer 1.8s linear infinite;
-  border-radius: 4px;
 }
 
 /* Pulse dot for live indicators (active runs, streaming). The ::after ring
@@ -1513,6 +1527,104 @@ code {
   z-index: -1;
 }
 
+/* Aurora-blur drifting accent spot (DESIGN.md aiag-aurora) — ambient amber
+ * glow behind the hub. Ported verbatim from apps/web/globals.css so both
+ * surfaces share one definition (issue #23: was missing entirely in TMA). */
+@keyframes aiag-aurora-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.4;
+  }
+  33% {
+    transform: translate3d(40px, -30px, 0) scale(1.15);
+    opacity: 0.55;
+  }
+  66% {
+    transform: translate3d(-30px, 20px, 0) scale(0.95);
+    opacity: 0.35;
+  }
+}
+
+.aiag-aurora {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at center,
+    rgba(245, 158, 11, 0.18) 0%,
+    rgba(245, 158, 11, 0.05) 40%,
+    transparent 70%
+  );
+  filter: blur(60px);
+  pointer-events: none;
+  animation: aiag-aurora-drift 18s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* Chain-glow for the AIAG logo mark (DESIGN.md aiag-logo-dot) — light runs
+ * across the 4 nodes in sequence via per-circle animation-delay. Mirrors
+ * apps/web/globals.css; consumer = BrandMark.tsx.
+ *
+ * transform/opacity ONLY (issue #23): the bloom is a real SVG halo layer
+ * (.aiag-logo-halo), not a `filter: drop-shadow`. The node beat is transform
+ * only so each circle keeps its own `opacity` attribute (the 4th is 0.65). */
+@keyframes aiag-logo-dot-pulse {
+  0%,
+  70%,
+  100% {
+    transform: scale(1);
+  }
+  15%,
+  35% {
+    transform: scale(1.12);
+  }
+}
+.aiag-logo-dot {
+  animation: aiag-logo-dot-pulse 3.2s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+@keyframes aiag-logo-halo-bloom {
+  0%,
+  70%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  15%,
+  35% {
+    transform: scale(2.1);
+    opacity: 0.3;
+  }
+}
+.aiag-logo-halo {
+  animation: aiag-logo-halo-bloom 3.2s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+  pointer-events: none;
+}
+
+/* Checkmark draw-in for success states (DESIGN.md aiag-check-draw) — agent
+ * created, payment confirmed. Consumer = CheckDraw in Icon.tsx. */
+@keyframes aiag-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.aiag-check-svg path {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 50;
+  stroke-dashoffset: 50;
+  animation: aiag-check-draw 600ms ease-out forwards;
+}
+
 /* === Page transition (app/template.tsx) ===
  * Re-mounted on every navigation → this enter keyframe replays per route.
  * Soft fade + 10px lift, 320ms, canonical ease. Universal fallback; where
@@ -1540,12 +1652,16 @@ code {
   animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* Full reduced-motion off-switch for the aiag-* library (DESIGN.md rule). */
+/* Full reduced-motion off-switch for the aiag-* library (DESIGN.md rule).
+ * One consolidated block for the whole library (issue #23) — covers all 8
+ * DESIGN.md animations, including the 3 added above (aurora/logo-dot/
+ * check-draw). */
 @media (prefers-reduced-motion: reduce) {
   .aiag-fade-up,
-  .aiag-skeleton,
+  .aiag-skeleton::after,
   .aiag-pulse-dot::after,
   .aiag-featured-ring::before,
+  .aiag-aurora,
   .tma-page-enter {
     animation: none !important;
   }
@@ -1562,6 +1678,19 @@ code {
   }
   .aiag-glow-hover:hover {
     transform: none !important;
+  }
+  .aiag-logo-dot {
+    animation: none !important;
+    transform: none !important;
+  }
+  /* Halo is pure decoration — hide it rather than freeze a stray amber blob. */
+  .aiag-logo-halo {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+  .aiag-check-svg path {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
   }
   /* Press-spring (табы/кнопки) — без transform в reduce. */
   .tma-nav-item:active,

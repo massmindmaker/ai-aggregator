@@ -51,6 +51,18 @@ export function AiagLogo({
         <line x1="24.5" y1="18"   x2="26"   y2="10" stroke="#f59e0b" strokeOpacity="0.55" strokeWidth="2"   strokeLinecap="round" />
         <line x1="11.5" y1="22"   x2="14.5" y2="22" stroke="#f59e0b" strokeOpacity="0.55" strokeWidth="2.5" strokeLinecap="round" />
 
+        {/* Halo-слой — bloom за каждым узлом (transform/opacity, БЕЗ filter;
+            заменяет прежний drop-shadow, issue #23). Рисуется первым → под
+            узлами. */}
+        {animated && (
+          <>
+            <circle cx="9"  cy="22" r="4.5" fill="#f59e0b" className="aiag-logo-halo" style={{ animationDelay: '0ms' }} />
+            <circle cx="15" cy="9"  r="4.5" fill="#f59e0b" className="aiag-logo-halo" style={{ animationDelay: '300ms' }} />
+            <circle cx="22" cy="21" r="4.5" fill="#f59e0b" className="aiag-logo-halo" style={{ animationDelay: '600ms' }} />
+            <circle cx="26" cy="8"  r="2.5" fill="#f59e0b" className="aiag-logo-halo" style={{ animationDelay: '900ms' }} />
+          </>
+        )}
+
         {/* 4 круга в порядке цепочки — задержка animation-delay по индексу */}
         <circle cx="9"  cy="22" r="4.5" fill="#f59e0b"
                 className={cls} style={animated ? { animationDelay: '0ms' } : undefined} />

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import type { Metadata } from 'next';
 import MainLayout from '@/components/layout/MainLayout';
 import HeroAnimation from '@/components/HeroAnimation';
@@ -332,7 +333,7 @@ export default function HomePage() {
         >
           <div className="min-w-0">
             <span
-              className="aiag-hero-badge inline-flex items-center font-mono uppercase rounded-sm"
+              className="aiag-hero-badge aiag-fade-up inline-flex items-center font-mono uppercase rounded-sm"
               style={{
                 fontSize: 11,
                 color: 'var(--accent)',
@@ -341,32 +342,31 @@ export default function HomePage() {
                 padding: '7px 12px',
                 background: 'rgba(245,158,11,0.12)',
                 border: '1px solid rgba(245,158,11,0.28)',
-                animation:
-                  'aiag-fade-up 500ms 100ms cubic-bezier(.23,1,.32,1) both',
-              }}
+                '--fade-dur': '500ms',
+                '--fade-delay': '100ms',
+              } as CSSProperties}
             >
               <span
-                className="inline-block rounded-full mr-2"
+                className="aiag-pulse inline-block rounded-full mr-2"
                 style={{
                   width: 6,
                   height: 6,
                   background: 'var(--accent)',
-                  animation: 'aiag-pulse 2s ease-in-out infinite',
                 }}
               />
               400+ моделей · оплата в ₽ · без VPN
             </span>
 
             <h1
-              className="font-bold"
+              className="aiag-fade-up font-bold"
               style={{
                 fontSize: 'clamp(36px, 8vw, 84px)',
                 lineHeight: 0.98,
                 letterSpacing: '-0.035em',
                 margin: '0 0 28px',
-                animation:
-                  'aiag-fade-up 700ms 300ms cubic-bezier(.23,1,.32,1) both',
-              }}
+                '--fade-dur': '700ms',
+                '--fade-delay': '300ms',
+              } as CSSProperties}
             >
               Any AI model.
               <br />
@@ -376,15 +376,15 @@ export default function HomePage() {
             </h1>
 
             <p
-              className="text-[18px]"
+              className="aiag-fade-up text-[18px]"
               style={{
                 lineHeight: 1.55,
                 color: 'var(--ink-muted)',
                 maxWidth: 540,
                 margin: '0 0 36px',
-                animation:
-                  'aiag-fade-up 500ms 1000ms cubic-bezier(.23,1,.32,1) both',
-              }}
+                '--fade-dur': '500ms',
+                '--fade-delay': '1000ms',
+              } as CSSProperties}
             >
               Подключайте любую AI-модель через OpenAI-совместимый API. GPT-5,
               Claude, Flux, Veo, Whisper и сотни открытых моделей. Оплата
@@ -395,46 +395,46 @@ export default function HomePage() {
             <div className="flex gap-3.5 flex-wrap">
               <Link
                 href="/marketplace"
-                className="inline-flex items-center gap-2 font-semibold rounded-sm transition-all hover:-translate-y-px"
+                className="aiag-fade-up inline-flex items-center gap-2 font-semibold rounded-sm transition-all hover:-translate-y-px"
                 style={{
                   padding: '14px 24px',
                   fontSize: 15,
                   background: 'var(--accent)',
                   color: '#000',
                   border: '1px solid var(--accent)',
-                  animation:
-                    'aiag-fade-up 500ms 1200ms cubic-bezier(.23,1,.32,1) both',
                   boxShadow: '0 0 0 0 rgba(245,158,11,0)',
-                }}
+                  '--fade-dur': '500ms',
+                  '--fade-delay': '1200ms',
+                } as CSSProperties}
               >
                 Запустить модель <span>→</span>
               </Link>
               <Link
                 href="/docs"
-                className="inline-flex items-center gap-2 font-semibold rounded-sm transition-colors hover:bg-white/[0.04]"
+                className="aiag-fade-up inline-flex items-center gap-2 font-semibold rounded-sm transition-colors hover:bg-white/[0.04]"
                 style={{
                   padding: '14px 24px',
                   fontSize: 15,
                   background: 'transparent',
                   color: 'var(--ink)',
                   border: '1px solid var(--line)',
-                  animation:
-                    'aiag-fade-up 500ms 1280ms cubic-bezier(.23,1,.32,1) both',
-                }}
+                  '--fade-dur': '500ms',
+                  '--fade-delay': '1280ms',
+                } as CSSProperties}
               >
                 Документация
               </Link>
             </div>
 
             <div
-              className="aiag-hero-stats flex gap-6 flex-wrap font-mono"
+              className="aiag-hero-stats aiag-fade-up flex gap-6 flex-wrap font-mono"
               style={{
                 marginTop: 32,
                 fontSize: 12,
                 color: 'var(--ink-muted)',
-                animation:
-                  'aiag-fade-up 500ms 1400ms cubic-bezier(.23,1,.32,1) both',
-              }}
+                '--fade-dur': '500ms',
+                '--fade-delay': '1400ms',
+              } as CSSProperties}
             >
               <span className="inline-flex items-center gap-1.5">
                 <span style={{ color: 'var(--success)' }}>✓</span> T-Bank / СБП /
@@ -505,11 +505,8 @@ export default function HomePage() {
           </p>
           <div className="relative">
             <div
-              className="flex gap-3 whitespace-nowrap"
-              style={{
-                width: 'max-content',
-                animation: 'aiag-scroll-left 50s linear infinite',
-              }}
+              className="aiag-logo-track whitespace-nowrap"
+              style={{ gap: 12 }}
             >
               {[...providers, ...providers].map((name, i) => (
                 <div
@@ -1048,7 +1045,7 @@ export default function HomePage() {
             {pricingTiers.map((p) => (
               <div
                 key={p.tier}
-                className="relative transition-all hover:-translate-y-0.5"
+                className={`relative transition-all hover:-translate-y-0.5${p.featured ? ' aiag-featured-ring' : ''}`}
                 style={{
                   background: p.featured
                     ? 'linear-gradient(180deg, rgba(245,158,11,0.08) 0%, var(--bg-surface) 100%)'

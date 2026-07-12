@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { BottomNav } from '@/components/BottomNav';
+import { BrandMark } from '@/components/BrandMark';
 import { CharCard } from '@/components/CharCard';
 import { hueFor } from '@/components/AgentCard';
 import { fmtCredits } from '@/lib/credits';
@@ -357,6 +358,9 @@ export default function AgentsPage() {
 
         {!loading && error && (
           <div className="tma-card">
+            {/* Chain-glow brand mark (DESIGN.md aiag-logo-dot, issue #23) — the
+                pre-auth gate is TMA's only splash-like surface. */}
+            <BrandMark />
             <p className="tma-card-text">
               {error === 'Не открыто в Telegram'
                 ? 'Откройте через @aiag_bot в Telegram'

@@ -101,12 +101,14 @@ export function Sparkline({
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
+        /* Animation lives on .aiag-sparkline-path in globals.css (issue #23);
+           only the length-derived dash geometry stays inline. */
+        className={animate ? 'aiag-sparkline-path' : undefined}
         style={
           animate
             ? {
                 strokeDasharray: length,
                 strokeDashoffset: length,
-                animation: `aiag-sparkline-draw 1.4s cubic-bezier(.23,1,.32,1) forwards`,
               }
             : undefined
         }

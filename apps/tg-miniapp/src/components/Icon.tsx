@@ -41,3 +41,20 @@ export function Icon({
     </svg>
   );
 }
+
+// Animated variant of the ✓ glyph (DESIGN.md aiag-check-draw — stroke draws
+// in on mount). Success states only: agent created, payment confirmed
+// (issue #23 — the keyframe existed with zero consumers in TMA).
+export function CheckDraw({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      className="aiag-check-svg"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden="true"
+    >
+      <path d={ICONS.check} />
+    </svg>
+  );
+}

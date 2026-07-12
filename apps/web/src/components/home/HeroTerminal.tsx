@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 
 type Part = { text: string; cls?: string; delay: number };
 
@@ -102,16 +102,17 @@ export default function HeroTerminal() {
 
   return (
     <div
-      className="aiag-hero-terminal rounded-md overflow-hidden relative"
-      style={{
-        background: '#0f0f11',
-        maxWidth: '100%',
-        border: '1px solid var(--line)',
-        boxShadow:
-          '0 30px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
-        animation:
-          'aiag-fade-up 600ms cubic-bezier(.23,1,.32,1) 1400ms both',
-      }}
+      className="aiag-hero-terminal aiag-fade-up rounded-md overflow-hidden relative"
+      style={
+        {
+          background: '#0f0f11',
+          maxWidth: '100%',
+          border: '1px solid var(--line)',
+          boxShadow:
+            '0 30px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
+          '--fade-delay': '1400ms',
+        } as CSSProperties
+      }
     >
       <div
         className="flex items-center px-3 py-3 border-b gap-1.5 min-w-0"

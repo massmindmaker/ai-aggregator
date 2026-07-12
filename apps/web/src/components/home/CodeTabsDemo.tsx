@@ -169,12 +169,11 @@ export function CodeTabsDemo() {
             style={{ fontSize: 11, color: 'var(--ink-muted)', letterSpacing: '0.12em' }}
           >
             <span
-              className="inline-block rounded-full"
+              className="aiag-pulse inline-block rounded-full"
               style={{
                 width: 6,
                 height: 6,
                 background: 'var(--success, #22c55e)',
-                animation: 'aiag-pulse 2s ease-in-out infinite',
               }}
             />
             Stream · openai/gpt-4o-mini
@@ -184,14 +183,14 @@ export function CodeTabsDemo() {
             style={{ fontSize: 13.5, color: 'var(--ink)' }}
           >
             {out}
+            {/* Blink comes from the .aiag-cursor class (issue #23) — an inline
+                `animation` cannot be switched off by the reduced-motion rule.
+                Geometry stays inline; only the animation had to move. */}
             <span
-              className="inline-block align-middle"
+              className="aiag-cursor"
               style={{
-                width: 8,
                 height: 16,
                 marginLeft: 2,
-                background: 'var(--accent)',
-                animation: 'aiag-cursor-blink 900ms steps(2, end) infinite',
                 verticalAlign: 'text-bottom',
               }}
             />
