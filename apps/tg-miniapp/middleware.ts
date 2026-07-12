@@ -27,10 +27,14 @@ export async function middleware(req: NextRequest) {
   //   /api/tma/agents/transfer/webhook — Startonus mint callback (unsigned external
   //                                 caller, no TMA JWT; protected via nginx IP-allowlist
   //                                 + unguessable charge UUID + seller-guarded settle)
+  //   /api/tma/membership/webhook — same shape, membership-purchase mint callback
+  //                                 (issue #29); same shared TRANSFER_WEBHOOK_SECRET
+  //                                 token check + unguessable charge UUID.
   if (
     path.startsWith('/api/tma/auth/') ||
     path === '/api/tma/mcp-oauth/callback' ||
     path === '/api/tma/agents/transfer/webhook' ||
+    path === '/api/tma/membership/webhook' ||
     (path.startsWith('/api/tma/agents/') && path.endsWith('/transfer-offer')) ||
     path.startsWith('/api/tma/marketplace')
   ) {

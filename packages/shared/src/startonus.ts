@@ -65,17 +65,45 @@ export interface InvoiceResponse {
 }
 
 /**
- * Webhook payload POSTed by Startonus to `callbackUrl` on successful mint.
- * Consumed by the transfer webhook to read the minted `item` address
- * and match `userData` (= transfer_charges.id UUID).
+ * Minted NFT item, as it appears on the callback. NOTE: `item` is an OBJECT, not a bare
+ * address string — corrected 2026-07-12 against the official docs (bot.startonus.com/docs
+ * + OpenAPI). The previous `item?: string` here was the root of a real money bug: consumers
+ * used `item` directly as an idempotency key and would have keyed on "[object Object]".
+ */
+export interface StartonusItem {
+  index?: number;
+  /** The TEP-62 item contract address on TON — this is the on-chain identity. */
+  address?: string;
+  owner?: StartonusOwner;
+  meta?: unknown;
+}
+
+/** Error detail on a failed mint (documented; we previously had no field for it at all). */
+export interface StartonusError {
+  code?: string | number;
+  message?: string;
+}
+
+/**
+ * Webhook payload POSTed by Startonus to `callbackUrl`.
+ *
+ * ⚠️ REALITY CHECK (docs research 2026-07-12) — do not "improve" this type from memory:
+ *   - there is NO GET endpoint to ask for a mint's status (the whole API is one
+ *     POST generate-invoice + these callbacks);
+ *   - there are NO callback retries — a pm2 restart mid-deploy loses the callback forever;
+ *   - callbacks are NOT signed and custom headers cannot be set on them.
+ * Therefore a callback is a HINT, never the source of truth. Ownership is confirmed by
+ * reading the chain (see apps/agent-worker/src/membership-reconciler.ts).
  */
 export interface StartonusCallback {
   success: boolean;
-  /** Minted NFT item address on TON */
-  item?: string;
+  /** Minted item — an OBJECT (see StartonusItem), present on success. */
+  item?: StartonusItem;
   owner?: StartonusOwner;
   referrers?: unknown[];
   mint?: unknown;
+  /** Present on failure. */
+  error?: StartonusError;
   /** Echoed from `GenerateInvoiceParams.userData` */
   userData?: string;
 }

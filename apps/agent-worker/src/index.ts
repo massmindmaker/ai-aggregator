@@ -4,6 +4,7 @@ import http from 'node:http';
 import { runAgent } from './agent-runner.js';
 import { startScheduler } from './scheduler.js';
 import { startTopupReconciler } from './topup-reconciler.js';
+import { startMembershipReconciler } from './membership-reconciler.js';
 import { batchPayout, payoutsEnabled } from './payouts.js';
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
@@ -44,6 +45,11 @@ const scheduler = startScheduler(scheduleQueue);
 // path; this sweep is the safety net). Идемпотентен с клиентским поллом.
 const topupReconciler = startTopupReconciler();
 
+// Issue #29: membership-NFT reconciler. The AUTHORITATIVE grant path — Startonus callbacks
+// are unsigned, never retried, and have no status endpoint to poll, so the chain (tonapi)
+// is the source of truth. No-op unless MEMBERSHIP_NFT_COLLECTION_ADDRESS is configured.
+const membershipReconciler = startMembershipReconciler();
+
 // R2-readiness: author-payout batch (MONEY-OUT, off by default). The tick is a
 // no-op unless TON_PAYOUTS_ENABLED='true' AND a payout wallet is configured — with
 // the flag off it never claims a row or moves funds (see payouts.ts safety contract).
@@ -74,6 +80,7 @@ async function shutdown(): Promise<void> {
   console.log('[agent-worker] shutting down…');
   scheduler.stop();
   topupReconciler.stop();
+  membershipReconciler.stop();
   clearInterval(payoutTimer);
   await scheduleQueue.close();
   await worker.close();
