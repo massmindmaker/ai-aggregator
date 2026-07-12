@@ -19,18 +19,24 @@ const PENDING_TTL_MIN = 15;
 
 interface Body {
   tier: string;
-  recipient_address: string;
 }
 
 /**
  * POST /api/tma/membership/purchase — membership-NFT purchase INITIATE (issue #29).
  *
- * Mirrors the transferable-agent transfer/route.ts pattern exactly (same minter, same
- * TON Connect flow): insert a `pending` tg_membership_charges row, ask Startonus to
- * lazily mint one membership-tier NFT item onto the CALLER's own wallet, and hand the
- * client a TON Connect transaction to sign. Payment is on-chain TON — no crypto-credit
- * debit (issue boundary). Ownership/grant happens ONLY on the webhook 'minted' confirm
- * (…/api/tma/membership/webhook), never here.
+ * Insert a `pending` tg_membership_charges row, ask Startonus to lazily mint one
+ * membership-tier NFT item onto the caller's VERIFIED wallet, and hand the client a TON
+ * Connect transaction to sign. Payment is on-chain TON — no crypto-credit debit.
+ *
+ * The membership is NOT granted here. It is granted when the CHAIN confirms the mint —
+ * by the reconciler (apps/agent-worker/src/membership-reconciler.ts, the authoritative
+ * path) or, as a fast path, by the webhook. The Startonus callback is never trusted on
+ * its own: it is unsigned, unretried, and has no status endpoint to ask.
+ *
+ * 🔴 HIGH-A: the mint recipient is read from `ton_wallets` (ton-proof VERIFIED wallets
+ * only) — NEVER from the request body. Taking it from the body let a caller mint the NFT
+ * they paid for onto an arbitrary address, and, worse, made the recipient a client-chosen
+ * value that the on-chain grant check is keyed on.
  */
 export async function POST(req: NextRequest) {
   const tgUserId = req.headers.get('x-tma-user-id');
@@ -50,12 +56,26 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
   }
-  const { tier, recipient_address } = body;
+  const { tier } = body;
   if (!isMembershipTier(tier)) {
     return NextResponse.json({ error: 'invalid_tier' }, { status: 400 });
   }
-  if (!recipient_address || typeof recipient_address !== 'string') {
-    return NextResponse.json({ error: 'recipient_address_required' }, { status: 400 });
+
+  // HIGH-A: recipient = the caller's latest ton-proof-VERIFIED wallet. Any address in the
+  // request body is ignored outright. No verified wallet → no purchase (the user must
+  // connect + prove their wallet first), because the on-chain grant check is keyed on this
+  // address: a client-supplied one would let the caller point the check at someone else's
+  // wallet that already holds a collection item.
+  const wal = (await sql`
+    SELECT address
+    FROM ton_wallets
+    WHERE tg_user_id = ${tgUserId}::bigint AND is_verified = true
+    ORDER BY last_seen_at DESC
+    LIMIT 1
+  `) as unknown as Array<{ address: string }>;
+  const recipientAddress = wal[0]?.address ?? null;
+  if (!recipientAddress) {
+    return NextResponse.json({ error: 'wallet_not_verified' }, { status: 403 });
   }
 
   // HIGH-1 (issue #29 review): a pending charge used to be a PERMANENT lock. If the user
@@ -95,7 +115,7 @@ export async function POST(req: NextRequest) {
       )
       VALUES (
         ${tgUserId}::bigint, ${tier}, ${amountNanoTon.toString()}::bigint, 'pending',
-        ${recipient_address}, NOW()
+        ${recipientAddress}, NOW()
       )
       RETURNING id::text
     `) as unknown as Array<{ id: string }>;
@@ -138,7 +158,7 @@ export async function POST(req: NextRequest) {
       templateId: Number(mintTemplateId),
       address: collectionAddress,
       secret,
-      owner: { tgId: Number(tgUserId), wallet: recipient_address },
+      owner: { tgId: Number(tgUserId), wallet: recipientAddress },
       nftPrice: amountNanoTon,
       // LOW-2: no `nftData` — the card's name/description/image come from the Startonus
       // mint-set template (`templateId`), configured once in the minter panel. The previous

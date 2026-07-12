@@ -121,16 +121,21 @@ export default function MembershipPage() {
     setBusyTier(tier);
     setStatus('creating');
     try {
+      // The recipient is NOT sent: the server mints onto the caller's ton-proof-verified
+      // wallet, read server-side from ton_wallets (HIGH-A). A client-supplied address is
+      // ignored by the route.
       const res = await fetch('/tg/api/tma/membership/purchase', {
         method: 'POST',
         headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ tier, recipient_address: userAddress }),
+        body: JSON.stringify({ tier }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
         setStatus('error');
         if (res.status === 409 && j.error === 'purchase_pending') {
           setErrorMsg('Покупка уже запрошена. Подождите подтверждения.');
+        } else if (res.status === 403 && j.error === 'wallet_not_verified') {
+          setErrorMsg('Подтвердите владение кошельком (подпись ton-proof), затем повторите.');
         } else if (res.status === 503 && j.error === 'minter_not_configured') {
           setErrorMsg('Покупка членства временно недоступна.');
         } else {
