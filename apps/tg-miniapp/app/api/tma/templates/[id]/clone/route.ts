@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
+import { assertAgentQuota, QuotaExceededError, quotaExceededBody } from '@/lib/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -60,36 +61,48 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // transaction. connection_type='aiag' (caller wires their own keys/provider later);
   // every external_*/mcp_auth secret column is left at its NULL default — no secret copied.
   let newAgentId = '';
-  await sql.begin(async (sql) => {
-    const ins = (await sql`
-      INSERT INTO agents (
-        tg_user_id, template_kind, name, description,
-        system_prompt, tools, model_slug, budget_credits_monthly,
-        connection_type, mcp_endpoint_url
-      )
-      VALUES (
-        ${tgUserId}::bigint,
-        ${templateKind},
-        ${name},
-        ${tpl.description},
-        ${systemPrompt},
-        ${sql.json(tools as never)},
-        ${tpl.model_slug},
-        ${DEFAULT_BUDGET_CREDITS},
-        'aiag',
-        ${tpl.mcp_endpoint_url}
-      )
-      RETURNING id::text
-    `) as unknown as Array<{ id: string }>;
+  try {
+    await sql.begin(async (sql) => {
+      // Per-tier agent quota (issue #32): a template clone creates an agent the caller
+      // OWNS → counts against the cap like any other create. In this SAME transaction,
+      // so the FOR UPDATE lock serializes concurrent clones by this user.
+      await assertAgentQuota(tgUserId, sql);
 
-    newAgentId = ins[0]!.id;
+      const ins = (await sql`
+        INSERT INTO agents (
+          tg_user_id, template_kind, name, description,
+          system_prompt, tools, model_slug, budget_credits_monthly,
+          connection_type, mcp_endpoint_url
+        )
+        VALUES (
+          ${tgUserId}::bigint,
+          ${templateKind},
+          ${name},
+          ${tpl.description},
+          ${systemPrompt},
+          ${sql.json(tools as never)},
+          ${tpl.model_slug},
+          ${DEFAULT_BUDGET_CREDITS},
+          'aiag',
+          ${tpl.mcp_endpoint_url}
+        )
+        RETURNING id::text
+      `) as unknown as Array<{ id: string }>;
 
-    await sql`
-      UPDATE agent_templates
-      SET clone_count = clone_count + 1
-      WHERE id = ${params.id}::uuid
-    `;
-  });
+      newAgentId = ins[0]!.id;
+
+      await sql`
+        UPDATE agent_templates
+        SET clone_count = clone_count + 1
+        WHERE id = ${params.id}::uuid
+      `;
+    });
+  } catch (e) {
+    if (e instanceof QuotaExceededError) {
+      return NextResponse.json(quotaExceededBody(e), { status: 403 });
+    }
+    throw e;
+  }
 
   return NextResponse.json({ agent_id: newAgentId }, { status: 201 });
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
+import { assertAgentQuota, QuotaExceededError, quotaExceededBody } from '@/lib/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,26 +69,46 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // connection_type='aiag' (caller wires their own keys/provider later); every
   // external_*/mcp_auth secret column is left at its NULL default — no secret copied.
-  const ins = (await sql`
-    INSERT INTO agents (
-      tg_user_id, template_kind, name, description,
-      system_prompt, tools, model_slug, budget_credits_monthly,
-      connection_type, mcp_endpoint_url
-    )
-    VALUES (
-      ${tgUserId}::bigint,
-      ${templateKind},
-      ${name},
-      ${src.description},
-      ${systemPrompt},
-      ${sql.json(tools as never)},
-      ${src.model_slug},
-      ${DEFAULT_BUDGET_CREDITS},
-      'aiag',
-      ${src.mcp_endpoint_url}
-    )
-    RETURNING id::text
-  `) as unknown as Array<{ id: string }>;
+  //
+  // Per-tier agent quota (issue #32): a clone creates an agent the caller OWNS, so it
+  // counts against the cap exactly like a from-scratch create. Without this the tier is
+  // meaningless — buy `creator` (cap 1), create your one agent, then clone unlimited.
+  // Check + INSERT in ONE transaction: assertAgentQuota's FOR UPDATE serializes
+  // concurrent creates by this user (see its doc comment).
+  let newAgentId: string;
+  try {
+    newAgentId = await sql.begin(async (tx) => {
+      await assertAgentQuota(tgUserId, tx);
 
-  return NextResponse.json({ agent_id: ins[0]!.id }, { status: 201 });
+      const ins = (await tx`
+        INSERT INTO agents (
+          tg_user_id, template_kind, name, description,
+          system_prompt, tools, model_slug, budget_credits_monthly,
+          connection_type, mcp_endpoint_url
+        )
+        VALUES (
+          ${tgUserId}::bigint,
+          ${templateKind},
+          ${name},
+          ${src.description},
+          ${systemPrompt},
+          ${tx.json(tools as never)},
+          ${src.model_slug},
+          ${DEFAULT_BUDGET_CREDITS},
+          'aiag',
+          ${src.mcp_endpoint_url}
+        )
+        RETURNING id::text
+      `) as unknown as Array<{ id: string }>;
+
+      return ins[0]!.id;
+    });
+  } catch (e) {
+    if (e instanceof QuotaExceededError) {
+      return NextResponse.json(quotaExceededBody(e), { status: 403 });
+    }
+    throw e;
+  }
+
+  return NextResponse.json({ agent_id: newAgentId }, { status: 201 });
 }
