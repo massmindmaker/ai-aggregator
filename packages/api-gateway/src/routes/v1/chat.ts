@@ -182,7 +182,11 @@ chat.post('/completions', async (c) => {
   });
 
   c.header('X-AIAG-Mode-Applied', mode);
-  c.header('X-AIAG-Upstream', upstream.provider);
+  // White-label: X-AIAG-Upstream (raw provider name, e.g. "openrouter") used
+  // to be echoed here. Removed — it had zero internal consumers (agent-worker,
+  // billing, tests all key off upstream_id/model slug, not this header) and
+  // directly violated SECURITY.md's white-label rule. Provider name stays in
+  // server-side logs only (see logRequest below).
   // D-0: authoritative billing figures (₽), keyed to gateway_request_id via the
   // echoed X-Request-Id. Brand-neutral (numbers only). The agent-worker reads
   // these to bill off the REAL charge/cost instead of its local estimate.

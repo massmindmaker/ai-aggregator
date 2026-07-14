@@ -30,6 +30,7 @@ import type {
   MediaJob,
 } from './interface';
 import { logger } from '../lib/logger';
+import { upstreamHttpError } from '../lib/client-errors';
 
 const KIE_BASE = process.env.KIE_BASE_URL || 'https://api.kie.ai';
 
@@ -111,7 +112,7 @@ async function createTask(
       { model, family, url, status: res.status, body: text.slice(0, 500) },
       'kie_submit_error',
     );
-    throw new Error(`upstream error ${res.status}`);
+    throw upstreamHttpError(res.status);
   }
   let data: { code?: number; msg?: string; data?: { taskId?: string } };
   try {
@@ -188,7 +189,7 @@ async function pollOnce(prefixedJobId: string, byokKey?: string): Promise<MediaJ
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     logger.warn({ status: res.status, body: text.slice(0, 500) }, 'kie_recordinfo_error');
-    throw new Error(`upstream error ${res.status}`);
+    throw upstreamHttpError(res.status);
   }
   const body = (await res.json()) as KieRecordResponse;
   const s = (body?.data?.state ?? '').toLowerCase();
@@ -201,6 +202,14 @@ async function pollOnce(prefixedJobId: string, byokKey?: string): Promise<MediaJ
     };
   }
   if (s === 'fail' || s === 'failed') {
+    // Server-side only: the real upstream failure text. Routes (images.ts /
+    // video.ts / audio.ts) log this again alongside requestId/upstreamId and
+    // return a brand-neutral message to the client — this MediaJob.error
+    // field must never be forwarded to the client as-is.
+    logger.warn(
+      { jobId: prefixedJobId, failCode: body.data?.failCode, failMsg: body.data?.failMsg },
+      'kie_job_failed'
+    );
     return {
       status: 'failed',
       job_id: prefixedJobId,

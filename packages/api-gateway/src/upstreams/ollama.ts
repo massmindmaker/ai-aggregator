@@ -11,6 +11,7 @@ import type {
   EmbeddingsResponse,
 } from './interface';
 import { logger } from '../lib/logger';
+import { upstreamHttpError } from '../lib/client-errors';
 
 function getBaseUrl(): string {
   const url = process.env.OLLAMA_CLOUD_URL;
@@ -45,7 +46,7 @@ export const ollamaUpstream: UpstreamAdapter = {
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
       logger.warn({ status: res.status, body: txt }, 'ollama_chat_error');
-      throw new Error(`upstream error ${res.status}`);
+      throw upstreamHttpError(res.status);
     }
     const data = await res.json() as {
       id?: string;
@@ -92,7 +93,7 @@ export const ollamaUpstream: UpstreamAdapter = {
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
         logger.warn({ status: res.status, body: txt }, 'ollama_embeddings_error');
-        throw new Error(`upstream error ${res.status}`);
+        throw upstreamHttpError(res.status);
       }
       const json = (await res.json()) as { embedding?: number[] };
       data.push({ object: 'embedding', embedding: json.embedding ?? [], index: i });
