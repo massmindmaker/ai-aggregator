@@ -220,26 +220,35 @@ function deterministicStats(slug: string, modelType: ModelType) {
 // ---------------------------------------------------------------------------
 // Strip upstream provider mentions from description text.
 // Removes routing-layer names (OpenRouter, Kie.ai, Together, Replicate, Fal,
-// HF Inference, TG-bridge) while preserving model brand names.
+// HF Inference, TG-bridge, Gonka/GonkaGate) while preserving model brand names.
 // Patterns handled:
 //   "— через Kie.ai"  "через Kie.ai-обёртку"  "Через Replicate."
 //   "Доступно через OpenRouter."  "via Fal.ai"  "через TG-bridge: …"
-//   "через HF Inference"  "через Together"
+//   "через HF Inference"  "через Together"  ", доступная через GonkaGate"
 // ---------------------------------------------------------------------------
 const UPSTREAM_RE =
-  /(?:(?:—\s*)?(?:доступно\s+)?(?:через|available\s+via|via)\s+(?:openrouter|kie(?:\.ai)?(?:-обёртку)?|together(?:\.ai)?|replicate|fal(?:\.ai)?|hf(?:\s+inference)?|hugging\s*face|tg[- ]?bridge)[^.\n]*\.?)/gi;
+  /(?:(?:—\s*)?(?:доступно\s+)?(?:через|available\s+via|via)\s+(?:openrouter|kie(?:\.ai)?(?:-обёртку)?|together(?:\.ai)?|replicate|fal(?:\.ai)?|hf(?:\s+inference)?|hugging\s*face|tg[- ]?bridge|gonka(?:gate)?)[^.\n]*\.?)/gi;
 
 // Also remove bare standalone "Через Upstream." or "Via Upstream." sentences that
 // start a clause (capitalised, preceded by ". " or start-of-string).
 const UPSTREAM_CLAUSE_RE =
-  /(?:^|(?<=\.\s))(?:Через|Via)\s+(?:Replicate|OpenRouter|Kie(?:\.ai)?|Together(?:\.ai)?|Fal(?:\.ai)?|HF(?:\s+Inference)?|Hugging\s*Face|TG[- ]?bridge)[^.]*\./gi;
+  /(?:^|(?<=\.\s))(?:Через|Via)\s+(?:Replicate|OpenRouter|Kie(?:\.ai)?|Together(?:\.ai)?|Fal(?:\.ai)?|HF(?:\s+Inference)?|Hugging\s*Face|TG[- ]?bridge|Gonka(?:Gate)?)[^.]*\./gi;
+
+// Handles the gendered adjective form ("доступная/доступное/доступный через
+// X") that UPSTREAM_RE's "доступно\s+" (neuter-only) doesn't cover, and
+// consumes the leading ", " so no orphan adjective is left behind — e.g.
+// "MoE-модель, доступная через GonkaGate." → "MoE-модель.".
+const UPSTREAM_ADJ_CLAUSE_RE =
+  /,?\s*доступн(?:а|о|ый|ая|ые)\s+через\s+(?:GonkaGate|Gonka|OpenRouter|Kie(?:\.ai)?|Together(?:\.ai)?|Fal(?:\.ai)?|HF(?:\s+Inference)?|Hugging\s*Face|TG[- ]?bridge|Replicate)\b/gi;
 
 function stripUpstream(text: string | null): string | null {
   if (!text) return text;
   let result = text;
-  // First pass: remove standalone upstream clauses like "Через Replicate."
+  // First pass: remove gendered "доступная через X" clauses (incl. leading comma)
+  result = result.replace(UPSTREAM_ADJ_CLAUSE_RE, '');
+  // Second pass: remove standalone upstream clauses like "Через Replicate."
   result = result.replace(UPSTREAM_CLAUSE_RE, '');
-  // Second pass: remove inline upstream mentions like "через Kie.ai-обёртку"
+  // Third pass: remove inline upstream mentions like "через Kie.ai-обёртку"
   result = result.replace(UPSTREAM_RE, '');
   // Clean up artifacts:
   // 1. Collapse multiple spaces
@@ -251,6 +260,58 @@ function stripUpstream(text: string | null): string | null {
   result = result.trim();
   return result || null;
 }
+
+// ---------------------------------------------------------------------------
+// Strip a trailing "(Kie)" / "(HF)" / etc. routing-layer suffix from display
+// names. These suffixes exist purely to disambiguate DB rows that hit
+// different upstream brokers for the same model — they must never reach the
+// public model name (white-label rule, SECURITY.md).
+// ---------------------------------------------------------------------------
+const NAME_SUFFIX_RE =
+  /\s*\((?:Kie|HF|Hugging\s*Face|Replicate|Fal(?:\.ai)?|Together(?:\.ai)?|OpenRouter|TG[- ]?bridge|Gonka(?:Gate)?)\)\s*$/i;
+
+function stripNameSuffix(name: string): string {
+  return name.replace(NAME_SUFFIX_RE, '').trim();
+}
+
+// ---------------------------------------------------------------------------
+// White-label de-duplication + display-org override.
+//
+// Some models are reachable through two upstream brokers (e.g. a direct
+// route AND a Kie.ai-wrapped route) and exist as two separate DB rows that
+// differ only by a routing suffix on the slug. Publishing both as separate
+// catalog entries would surface the routing layer as if it were a second
+// product. We keep exactly ONE public listing per model — the entry below
+// maps the routing-only duplicate onto the row we keep. The dropped row's DB
+// data is untouched; this only changes what the static catalog renders.
+// ---------------------------------------------------------------------------
+const DUPLICATE_OF: Record<string, string> = {
+  'elevenlabs-tts-kie': 'elevenlabs-tts-hf',
+  'flux-dev-kie': 'flux-dev',
+  'flux-pro-1-1-kie': 'flux-pro-1-1',
+  'recraft-v3-kie': 'recraft-v3',
+  'sd-3-5-kie': 'stable-diffusion-3-5',
+};
+
+// A routing-layer prefix that leaked into the DB slug as if it were the
+// model's creator org (e.g. "gonka/qwen3-235b" — Gonka is the decentralized
+// compute broker we route through, not who made Qwen3). Overrides the
+// DISPLAY orgSlug/orgName only; `CatalogModel.slug` (the API id used in code
+// samples + gateway routing) is left untouched — routing is unaffected.
+// Extend this map, keyed by full DB slug, if another routing-layer org name
+// ever leaks the same way.
+const DISPLAY_ORG_OVERRIDE: Record<string, { orgSlug: string; orgName: string }> = {
+  'gonka/qwen3-235b': { orgSlug: 'qwen', orgName: 'Qwen' },
+  // "together" is Together.ai — an inference broker, not Llama's creator.
+  // Bucket it into the same display org as the other Llama entry (Meta).
+  'together/llama-3.1-70b': { orgSlug: 'meta-llama', orgName: 'Meta' },
+};
+
+// Routing suffix baked into flat (no "/") DB slugs — stripped from the
+// PUBLIC url segment only. `CatalogModel.slug` keeps the suffix (still
+// needed for code samples / gateway routing); `CatalogModel.modelSlug` (the
+// URL + lookup key) does not.
+const URL_SUFFIX_STRIP_RE = /-(?:kie|hf)$/i;
 
 // ---------------------------------------------------------------------------
 // Short description: first sentence, capped at 90 chars
@@ -366,12 +427,23 @@ function rowToCatalogModel(row: DbRow): CatalogModel {
 
   const cleanedDescription = stripUpstream(row.description);
 
+  // Display-only overrides — `slug` (API id / gateway routing key) stays raw.
+  const orgOverride = DISPLAY_ORG_OVERRIDE[slug];
+  const displayOrgSlug = orgOverride?.orgSlug ?? orgSlug;
+  const displayOrgName = orgOverride?.orgName ?? orgName;
+  const displayModelSlug = URL_SUFFIX_STRIP_RE.test(modelSlug)
+    ? modelSlug.replace(URL_SUFFIX_STRIP_RE, '')
+    : modelSlug;
+
   const model: CatalogModel = {
     slug,
-    orgSlug,
-    orgName,
-    modelSlug,
-    name: row.display_name ?? slug,
+    orgSlug: displayOrgSlug,
+    orgName: displayOrgName,
+    modelSlug: displayModelSlug,
+    // Fallback (missing display_name) uses the model-only segment, never the
+    // full `org/model` slug — the org segment can itself be a routing-layer
+    // name (e.g. "together/llama-3.1-70b" would otherwise show "together").
+    name: stripNameSuffix(row.display_name ?? displayModelSlug),
     shortDescription: shortDesc(cleanedDescription),
     description: cleanedDescription ?? '',
     type: modelType,
@@ -430,12 +502,14 @@ function serializeModel(m: CatalogModel): string {
 // ---------------------------------------------------------------------------
 async function main() {
   const dumpPath = process.env.CATALOG_DUMP_JSON;
-  const rows: DbRow[] = dumpPath
+  const allRows: DbRow[] = dumpPath
     ? (JSON.parse(fs.readFileSync(dumpPath, 'utf-8')) as DbRow[])
     : await getRowsFromDb();
 
-  console.log(`Loaded ${rows.length} models (${dumpPath ? dumpPath : 'live DB'}).`);
+  console.log(`Loaded ${allRows.length} models (${dumpPath ? dumpPath : 'live DB'}).`);
 
+  // Drop routing-only duplicates (see DUPLICATE_OF) — one public listing per model.
+  const rows = allRows.filter((r) => !(r.slug in DUPLICATE_OF));
   const models = rows.map(rowToCatalogModel);
 
   const catalogLiteral = models.map((m) => `  ${serializeModel(m)}`).join(',\n');
@@ -458,6 +532,38 @@ async function main() {
   );
   fs.writeFileSync(outPath, output, 'utf-8');
   console.log(`Written ${models.length} models to ${outPath}`);
+
+  // ---------------------------------------------------------------------------
+  // Legacy URL redirects — every model URL that moves (routing suffix
+  // stripped, duplicate dropped, display-org overridden) 301s from its old
+  // path to its new one so already-indexed/shared links don't dead-end.
+  // Computed programmatically from allRows so it never drifts from the
+  // catalog transform above.
+  // ---------------------------------------------------------------------------
+  const byRawSlug = new Map(allRows.map((r) => [r.slug, r] as const));
+  const redirects: Array<{ source: string; destination: string }> = [];
+  for (const row of allRows) {
+    const rawParts = row.slug.split('/');
+    const rawOrgSlug =
+      rawParts.length >= 2 ? rawParts[0] : ((row.metadata.provider_family as string) ?? row.slug);
+    const rawModelSlug = rawParts.length >= 2 ? rawParts.slice(1).join('/') : row.slug;
+    const rawPath = `/marketplace/${rawOrgSlug}/${rawModelSlug}`;
+
+    const canonicalSlug = DUPLICATE_OF[row.slug] ?? row.slug;
+    const canonicalRow = byRawSlug.get(canonicalSlug);
+    if (!canonicalRow) continue; // DUPLICATE_OF target missing from the row set — skip, nothing to redirect to
+    const canonicalModel = rowToCatalogModel(canonicalRow);
+    const newPath = `/marketplace/${canonicalModel.orgSlug}/${canonicalModel.modelSlug}`;
+
+    if (rawPath !== newPath) redirects.push({ source: rawPath, destination: newPath });
+  }
+
+  const redirectsOutPath = path.resolve(
+    __dirname,
+    '../../../apps/web/src/lib/marketplace/legacy-redirects.generated.json'
+  );
+  fs.writeFileSync(redirectsOutPath, JSON.stringify(redirects, null, 2) + '\n', 'utf-8');
+  console.log(`Written ${redirects.length} legacy redirects to ${redirectsOutPath}`);
 }
 
 main().catch((err) => {

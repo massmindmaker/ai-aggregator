@@ -25,6 +25,11 @@ export const revalidate = 30;
 
 // Известные провайдеры — гарантируем, что они присутствуют в ответе даже без
 // трафика за последний час (показываем как operational с null success/p95).
+// Внутренние ключи маршрутизации (см. `upstreams.provider` в БД) — НЕ отдаём
+// их наружу как есть. Публичные модели-бренды (OpenAI/Anthropic/Yandex/
+// GigaChat) можно показывать как есть — это не upstream-роутинг, это витрина
+// самого продукта. Роутинг-брокеры (fal/kie/together/...) — white-label:
+// см. SECURITY.md, никогда не показываем брокера конечному пользователю.
 const KNOWN_PROVIDERS = [
   'openai',
   'anthropic',
@@ -34,6 +39,32 @@ const KNOWN_PROVIDERS = [
   'kie',
   'together',
 ];
+
+// Публичная (обезличенная) метка для внутреннего ключа роутинга. Брокеры,
+// через которых мы физически ходим к апстриму, никогда не показываются под
+// своим именем — только под нашим собственным названием канала.
+const PROVIDER_PUBLIC_LABEL: Record<string, string> = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  yandex: 'yandex',
+  gigachat: 'gigachat',
+  fal: 'media-channel-a',
+  kie: 'media-channel-b',
+  together: 'open-models-channel',
+};
+
+// Safety net for any future `upstreams.provider` value that isn't in the map
+// above yet: known routing-broker name fragments are redacted by default so
+// a new broker can never leak its brand before someone adds a proper label.
+const KNOWN_BROKER_FRAGMENTS = ['kie', 'fal', 'together', 'replicate', 'openrouter', 'gonka', 'hf', 'tg-bridge'];
+
+function toPublicProviderLabel(provider: string): string {
+  const mapped = PROVIDER_PUBLIC_LABEL[provider];
+  if (mapped) return mapped;
+  const lower = provider.toLowerCase();
+  if (KNOWN_BROKER_FRAGMENTS.some((f) => lower.includes(f))) return 'other-channel';
+  return provider;
+}
 
 type ProviderStatus = {
   provider: string;
@@ -109,7 +140,7 @@ async function computeStatus(): Promise<StatusPayload> {
     const agg = byProvider.get(provider);
     if (!agg || agg.total === 0) {
       return {
-        provider,
+        provider: toPublicProviderLabel(provider),
         status: 'operational',
         successRate: null,
         p95TtftMs: null,
@@ -117,7 +148,7 @@ async function computeStatus(): Promise<StatusPayload> {
     }
     const successRate = agg.success / agg.total;
     return {
-      provider,
+      provider: toPublicProviderLabel(provider),
       status: classify(successRate),
       successRate: Number(successRate.toFixed(4)),
       p95TtftMs: agg.p95,
@@ -176,7 +207,7 @@ async function computeStatus(): Promise<StatusPayload> {
 function fallback(): StatusPayload {
   return {
     providers: KNOWN_PROVIDERS.map((provider) => ({
-      provider,
+      provider: toPublicProviderLabel(provider),
       status: 'operational' as const,
       successRate: null,
       p95TtftMs: null,

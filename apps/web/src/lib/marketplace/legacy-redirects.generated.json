@@ -1,0 +1,130 @@
+[
+  {
+    "source": "/marketplace/elevenlabs/elevenlabs-tts-hf",
+    "destination": "/marketplace/elevenlabs/elevenlabs-tts"
+  },
+  {
+    "source": "/marketplace/elevenlabs/elevenlabs-tts-kie",
+    "destination": "/marketplace/elevenlabs/elevenlabs-tts"
+  },
+  {
+    "source": "/marketplace/riffusion/riffusion-kie",
+    "destination": "/marketplace/riffusion/riffusion"
+  },
+  {
+    "source": "/marketplace/suno/suno-v3-5-kie",
+    "destination": "/marketplace/suno/suno-v3-5"
+  },
+  {
+    "source": "/marketplace/suno/suno-v4-kie",
+    "destination": "/marketplace/suno/suno-v4"
+  },
+  {
+    "source": "/marketplace/gonka/qwen3-235b",
+    "destination": "/marketplace/qwen/qwen3-235b"
+  },
+  {
+    "source": "/marketplace/together/llama-3.1-70b",
+    "destination": "/marketplace/meta-llama/llama-3.1-70b"
+  },
+  {
+    "source": "/marketplace/codeformer/codeformer-kie",
+    "destination": "/marketplace/codeformer/codeformer"
+  },
+  {
+    "source": "/marketplace/openai/dalle-3-kie",
+    "destination": "/marketplace/openai/dalle-3"
+  },
+  {
+    "source": "/marketplace/flux/flux-dev-kie",
+    "destination": "/marketplace/flux/flux-dev"
+  },
+  {
+    "source": "/marketplace/flux/flux-pro-1-1-kie",
+    "destination": "/marketplace/flux/flux-pro-1-1"
+  },
+  {
+    "source": "/marketplace/flux/flux-schnell-kie",
+    "destination": "/marketplace/flux/flux-schnell"
+  },
+  {
+    "source": "/marketplace/ideogram/ideogram-v2-kie",
+    "destination": "/marketplace/ideogram/ideogram-v2"
+  },
+  {
+    "source": "/marketplace/midjourney/midjourney-v6-1-kie",
+    "destination": "/marketplace/midjourney/midjourney-v6-1"
+  },
+  {
+    "source": "/marketplace/midjourney/midjourney-v7-kie",
+    "destination": "/marketplace/midjourney/midjourney-v7"
+  },
+  {
+    "source": "/marketplace/google-imagen/nano-banana-2-kie",
+    "destination": "/marketplace/google-imagen/nano-banana-2"
+  },
+  {
+    "source": "/marketplace/google-imagen/nano-banana-pro-kie",
+    "destination": "/marketplace/google-imagen/nano-banana-pro"
+  },
+  {
+    "source": "/marketplace/esrgan/real-esrgan-kie",
+    "destination": "/marketplace/esrgan/real-esrgan"
+  },
+  {
+    "source": "/marketplace/recraft/recraft-v3-kie",
+    "destination": "/marketplace/recraft/recraft-v3"
+  },
+  {
+    "source": "/marketplace/rembg/rembg-kie",
+    "destination": "/marketplace/rembg/rembg"
+  },
+  {
+    "source": "/marketplace/stability/sd-3-5-kie",
+    "destination": "/marketplace/stability/stable-diffusion-3-5"
+  },
+  {
+    "source": "/marketplace/topaz/topaz-photo-ai-kie",
+    "destination": "/marketplace/topaz/topaz-photo-ai"
+  },
+  {
+    "source": "/marketplace/hailuo/hailuo-02-kie",
+    "destination": "/marketplace/hailuo/hailuo-02"
+  },
+  {
+    "source": "/marketplace/hunyuan/hunyuan-video-kie",
+    "destination": "/marketplace/hunyuan/hunyuan-video"
+  },
+  {
+    "source": "/marketplace/kling/kling-1-6-kie",
+    "destination": "/marketplace/kling/kling-1-6"
+  },
+  {
+    "source": "/marketplace/kling/kling-3-0-kie",
+    "destination": "/marketplace/kling/kling-3-0"
+  },
+  {
+    "source": "/marketplace/ltx/ltx-video-kie",
+    "destination": "/marketplace/ltx/ltx-video"
+  },
+  {
+    "source": "/marketplace/seedance/seedance-pro-kie",
+    "destination": "/marketplace/seedance/seedance-pro"
+  },
+  {
+    "source": "/marketplace/sora/sora-2-kie",
+    "destination": "/marketplace/sora/sora-2"
+  },
+  {
+    "source": "/marketplace/veo/veo-2-kie",
+    "destination": "/marketplace/veo/veo-2"
+  },
+  {
+    "source": "/marketplace/veo/veo-3-kie",
+    "destination": "/marketplace/veo/veo-3"
+  },
+  {
+    "source": "/marketplace/wan/wan-2-5-kie",
+    "destination": "/marketplace/wan/wan-2-5"
+  }
+]
