@@ -19,6 +19,7 @@ import { calcCostRub, calcByokFeeRub } from '../lib/pricing';
 import { fetchUsdRubRate } from '../lib/cbr';
 import { logger } from '../lib/logger';
 import type { UpstreamCandidate } from '../routing/engine';
+import { stripUpstreamFields } from './scrub';
 
 export type StreamSettleOpts = {
   upstream: UpstreamCandidate;
@@ -58,6 +59,10 @@ export async function streamSseAndSettle(
             ? safeJson(chunk)
             : (chunk as Record<string, unknown>);
         if (json && typeof json === 'object') {
+          // White-label: strip provider-revealing fields before this chunk
+          // is ever written to the client (mirrors the non-stream cleanup
+          // in upstreams/{openrouter,gonka,groq}.ts).
+          stripUpstreamFields(json as Record<string, unknown>);
           const usage = (json as any).usage;
           if (usage) {
             inputTokens = usage.prompt_tokens ?? inputTokens;

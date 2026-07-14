@@ -25,6 +25,7 @@ import type {
 } from './interface';
 import { safeFetch } from '@aiag/shared/server';
 import { logger } from '../lib/logger';
+import { upstreamHttpError } from '../lib/client-errors';
 
 const GONKA_BASE = 'https://api.gonkagate.com/v1';
 // safeFetch allowlist: GonkaGate is the only host this adapter ever talks to.
@@ -67,7 +68,7 @@ export const gonkaUpstream: UpstreamAdapter = {
       );
       // White-label: the thrown (user-facing) error MUST NOT reveal the brand
       // or the raw upstream body — neutral status only.
-      throw new Error(`upstream error ${res.status}`);
+      throw upstreamHttpError(res.status);
     }
     const data = (await res.json()) as ChatResponse & {
       usage?: Partial<ChatResponse['usage']>;
@@ -137,7 +138,7 @@ export const gonkaUpstream: UpstreamAdapter = {
         'gonka_stream_error'
       );
       // White-label: neutral status only, no brand / no raw body.
-      throw new Error(`upstream error ${res.status}`);
+      throw upstreamHttpError(res.status);
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -184,7 +185,7 @@ export const gonkaUpstream: UpstreamAdapter = {
         'gonka_embeddings_error'
       );
       // White-label: neutral status only, no brand / no raw body.
-      throw new Error(`upstream error ${res.status}`);
+      throw upstreamHttpError(res.status);
     }
     const data = (await res.json()) as {
       data?: Array<{ embedding: number[]; index?: number }>;

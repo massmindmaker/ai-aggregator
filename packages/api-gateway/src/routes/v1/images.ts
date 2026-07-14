@@ -20,6 +20,8 @@ import { settleCharge } from '../../billing/settle';
 import { logRequest } from '../../logging/stream';
 import { getUpstream } from '../../upstreams/registry';
 import type { AuthenticatedApiKey } from '../../middleware/auth-plan04';
+import { logger } from '../../lib/logger';
+import { NEUTRAL_MESSAGES } from '../../lib/client-errors';
 
 export const images = new Hono();
 
@@ -53,7 +55,7 @@ images.post('/generations', async (c) => {
   const start = Date.now();
   const adapter = getUpstream(upstream.provider);
   if (!adapter.imageGeneration) {
-    throw errors.badRequest(`Upstream ${upstream.provider} does not support image generation`);
+    throw errors.badRequest('Selected model does not support image generation');
   }
 
   // Submit
@@ -114,13 +116,18 @@ images.post('/generations', async (c) => {
   });
 
   c.header('X-AIAG-Mode-Applied', mode);
-  c.header('X-AIAG-Upstream', upstream.provider);
   c.header('X-AIAG-Job-Id', job.job_id);
   c.header('X-AIAG-Job-Status', job.status);
 
   if (job.status === 'failed') {
+    // White-label: job.error carries the raw upstream failure text (Kie's
+    // failMsg/failCode) — log it server-side, never forward it to the client.
+    logger.warn(
+      { requestId, upstreamId: upstream.upstream_id, jobId: job.job_id, upstreamError: job.error },
+      'image_job_failed'
+    );
     return c.json(
-      { error: { code: 'UPSTREAM_FAILED', message: job.error ?? 'job failed' } },
+      { error: { code: 'UPSTREAM_FAILED', message: NEUTRAL_MESSAGES.jobFailed } },
       502,
     );
   }
@@ -141,13 +148,14 @@ images.post('/generations', async (c) => {
       job_id: job.job_id,
     });
   }
-  // Still queued/processing
+  // Still queued/processing. White-label: job.poll_url is the raw upstream
+  // URL (e.g. api.kie.ai) — never forward it, there is no client-facing poll
+  // endpoint yet, so only the job_id (opaque, brand-neutral) goes out.
   return c.json(
     {
       job_id: job.job_id,
       status: job.status,
-      poll_url: job.poll_url,
-      hint: 'Job did not complete within sync poll window. Poll the upstream URL or retry later.',
+      hint: 'Job did not complete within the sync poll window. Retry later.',
     },
     202,
   );

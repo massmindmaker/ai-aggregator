@@ -17,6 +17,7 @@ import type {
   EmbeddingsResponse,
 } from './interface';
 import { logger } from '../lib/logger';
+import { upstreamHttpError } from '../lib/client-errors';
 
 const GROQ_BASE = 'https://api.groq.com/openai/v1';
 
@@ -54,7 +55,7 @@ export const groqUpstream: UpstreamAdapter = {
         { status: res.status, model: req.modelId, body: text.slice(0, 500) },
         'groq_upstream_error'
       );
-      throw new Error(`upstream error ${res.status}`);
+      throw upstreamHttpError(res.status);
     }
     const data = (await res.json()) as ChatResponse & {
       usage?: Partial<ChatResponse['usage']>;
@@ -105,7 +106,7 @@ export const groqUpstream: UpstreamAdapter = {
         { status: res.status, model: req.modelId, body: text.slice(0, 500) },
         'groq_stream_error'
       );
-      throw new Error(`upstream error ${res.status}`);
+      throw upstreamHttpError(res.status);
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -150,7 +151,7 @@ export const groqUpstream: UpstreamAdapter = {
         { status: res.status, model: req.modelId, body: text.slice(0, 500) },
         'groq_embeddings_error'
       );
-      throw new Error(`upstream error ${res.status}`);
+      throw upstreamHttpError(res.status);
     }
     const data = (await res.json()) as {
       data?: Array<{ embedding: number[]; index?: number }>;

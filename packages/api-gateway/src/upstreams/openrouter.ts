@@ -16,6 +16,7 @@ import type {
 } from './interface';
 import { safeFetch } from '@aiag/shared/server';
 import { logger } from '../lib/logger';
+import { upstreamHttpError } from '../lib/client-errors';
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 // safeFetch allowlist: OpenRouter is the only host this adapter ever talks to.
@@ -60,7 +61,7 @@ export const openRouterUpstream: UpstreamAdapter = {
         { status: res.status, model: req.modelId, body: text.slice(0, 500) },
         'openrouter_upstream_error'
       );
-      throw new Error(`upstream error ${res.status}`);
+      throw upstreamHttpError(res.status);
     }
     const data = (await res.json()) as ChatResponse & {
       usage?: Partial<ChatResponse['usage']>;
@@ -136,7 +137,7 @@ export const openRouterUpstream: UpstreamAdapter = {
         { status: res.status, model: req.modelId, body: text.slice(0, 500) },
         'openrouter_stream_error'
       );
-      throw new Error(`upstream error ${res.status}`);
+      throw upstreamHttpError(res.status);
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -187,7 +188,7 @@ export const openRouterUpstream: UpstreamAdapter = {
         { status: res.status, model: req.modelId, body: text.slice(0, 500) },
         'openrouter_embeddings_error'
       );
-      throw new Error(`upstream error ${res.status}`);
+      throw upstreamHttpError(res.status);
     }
     const data = (await res.json()) as {
       data?: Array<{ embedding: number[]; index?: number }>;

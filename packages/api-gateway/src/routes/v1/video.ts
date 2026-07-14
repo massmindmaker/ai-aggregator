@@ -16,6 +16,8 @@ import { settleCharge } from '../../billing/settle';
 import { logRequest } from '../../logging/stream';
 import { getUpstream } from '../../upstreams/registry';
 import type { AuthenticatedApiKey } from '../../middleware/auth-plan04';
+import { logger } from '../../lib/logger';
+import { NEUTRAL_MESSAGES } from '../../lib/client-errors';
 
 export const video = new Hono();
 
@@ -49,7 +51,7 @@ video.post('/generations', async (c) => {
   const start = Date.now();
   const adapter = getUpstream(upstream.provider);
   if (!adapter.videoGeneration) {
-    throw errors.badRequest(`Upstream ${upstream.provider} does not support video generation`);
+    throw errors.badRequest('Selected model does not support video generation');
   }
 
   let job = await adapter.videoGeneration({
@@ -104,13 +106,18 @@ video.post('/generations', async (c) => {
   });
 
   c.header('X-AIAG-Mode-Applied', mode);
-  c.header('X-AIAG-Upstream', upstream.provider);
   c.header('X-AIAG-Job-Id', job.job_id);
   c.header('X-AIAG-Job-Status', job.status);
 
   if (job.status === 'failed') {
+    // White-label: job.error carries the raw upstream failure text (Kie's
+    // failMsg/failCode) — log it server-side, never forward it to the client.
+    logger.warn(
+      { requestId, upstreamId: upstream.upstream_id, jobId: job.job_id, upstreamError: job.error },
+      'video_job_failed'
+    );
     return c.json(
-      { error: { code: 'UPSTREAM_FAILED', message: job.error ?? 'job failed' } },
+      { error: { code: 'UPSTREAM_FAILED', message: NEUTRAL_MESSAGES.jobFailed } },
       502,
     );
   }
@@ -128,12 +135,12 @@ video.post('/generations', async (c) => {
       job_id: job.job_id,
     });
   }
+  // White-label: job.poll_url is the raw upstream URL — never forward it.
   return c.json(
     {
       job_id: job.job_id,
       status: job.status,
-      poll_url: job.poll_url,
-      hint: 'Video job did not complete within sync poll window. Poll later.',
+      hint: 'Video job did not complete within the sync poll window. Retry later.',
     },
     202,
   );
