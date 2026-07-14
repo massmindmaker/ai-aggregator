@@ -55,6 +55,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // configured callbackUrl (/dashboard) without it.
   },
   providers: [
+    // ── TRANSITIONAL: GitHub + Google are kept SERVER-SIDE ON PURPOSE ──────
+    // Google/GitHub are blocked in RU, so their sign-in BUTTONS were removed
+    // from /login and /register — no new user can register through them.
+    //
+    // But the providers must NOT be deleted from this config yet. Prod fact
+    // (2026-07-14): 26 users authenticate via Google and 2 via GitHub, and
+    // they have NO other way in — no password hash, no second linked provider.
+    // Removing the provider here would lock all 28 out of their accounts.
+    //
+    // So this is a soft migration:
+    //   1. UI is Yandex + email/password only (new signups).
+    //   2. These two providers stay reachable via a direct callback so the
+    //      existing 28 can still sign in, then set a password (/forgot-password)
+    //      or link Yandex.
+    //   3. Deleting GitHub/Google from this array is a SEPARATE, LATER step —
+    //      only once those 28 accounts have an alternative credential.
+    // Do not "clean this up" without checking that count against prod.
+    // ──────────────────────────────────────────────────────────────────────
     GitHub({
       clientId: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,

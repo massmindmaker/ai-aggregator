@@ -149,6 +149,16 @@ jobs:
           # read at runtime (server-side env, never baked into the bundle). This
           # dummy only lets the build's module load succeed.
           TMA_JWT_SECRET: ci-build-placeholder-not-a-real-secret-000000
+          # apps/web login/register buttons gate on this NEXT_PUBLIC_* flag.
+          # NEXT_PUBLIC_* vars are inlined into the JS bundle at `next build`
+          # time, not read at runtime — so setting it only in
+          # /srv/aiag/shared/.env has no effect; it must be present HERE.
+          # Sourced from a repo Actions variable (Settings → Secrets and
+          # variables → Actions → Variables → NEXT_PUBLIC_ENABLE_YANDEX) so
+          # the founder can flip it to "1" once YANDEX_CLIENT_ID/SECRET are
+          # set, without touching this workflow again. Unset/anything-but-"1"
+          # keeps the Yandex button hidden (fail-closed default).
+          NEXT_PUBLIC_ENABLE_YANDEX: ${{ vars.NEXT_PUBLIC_ENABLE_YANDEX }}
         run: |
           case "${{ matrix.app }}" in
             web)          bun run --cwd apps/web build ;;            # next build → apps/web/.next
