@@ -28,8 +28,6 @@ interface LeaderboardPayload {
   updatedAt: string;
 }
 
-// (MOCK data removed — real /api/contests/[slug]/leaderboard implemented.)
-
 export default function LeaderboardTable({ slug }: { slug: string }) {
   const [data, setData] = React.useState<LeaderboardPayload | null>(() => null);
   const [loading, setLoading] = React.useState(true);

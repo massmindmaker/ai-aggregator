@@ -47,6 +47,11 @@ export default function BillingPage() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
 
+  // Real tier + gateway-spendable balance from /api/dashboard/billing/summary
+  const [planName, setPlanName] = useState<string | null>(null);
+  const [creditsLimit, setCreditsLimit] = useState<number | null>(null);
+  const [balanceRub, setBalanceRub] = useState<number | null>(null);
+
   useEffect(() => {
     void (async () => {
       try {
@@ -56,6 +61,26 @@ export default function BillingPage() {
         setPayments(data.payments ?? []);
       } finally {
         setPaymentsLoading(false);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/dashboard/billing/summary');
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          plan?: { name: string; creditsLimit: number | null };
+          balance?: { totalSpendableRub: number };
+        };
+        if (data.plan) {
+          setPlanName(data.plan.name);
+          setCreditsLimit(data.plan.creditsLimit);
+        }
+        if (data.balance) setBalanceRub(data.balance.totalSpendableRub);
+      } catch {
+        /* leave nulls — UI falls back to Free / 0 */
       }
     })();
   }, []);
@@ -153,10 +178,12 @@ export default function BillingPage() {
               Активная подписка
             </div>
             <div className="mt-2 text-2xl font-semibold">
-              Free
-              <Badge variant="outline" className="ms-2 align-middle text-xs">
-                200 кредитов / мес
-              </Badge>
+              {planName ?? 'Free'}
+              {creditsLimit != null && (
+                <Badge variant="outline" className="ms-2 align-middle text-xs">
+                  {creditsLimit.toLocaleString('ru-RU')} кредитов / мес
+                </Badge>
+              )}
             </div>
             <p className="mt-3 text-sm text-muted-foreground">
               Перейдите на платный тариф для повышенных лимитов и приоритета
@@ -175,7 +202,8 @@ export default function BillingPage() {
               Баланс PAYG
             </div>
             <div className="mt-2 text-2xl font-semibold">
-              0,00 <span className="text-base text-muted-foreground">₽</span>
+              {(balanceRub ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+              <span className="text-base text-muted-foreground">₽</span>
             </div>
             <p className="mt-3 text-sm text-muted-foreground">
               Pay-per-use списания за API-запросы сверх лимита подписки.
