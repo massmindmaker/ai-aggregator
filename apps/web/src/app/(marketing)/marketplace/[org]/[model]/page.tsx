@@ -182,7 +182,13 @@ export default function ModelDetailPage({ params }: RouteParams) {
                 от{' '}
                 <span className="text-foreground font-medium">{model.orgName}</span>
                 {' · '}
-                <code className="font-mono text-xs">{model.slug}</code>
+                {/* Visible identifier preview — uses the clean display
+                    org/model pair, not the raw `model.slug` (which can carry
+                    a routing-broker suffix like "-kie"; that suffix is fine
+                    in the actual API code samples below (CodeExampleTabs,
+                    gateway-routing-critical) but must not leak into cosmetic
+                    text — white-label rule, SECURITY.md). */}
+                <code className="font-mono text-xs">{model.orgSlug}/{model.modelSlug}</code>
               </p>
               <p className="mt-3 text-foreground/90 max-w-2xl">
                 {model.shortDescription}

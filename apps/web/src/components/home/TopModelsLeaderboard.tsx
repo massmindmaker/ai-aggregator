@@ -8,6 +8,7 @@
 
 import { db, sql } from '@/lib/db';
 import { placeholderRuns } from '@/lib/marketplace/placeholders';
+import { stripProviderBrand } from '@/lib/marketplace/strip-provider-brand';
 
 interface TopModel {
   slug: string;
@@ -51,7 +52,7 @@ async function getTopModels(): Promise<TopModel[]> {
     if (Array.isArray(rows) && rows.length >= 3) {
       return rows.map((r) => ({
         slug: r.slug,
-        name: r.name,
+        name: r.name ? stripProviderBrand(r.name) : r.name,
         org_slug: orgFromSlug(r.slug),
         runs: r.runs,
       }));
@@ -75,7 +76,7 @@ async function getTopModels(): Promise<TopModel[]> {
     return (rows ?? [])
       .map((r) => ({
         slug: r.slug,
-        name: r.name,
+        name: r.name ? stripProviderBrand(r.name) : r.name,
         org_slug: orgFromSlug(r.slug),
         runs: parseRunsToken(placeholderRuns(r.slug)),
       }))
