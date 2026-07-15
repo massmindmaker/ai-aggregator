@@ -1,7 +1,15 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import MainLayout from '@/components/layout/MainLayout';
 import { AgentTemplateGrid } from '@/components/agentmarket/AgentTemplateCard';
 import { getPublicAgentTemplates } from '@/lib/agentmarket/catalog';
+
+// HIDDEN (2026-07-15, founder decision): the web агент-маркет is unfinished.
+// Gate the route behind a hard 404 instead of deleting the code — the
+// catalog/detail pages stay in the repo for future work. To re-enable:
+// remove this notFound() call (and the matching one in [id]/page.tsx) and
+// restore the /agentmarket nav entry. See
+// docs/specs/2026-07-15-agentmarket-web-hidden.md.
 
 export const metadata: Metadata = {
   title: 'Витрина агентов — AI Aggregator',
@@ -19,6 +27,7 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function AgentMarketPage() {
+  notFound();
   const templates = await getPublicAgentTemplates();
 
   return (

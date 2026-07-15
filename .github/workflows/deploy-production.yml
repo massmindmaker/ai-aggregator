@@ -159,6 +159,11 @@ jobs:
           # set, without touching this workflow again. Unset/anything-but-"1"
           # keeps the Yandex button hidden (fail-closed default).
           NEXT_PUBLIC_ENABLE_YANDEX: ${{ vars.NEXT_PUBLIC_ENABLE_YANDEX }}
+          # Same pattern for the VK button (Settings → Secrets and variables →
+          # Actions → Variables → NEXT_PUBLIC_ENABLE_VK). Fail-closed default:
+          # unset/anything-but-"1" keeps the VK button hidden. Flip once
+          # VK_CLIENT_ID/VK_CLIENT_SECRET are set in /srv/aiag/shared/.env.
+          NEXT_PUBLIC_ENABLE_VK: ${{ vars.NEXT_PUBLIC_ENABLE_VK }}
         run: |
           case "${{ matrix.app }}" in
             web)          bun run --cwd apps/web build ;;            # next build → apps/web/.next

@@ -38,6 +38,15 @@ export async function generateMetadata({
 }
 
 export default async function AgentMarketDetailPage({ params }: RouteParams) {
+  // HIDDEN (2026-07-15, founder decision): see page.tsx one level up and
+  // docs/specs/2026-07-15-agentmarket-web-hidden.md — hard 404, code kept.
+  // `as boolean` (not a literal `true`) so TS doesn't treat everything below
+  // as statically unreachable — that would drop control-flow narrowing on
+  // `template` further down (`if (!template) notFound()` → non-null) and
+  // spuriously break the build.
+  const AGENTMARKET_HIDDEN = true as boolean;
+  if (AGENTMARKET_HIDDEN) notFound();
+
   const { id } = await params;
   const template = await getPublicAgentTemplateById(id);
   if (!template) notFound();

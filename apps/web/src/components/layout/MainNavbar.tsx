@@ -9,7 +9,8 @@ import { AiagLogo } from '@/components/ui/AiagLogo';
 
 const mainMenu = [
   { title: 'Маркетплейс', href: '/marketplace' },
-  { title: 'Агенты', href: '/agentmarket' },
+  // 'Агенты' (/agentmarket) HIDDEN 2026-07-15 — unfinished web агент-маркет,
+  // see docs/specs/2026-07-15-agentmarket-web-hidden.md.
   { title: 'Конкурсы', href: '/contests' },
   { title: 'Документация', href: '/docs' },
   { title: 'Тарифы', href: '/pricing' },
