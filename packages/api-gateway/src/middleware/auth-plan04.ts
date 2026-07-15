@@ -26,6 +26,16 @@ export type AuthenticatedApiKey = {
   rpm_limit: number;
   daily_usd_cap: number | null;
   batch_rpm_limit: number;
+  // Security review 2026-07: were persisted at key creation but never read by
+  // the gateway — decoration only. Now selected + enforced (key-limits.ts /
+  // this middleware's disabled_at guard). Optional so pre-existing test
+  // fixtures / DI resolvers that predate this fix keep compiling.
+  // NULL/undefined cost_limit_monthly_rub = unlimited (the DB default — do not
+  // treat as 0). An empty/undefined model_whitelist = no restriction (also the
+  // DB default, see gatewayApiKeys.modelWhitelist).
+  cost_limit_monthly_rub?: number | null;
+  model_whitelist?: string[];
+  ru_residency_only?: boolean;
 };
 
 /**
@@ -53,12 +63,20 @@ async function resolveFromDb(key: string): Promise<AuthenticatedApiKey | null> {
     logger.warn({ err: String(e) }, 'auth_cache_read_fail');
   }
 
+  // Security review 2026-07 (#2): "disable key" only ever set `disabled_at`
+  // (see apps/web keys/[id] PATCH) — this query used to filter solely on
+  // `revoked_at IS NULL`, so a disabled-but-not-revoked key kept working
+  // forever. Also now selects cost_limit_monthly_rub / model_whitelist /
+  // ru_residency_only (#3) — previously written at key creation but never
+  // read here, so those caps were pure decoration.
   const rows = await sql<AuthenticatedApiKey[]>`
     SELECT id, org_id, policies,
-           rpm_limit, daily_usd_cap, batch_rpm_limit
+           rpm_limit, daily_usd_cap, batch_rpm_limit,
+           cost_limit_monthly_rub, model_whitelist, ru_residency_only
     FROM gateway_api_keys
     WHERE key_hash = ${keyHash}
       AND revoked_at IS NULL
+      AND disabled_at IS NULL
     LIMIT 1
   `;
   const row = rows[0];

@@ -28,6 +28,7 @@ import { logRequest } from '../../logging/stream';
 import { streamSseAndSettle } from '../../streaming/sse';
 import { getUpstream } from '../../upstreams/registry';
 import type { AuthenticatedApiKey } from '../../middleware/auth-plan04';
+import { monthlyCostCounterKey } from '../../middleware/key-limits';
 
 export const chat = new Hono();
 
@@ -150,6 +151,26 @@ chat.post('/completions', async (c) => {
       );
     } catch (e) {
       logger.warn({ err: String(e) }, 'daily_usd_incr_fail');
+    }
+  }
+
+  // Security review 2026-07 (#3): cost_limit_monthly_rub INCR. Same shape as
+  // the daily USD cap above but keyed per-key (not per-org) and in ₽ (not
+  // upstream USD) — it must reflect what the caller was actually CHARGED
+  // (totalRub), not our upstream cost, so BYOK's fixed fee counts too.
+  // key-limits.ts middleware reads this counter read-only on the NEXT
+  // request; this is the only place it's incremented.
+  if (key.cost_limit_monthly_rub) {
+    try {
+      const redis = makeRedis('ratelimit');
+      const usedKey = monthlyCostCounterKey(key.id);
+      await redis.incrbyfloat(usedKey, totalRub);
+      // ~32 days: comfortably outlives the current calendar month regardless
+      // of when in the month the first request landed; the counter key
+      // itself rolls over to a fresh YYYY-MM string next month anyway.
+      await redis.expire(usedKey, 32 * 24 * 3600);
+    } catch (e) {
+      logger.warn({ err: String(e) }, 'monthly_cost_incr_fail');
     }
   }
 

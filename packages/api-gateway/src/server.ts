@@ -10,6 +10,7 @@ import { config } from './config';
 import { AiagError, errors } from './lib/errors';
 import { requireApiKey } from './middleware/auth-plan04';
 import { rateLimit } from './middleware/rate-limit-plan04';
+import { keyLimits } from './middleware/key-limits';
 import { piiFilter } from './middleware/pii-filter';
 import { modelStatusMiddleware } from './middleware/model-status-check';
 import { requestIdMiddleware } from './middleware/request-id';
@@ -71,6 +72,7 @@ app.get('/', (c) =>
 // ---- /v1 routes: auth + rate-limit + pii ------------------------------------
 app.use('/v1/*', requireApiKey);
 app.use('/v1/*', rateLimit);
+app.use('/v1/*', keyLimits);
 app.use('/v1/*', piiFilter);
 app.use('/v1/*', modelStatusMiddleware());
 

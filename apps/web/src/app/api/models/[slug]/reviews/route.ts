@@ -7,7 +7,6 @@ interface ReviewRow {
   rating: number;
   title: string | null;
   content: string | null;
-  user_id: string;
   user_name: string | null;
   created_at: string;
 }
@@ -40,8 +39,11 @@ export async function GET(
   const { slug } = await params;
   const decodedSlug = decodeURIComponent(slug);
   try {
+    // #7 (security review 2026-07): do not select r.user_id — this is a
+    // public, unauthenticated endpoint. u.name (display name) is the only
+    // author identity exposed; the internal user PK never leaves the server.
     const result = await db.execute(sql`
-      SELECT r.id, r.rating, r.title, r.content, r.user_id, r.created_at,
+      SELECT r.id, r.rating, r.title, r.content, r.created_at,
         u.name AS user_name
       FROM gateway_model_reviews r
       LEFT JOIN users u ON u.id = r.user_id

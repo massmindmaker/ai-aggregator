@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { gatewayApiKeys } from '@aiag/database/schema';
 import { and, eq } from '@aiag/database';
 import { getOrCreateDefaultOrg } from '@/lib/dashboard/org';
+import { invalidateApiKeyCache } from '@/lib/dashboard/gateway-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -79,6 +80,10 @@ export async function PATCH(
     .where(eq(gatewayApiKeys.id, id))
     .returning();
 
+  // #4: any change here (disable, cost cap, whitelist, residency) must not
+  // wait out the gateway's 5-minute auth cache — purge it immediately.
+  await invalidateApiKeyCache(owned.key.keyHash);
+
   return NextResponse.json({ ok: true, record: row });
 }
 
@@ -99,6 +104,10 @@ export async function DELETE(
     .update(gatewayApiKeys)
     .set({ disabledAt: new Date(), revokedAt: new Date() })
     .where(eq(gatewayApiKeys.id, id));
+
+  // #4: without this a just-deleted key keeps authenticating off the
+  // gateway's cached copy for up to 5 more minutes.
+  await invalidateApiKeyCache(owned.key.keyHash);
 
   return NextResponse.json({ ok: true });
 }
