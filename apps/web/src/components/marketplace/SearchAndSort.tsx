@@ -48,6 +48,13 @@ export function SearchAndSort() {
       const next = { ...filters, ...patch, page: 1 };
       const qs = filtersToSearchParams(next).toString();
       router.push(qs ? `${pathname}?${qs}` : pathname);
+      // The results grid is server-rendered from `searchParams`. Next's
+      // client Router Cache can serve a stale RSC payload for a URL that
+      // was visited earlier in the session (e.g. toggling sort back and
+      // forth) even though the address bar updates correctly — force a
+      // fresh fetch so the dropdown label and card order always match the
+      // URL immediately, same as the filter checkboxes.
+      router.refresh();
     },
     [filters, router, pathname]
   );

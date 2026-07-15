@@ -85,7 +85,17 @@ export function OnboardingTour() {
     try {
       if (typeof window === 'undefined') return;
       if (localStorage.getItem(STORAGE_KEY)) return;
-      t = setTimeout(() => setOpen(true), 1200);
+      t = setTimeout(() => {
+        // Mark as shown the moment the tour actually opens, not only when the
+        // user closes it — otherwise navigating away before closing (e.g. a
+        // full page reload) re-triggers the tour on every subsequent visit.
+        try {
+          localStorage.setItem(STORAGE_KEY, '1');
+        } catch {
+          /* ignore */
+        }
+        setOpen(true);
+      }, 1200);
     } catch {
       /* localStorage unavailable */
     }

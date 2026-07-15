@@ -82,9 +82,24 @@ export async function POST(req: NextRequest) {
   });
 
   if (!result.success) {
+    // The upstream provider (Tinkoff/YooKassa) rejected Init — most commonly
+    // because the provider isn't configured on this environment (missing
+    // terminal/secret) rather than anything the user did wrong. Log the raw
+    // provider error for debugging, but never surface it to the user — it
+    // leaks provider internals and wrongly implies a user input mistake.
+    // eslint-disable-next-line no-console
+    console.error('[payments/topup] provider init failed', {
+      provider: providerId,
+      errorMessage: result.errorMessage,
+    });
     return NextResponse.json(
-      { error: { message: result.errorMessage || 'Payment init failed', code: 'INIT_FAILED' } },
-      { status: 502 }
+      {
+        error: {
+          message: 'Оплата временно недоступна, попробуйте позже',
+          code: 'PROVIDER_UNAVAILABLE',
+        },
+      },
+      { status: 503 }
     );
   }
 

@@ -92,9 +92,24 @@ export async function POST(req: NextRequest) {
   });
 
   if (!result.success) {
+    // Same honesty rule as /api/payments/topup: an Init rejection is a
+    // provider/config problem (e.g. missing terminal credentials on this
+    // environment), not invalid user input — never surface the raw upstream
+    // error text (it can read like "неверные параметры" and wrongly blame
+    // the user). Log it server-side instead.
+    // eslint-disable-next-line no-console
+    console.error('[subscriptions/create] provider init failed', {
+      provider: providerId,
+      errorMessage: result.errorMessage,
+    });
     return NextResponse.json(
-      { error: { message: result.errorMessage || 'Payment init failed', code: 'INIT_FAILED' } },
-      { status: 502 }
+      {
+        error: {
+          message: 'Оплата временно недоступна, попробуйте позже',
+          code: 'PROVIDER_UNAVAILABLE',
+        },
+      },
+      { status: 503 }
     );
   }
 

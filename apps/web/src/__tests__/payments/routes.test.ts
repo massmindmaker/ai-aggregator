@@ -168,16 +168,20 @@ describe('POST /api/subscriptions/create', () => {
     expect(arg.amountRub).toBe(24900);
   });
 
-  it('returns 502 on provider failure', async () => {
+  it('returns an honest 503 on provider failure, without leaking the raw upstream error', async () => {
     mockedAuth.mockResolvedValue({ user: { id: 'u1' } });
     mockInitPayment.mockResolvedValue({
       success: false,
       providerPaymentId: '',
       status: 'REJECTED',
-      errorMessage: 'API down',
+      errorMessage: 'Неверные параметры', // raw upstream text — must never reach the client
     });
     const r = await createSub(makeReq({ tierId: 'basic' }) as never);
-    expect(r.status).toBe(502);
+    expect(r.status).toBe(503);
+    const data = await r.json();
+    expect(data.error.code).toBe('PROVIDER_UNAVAILABLE');
+    expect(data.error.message).not.toMatch(/неверные параметры/i);
+    expect(data.error.message).toBe('Оплата временно недоступна, попробуйте позже');
   });
 });
 
@@ -255,6 +259,22 @@ describe('POST /api/payments/topup', () => {
     const data = await r.json();
     expect(data.amount).toBe(2500);
     expect(data.paymentUrl).toBe('https://x.test');
+  });
+
+  it('returns an honest 503 on provider failure, without leaking the raw upstream error', async () => {
+    mockedAuth.mockResolvedValue({ user: { id: 'u1' } });
+    mockInitPayment.mockResolvedValue({
+      success: false,
+      providerPaymentId: '',
+      status: 'REJECTED',
+      errorMessage: 'Неверные параметры', // raw upstream text — must never reach the client
+    });
+    const r = await topup(makeReq({ amountRub: 1000 }) as never);
+    expect(r.status).toBe(503);
+    const data = await r.json();
+    expect(data.error.code).toBe('PROVIDER_UNAVAILABLE');
+    expect(data.error.message).not.toMatch(/неверные параметры/i);
+    expect(data.error.message).toBe('Оплата временно недоступна, попробуйте позже');
   });
 });
 

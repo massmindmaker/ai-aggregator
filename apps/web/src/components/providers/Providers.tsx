@@ -15,7 +15,10 @@ interface ProvidersProps {
 export function Providers({ children, session }: ProvidersProps) {
   const path = usePathname();
   const showOnboarding =
-    !path?.startsWith('/admin') && !path?.startsWith('/dashboard');
+    !path?.startsWith('/admin') &&
+    !path?.startsWith('/dashboard') &&
+    !path?.startsWith('/login') &&
+    !path?.startsWith('/register');
 
   return (
     <SessionProvider session={session}>
