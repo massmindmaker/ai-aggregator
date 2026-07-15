@@ -84,13 +84,27 @@ export interface CatalogModel {
 // Import the generated catalog (empty placeholder until `gen:catalog` is run).
 // eslint-disable-next-line import/no-cycle
 import { GENERATED_CATALOG } from './catalog.generated';
+import { stripProviderBrand } from './strip-provider-brand';
 
 /**
  * Runtime source: prefer DB-generated data when available, fall back to the
  * static CATALOG so the app always has something to render.
+ *
+ * `name` is passed through `stripProviderBrand` as a defense-in-depth net:
+ * the generator already strips the routing-layer suffix (e.g. "(Kie)") at
+ * build time, but this guarantees no consumer (detail page, ModelCard,
+ * playground, search index, ...) ever renders a dirty name even if a future
+ * regeneration forgets to, or a supersededByName field carries one through.
  */
 function getSource(): CatalogModel[] {
-  return GENERATED_CATALOG.length > 0 ? GENERATED_CATALOG : CATALOG;
+  const source = GENERATED_CATALOG.length > 0 ? GENERATED_CATALOG : CATALOG;
+  return source.map((m) => ({
+    ...m,
+    name: stripProviderBrand(m.name) || m.name,
+    ...(m.supersededByName
+      ? { supersededByName: stripProviderBrand(m.supersededByName) || m.supersededByName }
+      : {}),
+  }));
 }
 
 /** Foreign-hosted org slugs (trigger transfer warning per 152-ФЗ). */

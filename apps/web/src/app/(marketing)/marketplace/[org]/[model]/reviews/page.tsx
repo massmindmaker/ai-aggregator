@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { db, sql } from '@/lib/db';
 import { auth } from '@/auth';
+import { stripProviderBrand } from '@/lib/marketplace/strip-provider-brand';
 import { ReviewForm } from './ReviewForm';
 
 export const dynamic = 'force-dynamic';
@@ -95,7 +96,7 @@ export default async function ReviewsPage({
           href={`/marketplace/${org}/${modelSlugPart}`}
           className="text-sm text-muted-foreground hover:text-primary"
         >
-          ← {model.display_name ?? model.slug}
+          ← {model.display_name ? stripProviderBrand(model.display_name) : model.slug}
         </Link>
 
         <h1 className="text-3xl font-bold tracking-tight mt-4 mb-2">Отзывы</h1>
