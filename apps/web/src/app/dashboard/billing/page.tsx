@@ -18,6 +18,12 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   sbp: 'СБП',
 };
 
+// yookassa/sbp webhooks are still a stub (TODO: persist + settle credits, see
+// /api/subscriptions/webhook/[provider]) — a payment there takes the user's
+// money but never credits the balance. Keep them visible (roadmap-honest) but
+// disabled until that lands. Only tinkoff is a real, working money path.
+const DISABLED_PROVIDERS: ReadonlySet<ProviderId> = new Set(['yookassa', 'sbp']);
+
 interface PaymentRow {
   id: string;
   amount: string;
@@ -238,21 +244,30 @@ export default function BillingPage() {
 
           <div className="flex flex-wrap items-center gap-3 mb-4 text-xs text-muted-foreground">
             <span>Способ оплаты:</span>
-            {(['tinkoff', 'yookassa', 'sbp'] as ProviderId[]).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setTopupProvider(p)}
-                className={cn(
-                  'px-3 py-1 rounded-full border transition-colors',
-                  topupProvider === p
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border hover:border-primary/40'
-                )}
-              >
-                {PROVIDER_LABELS[p]}
-              </button>
-            ))}
+            {(['tinkoff', 'yookassa', 'sbp'] as ProviderId[]).map((p) => {
+              const disabled = DISABLED_PROVIDERS.has(p);
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => !disabled && setTopupProvider(p)}
+                  aria-disabled={disabled}
+                  title={disabled ? 'Скоро' : undefined}
+                  className={cn(
+                    'px-3 py-1 rounded-full border transition-colors',
+                    disabled
+                      ? 'opacity-40 cursor-not-allowed border-border'
+                      : topupProvider === p
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border hover:border-primary/40'
+                  )}
+                >
+                  {PROVIDER_LABELS[p]}
+                  {disabled && <span className="ms-1">(скоро)</span>}
+                </button>
+              );
+            })}
           </div>
 
           {error && (

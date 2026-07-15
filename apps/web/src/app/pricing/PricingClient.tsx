@@ -102,6 +102,13 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   sbp: 'СБП',
 };
 
+// yookassa/sbp webhooks are still a stub (TODO: persist + settle credits, see
+// /api/subscriptions/webhook/[provider]) — a subscription paid there takes
+// the user's money but never activates the tier. Keep them visible
+// (roadmap-honest) but disabled until that lands. Only tinkoff is a real,
+// working money path.
+const DISABLED_PROVIDERS: ReadonlySet<ProviderId> = new Set(['yookassa', 'sbp']);
+
 function formatPrice(n: number) {
   return n.toLocaleString('ru-RU');
 }
@@ -218,21 +225,30 @@ export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClie
           {/* Payment provider selector */}
           <div className="mt-5 inline-flex items-center gap-2 text-xs text-muted-foreground">
             <span>Способ оплаты:</span>
-            {(['tinkoff', 'yookassa', 'sbp'] as ProviderId[]).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setProvider(p)}
-                className={cn(
-                  'px-3 py-1 rounded-full border transition-colors',
-                  provider === p
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border hover:border-primary/40'
-                )}
-              >
-                {PROVIDER_LABELS[p]}
-              </button>
-            ))}
+            {(['tinkoff', 'yookassa', 'sbp'] as ProviderId[]).map((p) => {
+              const disabled = DISABLED_PROVIDERS.has(p);
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => !disabled && setProvider(p)}
+                  aria-disabled={disabled}
+                  title={disabled ? 'Скоро' : undefined}
+                  className={cn(
+                    'px-3 py-1 rounded-full border transition-colors',
+                    disabled
+                      ? 'opacity-40 cursor-not-allowed border-border'
+                      : provider === p
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border hover:border-primary/40'
+                  )}
+                >
+                  {PROVIDER_LABELS[p]}
+                  {disabled && <span className="ms-1">(скоро)</span>}
+                </button>
+              );
+            })}
           </div>
 
           {error && (

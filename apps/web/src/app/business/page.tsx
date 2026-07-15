@@ -237,7 +237,7 @@ export default function BusinessPage() {
               Запросить договор →
             </a>
             <a
-              href="https://t.me/b0brov"
+              href="https://t.me/aiaggregatorsupport"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 font-semibold rounded-sm hover:bg-white/[0.04] transition-colors"

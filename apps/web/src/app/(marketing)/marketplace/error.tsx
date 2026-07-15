@@ -35,12 +35,12 @@ export default function MarketplaceError({
           <AlertDescription>
             Если ошибка повторяется — напишите нам в Telegram{' '}
             <a
-              href="https://t.me/b0brov"
+              href="https://t.me/aiaggregatorsupport"
               target="_blank"
               rel="noreferrer"
               className="text-primary underline"
             >
-              @b0brov
+              @aiaggregatorsupport
             </a>
             . Укажите ID ошибки, если он есть.
           </AlertDescription>
