@@ -179,14 +179,14 @@ chat.post('/completions', async (c) => {
   // incremented.
   // ⚠️ T1 scope note (widened by the 2026-07-16 micro-credit rework): the
   // field/redis-key are still named "..._rub" and the policy value
-  // (`key.cost_limit_monthly_rub`) is still ₽-denominated — this counter now
-  // accumulates MICRO-credits (1/1000 of a US-cent credit) against that ₽
-  // threshold. That is a ~1000-92000× unit mismatch (not the ~8.7% drift a
-  // whole-credit unit would have caused) — in practice this cap will now
-  // almost never trip on a ₽-scaled threshold. NOT fixed here: caps moving
-  // into the settle function with a proper credits column is T4
-  // (finmodel-build-spec §6/§8) — flagging the magnitude honestly rather
-  // than silently leaving a smaller-looking drift note in place.
+  // (`key.cost_limit_monthly_rub`) is still ₽-denominated — this counter
+  // accumulates MICRO-credits (1/1000 of a US-cent credit), NOT ₽. The
+  // comparison side (key-limits.ts) converts through the CBR USD/RUB rate
+  // before comparing, so the unit mismatch is corrected there — this INCR
+  // stays in micro-credits (the settlement's native unit) on purpose.
+  // Renaming the column/redis-key to a real credits unit is still T6/T4
+  // (finmodel-build-spec §6/§8); until then this is the accumulator +
+  // FX-at-read-time bridge.
   if (key.cost_limit_monthly_rub) {
     try {
       const redis = makeRedis('ratelimit');

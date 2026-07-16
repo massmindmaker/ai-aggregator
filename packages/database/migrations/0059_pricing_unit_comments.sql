@@ -25,9 +25,13 @@
 
 COMMENT ON COLUMN model_upstreams.price_per_1k_input IS
   'US CENTS per 1k input tokens (= USD × 100). NOT RUB, despite migration '
-  '0006''s original header wording (corrected same day). NOT USD — dividing '
-  'by 100 before multiplying by markup is mandatory; see lib/pricing.ts '
-  '(calcCostCredits PricingArgs.upstreamCents).';
+  '0006''s original header wording (corrected same day). NOT USD. Pass this '
+  'value DIRECTLY as calcCostCredits'' PricingArgs.upstreamCents (lib/pricing.ts) '
+  '— do NOT divide by 100 first: 1 credit = 1 US cent, so '
+  'cents x markup x 1000 = micro-credits is already correct. Dividing by 100 '
+  'before that multiplication is NOT mandatory — doing so produces a 100x '
+  'UNDERCHARGE, the mirror image of the original 100x OVERCHARGE bug this '
+  'same rework fixed.';
 
 COMMENT ON COLUMN model_upstreams.price_per_1k_output IS
   'US CENTS per 1k output tokens (= USD × 100). Same convention as '

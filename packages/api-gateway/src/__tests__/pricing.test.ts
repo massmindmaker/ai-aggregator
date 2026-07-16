@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { calcCostCredits, calcByokFeeCredits, MICRO_PER_CREDIT } from '../lib/pricing';
+// Cross-package import of the ACTUAL storefront artifact (not a copy) — see
+// the "storefront == invoice" describe block below for why.
+import { GENERATED_CATALOG } from '../../../../apps/web/src/lib/marketplace/catalog.generated';
 
 // T1-fix (2026-07-16 rework): org buckets are whole MICRO-credits now
 // (1 credit = 1000 micro = 1¢ USD), not ₽, not whole-credit-with-a-1-floor.
@@ -103,19 +106,51 @@ describe('pricing.calcCostCredits', () => {
     expect(Number.isInteger(calcByokFeeCredits())).toBe(true);
   });
 
-  // Storefront == invoice: the price a user sees in the catalog
-  // (gen-marketplace-catalog.ts:373, `inputRaw × markup`, in CENTS) must
-  // agree with what the gateway actually settles for the same call, once
-  // converted back to the same cents unit (micro / MICRO_PER_CREDIT).
-  it('storefront price (cents) matches gateway charge (micro / 1000), within rounding', () => {
-    const col = 0.3; // anthropic/claude-sonnet-4-6 input, cents/1k
-    const markup = 1.8;
-    const storefrontCentsPer1k = col * markup; // gen-marketplace-catalog.ts:373 (no /100, no rate)
-    const chargedMicro = calcCostCredits({ upstreamCents: col, markup });
-    const chargedCents = chargedMicro / MICRO_PER_CREDIT;
-    // Rounding to the nearest micro-credit is within 1/1000 of a cent —
-    // negligible next to the storefront's own 6-decimal rounding.
-    expect(chargedCents).toBeCloseTo(storefrontCentsPer1k, 3);
+  // Storefront == invoice.
+  //
+  // 🔴 Rewrite (Opus review, 2026-07-17): the PREVIOUS version of this test
+  // was GREEN AND USELESS — it hardcoded `col = 0.3` and `markup = 1.8` on
+  // BOTH sides of the comparison (the "storefront" side and the "invoice"
+  // side), so it could never fail no matter what catalog.generated.ts
+  // actually contained. It never once read the real artifact. This is
+  // exactly how the storefront shipped baked at markup 1.07 (gen'd
+  // 2026-07-14, before markup was raised to 1.8 by migration 0057) while the
+  // gateway billed at 1.8 for weeks with this test green throughout.
+  //
+  // The fix: read GENERATED_CATALOG — the literal file the web app ships —
+  // and cross-check it against calcCostCredits, the REAL settlement
+  // function, not a copy of its formula. The raw upstream cents + the
+  // expected markup are the only hardcoded inputs (a public-pricing anchor,
+  // same one migration 0059's header verifies against prod); everything
+  // else flows from the artifact.
+  describe('storefront == invoice (reads the real catalog.generated.ts artifact)', () => {
+    const RAW_INPUT_CENTS = 0.3; // anthropic/claude-sonnet-4-6, public pricing: $3/1M = 0.30¢/1k
+    const RAW_OUTPUT_CENTS = 1.5; // $15/1M = 1.50¢/1k
+    const CURRENT_MARKUP = 1.8; // model_upstreams.markup as of migration 0057
+
+    const model = GENERATED_CATALOG.find((m) => m.slug === 'anthropic/claude-sonnet-4-6');
+
+    it('fixture model is present in the shipped artifact', () => {
+      expect(model).toBeDefined();
+    });
+
+    it('storefront input price (catalog.generated.ts) matches what calcCostCredits actually charges', () => {
+      if (!model) throw new Error('anthropic/claude-sonnet-4-6 missing from GENERATED_CATALOG — re-run gen:catalog');
+      const chargedMicro = calcCostCredits({ upstreamCents: RAW_INPUT_CENTS, markup: CURRENT_MARKUP });
+      const chargedCredits = chargedMicro / MICRO_PER_CREDIT;
+      // This is the assertion that catches a stale-markup artifact: if the
+      // catalog was baked at 1.07 instead of 1.8, model.pricing.inputPer1k
+      // would be 0.321, chargedCredits would be 0.54 — a 40%+ mismatch, well
+      // outside the rounding tolerance below.
+      expect(model.pricing.inputPer1k).toBeCloseTo(chargedCredits, 3);
+    });
+
+    it('storefront output price (catalog.generated.ts) matches what calcCostCredits actually charges', () => {
+      if (!model) throw new Error('anthropic/claude-sonnet-4-6 missing from GENERATED_CATALOG — re-run gen:catalog');
+      const chargedMicro = calcCostCredits({ upstreamCents: RAW_OUTPUT_CENTS, markup: CURRENT_MARKUP });
+      const chargedCredits = chargedMicro / MICRO_PER_CREDIT;
+      expect(model.pricing.outputPer1k).toBeCloseTo(chargedCredits, 3);
+    });
   });
 
   // HIGH-1 anchor (Opus review, embeddings): a 1k-token embedding call at

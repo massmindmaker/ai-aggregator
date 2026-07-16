@@ -176,6 +176,20 @@ ssh -O exit aiag-vps   # close forward + master when done
 > (or restart the `cache` Redis logical DB the gateway uses). Otherwise up to 10 minutes of traffic
 > bills at the stale cached value.
 
+> 🔴 **Same migration also requires re-running `gen:catalog`** (Opus review, HIGH-C 2026-07-17): the
+> public marketplace storefront (`apps/web/src/lib/marketplace/catalog.generated.ts`) is a BUILD-TIME
+> snapshot baked by `packages/database/scripts/gen-marketplace-catalog.ts` from `model_upstreams` —
+> it is NOT read live. `0057_markup_180.sql`'s own header already said this ("Whoever deploys this
+> migration must also re-run [gen:catalog]") but that step was never actually taken, so the storefront
+> shipped at a stale markup (1.07 baked) while the gateway billed at the new one (1.8) — a live
+> under-display of what customers were actually charged. After ANY migration touching
+> `model_upstreams.markup`/`price_per_*`, regenerate and redeploy the web app in the same window:
+> ```bash
+> cd packages/database && bun run gen:catalog   # needs DATABASE_URL, or CATALOG_DUMP_JSON=<path> for offline/dump mode
+> ```
+> then commit `catalog.generated.ts` (+ `legacy-redirects.generated.json` if it changed) and deploy
+> `web` — a markup/pricing migration is not "done" until this artifact matches prod.
+
 ### (f) Verify
 
 ```bash

@@ -34,5 +34,18 @@ balance.get('/', async (c) => {
     payg_credits: paygCredits,
     subscription_expires_at: row.subscription_credits_expires_at,
     total_credits: subscriptionCredits + paygCredits,
+    // 🔴 Dual-emit (MED fix, Opus review): the HIGH-2 rework above REMOVED
+    // `subscription_rub`/`payg_rub`/`total_rub` outright with no grace
+    // period — a hard break for any external B2B caller (this is a public
+    // `/v1/*` gateway endpoint; API keys are handed to real org integrations
+    // per SECURITY.md, so "no consumer in this repo" doesn't prove "no
+    // consumer"). Keep the old field names for one release, populated with
+    // the SAME corrected value as their `_credits` twin — not the old ~8.7%
+    // off number, so a caller that never updates its field name at least
+    // gets the right amount. Remove once callers have migrated (track via
+    // access logs / a follow-up deprecation window, not a fixed date here).
+    subscription_rub: subscriptionCredits,
+    payg_rub: paygCredits,
+    total_rub: subscriptionCredits + paygCredits,
   });
 });

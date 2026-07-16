@@ -43,6 +43,16 @@ audio.post('/speech', async (c) => {
   const mode: Mode = (body.aiag_mode ?? policies.default_mode ?? 'auto') as Mode;
   const upstream = pickUpstream(model.candidates, mode, policies, 'image');
 
+  // Fail closed, before spending on the upstream job: a missing price means
+  // we cannot bill correctly. A numeric fallback here was the MED bug (Opus
+  // review) — `?? 0.05` was written when the column was believed to be USD;
+  // now that price_per_image is confirmed US CENTS, that fallback would have
+  // billed ~100x too little instead of erroring. The price is required in
+  // the DB (model_upstreams.price_per_image) — there is no safe guess.
+  if (!byok && upstream.price_per_image == null) {
+    throw errors.unavailable('Pricing not configured for this model — cannot bill safely');
+  }
+
   const start = Date.now();
   const adapter = getUpstream(upstream.provider);
   if (!adapter.audioSpeech) {
@@ -75,7 +85,7 @@ audio.post('/speech', async (c) => {
   if (byok) {
     costCredits = calcByokFeeCredits();
   } else {
-    upstreamCents = upstream.price_per_image ?? 0.05; // per-clip baseline for audio
+    upstreamCents = upstream.price_per_image!; // per-clip baseline; validated non-null above
     costCredits = calcCostCredits({ upstreamCents, markup: upstream.markup });
   }
   if (job.status === 'completed' && costCredits > 0) {
