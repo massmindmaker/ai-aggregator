@@ -912,7 +912,11 @@ export async function runAgent(runId: string): Promise<void> {
           ? await callMcpTool(mcp, toolCall.function.name.slice(MCP_PREFIX.length), parsed)
           : await executeTool(toolCall.function.name, parsed, {
               agentId: agent.id,
-              tgUserId: agent.tg_user_id,
+              // ISSUE (cross-tenant call_agent): tgUserId is documented in
+              // tools.ts as "the owning tg_user_id of the CALLING run" — on a
+              // hire run that is the HIRER (run.tg_user_id), never the agent
+              // owner (agent.tg_user_id). Mirrors the fix below at callAgent.
+              tgUserId: run.tg_user_id,
               // HIRE ISOLATION: server-derived per-hirer memory scope (null for
               // owner runs). The memory tool namespaces every read/write by it.
               scopeHirerId,
@@ -940,7 +944,18 @@ export async function runAgent(runId: string): Promise<void> {
                       };
                     }
                     callAgentCount++;
-                    return runSubAgent(agent.tg_user_id, a);
+                    // SECURITY FIX (cross-tenant call_agent escalation): on a
+                    // HIRE run the run is driven by the HIRER, not the agent
+                    // owner — parentTgUserId MUST be run.tg_user_id so the
+                    // ownership guard inside runSubAgent (target.tg_user_id ===
+                    // parentTgUserId) authorizes against the caller's OWN
+                    // agent fleet, never the owner's. Passing agent.tg_user_id
+                    // here let a hirer delegate into the owner's PRIVATE agents
+                    // (and spend the owner's BYOK key for free). run.tg_user_id
+                    // equals agent.tg_user_id on an owner run, so this is a
+                    // no-op there — matches the pattern already used for
+                    // resolveRunScope/settleRun/notify above (issue #5/#12).
+                    return runSubAgent(run.tg_user_id, a);
                   },
             });
       if (exec.cost_rub > 0) {
