@@ -22,7 +22,23 @@ type MinimalRedisClient = {
   incr(key: string): Promise<number>;
   expire(key: string, seconds: number): Promise<number>;
   decr(key: string): Promise<number>;
+  eval(script: string, numKeys: number, ...args: Array<string | number>): Promise<unknown>;
 };
+
+// INCR + "set TTL only if this is the first hit on the key today" as one
+// atomic server-side step. Plain `INCR` then `if (countAfter === 1) EXPIRE`
+// is two round-trips — a crash/redeploy between them leaves the key without
+// a TTL, so it never expires: the counter sticks past midnight and keeps
+// counting against yesterday's quota (a guest gets stuck rate-limited past
+// reset — annoying, not a money leak, since it only ever makes the gate
+// stricter). Still worth closing since it's one Lua script away.
+const INCR_WITH_TTL_IF_NEW = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+`;
 
 const globalForPlaygroundRedis = globalThis as unknown as {
   __aiagPlaygroundRedis?: MinimalRedisClient | null;
@@ -39,12 +55,23 @@ async function getClient(): Promise<MinimalRedisClient | null> {
   }
   try {
     const { default: IORedis } = await import('ioredis');
-    globalForPlaygroundRedis.__aiagPlaygroundRedis = new IORedis(url, {
+    const client = new IORedis(url, {
       maxRetriesPerRequest: 1,
       enableOfflineQueue: true,
       lazyConnect: false,
       connectionName: 'web-playground-rate-limit',
-    }) as unknown as MinimalRedisClient;
+    });
+    // Required: ioredis emits 'error' on the client for connection failures
+    // (ECONNREFUSED, reset, etc). Without a listener Node treats it as an
+    // unhandled error event and CRASHES THE PROCESS — on this endpoint that
+    // would take down `web` instead of the intended fail-closed 403/429.
+    // The incr()/expire()/decr() call sites already try/catch and fail
+    // closed, so this handler only needs to stop the crash + log server-side
+    // (no infra detail reaches the client response).
+    client.on('error', (err) => {
+      console.warn('[playground] redis client error (non-fatal, failing closed)', err);
+    });
+    globalForPlaygroundRedis.__aiagPlaygroundRedis = client as unknown as MinimalRedisClient;
   } catch (e) {
     console.warn('[playground] ioredis unavailable, rate limit fails closed', e);
     globalForPlaygroundRedis.__aiagPlaygroundRedis = null;
@@ -78,20 +105,34 @@ export async function consumePlaygroundHit(
   limit: number
 ): Promise<{ allowed: boolean }> {
   const client = await getClient();
-  if (!client) return { allowed: false };
+  if (!client) {
+    // No Redis configured/reachable at all — distinct server-side signal
+    // from "quota exhausted" below, even though both currently produce the
+    // same user-facing 429 (we don't want to leak infra state to the
+    // client). A spike in this specific log line means Redis is down, not
+    // that guests are legitimately hitting their daily limit.
+    console.warn('[playground] redis unavailable, failing closed (no client)');
+    return { allowed: false };
+  }
   const key = dayKey(ip);
   try {
-    const countAfter = await client.incr(key);
-    if (countAfter === 1) {
-      await client.expire(key, secondsUntilEndOfDayUtc());
-    }
+    const countAfter = (await client.eval(
+      INCR_WITH_TTL_IF_NEW,
+      1,
+      key,
+      secondsUntilEndOfDayUtc()
+    )) as number;
     // countAfter includes this attempt; feed the pre-attempt count through
     // the same pure decision `guard.ts` uses, so there is exactly one place
     // that defines "allowed".
     const usedBefore = countAfter - 1;
     return { allowed: playgroundAllowed({ ip, used: usedBefore, limit }) };
   } catch (e) {
-    console.warn('[playground] redis incr failed, failing closed', e);
+    // Redis reachable at connect time but this call failed (timeout, script
+    // error, connection dropped mid-request) — same fail-closed outcome as
+    // "no client" above, logged separately so an operator can tell "Redis
+    // never connected" apart from "Redis flaked on this one call".
+    console.warn('[playground] redis eval(incr+ttl) failed, failing closed', e);
     return { allowed: false };
   }
 }

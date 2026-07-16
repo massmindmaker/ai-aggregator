@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { playgroundAllowed } from './guard';
 import { consumePlaygroundHit, refundPlaygroundHit } from './rate-limit';
 
 export const runtime = 'nodejs';
@@ -37,8 +36,12 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
 
   // 🔴 P0 fix: an unresolved IP used to bypass the limit entirely
-  // (`if (ip && ...)` short-circuited). Fail-closed instead — see guard.ts.
-  if (!ip || !playgroundAllowed({ ip, used: 0, limit: FREE_LIMIT })) {
+  // (`if (ip && ...)` short-circuited). Fail-closed instead.
+  // Just `!ip` here — the actual quota decision (used vs limit) is made once,
+  // atomically, inside `consumePlaygroundHit` below via `playgroundAllowed`;
+  // calling `playgroundAllowed` a second time here with a hardcoded `used: 0`
+  // would always be true for a truthy `ip` (0 < FREE_LIMIT) and was dead code.
+  if (!ip) {
     return Response.json(
       { error: 'ip_unresolved', message: 'Не удалось определить источник запроса.' },
       { status: 403 }

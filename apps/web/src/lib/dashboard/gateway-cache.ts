@@ -41,12 +41,23 @@ async function getClient(): Promise<MinimalRedisClient | null> {
   }
   try {
     const { default: IORedis } = await import('ioredis');
-    globalForGatewayCache.__aiagGatewayCacheRedis = new IORedis(url, {
+    const client = new IORedis(url, {
       maxRetriesPerRequest: 1,
       enableOfflineQueue: true,
       lazyConnect: false,
       connectionName: 'web-gateway-cache-invalidate',
-    }) as unknown as MinimalRedisClient;
+    });
+    // Required: without an 'error' listener, ioredis connection failures
+    // (ECONNREFUSED, reset, etc) are unhandled events that crash the whole
+    // `web` process — not just this best-effort invalidation. Same defect
+    // fixed in ../../app/api/playground/run/rate-limit.ts (review 2026-07);
+    // ported here because both clients live in the same process, so an
+    // unhandled error on this one would take down playground's fail-closed
+    // gate too.
+    client.on('error', (err) => {
+      console.warn('[gateway-cache] redis client error (non-fatal)', err);
+    });
+    globalForGatewayCache.__aiagGatewayCacheRedis = client as unknown as MinimalRedisClient;
   } catch (e) {
     console.warn('[gateway-cache] ioredis unavailable, cache invalidation skipped', e);
     globalForGatewayCache.__aiagGatewayCacheRedis = null;
