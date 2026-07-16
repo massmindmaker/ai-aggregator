@@ -18,7 +18,12 @@ const schema = z.object({
   DEFAULT_MARKUP: z.coerce.number().default(1.25),
   BATCH_DISCOUNT: z.coerce.number().default(0.5),
   CACHING_DISCOUNT: z.coerce.number().default(0.5),
-  BYOK_FEE_RUB: z.coerce.number().default(0.5),
+  // T1 (2026-07-16): replaces BYOK_FEE_RUB (0.5 ₽) now that org buckets are
+  // USD-cent credits. 1 credit ≈ the old 0.5₽ fee at the reference ~92₽/$
+  // rate (0.5/92*100 ≈ 0.54¢ → rounds to 1, the credit-unit floor anyway).
+  // Open question (finmodel-build-spec §10 Q3) — founder to confirm the
+  // BYOK fee amount; 1 is the minimal-viable default, not a re-derived price.
+  BYOK_FEE_CREDITS: z.coerce.number().default(1),
   // Metrics
   METRICS_TOKEN: z.string().optional(),
   METRICS_PORT: z.coerce.number().default(9090),

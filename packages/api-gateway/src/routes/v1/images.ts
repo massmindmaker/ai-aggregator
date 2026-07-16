@@ -14,8 +14,7 @@ import { Hono } from 'hono';
 import { errors } from '../../lib/errors';
 import { resolveModelWithOverride } from '../../routing/resolver';
 import { pickUpstream, type Mode, type ApiKeyPolicies } from '../../routing/engine';
-import { fetchUsdRubRate } from '../../lib/cbr';
-import { calcCostRub, calcByokFeeRub } from '../../lib/pricing';
+import { calcCostCredits, calcByokFeeCredits } from '../../lib/pricing';
 import { settleCharge } from '../../billing/settle';
 import { logRequest } from '../../logging/stream';
 import { getUpstream } from '../../upstreams/registry';
@@ -81,20 +80,24 @@ images.post('/generations', async (c) => {
     }
   }
 
-  // Settle: per-image pricing
+  // Settle: per-image pricing (T1: whole USD-cent credits, no ₽/FX)
   const n = Math.max(1, body.n ?? 1);
-  let totalRub = 0;
+  let costCredits = 0;
   let upstreamUsd = 0;
   if (byok) {
-    totalRub = calcByokFeeRub();
+    costCredits = calcByokFeeCredits();
   } else {
-    const rate = await fetchUsdRubRate().catch(() => 92);
     upstreamUsd = (upstream.price_per_image ?? 0.01) * n;
-    totalRub = calcCostRub({ upstreamUsd, rate, markup: upstream.markup });
+    costCredits = calcCostCredits({ upstreamUsd, markup: upstream.markup });
   }
   // Only settle if completed (don't charge for failed jobs)
   if (job.status === 'completed') {
-    await settleCharge({ orgId: key.org_id, requestId, totalRub });
+    await settleCharge({
+      orgId: key.org_id,
+      requestId,
+      costCredits,
+      metadata: { model_slug: body.model, image_count: n },
+    });
   }
 
   void logRequest({
@@ -109,7 +112,7 @@ images.post('/generations', async (c) => {
     outputTokens: 0,
     upstreamCostUsd: upstreamUsd,
     markup: upstream.markup,
-    totalCostRub: totalRub,
+    totalCostCredits: costCredits,
     statusCode: job.status === 'failed' ? 502 : 200,
     latencyMs: Date.now() - start,
     byok,
