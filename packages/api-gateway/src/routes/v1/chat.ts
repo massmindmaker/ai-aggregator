@@ -16,7 +16,7 @@ import {
   checkSessionBudget,
   accumulateSessionCost,
 } from '../../routing/policies';
-import { calcCostCredits, calcByokFeeCredits } from '../../lib/pricing';
+import { calcCostCredits, calcByokFeeCredits, MICRO_PER_USD } from '../../lib/pricing';
 import { settleCharge } from '../../billing/settle';
 import {
   BILLING_HEADERS,
@@ -95,60 +95,73 @@ chat.post('/completions', async (c) => {
   });
 
   const usage = resp.usage;
-  // T1 (2026-07-16): org buckets are whole USD-cent credits now — no ₽, no FX.
-  let costCredits = 0;
-  let upstreamUsd = 0;
-  // D-1 (USD-native): computed DIRECTLY from costCredits (no rate division —
-  // there is no rate anymore). Still feeds the USD-micro headers the TMA
-  // agent-worker reads (HDR_CHARGED_USD_MICRO / HDR_UPSTREAM_COST_USD_MICRO).
+  // T1-fix (2026-07-16 rework): org buckets are whole MICRO-credits now — no
+  // ₽, no FX. `upstream.price_per_1k_input/output` are already US CENTS (=
+  // USD × 100, see COMMENT ON COLUMN / 0059) — the local var below is named
+  // `upstreamCents` (not `upstreamUsd`, the original bug: reading a cents
+  // column as USD produced a 100× overcharge — see lib/pricing.ts).
+  let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
+  let upstreamCents = 0;
+  // D-1 (USD-native): chargedUsd/upstreamCostUsd feed the USD-micro headers
+  // the TMA agent-worker reads (HDR_CHARGED_USD_MICRO /
+  // HDR_UPSTREAM_COST_USD_MICRO) — MICRO_PER_USD converts costCredits (micro)
+  // back to real USD: costCredits / 100_000 = (upstreamCents/100) × markup ×
+  // batchDiscount × caching, i.e. real upstream-USD × markup.
   let chargedUsd = 0;
   let upstreamCostUsd = 0;
   if (byok) {
     costCredits = calcByokFeeCredits();
     // BYOK pays a fixed credit fee, no upstream cost we bear. (TMA BYOK runs
     // are isExternal → the worker ignores these headers, but keep them coherent.)
-    chargedUsd = costCredits / 100;
+    chargedUsd = costCredits / MICRO_PER_USD;
     upstreamCostUsd = 0;
-    await settleCharge({
-      orgId: key.org_id,
-      requestId,
-      costCredits,
-      metadata: { model_slug: body.model },
-    });
+    if (costCredits > 0) {
+      await settleCharge({
+        orgId: key.org_id,
+        requestId,
+        costCredits,
+        metadata: { model_slug: body.model },
+      });
+    }
   } else {
-    upstreamUsd =
+    upstreamCents =
       (usage.prompt_tokens / 1000) * upstream.price_per_1k_input +
       (usage.completion_tokens / 1000) * upstream.price_per_1k_output;
     costCredits = calcCostCredits({
-      upstreamUsd,
+      upstreamCents,
       markup: upstream.markup,
       cachedInputTokens: usage.cached_input_tokens,
       totalInputTokens: usage.prompt_tokens,
     });
-    // USD-native equivalents: upstream cost in USD is just upstreamUsd; the
-    // charged USD is costCredits / 100 (markup + caching already folded into
-    // costCredits, and the credit-rounding is the SAME rounding TMA bills on).
-    upstreamCostUsd = upstreamUsd;
-    chargedUsd = costCredits / 100;
-    await settleCharge({
-      orgId: key.org_id,
-      requestId,
-      costCredits,
-      metadata: {
-        model_slug: body.model,
-        input_tokens: usage.prompt_tokens,
-        output_tokens: usage.completion_tokens,
-      },
-    });
+    // USD-native equivalents: upstream cost in USD is upstreamCents / 100
+    // (this is what fixes the D-0 header — it used to hold cents under the
+    // name "USD"); the charged USD is costCredits (micro-credits) / 100_000.
+    upstreamCostUsd = upstreamCents / 100;
+    chargedUsd = costCredits / MICRO_PER_USD;
+    if (costCredits > 0) {
+      await settleCharge({
+        orgId: key.org_id,
+        requestId,
+        costCredits,
+        metadata: {
+          model_slug: body.model,
+          input_tokens: usage.prompt_tokens,
+          output_tokens: usage.completion_tokens,
+        },
+      });
+    }
   }
 
-  // FIX H2.3: daily USD cap INCR (unaffected by T1 — already USD, not ₽/credits)
+  // FIX H2.3: daily USD cap INCR. 🔴 T1-fix (2026-07-16 rework): this
+  // previously accumulated `upstreamUsd` (actually cents, mislabeled) as if
+  // it were USD against a real-USD cap (`daily_usd_cap`) — tripping the cap
+  // ~100× too early. Now divides by 100 so the accumulator is real USD.
   if (!byok && key.daily_usd_cap) {
     try {
       const redis = makeRedis('ratelimit');
       const today = new Date().toISOString().slice(0, 10);
       const usedKey = `usd_day:${key.org_id}:${today}`;
-      await redis.incrbyfloat(usedKey, upstreamUsd);
+      await redis.incrbyfloat(usedKey, upstreamCents / 100);
       await redis.expireat(
         usedKey,
         Math.floor(new Date().setUTCHours(24, 0, 0, 0) / 1000)
@@ -164,13 +177,16 @@ chat.post('/completions', async (c) => {
   // so BYOK's fixed fee counts too. key-limits.ts middleware reads this
   // counter read-only on the NEXT request; this is the only place it's
   // incremented.
-  // ⚠️ T1 scope note: the field/redis-key are still named "..._rub" and the
-  // policy value (`key.cost_limit_monthly_rub`) is still ₽-denominated — this
-  // counter now accumulates CREDITS against a ₽ threshold (T1 did not rename
-  // this; caps are T4 per finmodel-build-spec §8). Credits ≈ ₽/0.92 at the
-  // reference rate, so the cap now trips slightly earlier than a ₽ figure
-  // would suggest — not a silent no-op, but the naming is misleading until T4
-  // renames the field/threshold to credits.
+  // ⚠️ T1 scope note (widened by the 2026-07-16 micro-credit rework): the
+  // field/redis-key are still named "..._rub" and the policy value
+  // (`key.cost_limit_monthly_rub`) is still ₽-denominated — this counter now
+  // accumulates MICRO-credits (1/1000 of a US-cent credit) against that ₽
+  // threshold. That is a ~1000-92000× unit mismatch (not the ~8.7% drift a
+  // whole-credit unit would have caused) — in practice this cap will now
+  // almost never trip on a ₽-scaled threshold. NOT fixed here: caps moving
+  // into the settle function with a proper credits column is T4
+  // (finmodel-build-spec §6/§8) — flagging the magnitude honestly rather
+  // than silently leaving a smaller-looking drift note in place.
   if (key.cost_limit_monthly_rub) {
     try {
       const redis = makeRedis('ratelimit');
@@ -185,9 +201,9 @@ chat.post('/completions', async (c) => {
     }
   }
 
-  // ⚠️ Same T1 scope note as above: policies.per_session_budget_cap_rub /
-  // accumulateSessionCost's `deltaRub` param are still ₽-named; fed credits
-  // here. T4 follow-up.
+  // ⚠️ Same widened T1 scope note as above: policies.per_session_budget_cap_rub /
+  // accumulateSessionCost's `deltaRub` param are still ₽-named; fed
+  // MICRO-credits here (same ~1000-92000× unit mismatch). T4 follow-up.
   if (sessionCap && sessionId) {
     await accumulateSessionCost({
       apiKeyId: key.id,
@@ -208,7 +224,7 @@ chat.post('/completions', async (c) => {
     modeApplied: mode,
     inputTokens: usage.prompt_tokens,
     outputTokens: usage.completion_tokens,
-    upstreamCostUsd: upstreamUsd,
+    upstreamCostUsd,
     markup: upstream.markup,
     totalCostCredits: costCredits,
     statusCode: 200,

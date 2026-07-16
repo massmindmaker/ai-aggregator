@@ -169,11 +169,14 @@ $$;
 -- =============================================================================
 -- aiag_settle_charge_credits(_org_id, _request_id, _cost_credits, _metadata)
 --
--- T1 (2026-07-16) — credit-unit twin of aiag_settle_charge above. Founder
--- decision 2026-07-15: web org buckets migrate to whole US-cent credits
--- (1 credit = 1¢), matching TMA (tg_user_balances.balance_credits BIGINT).
--- See migration 0056_web_credits_unit.sql and
--- docs/specs/2026-07-16-finmodel-build-spec.md.
+-- T1 (2026-07-16, reworked same day after adversarial review) — credit-unit
+-- twin of aiag_settle_charge above. Founder decision 2026-07-15: web org
+-- buckets migrate to whole MICRO-credits (1 credit = 1¢ = 1000 micro),
+-- matching TMA's unit (tg_user_balances.balance_credits BIGINT) at the
+-- credit granularity, one level finer to avoid the whole-credit floor's
+-- ~1390× overcharge on cheap calls (Opus review HIGH-1). See migration
+-- 0056_web_credits_unit.sql, 0059_pricing_unit_comments.sql, and
+-- docs/specs/2026-07-16-finmodel-build-spec.md (+ its "поправка v2").
 --
 -- 🔴 Deliberately a NEW function name, not a rename-in-place: any call site
 -- not yet migrated to this function throws `function does not exist` at
@@ -181,8 +184,18 @@ $$;
 -- (a ~92× misprice with zero exception raised). aiag_settle_charge is left
 -- in place, unused, purely as a rollback path.
 --
+-- 🔴 P0-1 fix (Opus review): this function body is NOT deployed by mirroring
+-- this file alone — prod migrations are hand-run from `migrations/` only
+-- (packages/database/CLAUDE.md), and this `src/functions/` file is NOT one of
+-- them. The authoritative deploy artifact is
+-- migrations/0058_settle_charge_credits_fn.sql (byte-identical CREATE OR
+-- REPLACE body). Keep both in sync by hand; this file is the readable mirror,
+-- 0058 is what actually reaches Postgres.
+--
 -- Same atomicity/concurrency contract as aiag_settle_charge, unit changed to
--- BIGINT credits throughout:
+-- BIGINT MICRO-credits throughout (1 credit = 1000 micro = 1¢; the function
+-- itself is unit-agnostic integer arithmetic — the meaning of "1" is entirely
+-- a caller/display concern, see lib/pricing.ts and lib/credits.ts (T5)):
 --  - SELECT FOR UPDATE on organizations row serializes per-org concurrent calls.
 --  - Idempotency check INSIDE the lock (before UPDATE) — no TOCTOU.
 --  - Two conditional INSERTs (source='subscription' + source='payg').
@@ -203,7 +216,7 @@ $$;
 -- §5 — the spend-by-model ledger reads gateway_transactions.metadata).
 --
 -- Returns: (sub_portion, payg_portion, new_sub, new_payg, idempotent) — all
--- credit-denominated BIGINT except idempotent.
+-- MICRO-credit-denominated BIGINT except idempotent.
 -- Raises:
 --   P0001 INVALID_AMOUNT            if _cost_credits <= 0
 --   P0002 ORG_NOT_FOUND             if organization missing

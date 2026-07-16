@@ -1,8 +1,12 @@
 -- 0056_web_credits_unit.sql
--- T1 (money-path): web org credit buckets migrate ₽ (NUMERIC) → whole US-cent
--- credits (BIGINT). Founder decision 2026-07-15: 1 credit = 1¢ USD, matching
--- TMA (tg_user_balances.balance_credits BIGINT). See
--- docs/specs/2026-07-16-finmodel-build-spec.md.
+-- T1 (money-path): web org credit buckets migrate ₽ (NUMERIC) → whole
+-- MICRO-credit (BIGINT). Founder decision 2026-07-15: 1 credit = 1¢ USD,
+-- matching TMA's unit family (tg_user_balances.balance_credits BIGINT) —
+-- refined 2026-07-16 (adversarial rework) to a MICRO-credit granularity
+-- (1 credit = 1000 micro) so a sub-cent call doesn't have to round up to a
+-- full cent (that whole-credit floor was itself an ~1390× overcharge risk on
+-- embeddings — Opus review HIGH-1). See
+-- docs/specs/2026-07-16-finmodel-build-spec.md and lib/pricing.ts.
 --
 -- Ground truth this migration acts on (read-only SELECT on prod, 2026-07-16):
 --   organizations: 47 rows | nonzero sub_credits=1 (737.736872 ₽) |
@@ -19,24 +23,46 @@
 -- any already-applied migration ... stays as history"). This migration is
 -- forward-only/additive, like 0047.
 --
--- Idempotency: every destructive step is guarded so a second run is a no-op —
---  (1)/(2) CREATE TABLE IF NOT EXISTS ... AS SELECT — second run does not
---      re-snapshot (table already exists).
---  (3) DELETE ... WHERE type='api_usage' — second run deletes 0 rows (already
---      gone; nothing new is inserted as type='api_usage' by the OLD ₽
---      function once this migration + the paired code deploy are live).
---  (4)/(5) column-type changes are wrapped in a data_type check so a second
---      run does not re-zero real balances that accrued between runs.
+-- 🔴 P0-2 fix (Opus review, 2026-07-16 rework): the FIRST version of this
+-- migration ran the archive-then-DELETE of `gateway_transactions WHERE
+-- type='api_usage'` unconditionally, with a header claiming "second run
+-- deletes 0 rows because nothing new is inserted as api_usage by the OLD ₽
+-- function" — which is FALSE: the NEW credits function
+-- (aiag_settle_charge_credits) inserts exactly that `type='api_usage'` shape
+-- (settle-charge.sql, both INSERTs). On prod there is no applied-migrations
+-- table (packages/database/CLAUDE.md), so a second accidental run of this
+-- file after real traffic has landed would have archived nothing new
+-- (CREATE TABLE IF NOT EXISTS is a no-op the second time) and then deleted
+-- the entire live ledger — destroying both the revenue audit trail AND the
+-- idempotency check inside the settle function (which reads
+-- gateway_transactions to detect replays), enabling double-charges on any
+-- retried request_id.
 --
--- ⚠️ Deployment-ordering note (finding, not in the original spec): step (6)
--- changes gateway_transactions.delta from NUMERIC (fractional ₽) to BIGINT.
--- If this migration is applied while the OLD gateway code
--- (aiag_settle_charge, ₽) is still serving traffic, any non-BYOK charge with
--- a fractional ₽ amount (the overwhelmingly common case, e.g. 1.15₽) will
--- fail the INSERT with a Postgres type error instead of silently succeeding.
--- That is a LOUDER failure than before (good — no silent misprice), but it
--- means this migration and the api-gateway code deploy of this branch must
--- land together, not this-migration-then-wait.
+-- Fix: archive + DELETE + type-cast are now inside ONE guarded block, keyed
+-- on `gateway_transactions.delta` still being `numeric`. Once this migration
+-- has run once (delta is BIGINT), the ENTIRE block — archive, delete, and
+-- cast — is skipped on every subsequent run, full stop. There is no window
+-- in which DELETE can run against a column that is already BIGINT (i.e.
+-- already-migrated, potentially containing real post-migration rows).
+--
+-- Idempotency (restated under the P0-2 fix):
+--  (1) CREATE TABLE IF NOT EXISTS ... AS SELECT (org buckets) — second run
+--      does not re-snapshot (table already exists). Non-destructive either way.
+--  (2)+(3)+(6, renumbered from old (2)/(3)/(6)) archive+delete+cast of
+--      gateway_transactions — now a single data_type-guarded block, see above.
+--  (4)/(5) [now the org bucket type/constraint steps] are wrapped in a
+--      data_type check so a second run does not re-zero real balances that
+--      accrued between runs.
+--
+-- ⚠️ Deployment-ordering note (finding, not in the original spec): the
+-- gateway_transactions.delta cast below still requires this migration and
+-- the paired api-gateway code deploy (which stops calling the OLD ₽
+-- function) to land together, not this-migration-then-wait — see
+-- packages/database/CLAUDE.md deploy runbook / skill aiag-deploy. The P0-2
+-- fix above makes a stray SECOND run safe; it does not make "migration
+-- applied, old code still serving" safe (that combination still throws a
+-- loud Postgres type error on any fractional-₽ INSERT instead of silently
+-- mispricing — the originally-intended behaviour, unaffected by this fix).
 
 BEGIN;
 
@@ -47,17 +73,27 @@ SELECT id, subscription_credits AS sub_rub, payg_credits AS payg_rub,
 FROM organizations
 WHERE subscription_credits <> 0 OR payg_credits <> 0;
 
--- (2) Archive historical api_usage ledger rows (₽-denominated, test traffic only).
-CREATE TABLE IF NOT EXISTS gateway_transactions_rub_archive_20260716 AS
-SELECT * FROM gateway_transactions WHERE type = 'api_usage';
-
--- (3) Clear the archived rows from the live ledger — they are ₽-denominated
---     and would be nonsensical once `delta` becomes a credits BIGINT.
-DELETE FROM gateway_transactions WHERE type = 'api_usage';
+-- (2)+(3)+(6) gateway_transactions: archive the ₽-denominated api_usage rows,
+--     clear them (nonsensical once `delta` becomes a credits BIGINT), then
+--     cast delta NUMERIC(20,6) → BIGINT — all inside ONE guard keyed on delta
+--     still being `numeric`. P0-2 fix: this is what makes a second run,
+--     whenever it happens and however much real traffic has landed by then,
+--     a true no-op instead of a silent ledger-wipe (see header above).
+DO $$
+BEGIN
+  IF (SELECT data_type FROM information_schema.columns
+      WHERE table_name = 'gateway_transactions' AND column_name = 'delta') = 'numeric'
+  THEN
+    EXECUTE 'CREATE TABLE IF NOT EXISTS gateway_transactions_rub_archive_20260716 AS '
+            || 'SELECT * FROM gateway_transactions WHERE type = ''api_usage''';
+    EXECUTE 'DELETE FROM gateway_transactions WHERE type = ''api_usage''';
+    EXECUTE 'ALTER TABLE gateway_transactions ALTER COLUMN delta TYPE BIGINT USING delta::bigint';
+  END IF;
+END $$;
 
 -- (4) organizations.subscription_credits / payg_credits: NUMERIC(20,6) ₽ →
---     BIGINT credits. No real money to convert (see header) → reset to 0,
---     not FX-converted. Guarded so a second run is a no-op.
+--     BIGINT MICRO-credits. No real money to convert (see header) → reset to
+--     0, not FX-converted. Guarded so a second run is a no-op.
 DO $$
 BEGIN
   IF (SELECT data_type FROM information_schema.columns
@@ -84,19 +120,6 @@ ALTER TABLE organizations DROP CONSTRAINT IF EXISTS organizations_payg_credits_n
 ALTER TABLE organizations
   ADD CONSTRAINT organizations_sub_credits_nonneg  CHECK (subscription_credits >= 0),
   ADD CONSTRAINT organizations_payg_credits_nonneg CHECK (payg_credits >= 0);
-
--- (6) gateway_transactions.delta: NUMERIC(20,6) ₽ → BIGINT credits, matching
---     the org buckets. Safe today: step (3) emptied all api_usage rows, and
---     no other type ('topup'/'refill'/'expire'/'refund') has any rows yet
---     (payments=0 on prod) — so this cast has 0 rows to truncate.
-DO $$
-BEGIN
-  IF (SELECT data_type FROM information_schema.columns
-      WHERE table_name = 'gateway_transactions' AND column_name = 'delta') = 'numeric'
-  THEN
-    EXECUTE 'ALTER TABLE gateway_transactions ALTER COLUMN delta TYPE BIGINT USING delta::bigint';
-  END IF;
-END $$;
 
 -- (7) credit_buckets.amount_rub — NOT migrated (table has no aggregate reader;
 --     billing/summary/route.ts:14-16 confirms it is never read). Mark the

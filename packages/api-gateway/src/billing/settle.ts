@@ -19,7 +19,13 @@ import { errors } from '../lib/errors';
 export type SettleArgs = {
   orgId: string;
   requestId: string;
-  /** Whole credits (1 credit = 1 US cent). Integer, >= 1 — see calcCostCredits. */
+  /**
+   * Whole MICRO-credits (1 credit = 1 US cent = 1000 micro). Integer — see
+   * calcCostCredits/calcByokFeeCredits in lib/pricing.ts. Callers MUST guard
+   * `costCredits > 0` before calling (a zero-cost micro-rounding is valid and
+   * means "don't settle", not "settle for 0" — the stored function raises
+   * P0001 INVALID_AMOUNT for <= 0).
+   */
   costCredits: number;
   /** Optional per-request context (model_slug, input/output tokens) — written
    *  verbatim to gateway_transactions.metadata for the spend-by-model ledger. */

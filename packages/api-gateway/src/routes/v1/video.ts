@@ -73,16 +73,17 @@ video.post('/generations', async (c) => {
     }
   }
 
-  // T1: whole USD-cent credits, no ₽/FX
-  let costCredits = 0;
-  let upstreamUsd = 0;
+  // T1-fix: whole MICRO-credits, no ₽/FX. upstream.price_per_image is
+  // already US CENTS — see lib/pricing.ts.
+  let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
+  let upstreamCents = 0;
   if (byok) {
     costCredits = calcByokFeeCredits();
   } else {
-    upstreamUsd = upstream.price_per_image ?? 0.5; // per-clip baseline
-    costCredits = calcCostCredits({ upstreamUsd, markup: upstream.markup });
+    upstreamCents = upstream.price_per_image ?? 0.5; // per-clip baseline
+    costCredits = calcCostCredits({ upstreamCents, markup: upstream.markup });
   }
-  if (job.status === 'completed') {
+  if (job.status === 'completed' && costCredits > 0) {
     await settleCharge({
       orgId: key.org_id,
       requestId,
@@ -101,7 +102,7 @@ video.post('/generations', async (c) => {
     modeApplied: mode,
     inputTokens: 0,
     outputTokens: 0,
-    upstreamCostUsd: upstreamUsd,
+    upstreamCostUsd: upstreamCents / 100,
     markup: upstream.markup,
     totalCostCredits: costCredits,
     statusCode: job.status === 'failed' ? 502 : 200,

@@ -41,32 +41,35 @@ completions.post('/', async (c) => {
     messages: [{ role: 'user', content: promptText }],
   });
 
-  // T1: whole USD-cent credits, no ₽/FX
-  let costCredits = 0;
-  let upstreamUsd = 0;
+  // T1-fix: whole MICRO-credits, no ₽/FX. price_per_1k_input/output are
+  // already US CENTS — see lib/pricing.ts.
+  let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
+  let upstreamCents = 0;
   if (byok) {
     costCredits = calcByokFeeCredits();
   } else {
-    upstreamUsd =
+    upstreamCents =
       (resp.usage.prompt_tokens / 1000) * upstream.price_per_1k_input +
       (resp.usage.completion_tokens / 1000) * upstream.price_per_1k_output;
     costCredits = calcCostCredits({
-      upstreamUsd,
+      upstreamCents,
       markup: upstream.markup,
       cachedInputTokens: resp.usage.cached_input_tokens,
       totalInputTokens: resp.usage.prompt_tokens,
     });
   }
-  await settleCharge({
-    orgId: key.org_id,
-    requestId,
-    costCredits,
-    metadata: {
-      model_slug: body.model,
-      input_tokens: resp.usage.prompt_tokens,
-      output_tokens: resp.usage.completion_tokens,
-    },
-  });
+  if (costCredits > 0) {
+    await settleCharge({
+      orgId: key.org_id,
+      requestId,
+      costCredits,
+      metadata: {
+        model_slug: body.model,
+        input_tokens: resp.usage.prompt_tokens,
+        output_tokens: resp.usage.completion_tokens,
+      },
+    });
+  }
 
   void logRequest({
     requestId,
@@ -78,7 +81,7 @@ completions.post('/', async (c) => {
     modeApplied: mode,
     inputTokens: resp.usage.prompt_tokens,
     outputTokens: resp.usage.completion_tokens,
-    upstreamCostUsd: upstreamUsd,
+    upstreamCostUsd: upstreamCents / 100,
     markup: upstream.markup,
     totalCostCredits: costCredits,
     statusCode: 200,

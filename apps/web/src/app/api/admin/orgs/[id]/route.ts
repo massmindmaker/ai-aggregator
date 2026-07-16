@@ -46,21 +46,37 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     const { id } = await ctx.params;
     const body = (await req.json()) as {
       op: 'topupPayg' | 'suspend' | 'unsuspend' | 'transferOwner';
-      amountRub?: number;
+      amountCredits?: number;
       reason?: string;
       newOwnerEmail?: string;
     };
 
     switch (body.op) {
       case 'topupPayg': {
-        if (typeof body.amountRub !== 'number') {
+        // 🔴 HIGH-3 fix (Opus review): this used to be `amountRub`, written
+        // straight into `organizations.payg_credits` — a BIGINT that (as of
+        // migration 0056/0058) holds MICRO-credits (1 credit = 1000 micro =
+        // 1¢), not ₽ and not whole credits. An admin typing "1000" meaning
+        // "1000₽" would have granted 1000 MICRO-credits = $0.01 (~1000×
+        // short), and any fractional ₽ input (e.g. "100.50") would have been
+        // silently truncated by Postgres' numeric→int8 assignment cast (MED-2
+        // — no error, just quiet rounding). This is also currently the ONLY
+        // path that tops up organizations.payg_credits at all (T3, the
+        // payment→org bridge, is not built yet) — so it doubles as the only
+        // way to unblock a founder E2E test after 0056 zeroes the seed
+        // buckets. Now takes WHOLE credits explicitly and converts to micro
+        // itself (rounded — a fractional-credit admin input is legitimate,
+        // e.g. "10.5" credits, but must land on an integer micro-credit).
+        if (typeof body.amountCredits !== 'number' || !Number.isFinite(body.amountCredits)) {
           return NextResponse.json({ error: 'BAD_AMOUNT' }, { status: 400 });
         }
+        const amountMicroCredits = Math.round(body.amountCredits * 1000);
         await db.execute(sql`
-          UPDATE organizations SET payg_credits = payg_credits + ${body.amountRub} WHERE id = ${id}
+          UPDATE organizations SET payg_credits = payg_credits + ${amountMicroCredits} WHERE id = ${id}
         `);
         await audit(admin.email, 'org.topup_payg', 'org', id, {
-          delta: body.amountRub,
+          deltaCredits: body.amountCredits,
+          deltaMicroCredits: amountMicroCredits,
           reason: body.reason,
         });
         break;

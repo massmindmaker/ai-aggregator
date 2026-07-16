@@ -14,7 +14,7 @@ import {
   formatUsdMicroHeader,
 } from '../lib/billing-headers';
 import { logRequest } from '../logging/stream';
-import { calcCostCredits, calcByokFeeCredits } from '../lib/pricing';
+import { calcCostCredits, calcByokFeeCredits, MICRO_PER_USD } from '../lib/pricing';
 import { logger } from '../lib/logger';
 import type { UpstreamCandidate } from '../routing/engine';
 import { stripUpstreamFields } from './scrub';
@@ -84,27 +84,29 @@ export async function streamSseAndSettle(
       clientSignal.removeEventListener('abort', onAbort);
     }
 
-    // settle + log — T1 (2026-07-16): whole USD-cent credits, no ₽/FX.
-    let costCredits = 0;
+    // settle + log — T1-fix (2026-07-16 rework): whole MICRO-credits, no
+    // ₽/FX. `upstream.price_per_1k_input/output` are already US CENTS — see
+    // lib/pricing.ts (upstreamCents, not upstreamUsd — the original bug).
+    let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
     let upstreamCostUsd = 0;
-    // D-1 (USD-native): computed directly from costCredits (no rate division).
+    // D-1 (USD-native): costCredits (micro) / MICRO_PER_USD = real USD.
     let chargedUsd = 0;
     try {
       if (opts.byok) {
         costCredits = calcByokFeeCredits();
-        chargedUsd = costCredits / 100;
+        chargedUsd = costCredits / MICRO_PER_USD;
       } else {
-        const upstreamUsd =
+        const upstreamCents =
           (inputTokens / 1000) * opts.upstream.price_per_1k_input +
           (outputTokens / 1000) * opts.upstream.price_per_1k_output;
         costCredits = calcCostCredits({
-          upstreamUsd,
+          upstreamCents,
           markup: opts.upstream.markup,
           cachedInputTokens,
           totalInputTokens: inputTokens,
         });
-        upstreamCostUsd = upstreamUsd;
-        chargedUsd = costCredits / 100;
+        upstreamCostUsd = upstreamCents / 100;
+        chargedUsd = costCredits / MICRO_PER_USD;
       }
       if (costCredits > 0) {
         await settleCharge({

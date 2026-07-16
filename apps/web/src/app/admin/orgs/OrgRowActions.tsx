@@ -24,12 +24,16 @@ export function OrgRowActions({ orgId, status }: { orgId: string; status: string
   };
 
   const onTopup = async () => {
-    const raw = prompt('Сумма пополнения PAYG ₽:');
+    // HIGH-3 fix: organizations.payg_credits is BIGINT MICRO-credits
+    // (1 credit = 1000 micro = 1¢), not ₽ — see api/admin/orgs/[id]/route.ts.
+    // The prompt now takes whole CREDITS explicitly; the route converts to
+    // micro server-side.
+    const raw = prompt('Сумма пополнения PAYG (кредиты, 1 кредит = 1¢):');
     if (!raw) return;
     const amount = Number(raw);
     if (!Number.isFinite(amount) || amount === 0) return;
     const reason = prompt('Причина (для аудита):') ?? '';
-    await call({ op: 'topupPayg', amountRub: amount, reason });
+    await call({ op: 'topupPayg', amountCredits: amount, reason });
   };
 
   const onSuspend = async () => {
@@ -44,7 +48,7 @@ export function OrgRowActions({ orgId, status }: { orgId: string; status: string
   return (
     <div className="flex gap-1 justify-end">
       <Button size="sm" variant="outline" disabled={busy} onClick={onTopup}>
-        +₽
+        +кр
       </Button>
       <Button
         size="sm"

@@ -80,18 +80,19 @@ images.post('/generations', async (c) => {
     }
   }
 
-  // Settle: per-image pricing (T1: whole USD-cent credits, no ₽/FX)
+  // Settle: per-image pricing (T1-fix: whole MICRO-credits, no ₽/FX).
+  // upstream.price_per_image is already US CENTS — see lib/pricing.ts.
   const n = Math.max(1, body.n ?? 1);
-  let costCredits = 0;
-  let upstreamUsd = 0;
+  let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
+  let upstreamCents = 0;
   if (byok) {
     costCredits = calcByokFeeCredits();
   } else {
-    upstreamUsd = (upstream.price_per_image ?? 0.01) * n;
-    costCredits = calcCostCredits({ upstreamUsd, markup: upstream.markup });
+    upstreamCents = (upstream.price_per_image ?? 0.01) * n;
+    costCredits = calcCostCredits({ upstreamCents, markup: upstream.markup });
   }
-  // Only settle if completed (don't charge for failed jobs)
-  if (job.status === 'completed') {
+  // Only settle if completed (don't charge for failed jobs) and non-zero.
+  if (job.status === 'completed' && costCredits > 0) {
     await settleCharge({
       orgId: key.org_id,
       requestId,
@@ -110,7 +111,7 @@ images.post('/generations', async (c) => {
     modeApplied: mode,
     inputTokens: 0,
     outputTokens: 0,
-    upstreamCostUsd: upstreamUsd,
+    upstreamCostUsd: upstreamCents / 100,
     markup: upstream.markup,
     totalCostCredits: costCredits,
     statusCode: job.status === 'failed' ? 502 : 200,

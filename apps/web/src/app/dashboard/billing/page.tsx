@@ -56,7 +56,7 @@ export default function BillingPage() {
   // Real tier + gateway-spendable balance from /api/dashboard/billing/summary
   const [planName, setPlanName] = useState<string | null>(null);
   const [creditsLimit, setCreditsLimit] = useState<number | null>(null);
-  const [balanceRub, setBalanceRub] = useState<number | null>(null);
+  const [balanceCredits, setBalanceCredits] = useState<number | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -78,13 +78,13 @@ export default function BillingPage() {
         if (!res.ok) return;
         const data = (await res.json()) as {
           plan?: { name: string; creditsLimit: number | null };
-          balance?: { totalSpendableRub: number };
+          balance?: { totalSpendableCredits: number };
         };
         if (data.plan) {
           setPlanName(data.plan.name);
           setCreditsLimit(data.plan.creditsLimit);
         }
-        if (data.balance) setBalanceRub(data.balance.totalSpendableRub);
+        if (data.balance) setBalanceCredits(data.balance.totalSpendableCredits);
       } catch {
         /* leave nulls — UI falls back to Free / 0 */
       }
@@ -208,8 +208,8 @@ export default function BillingPage() {
               Баланс PAYG
             </div>
             <div className="mt-2 text-2xl font-semibold">
-              {(balanceRub ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-              <span className="text-base text-muted-foreground">₽</span>
+              {(balanceCredits ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+              <span className="text-base text-muted-foreground">кр</span>
             </div>
             <p className="mt-3 text-sm text-muted-foreground">
               Pay-per-use списания за API-запросы сверх лимита подписки.

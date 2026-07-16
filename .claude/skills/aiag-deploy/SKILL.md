@@ -165,6 +165,17 @@ ssh -O exit aiag-vps   # close forward + master when done
 > UNCERTAIN: exact migrate command/script name — verify in `packages/database/package.json`
 > before running. Migrations are forward-only; take a `pg_dump` first if risky.
 
+> 🔴 **After any migration that changes `model_upstreams` (markup, pricing columns, enable/disable)
+> or `models`**: the gateway's model resolver caches the resolved model (markup included) in Redis
+> with `TTL_SEC = 600` (`packages/api-gateway/src/routing/resolver.ts`) — it does **not** read
+> live/uncached per request (an earlier claim to the contrary in `packages/api-gateway/CLAUDE.md`
+> was false and is corrected there 2026-07-16; migration `0057_markup_180.sql`'s own header still
+> carries the same false claim — left as-is, out of scope for that already-applied migration).
+> Flush the cache in the SAME
+> deploy window: `redis-cli -n <cache-db> --scan --pattern 'model:*' | xargs redis-cli -n <cache-db> DEL`
+> (or restart the `cache` Redis logical DB the gateway uses). Otherwise up to 10 minutes of traffic
+> bills at the stale cached value.
+
 ### (f) Verify
 
 ```bash
