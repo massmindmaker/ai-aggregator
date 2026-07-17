@@ -198,7 +198,6 @@ export const ALL_PROVIDERS: ReadonlyArray<{
 ];
 
 export const TIERS = {
-  free: { name: 'Free', monthly: 0, yearly: 0, credits: 200 },
   basic: { name: 'Basic', monthly: 990, yearly: 9900, credits: 1200 },
   starter: { name: 'Starter', monthly: 2490, yearly: 24900, credits: 3200 },
   pro: { name: 'Pro', monthly: 6990, yearly: 69900, credits: 10000 },

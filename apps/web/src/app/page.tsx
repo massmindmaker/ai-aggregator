@@ -227,12 +227,6 @@ const cellColor: Record<string, string> = {
 
 const pricingTiers = [
   {
-    tier: 'Free',
-    price: <>0 ₽<span className="text-[11px] font-normal" style={{ color: 'var(--ink-muted)' }}> / мес</span></>,
-    desc: '50₽ на баланс. Playground. Open-source модели.',
-    cta: 'Начать',
-  },
-  {
     tier: 'Basic',
     price: <>990<span style={{ color: 'var(--accent)', fontSize: 14 }}>₽</span><span className="text-[11px] font-normal" style={{ color: 'var(--ink-muted)' }}> / мес</span></>,
     desc: '+1000₽ на баланс. Все модели. Email-поддержка.',
@@ -1033,8 +1027,8 @@ export default function HomePage() {
               Pay-as-you-go или депозит
             </h2>
             <p style={{ fontSize: 17, color: 'var(--ink-muted)', maxWidth: 600 }}>
-              Free-тариф для экспериментов. Подписки — бонус к балансу и
-              снижение цены запроса до -25%.
+              Платите за фактическое использование. Подписки дают бонус к
+              балансу и снижение цены запроса до -25%.
             </p>
           </div>
 

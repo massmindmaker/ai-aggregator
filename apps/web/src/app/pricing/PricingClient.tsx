@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
 
 interface Tier {
-  id: string; // 'free'|'basic'|'starter'|'pro'
+  id: string; // 'basic'|'starter'|'pro'
   name: string;
   monthlyPrice: number;
   yearlyPrice: number;
@@ -24,23 +24,9 @@ interface Tier {
 }
 
 // Финальные тарифы из Knowledge/14-pricing-validation.md
+// Free-тариф убран (founder 2026-07-17): регистрация не начисляла баланс —
+// карточка обещала то, чего код не делал. См. /CLAUDE.md founder decisions.
 const tiers: Tier[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    tagline: 'Попробовать без регистрации карты',
-    credits: '200 кредитов',
-    features: [
-      '500 запросов в день',
-      '10 запросов в минуту',
-      'Доступ к Llama, DeepSeek, gpt-oss',
-      'Email-поддержка',
-    ],
-    cta: 'Начать бесплатно',
-    ctaHref: '/register',
-  },
   {
     id: 'basic',
     name: 'Basic',
@@ -127,7 +113,7 @@ export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClie
   function ctaForTier(tier: Tier): { label: string; href: string | null; isCurrent: boolean } {
     if (!isLoggedIn) {
       return {
-        label: tier.id === 'free' ? 'Начать бесплатно' : 'Зарегистрироваться',
+        label: 'Зарегистрироваться',
         href: `/register?callbackUrl=${encodeURIComponent('/pricing')}`,
         isCurrent: false,
       };
@@ -196,7 +182,7 @@ export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClie
           </h1>
           <p className="mt-4 text-lg text-muted-foreground">
             Pay-per-request в рублях. Подписки дают бонус-кредиты, повышенный
-            rate-limit и приоритет в роутинге. Free-tier — без карты.
+            rate-limit и приоритет в роутинге.
           </p>
 
           <div className="mt-8 inline-flex items-center gap-3 rounded-full border border-border bg-card p-1.5 px-4">
