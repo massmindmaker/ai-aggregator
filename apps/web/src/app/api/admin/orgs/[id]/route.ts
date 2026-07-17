@@ -67,7 +67,16 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         // buckets. Now takes WHOLE credits explicitly and converts to micro
         // itself (rounded — a fractional-credit admin input is legitimate,
         // e.g. "10.5" credits, but must land on an integer micro-credit).
-        if (typeof body.amountCredits !== 'number' || !Number.isFinite(body.amountCredits)) {
+        // Must be a positive, finite, non-absurd credit amount. A NEGATIVE
+        // value here would do `payg_credits + (negative)` and DRAIN/negate the
+        // balance; 0 is a no-op; >1_000_000 credits (=$10k) is beyond any sane
+        // single admin top-up. All rejected before the micro-credit conversion.
+        if (
+          typeof body.amountCredits !== 'number' ||
+          !Number.isFinite(body.amountCredits) ||
+          body.amountCredits <= 0 ||
+          body.amountCredits > 1_000_000
+        ) {
           return NextResponse.json({ error: 'BAD_AMOUNT' }, { status: 400 });
         }
         const amountMicroCredits = Math.round(body.amountCredits * 1000);
