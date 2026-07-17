@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import MainLayout from '@/components/layout/MainLayout';
 import { CellsSpot } from '@/components/animations/CellsSpot';
 import { CountUp } from '@/components/ui/CountUp';
@@ -10,7 +11,15 @@ export const metadata: Metadata = {
     'AI-Aggregator для бизнеса: договор с ИП/ООО, УПД, счёт, NDA, on-premise, выделенные ключи и SLA 99.9%.',
 };
 
+// HIDDEN (2026-07-17, founder decision): no separate "for business" terms —
+// business customers just pick a pricing tier like everyone else. Gate the
+// route behind a hard 404 instead of deleting the code — it stays in the
+// repo for possible future use. To re-enable: remove this notFound() call
+// and restore the MainNavbar / footer / CommandPalette entries pointing at
+// /business. Pattern mirrors docs/specs/2026-07-15-agentmarket-web-hidden.md.
 export default function BusinessPage() {
+  notFound();
+
   return (
     <MainLayout>
       {/* ───── HERO ───── */}
