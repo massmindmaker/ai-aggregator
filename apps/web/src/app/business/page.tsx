@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 // route behind a hard 404 instead of deleting the code — it stays in the
 // repo for possible future use. To re-enable: remove this notFound() call
 // and restore the MainNavbar / footer / CommandPalette entries pointing at
-// /business. Pattern mirrors docs/specs/2026-07-15-agentmarket-web-hidden.md.
+// /business.
 export default function BusinessPage() {
   notFound();
 
