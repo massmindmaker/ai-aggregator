@@ -1,16 +1,42 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-09T23:03:41.055Z",
+  "timestamp": "2026-07-07T15:03:51.136Z",
   "source": "auto-postool",
   "partial": false,
-  "phase": null,
-  "phase_name": "R1.0 — Money-correctness foundation — IN PROGRESS (on branch)",
-  "phase_dir": null,
-  "plan": null,
+  "phase": "16",
+  "phase_name": "R1.4 Transferable Agent (iNFT-on-TON) — ✓ COMPLETE (5/5 plans, code; VPS deploy pending)",
+  "phase_dir": ".planning/phases/16-r1-4-transferable-agent-inft",
+  "plan": "5",
   "task": null,
-  "total_tasks": null,
+  "total_tasks": 5,
   "status": "auto-checkpoint",
-  "completed_tasks": [],
+  "completed_tasks": [
+    {
+      "id": "01",
+      "name": "Task 1: Write migration 0039_agent_transfers.sql",
+      "status": "done"
+    },
+    {
+      "id": "02",
+      "name": "Task 1: make-transferable opt-in route (free DB flag + price)",
+      "status": "done"
+    },
+    {
+      "id": "03",
+      "name": "Task 1: Transfer/sale INITIATE route (pending row + Startonus invoice + TON Connect)",
+      "status": "done"
+    },
+    {
+      "id": "04",
+      "name": "Task 1: TransferPanel component (owner toggle+share, acquirer TON Connect initiate, keyed on isOwner)",
+      "status": "done"
+    },
+    {
+      "id": "05",
+      "name": "Task 1: Rewrite the Startonus client to the current API shape",
+      "status": "done"
+    }
+  ],
   "remaining_tasks": [],
   "blockers": [
     {
@@ -99,202 +125,106 @@
     {
       "decision": "**D#12** Drop Supabase → Timeweb managed PG + NextAuth + S3 (152-ФЗ + RAM economy)",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**D#13** Drop Docker entirely → bare-metal apt + systemd",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**D#14** Drop Dokploy → pm2 + nginx + GitHub Actions SSH rsync (Capistrano-style releases)",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**15.1-01a** Worker money path uses READ COMMITTED + guarded `UPDATE … WHERE <guard> RETURNING` (per-row lock + WHERE-guard = double-spend/over-budget safe), NOT SERIALIZABLE and NO 40001 retry loop. settleRun = markCompleted + atomic daily-spend guard + balance debit in one `sql.begin`.",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**15.1-01b** Debit `tg_user_balances` (the live spendable table credited by topup-check + migration 0019), NOT `tg_users`. MIN_RUN_COST = 1₽ run-start floor.",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**15.1-01c** `agent_provider_credentials.enc_key` (TEXT) decoded as base64 — the BYOK write route (future plan) MUST store `encryptSecret(key).toString('base64')`. No write route exists yet; this sets the contract.",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**15.1-01d** aiag runs route through `http://127.0.0.1:4000/v1/chat/completions` with `AIAG_GATEWAY_KEY`; OpenRouter direct stays ONLY as the documented degraded fallback on gateway 404/model_not_found. White-label: error labels never leak \"openrouter\" on the aiag path.",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**15.1-02a** `isRevoked` in jwt-denylist.ts uses Upstash REST API over fetch (Edge-safe) when `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` are set; stubs false otherwise. R0 non-blocking — alg-pin + CVE patch + fail-hard secret are the blocking layer.",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**15.1-02b** JWT fail-hard guard is a module-level throw (not route-level) so the process refuses to serve ANY route when `TMA_JWT_SECRET` is missing or < 32 chars — not just the auth route.",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**15.1-02c** isRevoked fails-open on Upstash errors (returns false) to avoid locking out all users on transient Redis blips; stricter fail-closed policy deferred to T-15.1-10.",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**15.1-03a** Integration test uses TEST_DATABASE_URL (never DATABASE_URL/prod); gated by `describe.skipIf(!TEST_DATABASE_URL)`; synthetic tg_user_id in 9_000_000_000+ reserved range; afterEach cleanup by generated id. No test logic leaked into db.ts (sql was already exported by Plan 01).",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     },
     {
       "decision": "**15.1-03b** Dedicated test-local postgres client (postgres(TEST_DATABASE_URL)) for seeding/assertions; settleRun uses module-level sql — operator sets DATABASE_URL=TEST_DATABASE_URL when running integration suite on VPS so both clients target the same test DB.",
       "rationale": "",
-      "phase": null
+      "phase": "16"
     }
   ],
   "uncommitted_files": [
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-a07167902aa6f7ee5"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-a48dbb78405cb98ce"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-a5f7550954a20bca8"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-a66810f1c52cff63b"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-a77dd5559117429ef"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-a783aa41fced67b5d"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-a82af33b281334865"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-a89d9a0fd33238807"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-a9744bf689a001c80"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-aa75796dd30a32d67"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-ad0c94eaa3c534c8e"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-ad8b79aee094b5c24"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/agent-aee9fc033bf60f706"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/feat/phase15-tma-concept"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/wf_2963ae1f-02d-2"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/wf_3c7fd885-9e9-3"
-    },
-    {
-      "status": "M",
-      "path": ".claude/worktrees/wf_a8abd622-103-1"
-    },
     {
       "status": "M",
       "path": ".planning/HANDOFF.json"
     },
     {
       "status": "M",
-      "path": ".planning/STATE.md"
-    },
-    {
-      "status": "M",
-      "path": ".planning/phases/16-r1-4-transferable-agent-inft/16-02-PLAN.md"
-    },
-    {
-      "status": "M",
-      "path": ".planning/phases/16-r1-4-transferable-agent-inft/16-04-PLAN.md"
-    },
-    {
-      "status": "M",
-      "path": "CLAUDE.md"
+      "path": ".serena/project.yml"
     },
     {
       "status": "??",
-      "path": ".claude/settings.json"
+      "path": ".serena/memories/aiag_session_2026_07_07_reorg_knowledge.md"
     },
     {
       "status": "??",
-      "path": ".planning/phases/16-r1-4-transferable-agent-inft/.gitkeep"
+      "path": "docs/superpowers/specs/2026-06-24-connect-your-own-hermes.md"
     },
     {
       "status": "??",
-      "path": ".planning/phases/16-r1-4-transferable-agent-inft/16-PATTERNS.md"
+      "path": "docs/superpowers/specs/2026-06-24-hermes-memory-isolation.md"
     },
     {
       "status": "??",
-      "path": ".planning/phases/16-r1-4-transferable-agent-inft/CONTEXT.md"
+      "path": "docs/superpowers/specs/2026-06-24-hermes-profile-creation.md"
     },
     {
       "status": "??",
-      "path": "AGENTS.md"
+      "path": "docs/superpowers/specs/2026-06-26-research-credit-economy.md"
     },
     {
       "status": "??",
-      "path": "_artcheck/"
+      "path": "docs/superpowers/specs/2026-06-26-research-memoryos-knowledge.md"
     },
     {
       "status": "??",
-      "path": "docs/ARCHITECTURE-AUDIT-2026-06-10.md"
+      "path": "docs/superpowers/specs/2026-06-26-research-nft-membership.md"
     },
     {
       "status": "??",
-      "path": "docs/_dash_utf8.tmp"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/_review/"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/research/2026-06-10-0g-inft-on-ton.md"
-    },
-    {
-      "status": "??",
-      "path": "docs/specs/research/2026-06-10-0g-inft-on-ton.sources.json"
-    },
-    {
-      "status": "??",
-      "path": "graphify-out/"
+      "path": "docs/superpowers/specs/2026-06-26-research-wallet-auth.md"
     }
   ],
-  "next_action": "R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identity`",
-  "context_notes": "Status: R0 (Phase 15.1) COMPLETE; R1.0 underway on `plan/15.1-r0-billing-identity`\n\nStopped at: Phase 15.1 COMPLETE. 15.1-03: 1 task commit (97afe5d) + SUMMARY. tsc clean; vitest skips 4 cleanly. VPS green run deferred.\n\nRecent commits:\n27e706b fix(16): revise transfer plan for corrected Startonus API (one shared collection, new client)\n9a9f5f0 docs(16): create R1.4 transferable-agent phase plan (4 plans, 4 waves)\nf8b93d5 fix(tma P0): client-side root redirect — server redirect dropped the Telegram launch hash\n2223839 feat(gonka): add gonka/kimi-k2.6 (moonshotai/kimi-k2.6) as a routable model\n67d55c3 fix(tma P0): load the Telegram WebApp SDK — auth was dead inside Telegram"
+  "next_action": "Phase 16 code complete on `feat/r1.0-wave0-consolidated`; tg-miniapp typecheck 0 errors. Deploy = migration 0039 + Startonus env + nginx webhook allowlist + manual tma build (see 16-04-SUMMARY user_setup).",
+  "context_notes": "Status: Phase 16 code complete on `feat/r1.0-wave0-consolidated`; tg-miniapp typecheck 0 errors. Deploy = migration 0039 + Startonus env + nginx webhook allowlist + manual tma build (see 16-04-SUMMARY user_setup).\n\nStopped at: Phase 16 (R1.4 transferable-agent iNFT) COMPLETE — all 5 plans executed, tg-miniapp typecheck 0 errors. VPS deploy + user_setup (migration 0039, Startonus env, nginx allowlist) deferred per no-local-runtime.\n\nRecent commits:\n863c8a8 chore: repo hygiene (worktree-gitlinks, single pkg-manager) + knowledge-structure doc (#6 #7)\nb6779ac docs: мастер-бэклог завершённости TMA (4 аудита, что доделать к 108)\n0c3b0fe feat(tma): completeness — арт оживает, видимость/сорт публикации, деньги-ясность\n8b7824e feat(tma): каталог «Скиллы» тянет РЕАЛЬНЫЕ возможности из Hermes (не хардкод)\nd7b9814 fix(tma+worker): финальный полиш к 108 — честность/UX/визуал + run-hang P0"
 }
