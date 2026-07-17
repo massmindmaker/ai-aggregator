@@ -300,14 +300,37 @@ async function postChat(
   });
 }
 
+/** Shape of the info `shouldFallbackToDirectUpstream` decides on. `text` is the
+ * raw (unparsed) response body; `code` is an already-parsed error code, when
+ * the caller has one. Neither is required — the 401/402/403 guard below needs
+ * only `status`. */
+export interface UpstreamErrorInfo {
+  status: number;
+  code?: string;
+  text?: string;
+}
+
 /**
- * True when a gateway response means "I don't have this model" → fall back.
- * Covers OpenRouter-style 404 / model_not_found AND the AIAG :4000 gateway's
- * 400 "Unknown model" (resolver.ts), which the old check missed.
+ * Whether a failed gateway response should trigger the degraded direct-to-
+ * OpenRouter fallback.
+ *
+ * 🔴 SAFETY (split-task-2, risk #1): 401 (bad key) / 402 (insufficient funds) /
+ * 403 (forbidden) must NEVER fall back. Falling back on these would silently
+ * pay the upstream ourselves — a margin leak AND a white-label break — with no
+ * error surfaced anywhere. These three are checked FIRST and unconditionally
+ * deny, regardless of what `code`/`text` say (defense in depth: even if an
+ * auth/funds error's body happened to mention "model", it still won't
+ * fall back).
+ *
+ * The only legitimate reason to go direct: the gateway genuinely doesn't have
+ * this model in its registry — OpenRouter-style 404 / model_not_found, or the
+ * AIAG :4000 gateway's 400 "Unknown model" (resolver.ts).
  */
-function isModelNotFound(status: number, text: string): boolean {
-  if (status === 404) return true;
-  if (status === 400 && /unknown model/i.test(text)) return true;
+export function shouldFallbackToDirectUpstream(err: UpstreamErrorInfo): boolean {
+  if (err.status === 401 || err.status === 402 || err.status === 403) return false;
+  if (err.status === 404) return true;
+  const text = err.text ?? '';
+  if (err.status === 400 && /unknown model/i.test(text)) return true;
   return /model_not_found|model not found|no such model/i.test(text);
 }
 
@@ -397,7 +420,8 @@ export async function callWithFallback(
   const text = await res.text();
 
   // Degraded fallback: ONLY for the aiag gateway path, ONLY on model-not-found.
-  if (isGateway && isModelNotFound(res.status, text)) {
+  // (never on 401/402/403 — see shouldFallbackToDirectUpstream.)
+  if (isGateway && shouldFallbackToDirectUpstream({ status: res.status, text })) {
     const orKey = process.env.OPENROUTER_API_KEY;
     if (orKey) {
       const fb = await postChat(OPENROUTER_URL, orKey, body, true, 'openrouter');
