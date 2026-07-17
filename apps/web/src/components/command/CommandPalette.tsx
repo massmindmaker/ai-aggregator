@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
   Home,
   Boxes,
@@ -112,18 +113,28 @@ function score(cmd: Command, query: string): number {
 
 export function CommandPalette() {
   const router = useRouter();
+  const { data: session } = useSession();
+  // Admin routes must not be discoverable by non-admins (UI = reality). Server
+  // guards already block access; this stops the palette leaking the admin map.
+  // Defaults to hidden while the session is still loading.
+  const isAdmin =
+    (session?.user as { role?: string } | undefined)?.role === 'admin';
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
-    return COMMANDS.map((c) => ({ cmd: c, s: score(c, query) }))
+    const visible = COMMANDS.filter(
+      (c) => isAdmin || (c.group !== 'admin' && c.id !== 'new-contest')
+    );
+    return visible
+      .map((c) => ({ cmd: c, s: score(c, query) }))
       .filter((x) => x.s > 0)
       .sort((a, b) => b.s - a.s)
       .map((x) => x.cmd)
       .slice(0, 30);
-  }, [query]);
+  }, [query, isAdmin]);
 
   // Group filtered list
   const grouped = useMemo(() => {
