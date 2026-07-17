@@ -5,21 +5,11 @@ import { rowsOf } from '@/lib/admin/rows';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { CountUp } from '@/components/ui/CountUp';
-import { Sparkline } from '@/components/ui/Sparkline';
 import { RevenueChart } from './RevenueChart';
 import { TopOrgsChart } from './TopOrgsChart';
 
 export const metadata = { title: 'Админка — AI-Aggregator' };
 export const dynamic = 'force-dynamic';
-
-// FIXME: replace with real daily series fetched from DB
-function placeholderSeries(seed: string, len = 14): number[] {
-  let h = 0;
-  for (const c of seed) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
-  const rng = (i: number) =>
-    Math.sin(h + i * 0.7) * 50 + 100 + Math.sin(i * 0.3) * 20;
-  return Array.from({ length: len }, (_, i) => Math.max(10, rng(i)));
-}
 
 type Kpi = {
   revenue_today: number;
@@ -204,14 +194,6 @@ export default async function AdminHomePage() {
             <div className="text-3xl font-bold text-amber-400">
               <CountUp end={kpi.revenue_today} decimals={2} suffix=" ₽" />
             </div>
-            <Sparkline
-              data={placeholderSeries('revenue-today', 14)}
-              width={120}
-              height={32}
-              color="#f59e0b"
-              fill
-              className="mt-2"
-            />
           </CardContent>
         </Card>
         <Card>
@@ -222,14 +204,6 @@ export default async function AdminHomePage() {
             <div className="text-3xl font-bold">
               <CountUp end={kpi.mrr} decimals={2} suffix=" ₽" />
             </div>
-            <Sparkline
-              data={placeholderSeries('mrr', 14)}
-              width={120}
-              height={32}
-              color="#22c55e"
-              fill
-              className="mt-2"
-            />
           </CardContent>
         </Card>
         <Card>
@@ -240,14 +214,6 @@ export default async function AdminHomePage() {
             <div className="text-3xl font-bold">
               <CountUp end={kpi.dau} /> / <CountUp end={kpi.mau} />
             </div>
-            <Sparkline
-              data={placeholderSeries('dau', 14)}
-              width={120}
-              height={32}
-              color="#f59e0b"
-              fill
-              className="mt-2"
-            />
           </CardContent>
         </Card>
         <Card>
@@ -258,14 +224,6 @@ export default async function AdminHomePage() {
             <div className="text-3xl font-bold">
               <CountUp end={kpi.margin_pct} decimals={1} suffix="%" />
             </div>
-            <Sparkline
-              data={placeholderSeries('margin', 14)}
-              width={120}
-              height={32}
-              color={kpi.margin_pct < 20 ? '#ef4444' : '#22c55e'}
-              fill
-              className="mt-2"
-            />
           </CardContent>
         </Card>
       </div>

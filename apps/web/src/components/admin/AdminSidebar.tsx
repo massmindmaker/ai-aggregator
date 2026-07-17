@@ -13,7 +13,6 @@ import {
   Users,
   Building2,
   Trophy,
-  Gem,
   ShieldCheck,
   CreditCard,
   Banknote,
@@ -62,7 +61,6 @@ const SECTIONS: NavSection[] = [
       { href: '/admin/models', label: 'Модели', icon: Boxes },
       { href: '/admin/upstreams', label: 'Аплинки', icon: Plug },
       { href: '/admin/contests', label: 'Контесты', icon: Trophy },
-      { href: '/admin/nft', label: 'NFT', icon: Gem },
     ],
   },
   {
