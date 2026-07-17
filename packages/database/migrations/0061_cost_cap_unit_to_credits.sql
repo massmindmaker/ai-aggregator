@@ -26,16 +26,32 @@
 -- tracked separately (finmodel-build-spec §6/§8). COMMENT ON COLUMN records
 -- the truth so nobody re-reads the stale name as rubles again.
 --
--- Idempotency: guarded by a sentinel comment check would require a DO block;
--- simpler and sufficient here is that this migration is applied exactly once
--- (manual, tracked in the deploy runbook per aiag-deploy) — a second run
--- would double-convert, so it must not be re-applied. (Matches this repo's
--- existing manual/untracked migration convention; no migrations table exists
--- to guard against re-application automatically.)
+-- Idempotency (T2 follow-up, 2026-07-17): this repo runs migrations manually,
+-- untracked (no migrations table) — a re-run is a real risk, not a
+-- hypothetical. A second UPDATE would double-convert every cap (÷90×100
+-- applied twice ≈ ×1.111 on top of the correct value). Guarded below by
+-- reading the column's own COMMENT before converting: the COMMENT this
+-- migration sets (below) contains the literal string "migration 0061" — on
+-- a second run that substring is already present, so the UPDATE is skipped.
+-- The COMMENT statement itself is naturally idempotent (re-setting identical
+-- text is a no-op), so running this file N times has the same effect as
+-- running it once.
 
-UPDATE gateway_api_keys
-SET cost_limit_monthly_rub = ROUND(cost_limit_monthly_rub / 90.0 * 100, 2)
-WHERE cost_limit_monthly_rub IS NOT NULL;
+DO $$
+BEGIN
+  IF position('migration 0061' in coalesce(
+       (SELECT d.description
+          FROM pg_catalog.pg_description d
+          JOIN pg_catalog.pg_attribute a
+            ON a.attrelid = d.objoid AND a.attnum = d.objsubid
+         WHERE a.attrelid = 'gateway_api_keys'::regclass
+           AND a.attname = 'cost_limit_monthly_rub'),
+       '')) = 0 THEN
+    UPDATE gateway_api_keys
+    SET cost_limit_monthly_rub = ROUND(cost_limit_monthly_rub / 90.0 * 100, 2)
+    WHERE cost_limit_monthly_rub IS NOT NULL;
+  END IF;
+END $$;
 
 COMMENT ON COLUMN gateway_api_keys.cost_limit_monthly_rub IS
   'Monthly spend cap in CREDITS (1 credit = 1 US cent), NOT rubles, despite '
