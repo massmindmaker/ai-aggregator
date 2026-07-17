@@ -1,10 +1,24 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { POST } from '@/app/api/playground/run/route';
+
+// These tests exercise body validation (model/prompt/streaming), not the IP
+// rate-limit gate added in guard.ts/rate-limit.ts (covered by
+// playground-guard.test.ts). Without a real Redis (none in this test env,
+// no REDIS_URL) `consumePlaygroundHit` fails closed and every request would
+// 429 before reaching the validation this file is meant to test — so the
+// Redis-backed hit counter is mocked to always allow, same as an IP that is
+// within quota.
+vi.mock('@/app/api/playground/run/rate-limit', () => ({
+  consumePlaygroundHit: vi.fn(async () => ({ allowed: true })),
+  refundPlaygroundHit: vi.fn(async () => {}),
+}));
 
 function makeRequest(body: unknown) {
   return new Request('http://localhost/api/playground/run', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // x-real-ip: without it every request hits the fail-closed IP gate
+    // (guard.ts) and 403s before model/prompt validation ever runs.
+    headers: { 'Content-Type': 'application/json', 'x-real-ip': '203.0.113.1' },
     body: JSON.stringify(body),
   }) as unknown as Parameters<typeof POST>[0];
 }

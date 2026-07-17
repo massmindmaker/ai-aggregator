@@ -1,36 +1,15 @@
 import { NextRequest } from 'next/server';
+import { consumePlaygroundHit, refundPlaygroundHit } from './rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Rate-limit: 5 free requests per IP per day (tracked in-memory, resets on restart).
-// For production, move to Redis. Sufficient for playground launch.
-const ipHits = new Map<string, { count: number; resetAt: number }>();
+// Rate-limit: 5 free requests per IP per day, Redis-backed with a TTL to
+// end-of-day (survives pm2 restarts — the old in-memory Map did not).
+// 🔴 Fail-closed: an unresolved client IP is a REJECTION now, not a bypass
+// (see guard.ts). This endpoint spends real upstream money on a shared
+// system key, so "we can't identify the caller" must not mean "unlimited".
 const FREE_LIMIT = 5;
-const WINDOW_MS = 24 * 60 * 60 * 1000;
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  // Evict expired entries to prevent unbounded growth
-  if (ipHits.size > 10_000) {
-    for (const [k, v] of ipHits) {
-      if (v.resetAt < now) ipHits.delete(k);
-    }
-  }
-  const entry = ipHits.get(ip);
-  if (!entry || entry.resetAt < now) {
-    ipHits.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= FREE_LIMIT) return false;
-  entry.count++;
-  return true;
-}
-
-function decrementRateLimit(ip: string): void {
-  const entry = ipHits.get(ip);
-  if (entry && entry.count > 0) entry.count--;
-}
 
 interface RunRequest {
   model?: string;
@@ -55,7 +34,22 @@ function getClientIp(req: NextRequest): string | null {
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
-  if (ip && !checkRateLimit(ip)) {
+
+  // 🔴 P0 fix: an unresolved IP used to bypass the limit entirely
+  // (`if (ip && ...)` short-circuited). Fail-closed instead.
+  // Just `!ip` here — the actual quota decision (used vs limit) is made once,
+  // atomically, inside `consumePlaygroundHit` below via `playgroundAllowed`;
+  // calling `playgroundAllowed` a second time here with a hardcoded `used: 0`
+  // would always be true for a truthy `ip` (0 < FREE_LIMIT) and was dead code.
+  if (!ip) {
+    return Response.json(
+      { error: 'ip_unresolved', message: 'Не удалось определить источник запроса.' },
+      { status: 403 }
+    );
+  }
+
+  const { allowed } = await consumePlaygroundHit(ip, FREE_LIMIT);
+  if (!allowed) {
     return Response.json(
       { error: 'rate_limit', message: 'Лимит: 5 запросов в день для гостей. Зарегистрируйтесь для полного доступа.' },
       { status: 429 }
@@ -107,12 +101,12 @@ export async function POST(req: NextRequest) {
       }),
     });
   } catch {
-    if (ip) decrementRateLimit(ip);
+    await refundPlaygroundHit(ip);
     return Response.json({ error: 'gateway_unreachable' }, { status: 502 });
   }
 
   if (!upstreamRes.ok || !upstreamRes.body) {
-    if (ip) decrementRateLimit(ip);
+    await refundPlaygroundHit(ip);
     return Response.json({ error: `gateway_${upstreamRes.status}` }, { status: 502 });
   }
 
