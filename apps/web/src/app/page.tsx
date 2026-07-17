@@ -5,10 +5,13 @@ import MainLayout from '@/components/layout/MainLayout';
 import HeroAnimation from '@/components/HeroAnimation';
 import HeroTerminal from '@/components/home/HeroTerminal';
 import HomeFaq from '@/components/home/HomeFaq';
+import { ScenarioCardLink } from '@/components/home/ScenarioCardLink';
 import { CellsSpot } from '@/components/animations/CellsSpot';
 import { CodeTabsDemo } from '@/components/home/CodeTabsDemo';
 import { TopModelsLeaderboard } from '@/components/home/TopModelsLeaderboard';
 import { CountUp } from '@/components/ui/CountUp';
+import type { ModelType } from '@/lib/marketplace/catalog';
+import { filtersToSearchParams } from '@/lib/marketplace/filters';
 
 export const metadata: Metadata = {
   title:
@@ -17,33 +20,61 @@ export const metadata: Metadata = {
     'Подключайте любую AI-модель через OpenAI-совместимый API. GPT-5, Claude, Flux, Veo, Whisper и сотни открытых моделей. Оплата картой РФ, СБП, по счёту. Deploy в РФ-регионе — latency < 100ms.',
 };
 
-const scenarios = [
+/**
+ * Each scenario links to `/marketplace` pre-filtered to the model
+ * type/tag that actually matches it in the live catalog (checked against
+ * `apps/web/src/lib/marketplace/catalog.generated.ts`, 2026-07-17: 69
+ * models — llm 36 / image 15 / video 10 / audio 5 / embedding 3, `code`
+ * exists only as a tag, never as `type`).
+ *
+ * RAG/Docs maps to `types: ['embedding']` rather than `['embedding','llm']`:
+ * the llm-inclusive variant returns 39/69 models — almost identical to the
+ * Chatbot card's 36 — which would make the "curated" scenario list a
+ * near-duplicate of Chatbot/Support (a Potemkin filter, not a real one).
+ * Embedding-only stays small but honest and distinct.
+ */
+const scenarios: Array<{
+  icon: string;
+  title: string;
+  desc: string;
+  filter: { types?: ModelType[]; tags?: string[] };
+}> = [
   {
     icon: '💬',
     title: 'Chatbot / Support',
     desc: 'GPT-5, Claude, DeepSeek. Streaming, tool calls, контекст 200k.',
+    filter: { types: ['llm'] },
   },
   {
     icon: '📄',
     title: 'RAG / Docs',
     desc: 'Embedding + reranker + LLM. Русские модели ЯндексGPT, GigaChat.',
+    filter: { types: ['embedding'] },
   },
   {
     icon: '</>',
     title: 'Code / DevTool',
     desc: 'Claude Sonnet, DeepSeek-Coder, Qwen2.5-Coder. FIM, large ctx.',
+    filter: { tags: ['code'] },
   },
   {
     icon: '🖼',
     title: 'Image / Avatar',
     desc: 'SDXL, Flux, Imagen 4, Midjourney. ControlNet, IP-Adapter.',
+    filter: { types: ['image'] },
   },
   {
     icon: '🎙',
     title: 'Audio / Voice',
     desc: 'Whisper, ElevenLabs, Suno, XTTS. STT, TTS, voice cloning.',
+    filter: { types: ['audio'] },
   },
 ];
+
+function scenarioHref(filter: { types?: ModelType[]; tags?: string[] }): string {
+  const qs = filtersToSearchParams(filter).toString();
+  return qs ? `/marketplace?${qs}` : '/marketplace';
+}
 
 const providers = [
   'OpenAI',
@@ -579,9 +610,9 @@ export default function HomePage() {
             style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}
           >
             {scenarios.map((s) => (
-              <Link
+              <ScenarioCardLink
                 key={s.title}
-                href="/marketplace"
+                href={scenarioHref(s.filter)}
                 className="block transition-all hover:-translate-y-1"
                 style={{
                   padding: 24,
@@ -613,7 +644,7 @@ export default function HomePage() {
                 >
                   {s.desc}
                 </div>
-              </Link>
+              </ScenarioCardLink>
             ))}
           </div>
         </div>
