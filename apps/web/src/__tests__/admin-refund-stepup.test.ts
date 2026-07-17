@@ -21,9 +21,13 @@ vi.mock('@/lib/admin/session', () => ({
 }));
 
 const userFindFirst = vi.fn();
+// Lazy arrow (TDZ-safe): the hoisted factory must not touch dbExecute before its
+// const is initialised. The route now persists the refund via db.execute(sql`…`).
+const dbExecute = vi.fn();
 vi.mock('@/lib/db', () => ({
   db: {
     query: { users: { findFirst: (...args: unknown[]) => userFindFirst(...args) } },
+    execute: (...args: unknown[]) => dbExecute(...args),
   },
   eq: (a: unknown, b: unknown) => ({ a, b }),
   sql: (s: TemplateStringsArray) => ({ raw: s.raw.join(' ') }),
@@ -59,6 +63,7 @@ function signInAsAdmin() {
 describe('POST /api/admin/payments/refund — step-up enforcement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dbExecute.mockReset();
   });
 
   it('valid NextAuth admin session but NO aiag_admin_session cookie → 403 STEPUP_REQUIRED', async () => {
@@ -96,6 +101,15 @@ describe('POST /api/admin/payments/refund — step-up enforcement', () => {
     cookieGet.mockReturnValue({ value: 'valid-token' });
     verifyAdminSessionMock.mockResolvedValue(true);
     refundMock.mockResolvedValue({ success: true, providerRefundId: 'ref-1' });
+    // Confirmed, un-refunded ₽500 payment: the SELECT passes the ceiling and the
+    // claim UPDATE wins its WHERE-guard (returns the row), so the refund proceeds.
+    dbExecute.mockImplementation((q: { raw?: string }) => {
+      const raw = q?.raw ?? '';
+      if (raw.includes('SELECT amount')) return Promise.resolve({ rows: [{ amount: '500' }] });
+      if (raw.includes('refunded_at = NOW()'))
+        return Promise.resolve({ rows: [{ id: 'p-1', amount: '500', tinkoff_payment_id: 'prov-1' }] });
+      return Promise.resolve({ rows: [] });
+    });
 
     const r = await refundPost(jsonReq(REFUND_BODY));
     expect((r as Response).status).toBe(200);
