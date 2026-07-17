@@ -1,17 +1,26 @@
 /**
  * Phase 14-04 Task 3 — POST /api/admin/payouts/[id]/approve
  *
- * Approves a payout: computes tax via calculateTax(), updates payouts row
- * (tax_withheld_rub, net_paid_rub, kyc_snapshot, status='paid', timestamps),
- * marks the corresponding locked author_earnings rows as 'paid' via FIFO
- * (sum of net_rub up to and including last row whose running total ≤ payout.net_rub —
- * boundary EXCLUSIVE, no row splitting), and writes an audit_log entry.
+ * Approves a payout: computes tax via calculateTax(), updates the payouts
+ * row (status='paid', processed_at, kyc_snapshot, tax breakdown recorded in
+ * metadata jsonb), marks the corresponding locked author_earnings rows as
+ * 'paid' via FIFO (sum of net_rub up to and including last row whose running
+ * total ≤ payout's net_rub — boundary EXCLUSIVE, no row splitting), and
+ * writes an audit_log entry.
  *
  * All three mutations are wrapped in a single db.transaction (atomicity invariant).
  *
  * Out of scope (TODO Phase 14b):
- *   - Real bank transfer (СБП API) → tx_ref / transaction_reference stays NULL.
+ *   - Real bank transfer (СБП API) → transaction_id stays NULL.
  *   - Tax act PDF generation → tax_act_storage_key stays NULL.
+ *
+ * PROD-SCHEMA NOTE: the real `payouts` table has NO author_id / amount_rub /
+ * tax_withheld_rub / net_paid_rub / admin_note / paid_at columns — the
+ * migration files describing them are stale/drifted from prod. Real columns
+ * used below: user_id, amount, metadata jsonb. Tax breakdown + approver
+ * identity are recorded in `metadata` instead of dedicated columns.
+ * `author_earnings` is a different table and genuinely has author_id/net_rub
+ * — those refs are untouched.
  */
 import { NextResponse } from 'next/server';
 import { db, sql } from '@/lib/db';
@@ -23,8 +32,8 @@ const AUTO_APPROVE_CAP_RUB = 20000;
 
 interface PayoutWithUser {
   id: string;
-  author_id: string;
-  amount_rub: string;
+  user_id: string;
+  amount: string;
   status: string;
   kyc_status: string | null;
   kyc_type: string | null;
@@ -41,11 +50,11 @@ export async function POST(
     const { id } = await params;
 
     const lookup = await db.execute(sql`
-      SELECT p.id::text, p.author_id::text, p.amount_rub::text, p.status,
+      SELECT p.id::text, p.user_id::text, p.amount::text, p.status,
              u.kyc_status, u.kyc_type, u.tax_id, u.bank_details,
              u.kyc_verified_at::text AS kyc_verified_at
       FROM payouts p
-      JOIN users u ON u.id = p.author_id
+      JOIN users u ON u.id = p.user_id
       WHERE p.id = ${id}::uuid
       LIMIT 1
     `);
@@ -63,7 +72,7 @@ export async function POST(
       return NextResponse.json({ error: 'KYC_REQUIRED' }, { status: 422 });
     }
 
-    const amount = Number(row.amount_rub);
+    const amount = Number(row.amount);
     const tax = calculateTax(amount, row.kyc_type as KycType);
 
     // KYC snapshot for audit trail. bank_details stays as encrypted blob ref;
@@ -90,14 +99,16 @@ export async function POST(
     }).transaction(async (tx) => {
       await tx.execute(sql`
         UPDATE payouts SET
-          tax_withheld_rub = ${tax.tax_withheld_rub},
-          net_paid_rub = ${tax.net_rub},
-          kyc_snapshot = ${JSON.stringify(kycSnapshot)}::jsonb,
           status = 'paid',
           processed_at = NOW(),
-          paid_at = NOW(),
-          admin_note = COALESCE(admin_note, '') || ' approved by ' || ${user.email}
-        WHERE id = ${id}::uuid AND status = 'requested'
+          kyc_snapshot = ${JSON.stringify(kycSnapshot)}::jsonb,
+          metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
+            'tax_withheld_rub', ${tax.tax_withheld_rub}::numeric,
+            'net_paid_rub', ${tax.net_rub}::numeric,
+            'approved_by', ${user.email}::text,
+            'approved_at', ${new Date().toISOString()}::text
+          )
+        WHERE id = ${id}::uuid AND status NOT IN ('paid','failed')
       `);
 
       // Mark FIFO-net_rub-summed locked author_earnings as 'paid' up to (and
@@ -105,13 +116,14 @@ export async function POST(
       // exceed tax.net_rub. The boundary row stays 'locked' for next payout.
       // Ledger invariant:
       //   sum(author_earnings.net_rub WHERE status='paid')
-      //     == sum(payouts.net_paid_rub) for that author.
+      //     == sum(payouts.metadata->>'net_paid_rub') for that author.
+      // (row.user_id IS the author's id — payouts has no separate author_id column.)
       await tx.execute(sql`
         WITH eligible AS (
           SELECT id, net_rub,
                  SUM(net_rub) OVER (ORDER BY computed_at, id) AS running
           FROM author_earnings
-          WHERE author_id = ${row.author_id}::uuid
+          WHERE author_id = ${row.user_id}::uuid
             AND status = 'locked'
             AND net_rub IS NOT NULL
         )
@@ -128,7 +140,7 @@ export async function POST(
           'payout',
           ${id},
           ${JSON.stringify({
-            amount_rub: amount,
+            amount,
             kyc_type: row.kyc_type,
             kyc_status: row.kyc_status,
             tax_withheld_rub: tax.tax_withheld_rub,
@@ -142,7 +154,7 @@ export async function POST(
     });
 
     // TODO (Phase 14b): enqueue real bank transfer via СБП API; populate
-    // payouts.transaction_reference (tx_ref) and tax_act_storage_key with PDF.
+    // payouts.transaction_id and tax_act_storage_key with PDF.
     return NextResponse.json({
       ok: true,
       id,

@@ -100,8 +100,8 @@ describe('POST /api/admin/payouts/[id]/approve', () => {
       rows: [
         {
           id: PAYOUT_ID,
-          author_id: 'author-uuid',
-          amount_rub: '5000',
+          user_id: 'author-uuid',
+          amount: '5000',
           status: 'paid',
           kyc_status: 'verified',
           kyc_type: 'individual',
@@ -125,9 +125,9 @@ describe('POST /api/admin/payouts/[id]/approve', () => {
       rows: [
         {
           id: PAYOUT_ID,
-          author_id: 'author-uuid',
-          amount_rub: '5000',
-          status: 'requested',
+          user_id: 'author-uuid',
+          amount: '5000',
+          status: 'pending',
           kyc_status: 'none',
           kyc_type: null,
           tax_id: null,
@@ -150,9 +150,9 @@ describe('POST /api/admin/payouts/[id]/approve', () => {
       rows: [
         {
           id: PAYOUT_ID,
-          author_id: 'author-uuid',
-          amount_rub: '10000',
-          status: 'requested',
+          user_id: 'author-uuid',
+          amount: '10000',
+          status: 'pending',
           kyc_status: 'verified',
           kyc_type: 'individual',
           tax_id: '500100732259',
