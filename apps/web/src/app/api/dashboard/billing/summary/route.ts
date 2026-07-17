@@ -7,11 +7,15 @@
  *   - Tier/plan: `subscriptions` (active row for this user) → planName + creditsLimit.
  *     No active row → "Free". Written by the Tinkoff/YooKassa webhook + admin
  *     tier-grant flow (migration 0054).
- *   - Spendable balance: `organizations.subscription_credits` + `payg_credits`,
- *     scoped by the user's default org (`getOrCreateDefaultOrg`). This is the
- *     ONLY balance `aiag_settle_charge` (the gateway's debit function, see
- *     packages/database/src/functions/settle-charge.sql) reads and decrements —
- *     `credit_buckets` is an unused/optional detail table, not the aggregate.
+ *   - Spendable balance: `organizations.subscription_credits` + `payg_credits`
+ *     (BIGINT MICRO-credits as of migration 0056/0058 — 1 credit = 1000 micro
+ *     = 1¢; this route divides by 1000 before returning), scoped by the
+ *     user's default org (`getOrCreateDefaultOrg`). This is the ONLY balance
+ *     `aiag_settle_charge_credits` (the gateway's debit function, see
+ *     packages/database/src/functions/settle-charge.sql /
+ *     packages/database/migrations/0058_settle_charge_credits_fn.sql) reads
+ *     and decrements — `credit_buckets` is an unused/optional detail table,
+ *     not the aggregate.
  *
  * Known rassinhron (do not fix here — separate task): the `payments` table
  * (Tinkoff/YooKassa webhook history) and `subscriptions` tier are not wired to
@@ -68,8 +72,12 @@ export async function GET() {
     console.error('[billing/summary] subscription lookup failed', e);
   }
 
-  let subscriptionCreditsRub = 0;
-  let paygCreditsRub = 0;
+  // 🔴 HIGH-2 fix (Opus review): these were named ...CreditsRub while holding
+  // whole CREDITS (an ~8.7% off value if read literally as ₽). organizations.*
+  // columns are now BIGINT MICRO-credits (1 credit = 1000 micro = 1¢, as of
+  // migration 0056/0058) — divide by 1000 to get the display unit (credits).
+  let subscriptionCredits = 0;
+  let paygCredits = 0;
   try {
     const orgId = await getOrCreateDefaultOrg(userId);
     const balRes = await db.execute(sql`
@@ -82,8 +90,8 @@ export async function GET() {
     const rows = (((balRes as unknown as { rows?: OrgBalanceRow[] }).rows ?? balRes) as OrgBalanceRow[]);
     const row = rows[0];
     if (row) {
-      subscriptionCreditsRub = row.subscription_credits != null ? Number(row.subscription_credits) : 0;
-      paygCreditsRub = row.payg_credits != null ? Number(row.payg_credits) : 0;
+      subscriptionCredits = row.subscription_credits != null ? Number(row.subscription_credits) / 1000 : 0;
+      paygCredits = row.payg_credits != null ? Number(row.payg_credits) / 1000 : 0;
     }
   } catch (e) {
     console.error('[billing/summary] org balance lookup failed', e);
@@ -92,10 +100,10 @@ export async function GET() {
   return NextResponse.json({
     plan: { name: planName, creditsLimit, creditsUsed },
     balance: {
-      // What the gateway's aiag_settle_charge actually debits (see comment above).
-      paygCreditsRub,
-      subscriptionCreditsRub,
-      totalSpendableRub: paygCreditsRub + subscriptionCreditsRub,
+      // What the gateway's aiag_settle_charge_credits actually debits (see comment above).
+      paygCredits,
+      subscriptionCredits,
+      totalSpendableCredits: paygCredits + subscriptionCredits,
     },
   });
 }

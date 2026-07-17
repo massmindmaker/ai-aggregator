@@ -94,8 +94,17 @@ function buildProductJsonLd(model: CatalogModel) {
     category: MODEL_TYPE_LABEL_RU[model.type],
     offers: {
       '@type': 'Offer',
-      priceCurrency: 'RUB',
-      price: model.pricing.inputPer1k ?? model.pricing.perImage ?? model.pricing.perMinute ?? model.pricing.perSecond ?? 0,
+      // 🔴 Unit fix (HIGH-C, 2026-07-17): model.pricing.* is CREDITS (1 credit
+      // = 1 US cent, no FX — see pricing-calc.ts docblock), not RUB. Search
+      // engines parse schema.org `price` literally, so mislabeling it "RUB"
+      // showed a currency the customer is never actually charged in. USD is
+      // the correct ISO code here (credits are USD-pegged 1:1 at 100
+      // credits = $1) — priceCurrency must be a real ISO 4217 code, and
+      // there is no "credits" currency, so this converts credits → USD for
+      // the structured-data value only (the on-page display stays credits).
+      priceCurrency: 'USD',
+      price:
+        (model.pricing.inputPer1k ?? model.pricing.perImage ?? model.pricing.perMinute ?? model.pricing.perSecond ?? 0) / 100,
       availability: 'https://schema.org/InStock',
       url: `https://aiag.ru/marketplace/${model.orgSlug}/${model.modelSlug}`,
     },

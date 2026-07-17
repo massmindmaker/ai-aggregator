@@ -10,8 +10,7 @@ import { Hono } from 'hono';
 import { errors } from '../../lib/errors';
 import { resolveModelWithOverride } from '../../routing/resolver';
 import { pickUpstream, type Mode, type ApiKeyPolicies } from '../../routing/engine';
-import { fetchUsdRubRate } from '../../lib/cbr';
-import { calcCostRub, calcByokFeeRub } from '../../lib/pricing';
+import { calcCostCredits, calcByokFeeCredits } from '../../lib/pricing';
 import { settleCharge } from '../../billing/settle';
 import { logRequest } from '../../logging/stream';
 import { getUpstream } from '../../upstreams/registry';
@@ -48,6 +47,16 @@ video.post('/generations', async (c) => {
   // image cost-metric reused — picks by per-image (==per-clip) price
   const upstream = pickUpstream(model.candidates, mode, policies, 'image');
 
+  // Fail closed, before spending on the upstream job: a missing price means
+  // we cannot bill correctly. A numeric fallback here was the MED bug (Opus
+  // review) — `?? 0.5` was written when the column was believed to be USD;
+  // now that price_per_image is confirmed US CENTS, that fallback would have
+  // billed ~100x too little instead of erroring. The price is required in
+  // the DB (model_upstreams.price_per_image) — there is no safe guess.
+  if (!byok && upstream.price_per_image == null) {
+    throw errors.unavailable('Pricing not configured for this model — cannot bill safely');
+  }
+
   const start = Date.now();
   const adapter = getUpstream(upstream.provider);
   if (!adapter.videoGeneration) {
@@ -74,17 +83,23 @@ video.post('/generations', async (c) => {
     }
   }
 
-  let totalRub = 0;
-  let upstreamUsd = 0;
+  // T1-fix: whole MICRO-credits, no ₽/FX. upstream.price_per_image is
+  // already US CENTS — see lib/pricing.ts.
+  let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
+  let upstreamCents = 0;
   if (byok) {
-    totalRub = calcByokFeeRub();
+    costCredits = calcByokFeeCredits();
   } else {
-    const rate = await fetchUsdRubRate().catch(() => 92);
-    upstreamUsd = upstream.price_per_image ?? 0.5; // per-clip baseline
-    totalRub = calcCostRub({ upstreamUsd, rate, markup: upstream.markup });
+    upstreamCents = upstream.price_per_image!; // per-clip baseline; validated non-null above
+    costCredits = calcCostCredits({ upstreamCents, markup: upstream.markup });
   }
-  if (job.status === 'completed') {
-    await settleCharge({ orgId: key.org_id, requestId, totalRub });
+  if (job.status === 'completed' && costCredits > 0) {
+    await settleCharge({
+      orgId: key.org_id,
+      requestId,
+      costCredits,
+      metadata: { model_slug: body.model },
+    });
   }
 
   void logRequest({
@@ -97,9 +112,9 @@ video.post('/generations', async (c) => {
     modeApplied: mode,
     inputTokens: 0,
     outputTokens: 0,
-    upstreamCostUsd: upstreamUsd,
+    upstreamCostUsd: upstreamCents / 100,
     markup: upstream.markup,
-    totalCostRub: totalRub,
+    totalCostCredits: costCredits,
     statusCode: job.status === 'failed' ? 502 : 200,
     latencyMs: Date.now() - start,
     byok,

@@ -21,15 +21,20 @@ export type ModelType =
 export type HostingRegion = 'ru' | 'eu' | 'us' | 'global';
 
 export interface ModelPricing {
-  /** RUB per 1K input tokens (chat/llm) */
+  // 🔴 Unit fix (HIGH-C, 2026-07-17): these were documented "RUB" — wrong.
+  // Values are CREDITS (1 credit = 1 US cent, no FX), matching what
+  // gen-marketplace-catalog.ts:373 actually writes (rawCents × markup) and
+  // the 2026-07-15 web-finmodel decision to bill the web aggregator in
+  // credits like the TMA. See pricing-calc.ts's module docblock.
+  /** Credits per 1K input tokens (chat/llm) */
   inputPer1k?: number;
-  /** RUB per 1K output tokens (chat/llm) */
+  /** Credits per 1K output tokens (chat/llm) */
   outputPer1k?: number;
-  /** RUB per image */
+  /** Credits per image */
   perImage?: number;
-  /** RUB per minute of audio */
+  /** Credits per minute of audio */
   perMinute?: number;
-  /** RUB per second of video */
+  /** Credits per second of video */
   perSecond?: number;
   unit?: string;
 }

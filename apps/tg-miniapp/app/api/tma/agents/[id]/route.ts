@@ -219,15 +219,19 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!agent) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   // R2.1-A4: model rate for the pre-send cost hint (AIAG path only — BYOK is 0).
-  // model_upstreams prices are in RUB per 1K tokens (web-product unit, seeds
-  // 0004/0006); credits are US cents → ×100/USD_TO_RUB. Same constant family as
-  // the worker's billing fallback. Display-only — settle stays authoritative.
+  // 🔴 UNIT FIX (HIGH-B, Opus review 2026-07-17): model_upstreams prices are
+  // US CENTS (= USD × 100 — see migration 0059's COMMENT ON COLUMN), NOT RUB
+  // as this comment previously claimed. 1 credit = 1 US cent, so
+  // credits_per_1M = cents_per_1k × markup × 1000 — no FX rate enters this at
+  // all (the old `× 100 / USD_TO_RUB` term was a leftover from believing the
+  // column was RUB; it silently inflated every displayed rate by ~+11% at the
+  // reference 90 rate, and drifted with the env var). Display-only — settle
+  // (apps/agent-worker) stays authoritative.
   let modelRate: { in_per_1m_credits: string; out_per_1m_credits: string } | null = null;
   if (agent.connection_type === 'aiag' && agent.model_slug) {
-    const rub = Number(process.env.USD_TO_RUB ?? '90');
     const rate = (await sql`
-      SELECT ROUND(mu.price_per_1k_input  * mu.markup * 1000 * 100 / ${rub}, 2)::text AS in_per_1m_credits,
-             ROUND(mu.price_per_1k_output * mu.markup * 1000 * 100 / ${rub}, 2)::text AS out_per_1m_credits
+      SELECT ROUND(mu.price_per_1k_input  * mu.markup * 1000, 2)::text AS in_per_1m_credits,
+             ROUND(mu.price_per_1k_output * mu.markup * 1000, 2)::text AS out_per_1m_credits
       FROM models m
       JOIN model_upstreams mu ON mu.model_id = m.id AND mu.enabled = true
       WHERE m.slug = ${agent.model_slug}

@@ -3,8 +3,7 @@ import { Hono } from 'hono';
 import { errors } from '../../lib/errors';
 import { resolveModelWithOverride } from '../../routing/resolver';
 import { pickUpstream, type Mode, type ApiKeyPolicies } from '../../routing/engine';
-import { fetchUsdRubRate } from '../../lib/cbr';
-import { calcCostRub, calcByokFeeRub } from '../../lib/pricing';
+import { calcCostCredits, calcByokFeeCredits } from '../../lib/pricing';
 import { settleCharge } from '../../billing/settle';
 import { logRequest } from '../../logging/stream';
 import { mockUpstream } from '../../upstreams/mock';
@@ -40,16 +39,26 @@ embeddings.post('/', async (c) => {
     input: body.input,
   });
 
-  let totalRub = 0;
-  let upstreamUsd = 0;
+  // T1-fix: whole MICRO-credits, no ₽/FX. price_per_1k_input is already US
+  // CENTS — see lib/pricing.ts. This is exactly the route Opus flagged
+  // (HIGH-1): under the old whole-credit floor, cheap embeddings rounded UP
+  // to a full cent (~1390× overcharge); micro-credits fix that at the root.
+  let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
+  let upstreamCents = 0;
   if (byok) {
-    totalRub = calcByokFeeRub();
+    costCredits = calcByokFeeCredits();
   } else {
-    const rate = await fetchUsdRubRate().catch(() => 92);
-    upstreamUsd = (resp.usage.prompt_tokens / 1000) * upstream.price_per_1k_input;
-    totalRub = calcCostRub({ upstreamUsd, rate, markup: upstream.markup });
+    upstreamCents = (resp.usage.prompt_tokens / 1000) * upstream.price_per_1k_input;
+    costCredits = calcCostCredits({ upstreamCents, markup: upstream.markup });
   }
-  await settleCharge({ orgId: key.org_id, requestId, totalRub });
+  if (costCredits > 0) {
+    await settleCharge({
+      orgId: key.org_id,
+      requestId,
+      costCredits,
+      metadata: { model_slug: body.model, input_tokens: resp.usage.prompt_tokens },
+    });
+  }
 
   void logRequest({
     requestId,
@@ -61,9 +70,9 @@ embeddings.post('/', async (c) => {
     modeApplied: mode,
     inputTokens: resp.usage.prompt_tokens,
     outputTokens: 0,
-    upstreamCostUsd: upstreamUsd,
+    upstreamCostUsd: upstreamCents / 100,
     markup: upstream.markup,
-    totalCostRub: totalRub,
+    totalCostCredits: costCredits,
     statusCode: 200,
     latencyMs: Date.now() - start,
     byok,

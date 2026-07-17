@@ -16,12 +16,10 @@ import {
   checkSessionBudget,
   accumulateSessionCost,
 } from '../../routing/policies';
-import { fetchUsdRubRate } from '../../lib/cbr';
-import { calcCostRub, calcByokFeeRub } from '../../lib/pricing';
+import { calcCostCredits, calcByokFeeCredits, MICRO_PER_USD } from '../../lib/pricing';
 import { settleCharge } from '../../billing/settle';
 import {
   BILLING_HEADERS,
-  formatRubHeader,
   formatUsdMicroHeader,
 } from '../../lib/billing-headers';
 import { logRequest } from '../../logging/stream';
@@ -97,54 +95,73 @@ chat.post('/completions', async (c) => {
   });
 
   const usage = resp.usage;
-  let totalRub = 0;
-  let upstreamUsd = 0;
-  // D-0: authoritative upstream cost in ₽ (upstream_usd × rate, NO markup), so
-  // the caller can compute realized margin = charged − upstreamCost. For BYOK
-  // there is no upstream cost we bear (the user paid their provider) → 0.
-  let upstreamCostRub = 0;
-  // D-1 (USD-native): the SAME authoritative figures in USD, for the TMA worker's
-  // micro-USD headers. Derived from the ₽ figures via the SAME `rate` (computed
-  // once, below) so chargedUsd × rate == totalRub exactly — no second cost calc.
+  // T1-fix (2026-07-16 rework): org buckets are whole MICRO-credits now — no
+  // ₽, no FX. `upstream.price_per_1k_input/output` are already US CENTS (=
+  // USD × 100, see COMMENT ON COLUMN / 0059) — the local var below is named
+  // `upstreamCents` (not `upstreamUsd`, the original bug: reading a cents
+  // column as USD produced a 100× overcharge — see lib/pricing.ts).
+  let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
+  let upstreamCents = 0;
+  // D-1 (USD-native): chargedUsd/upstreamCostUsd feed the USD-micro headers
+  // the TMA agent-worker reads (HDR_CHARGED_USD_MICRO /
+  // HDR_UPSTREAM_COST_USD_MICRO) — MICRO_PER_USD converts costCredits (micro)
+  // back to real USD: costCredits / 100_000 = (upstreamCents/100) × markup ×
+  // batchDiscount × caching, i.e. real upstream-USD × markup.
   let chargedUsd = 0;
   let upstreamCostUsd = 0;
   if (byok) {
-    totalRub = calcByokFeeRub();
-    // BYOK pays a fixed ₽ fee, no upstream cost we bear. Convert the fee to USD
-    // via the live rate so the USD-micro header is populated too. (TMA BYOK runs
+    costCredits = calcByokFeeCredits();
+    // BYOK pays a fixed credit fee, no upstream cost we bear. (TMA BYOK runs
     // are isExternal → the worker ignores these headers, but keep them coherent.)
-    const rate = await fetchUsdRubRate().catch(() => 92);
-    chargedUsd = rate > 0 ? totalRub / rate : 0;
+    chargedUsd = costCredits / MICRO_PER_USD;
     upstreamCostUsd = 0;
-    await settleCharge({ orgId: key.org_id, requestId, totalRub });
+    if (costCredits > 0) {
+      await settleCharge({
+        orgId: key.org_id,
+        requestId,
+        costCredits,
+        metadata: { model_slug: body.model },
+      });
+    }
   } else {
-    const rate = await fetchUsdRubRate().catch(() => 92);
-    upstreamUsd =
+    upstreamCents =
       (usage.prompt_tokens / 1000) * upstream.price_per_1k_input +
       (usage.completion_tokens / 1000) * upstream.price_per_1k_output;
-    upstreamCostRub = upstreamUsd * rate;
-    totalRub = calcCostRub({
-      upstreamUsd,
-      rate,
+    costCredits = calcCostCredits({
+      upstreamCents,
       markup: upstream.markup,
       cachedInputTokens: usage.cached_input_tokens,
       totalInputTokens: usage.prompt_tokens,
     });
-    // USD-native equivalents off the SAME rate: upstream cost in USD is just
-    // upstreamUsd; the charged USD is totalRub / rate (markup + caching already
-    // folded into totalRub). One division, same rate → no drift vs the ₽ figures.
-    upstreamCostUsd = upstreamUsd;
-    chargedUsd = rate > 0 ? totalRub / rate : 0;
-    await settleCharge({ orgId: key.org_id, requestId, totalRub });
+    // USD-native equivalents: upstream cost in USD is upstreamCents / 100
+    // (this is what fixes the D-0 header — it used to hold cents under the
+    // name "USD"); the charged USD is costCredits (micro-credits) / 100_000.
+    upstreamCostUsd = upstreamCents / 100;
+    chargedUsd = costCredits / MICRO_PER_USD;
+    if (costCredits > 0) {
+      await settleCharge({
+        orgId: key.org_id,
+        requestId,
+        costCredits,
+        metadata: {
+          model_slug: body.model,
+          input_tokens: usage.prompt_tokens,
+          output_tokens: usage.completion_tokens,
+        },
+      });
+    }
   }
 
-  // FIX H2.3: daily USD cap INCR
+  // FIX H2.3: daily USD cap INCR. 🔴 T1-fix (2026-07-16 rework): this
+  // previously accumulated `upstreamUsd` (actually cents, mislabeled) as if
+  // it were USD against a real-USD cap (`daily_usd_cap`) — tripping the cap
+  // ~100× too early. Now divides by 100 so the accumulator is real USD.
   if (!byok && key.daily_usd_cap) {
     try {
       const redis = makeRedis('ratelimit');
       const today = new Date().toISOString().slice(0, 10);
       const usedKey = `usd_day:${key.org_id}:${today}`;
-      await redis.incrbyfloat(usedKey, upstreamUsd);
+      await redis.incrbyfloat(usedKey, upstreamCents / 100);
       await redis.expireat(
         usedKey,
         Math.floor(new Date().setUTCHours(24, 0, 0, 0) / 1000)
@@ -155,16 +172,24 @@ chat.post('/completions', async (c) => {
   }
 
   // Security review 2026-07 (#3): cost_limit_monthly_rub INCR. Same shape as
-  // the daily USD cap above but keyed per-key (not per-org) and in ₽ (not
-  // upstream USD) — it must reflect what the caller was actually CHARGED
-  // (totalRub), not our upstream cost, so BYOK's fixed fee counts too.
-  // key-limits.ts middleware reads this counter read-only on the NEXT
-  // request; this is the only place it's incremented.
+  // the daily USD cap above but keyed per-key (not per-org) — it must reflect
+  // what the caller was actually CHARGED (costCredits), not our upstream cost,
+  // so BYOK's fixed fee counts too. key-limits.ts middleware reads this
+  // counter read-only on the NEXT request; this is the only place it's
+  // incremented.
+  // ⚠️ T1/T2 scope note: the field/redis-key are still named "..._rub" but
+  // as of migration 0061 (2026-07-17) `cost_limit_monthly_rub` actually holds
+  // CREDITS, the same unit this counter accumulates (MICRO-credits, 1000 =
+  // 1 credit = 1 US cent) — key-limits.ts compares them directly, no FX.
+  // This INCR itself is unchanged by that migration; it always stored
+  // micro-credits (the settlement's native unit).
+  // Renaming the column/redis-key to a real credits unit is still T6/T4
+  // (finmodel-build-spec §6/§8).
   if (key.cost_limit_monthly_rub) {
     try {
       const redis = makeRedis('ratelimit');
       const usedKey = monthlyCostCounterKey(key.id);
-      await redis.incrbyfloat(usedKey, totalRub);
+      await redis.incrbyfloat(usedKey, costCredits);
       // ~32 days: comfortably outlives the current calendar month regardless
       // of when in the month the first request landed; the counter key
       // itself rolls over to a fresh YYYY-MM string next month anyway.
@@ -174,11 +199,14 @@ chat.post('/completions', async (c) => {
     }
   }
 
+  // ⚠️ Same widened T1 scope note as above: policies.per_session_budget_cap_rub /
+  // accumulateSessionCost's `deltaRub` param are still ₽-named; fed
+  // MICRO-credits here (same ~1000-92000× unit mismatch). T4 follow-up.
   if (sessionCap && sessionId) {
     await accumulateSessionCost({
       apiKeyId: key.id,
       sessionId,
-      deltaRub: totalRub,
+      deltaRub: costCredits,
       ttlSec: 86400,
     });
   }
@@ -194,9 +222,9 @@ chat.post('/completions', async (c) => {
     modeApplied: mode,
     inputTokens: usage.prompt_tokens,
     outputTokens: usage.completion_tokens,
-    upstreamCostUsd: upstreamUsd,
+    upstreamCostUsd,
     markup: upstream.markup,
-    totalCostRub: totalRub,
+    totalCostCredits: costCredits,
     statusCode: 200,
     latencyMs: Date.now() - start,
     byok,
@@ -208,13 +236,13 @@ chat.post('/completions', async (c) => {
   // billing, tests all key off upstream_id/model slug, not this header) and
   // directly violated SECURITY.md's white-label rule. Provider name stays in
   // server-side logs only (see logRequest below).
-  // D-0: authoritative billing figures (₽), keyed to gateway_request_id via the
-  // echoed X-Request-Id. Brand-neutral (numbers only). The agent-worker reads
-  // these to bill off the REAL charge/cost instead of its local estimate.
-  c.header(BILLING_HEADERS.CHARGED_RUB, formatRubHeader(totalRub));
-  c.header(BILLING_HEADERS.UPSTREAM_COST_RUB, formatRubHeader(upstreamCostRub));
-  // D-1: the USD-micro pair the TMA worker actually reads (USD-cent credits).
-  // ₽ pair kept above for the web aggregator / earnings; USD pair added for TMA.
+  // T1: the legacy ₽ pair (X-AIAG-Charged-Rub / X-AIAG-Upstream-Cost-Rub) is
+  // no longer emitted — it required the FX `rate` this migration removes from
+  // the hot path, and grep confirms it had zero real consumers (only this
+  // gateway's own contract test asserted the header NAMES, not any reader).
+  // The BILLING_HEADERS constants stay defined for now (harmless, still
+  // covered by that contract test) but nothing populates them anymore.
+  // D-1: the USD-micro pair the TMA worker actually reads.
   c.header(BILLING_HEADERS.CHARGED_USD_MICRO, formatUsdMicroHeader(chargedUsd));
   c.header(
     BILLING_HEADERS.UPSTREAM_COST_USD_MICRO,

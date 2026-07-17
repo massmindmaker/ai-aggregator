@@ -25,10 +25,14 @@ interface Model {
 // Real data only (D16): prices come from model_upstreams (the gateway's billing
 // source), context from models.metadata. The upstream itself is NEVER exposed
 // (white-label) — only the resulting AIAG price (base × markup) in credits.
-// UNIT: price_per_1k is stored in RUB (web-product seeds 0004/0006; verified
-// against real model prices). Credit = US cent → convert ×100/USD_TO_RUB.
+// 🔴 UNIT FIX (HIGH-B, Opus review 2026-07-17): price_per_1k is US CENTS (=
+// USD × 100 — see migration 0059's COMMENT ON COLUMN, verified against real
+// model prices), NOT RUB as this comment previously claimed. 1 credit = 1 US
+// cent, so credits_per_1M = cents_per_1k × markup × 1000 — no FX rate enters
+// this at all (the old `× 100 / USD_TO_RUB` term was a leftover from
+// believing the column was RUB; it silently inflated every displayed price
+// by ~+11% at the reference 90 rate, and drifted with the env var).
 async function getModel(slug: string): Promise<Model | null> {
-  const rub = Number(process.env.USD_TO_RUB ?? '90');
   try {
     const rows = (await sql`
       SELECT m.id::text, m.slug,
@@ -38,9 +42,9 @@ async function getModel(slug: string): Promise<Model | null> {
              p.price_in_1m, p.price_out_1m, p.price_image
       FROM models m
       LEFT JOIN LATERAL (
-        SELECT ROUND(mu.price_per_1k_input  * mu.markup * 1000 * 100 / ${rub}, 2)::text AS price_in_1m,
-               ROUND(mu.price_per_1k_output * mu.markup * 1000 * 100 / ${rub}, 2)::text AS price_out_1m,
-               ROUND(mu.price_per_image * mu.markup * 100 / ${rub}, 2)::text AS price_image
+        SELECT ROUND(mu.price_per_1k_input  * mu.markup * 1000, 2)::text AS price_in_1m,
+               ROUND(mu.price_per_1k_output * mu.markup * 1000, 2)::text AS price_out_1m,
+               ROUND(mu.price_per_image * mu.markup, 4)::text AS price_image
         FROM model_upstreams mu
         WHERE mu.model_id = m.id AND mu.enabled = true
         ORDER BY mu.price_per_1k_input ASC, mu.created_at ASC

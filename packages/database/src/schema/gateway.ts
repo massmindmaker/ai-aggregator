@@ -10,6 +10,7 @@ import {
   text,
   boolean,
   integer,
+  bigint,
   numeric,
   jsonb,
   timestamp,
@@ -246,7 +247,9 @@ export const gatewayTransactions = pgTable(
     requestId: varchar('request_id', { length: 64 }),
     type: varchar('type', { length: 20 }).notNull(),
     source: varchar('source', { length: 20 }).notNull(),
-    delta: numeric('delta', { precision: 20, scale: 6 }).notNull(),
+    // T1 (2026-07-16, migration 0056): whole US-cent credits, not ₽ NUMERIC —
+    // matches organizations.subscription_credits / payg_credits.
+    delta: bigint('delta', { mode: 'number' }).notNull(),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

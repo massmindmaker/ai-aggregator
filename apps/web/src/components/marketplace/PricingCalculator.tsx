@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/Select';
 import {
   estimateCost,
-  formatRub,
+  formatCredits,
   type UsageEstimate,
 } from '@/lib/marketplace/pricing-calc';
 import {
@@ -79,13 +79,13 @@ export function PricingCalculator({
             <div className="flex justify-between">
               <span className="text-muted-foreground text-sm">В день</span>
               <span className="font-mono font-semibold">
-                {formatRub(cost.perDayRub)}
+                {formatCredits(cost.perDayCredits)}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground text-sm">В месяц (~30 д)</span>
               <span className="font-mono font-semibold text-lg text-primary">
-                {formatRub(cost.perMonthRub)}
+                {formatCredits(cost.perMonthCredits)}
               </span>
             </div>
             <div className="pt-2 border-t border-border text-xs text-muted-foreground">

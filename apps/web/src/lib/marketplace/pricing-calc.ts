@@ -1,10 +1,24 @@
 /**
  * Plan 06 — Per-modality cost estimator for the marketplace pricing calculator.
  *
- * All prices in RUB. Catalog prices (`catalog.generated.ts`, built by
- * scripts/gen-marketplace-catalog.ts from the DB) already have the upstream
- * markup baked in — this calculator is a pure display of that price and must
- * NOT apply any additional markup on top (that would double-charge).
+ * 🔴 Currency fix (HIGH-C, Opus review 2026-07-17): this file used to format
+ * every catalog price with `Intl.NumberFormat({ currency: 'RUB' })`. That was
+ * wrong at the unit level, not just cosmetically: catalog prices
+ * (`catalog.generated.ts`, built by gen-marketplace-catalog.ts:373 as
+ * `rawCents × markup`) are in CREDITS (1 credit = 1 US cent — see
+ * packages/api-gateway/src/lib/pricing.ts, migration 0059's COMMENT ON
+ * COLUMN), not rubles, and no FX rate ever enters that number. Rendering it
+ * as "₽" showed the customer a currency they will never actually be charged
+ * in. It also happened to match the founder's 2026-07-15 web-finmodel reversal
+ * (`project_web_finmodel_decision_2026_07_15`): the web aggregator now bills
+ * in CREDITS too (like the TMA), not rubles — so displaying credits directly
+ * is not just a bug fix, it is the currently-correct product decision, and it
+ * needs no exchange rate at all (the credit unit already equals what
+ * settlement charges 1:1).
+ *
+ * Catalog prices already have the upstream markup baked in — this calculator
+ * is a pure display of that price and must NOT apply any additional markup on
+ * top (that would double-charge).
  */
 
 import type { CatalogModel } from './catalog';
@@ -25,8 +39,10 @@ export interface UsageEstimate {
 }
 
 export interface CostBreakdown {
-  perDayRub: number;
-  perMonthRub: number;
+  /** Credits (1 credit = 1 US cent), NOT rubles. */
+  perDayCredits: number;
+  /** Credits (1 credit = 1 US cent), NOT rubles. */
+  perMonthCredits: number;
   unit: string;
 }
 
@@ -54,35 +70,52 @@ export function estimateCost(
   }
 
   return {
-    perDayRub: roundRub(price),
-    perMonthRub: roundRub(price * 30),
+    perDayCredits: roundCredits(price),
+    perMonthCredits: roundCredits(price * 30),
     unit,
   };
 }
 
-function roundRub(n: number): number {
+function roundCredits(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-export function formatRub(amount: number): string {
-  return new Intl.NumberFormat('ru-RU', {
-    style: 'currency',
-    currency: 'RUB',
-    maximumFractionDigits: amount < 10 ? 2 : 0,
+/**
+ * Format a credit amount for display — NOT a currency, no FX.
+ *
+ * 🔴 MED fix (Opus review, 2026-07-17): a flat `maximumFractionDigits: 2` cap
+ * rendered genuinely paid, sub-cent models as "0 кр" — e.g.
+ * openai/text-embedding-3-small at 0.0036 credits/1k, or
+ * yandex/yandexgpt-pro at 0.00144/0.00432 — indistinguishable from actually
+ * free. Widen precision only when 2 decimals would collapse a non-zero price
+ * to zero; normal-priced models (>=10 or already representable at 2dp) are
+ * unaffected.
+ */
+export function formatCredits(amount: number): string {
+  let maxDigits = 0;
+  if (amount > 0 && amount < 10) {
+    maxDigits = 2;
+    while (maxDigits < 6 && Number(amount.toFixed(maxDigits)) === 0) {
+      maxDigits += 2;
+    }
+  }
+  const formatted = new Intl.NumberFormat('ru-RU', {
+    maximumFractionDigits: maxDigits,
   }).format(amount);
+  return `${formatted} кр`;
 }
 
 /** For model cards — compact price label. */
 export function formatPriceLabel(model: CatalogModel): string {
   const p = model.pricing;
   if (p.inputPer1k !== undefined && p.outputPer1k !== undefined) {
-    return `${formatRub(p.inputPer1k)} / ${formatRub(p.outputPer1k)} за ${p.unit}`;
+    return `${formatCredits(p.inputPer1k)} / ${formatCredits(p.outputPer1k)} за ${p.unit}`;
   }
   if (p.inputPer1k !== undefined) {
-    return `${formatRub(p.inputPer1k)} за ${p.unit}`;
+    return `${formatCredits(p.inputPer1k)} за ${p.unit}`;
   }
-  if (p.perImage !== undefined) return `${formatRub(p.perImage)} / ${p.unit}`;
-  if (p.perMinute !== undefined) return `${formatRub(p.perMinute)} / ${p.unit}`;
-  if (p.perSecond !== undefined) return `${formatRub(p.perSecond)} / ${p.unit}`;
+  if (p.perImage !== undefined) return `${formatCredits(p.perImage)} / ${p.unit}`;
+  if (p.perMinute !== undefined) return `${formatCredits(p.perMinute)} / ${p.unit}`;
+  if (p.perSecond !== undefined) return `${formatCredits(p.perSecond)} / ${p.unit}`;
   return '—';
 }

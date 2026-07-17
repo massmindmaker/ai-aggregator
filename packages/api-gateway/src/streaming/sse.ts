@@ -11,12 +11,10 @@ import { streamSSE } from 'hono/streaming';
 import { settleCharge } from '../billing/settle';
 import {
   BILLING_HEADERS,
-  formatRubHeader,
   formatUsdMicroHeader,
 } from '../lib/billing-headers';
 import { logRequest } from '../logging/stream';
-import { calcCostRub, calcByokFeeRub } from '../lib/pricing';
-import { fetchUsdRubRate } from '../lib/cbr';
+import { calcCostCredits, calcByokFeeCredits, MICRO_PER_USD } from '../lib/pricing';
 import { logger } from '../lib/logger';
 import type { UpstreamCandidate } from '../routing/engine';
 import { stripUpstreamFields } from './scrub';
@@ -86,40 +84,40 @@ export async function streamSseAndSettle(
       clientSignal.removeEventListener('abort', onAbort);
     }
 
-    // settle + log
-    let totalRub = 0;
-    // D-0: upstream cost we bore (₽, no markup) — 0 for BYOK.
-    let upstreamCostRub = 0;
-    // D-1 (USD-native): same figures in USD for the TMA worker's micro-USD pair.
-    let chargedUsd = 0;
+    // settle + log — T1-fix (2026-07-16 rework): whole MICRO-credits, no
+    // ₽/FX. `upstream.price_per_1k_input/output` are already US CENTS — see
+    // lib/pricing.ts (upstreamCents, not upstreamUsd — the original bug).
+    let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
     let upstreamCostUsd = 0;
+    // D-1 (USD-native): costCredits (micro) / MICRO_PER_USD = real USD.
+    let chargedUsd = 0;
     try {
       if (opts.byok) {
-        totalRub = calcByokFeeRub();
-        const rate = await fetchUsdRubRate().catch(() => 92);
-        chargedUsd = rate > 0 ? totalRub / rate : 0;
+        costCredits = calcByokFeeCredits();
+        chargedUsd = costCredits / MICRO_PER_USD;
       } else {
-        const rate = await fetchUsdRubRate().catch(() => 92);
-        const upstreamUsd =
+        const upstreamCents =
           (inputTokens / 1000) * opts.upstream.price_per_1k_input +
           (outputTokens / 1000) * opts.upstream.price_per_1k_output;
-        upstreamCostRub = upstreamUsd * rate;
-        totalRub = calcCostRub({
-          upstreamUsd,
-          rate,
+        costCredits = calcCostCredits({
+          upstreamCents,
           markup: opts.upstream.markup,
           cachedInputTokens,
           totalInputTokens: inputTokens,
         });
-        // USD-native off the SAME rate (chargedUsd × rate == totalRub).
-        upstreamCostUsd = upstreamUsd;
-        chargedUsd = rate > 0 ? totalRub / rate : 0;
+        upstreamCostUsd = upstreamCents / 100;
+        chargedUsd = costCredits / MICRO_PER_USD;
       }
-      if (totalRub > 0) {
+      if (costCredits > 0) {
         await settleCharge({
           orgId: opts.key.org_id,
           requestId: opts.requestId,
-          totalRub,
+          costCredits,
+          metadata: {
+            model_slug: opts.model.slug,
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+          },
         });
       }
     } catch (e) {
@@ -129,10 +127,9 @@ export async function streamSseAndSettle(
       );
     }
 
-    // D-0: same authoritative billing headers as the non-streaming path
-    // (brand-neutral ₽ figures, keyed to gateway_request_id via X-Request-Id).
-    c.header(BILLING_HEADERS.CHARGED_RUB, formatRubHeader(totalRub));
-    c.header(BILLING_HEADERS.UPSTREAM_COST_RUB, formatRubHeader(upstreamCostRub));
+    // T1: legacy ₽ headers (X-AIAG-Charged-Rub / X-AIAG-Upstream-Cost-Rub) are
+    // no longer emitted — see chat.ts for the same note (zero real consumers,
+    // required the FX rate this migration removes from the hot path).
     // D-1: USD-micro pair the TMA worker reads.
     c.header(BILLING_HEADERS.CHARGED_USD_MICRO, formatUsdMicroHeader(chargedUsd));
     c.header(
@@ -153,7 +150,7 @@ export async function streamSseAndSettle(
       inputTokens,
       outputTokens,
       cachedInputTokens,
-      totalCostRub: totalRub,
+      totalCostCredits: costCredits,
       statusCode,
       latencyMs: Date.now() - start,
       byok: opts.byok,

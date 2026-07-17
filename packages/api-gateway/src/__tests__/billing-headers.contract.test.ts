@@ -43,7 +43,9 @@ describe('D-0 gateway billing-header contract', () => {
   });
 
   it('USD figure derived from ₽ via the same rate round-trips: chargedUsd × rate ≈ totalRub', () => {
-    // Mirrors chat.ts: chargedUsd = totalRub / rate; the ₽ header is totalRub.
+    // T1 (2026-07-16): chat.ts no longer computes chargedUsd this way (no ₽/FX
+    // in the hot path anymore) — this test now only exercises formatRubHeader/
+    // formatUsdMicroHeader as standalone functions, not a live chat.ts mirror.
     const totalRub = 1.15;
     const rate = 92;
     const chargedUsd = totalRub / rate;

@@ -201,6 +201,31 @@ error or double-apply depending on the SQL (`IF NOT EXISTS` guards help but aren
 universal in this repo) — always check state first (step 2/4), and `pg_dump` before
 anything that touches existing data or drops a column.
 
+> 🔴 **After any migration that changes `model_upstreams` (markup, pricing columns, enable/disable)
+> or `models`**: the gateway's model resolver caches the resolved model (markup included) in Redis
+> with `TTL_SEC = 600` (`packages/api-gateway/src/routing/resolver.ts`) — it does **not** read
+> live/uncached per request (an earlier claim to the contrary in `packages/api-gateway/CLAUDE.md`
+> was false and is corrected there 2026-07-16; migration `0057_markup_180.sql`'s own header still
+> carries the same false claim — left as-is, out of scope for that already-applied migration).
+> Flush the cache in the SAME
+> deploy window: `redis-cli -n <cache-db> --scan --pattern 'model:*' | xargs redis-cli -n <cache-db> DEL`
+> (or restart the `cache` Redis logical DB the gateway uses). Otherwise up to 10 minutes of traffic
+> bills at the stale cached value.
+
+> 🔴 **Same migration also requires re-running `gen:catalog`** (Opus review, HIGH-C 2026-07-17): the
+> public marketplace storefront (`apps/web/src/lib/marketplace/catalog.generated.ts`) is a BUILD-TIME
+> snapshot baked by `packages/database/scripts/gen-marketplace-catalog.ts` from `model_upstreams` —
+> it is NOT read live. `0057_markup_180.sql`'s own header already said this ("Whoever deploys this
+> migration must also re-run [gen:catalog]") but that step was never actually taken, so the storefront
+> shipped at a stale markup (1.07 baked) while the gateway billed at the new one (1.8) — a live
+> under-display of what customers were actually charged. After ANY migration touching
+> `model_upstreams.markup`/`price_per_*`, regenerate and redeploy the web app in the same window:
+> ```bash
+> cd packages/database && bun run gen:catalog   # needs DATABASE_URL, or CATALOG_DUMP_JSON=<path> for offline/dump mode
+> ```
+> then commit `catalog.generated.ts` (+ `legacy-redirects.generated.json` if it changed) and deploy
+> `web` — a markup/pricing migration is not "done" until this artifact matches prod.
+
 ### (f) Verify
 
 ```bash

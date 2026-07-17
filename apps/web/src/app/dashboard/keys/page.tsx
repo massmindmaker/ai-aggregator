@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/Table';
+import { formatCredits } from '@/lib/marketplace/pricing-calc';
 
 interface KeyRow {
   id: string;
@@ -211,7 +212,7 @@ export default function DashboardKeysPage() {
                   <TableRow>
                     <TableHead>Имя</TableHead>
                     <TableHead>Префикс</TableHead>
-                    <TableHead>Лимит ₽/мес</TableHead>
+                    <TableHead>Лимит кр/мес</TableHead>
                     <TableHead>Создан</TableHead>
                     <TableHead>Использован</TableHead>
                     <TableHead>Статус</TableHead>
@@ -229,7 +230,7 @@ export default function DashboardKeysPage() {
                         </TableCell>
                         <TableCell>
                           {k.costLimitMonthlyRub
-                            ? `${Number(k.costLimitMonthlyRub).toLocaleString('ru-RU')} ₽`
+                            ? formatCredits(Number(k.costLimitMonthlyRub))
                             : '—'}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
@@ -307,7 +308,7 @@ export default function DashboardKeysPage() {
               />
             </div>
             <div>
-              <Label htmlFor="cost">Лимит расходов (₽/мес, опционально)</Label>
+              <Label htmlFor="cost">Лимит расходов (кр/мес, опционально)</Label>
               <Input
                 id="cost"
                 placeholder="например, 5000"
@@ -399,7 +400,7 @@ export default function DashboardKeysPage() {
               />
             </div>
             <div>
-              <Label htmlFor="ecost">Лимит ₽/мес</Label>
+              <Label htmlFor="ecost">Лимит кр/мес</Label>
               <Input
                 id="ecost"
                 inputMode="numeric"

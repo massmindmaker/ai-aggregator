@@ -61,8 +61,8 @@ export default async function AdminOrgsPage() {
                 <th className="text-left px-3 py-2">Название</th>
                 <th className="text-left px-3 py-2">Владелец</th>
                 <th className="text-right px-3 py-2">Участники</th>
-                <th className="text-right px-3 py-2">Подписка ₽</th>
-                <th className="text-right px-3 py-2">PAYG ₽</th>
+                <th className="text-right px-3 py-2">Подписка (кр)</th>
+                <th className="text-right px-3 py-2">PAYG (кр)</th>
                 <th className="text-left px-3 py-2">Статус</th>
                 <th className="text-right px-3 py-2">Действия</th>
               </tr>
@@ -74,8 +74,9 @@ export default async function AdminOrgsPage() {
                   <td className="px-3 py-2">{o.name}</td>
                   <td className="px-3 py-2 text-xs">{o.owner_email ?? '—'}</td>
                   <td className="px-3 py-2 text-right">{o.members_count}</td>
-                  <td className="px-3 py-2 text-right">{Number(o.subscription_credits).toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right">{Number(o.payg_credits).toFixed(2)}</td>
+                  {/* organizations.*_credits are BIGINT MICRO-credits (1 credit = 1000 micro) as of 0056/0058 — divide to display whole credits. */}
+                  <td className="px-3 py-2 text-right">{(Number(o.subscription_credits) / 1000).toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right">{(Number(o.payg_credits) / 1000).toFixed(2)}</td>
                   <td className="px-3 py-2">
                     <Badge variant={o.status === 'active' ? 'outline' : 'destructive'}>{o.status}</Badge>
                   </td>
