@@ -63,3 +63,6 @@ graphify-out/
 
 # AIAG video/promo assets (binaries, not for deploy repo)
 video/
+
+# SDD progress ledgers — scratch, recoverable from git log
+.superpowers/

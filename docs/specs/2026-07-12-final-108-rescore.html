@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIAG — независимая переоценка 108 (2026-07-12)</title>
+<style>
+  :root{
+    --bg:#0a0a0b; --bg-elev:#111114; --bg-surface:#18181b;
+    --ink:#f4f4f5; --ink-muted:#8b8b94; --ink-faint:#71717a;
+    --accent:#f59e0b; --accent-ink:#000;
+    --line:rgba(255,255,255,.08); --line-strong:rgba(255,255,255,.16);
+    --success:#22c55e; --danger:#ef4444; --warning:#eab308;
+    --radius:8px;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:Inter,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+       line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:48px 24px 96px}
+  .eyebrow{font-family:var(--mono);text-transform:uppercase;letter-spacing:.18em;
+           font-size:11px;color:var(--ink-faint);margin:0 0 12px}
+  h1{font-size:36px;line-height:1.2;margin:0 0 8px;font-weight:700;letter-spacing:-.02em}
+  h2{font-size:24px;margin:56px 0 8px;font-weight:600;letter-spacing:-.01em;
+     padding-top:24px;border-top:1px solid var(--line)}
+  h3{font-size:17px;margin:28px 0 10px;font-weight:600}
+  p{margin:0 0 14px;max-width:75ch;color:var(--ink)}
+  .lede{color:var(--ink-muted);font-size:15px;max-width:75ch}
+  .num,code,.mono{font-family:var(--mono)}
+  code{background:var(--bg-surface);border:1px solid var(--line);border-radius:4px;
+       padding:1px 5px;font-size:12.5px;color:var(--ink-muted)}
+
+  /* composite */
+  .composite{display:flex;gap:24px;align-items:center;flex-wrap:wrap;
+             background:var(--bg-elev);border:1px solid var(--line);
+             border-radius:var(--radius);padding:24px;margin:32px 0}
+  .big{font-family:var(--mono);font-size:56px;font-weight:700;line-height:1;color:var(--accent)}
+  .big small{font-size:20px;color:var(--ink-faint);font-weight:400}
+  .composite .meta{flex:1;min-width:260px}
+
+  /* bars */
+  .axes{margin:24px 0 8px}
+  .axis{display:grid;grid-template-columns:200px 1fr 56px;gap:16px;align-items:center;
+        padding:12px 0;border-bottom:1px solid var(--line)}
+  .axis:last-child{border-bottom:0}
+  .axis .name{font-size:14px;font-weight:500}
+  .axis .name em{display:block;font-style:normal;font-size:11px;color:var(--ink-faint);
+                 font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em}
+  .track{height:8px;background:var(--bg-surface);border:1px solid var(--line);
+         border-radius:99px;overflow:hidden}
+  .fill{height:100%;background:var(--accent);border-radius:99px}
+  .fill.low{background:var(--danger)}
+  .fill.mid{background:var(--warning)}
+  .fill.high{background:var(--success)}
+  .axis .val{font-family:var(--mono);font-size:15px;text-align:right;font-weight:600}
+  .axis .val small{color:var(--ink-faint);font-weight:400;font-size:11px}
+
+  /* cards */
+  .card{background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+        padding:20px 22px;margin:16px 0}
+  .card h3{margin-top:0}
+  ul{margin:0 0 14px;padding-left:20px}
+  li{margin-bottom:7px;color:var(--ink);max-width:72ch}
+  li::marker{color:var(--ink-faint)}
+  .why li{color:var(--ink-muted);font-size:14px}
+  .why li b{color:var(--ink);font-weight:600}
+
+  /* pills */
+  .pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;
+        text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border-radius:99px;
+        border:1px solid var(--line-strong);color:var(--ink-muted);white-space:nowrap}
+  .pill.ok{color:var(--success);border-color:rgba(34,197,94,.35)}
+  .pill.err{color:var(--danger);border-color:rgba(239,68,68,.35)}
+  .pill.warn{color:var(--warning);border-color:rgba(234,179,8,.35)}
+
+  .three{display:grid;grid-template-columns:1fr;gap:0}
+  .works li{color:var(--ink)}
+  .works li::marker{color:var(--success)}
+  .broken li::marker{color:var(--danger)}
+  .bugs li::marker{color:var(--warning)}
+
+  /* table */
+  .scroll{overflow-x:auto;margin:16px 0}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;
+     color:var(--ink-faint);font-weight:500}
+  td.n{font-family:var(--mono);text-align:right;white-space:nowrap}
+
+  /* priorities */
+  ol.prio{counter-reset:p;list-style:none;padding:0;margin:16px 0}
+  ol.prio li{counter-increment:p;position:relative;padding:12px 0 12px 44px;
+             border-bottom:1px solid var(--line);margin:0;max-width:none}
+  ol.prio li::before{content:counter(p);position:absolute;left:0;top:12px;
+             font-family:var(--mono);font-size:12px;width:26px;height:26px;
+             display:flex;align-items:center;justify-content:center;
+             border:1px solid var(--line-strong);border-radius:99px;color:var(--ink-faint)}
+  ol.prio li.p0::before{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+
+  .verdict{border:1px solid var(--line-strong);border-left:2px solid var(--accent);
+           background:var(--bg-elev);border-radius:var(--radius);padding:20px 22px;margin:32px 0}
+  .verdict p:last-child{margin-bottom:0}
+  .foot{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);
+        color:var(--ink-faint);font-size:12px;font-family:var(--mono)}
+  @media(max-width:640px){
+    .axis{grid-template-columns:1fr;gap:6px}
+    .axis .val{text-align:left}
+    h1{font-size:28px}
+    .big{font-size:44px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Независимая переоценка · факты из кода и прода</p>
+  <h1>AIAG — 108-балльная переоценка</h1>
+  <p class="lede">12 июля 2026 · ветка <code>feat/r2-readiness</code> (она же на проде, релиз <code>20260712T130409Z-15a4ad9</code>). Оценка построена на чтении кода, git и HTTP-ответов прода. Ни один «статус» из документации не принят на веру — документы этого проекта врали в обе стороны, и в этом прогоне снова поймано враньё в обе стороны.</p>
+
+  <div class="composite">
+    <div>
+      <div class="big">59<small>/108</small></div>
+      <p class="eyebrow" style="margin:8px 0 0">композит (взвеш.)</p>
+    </div>
+    <div class="meta">
+      <p style="margin:0 0 6px"><b>Невзвешенное среднее — 63.</b> Взвешенный композит ниже, потому что две оси, которые тянут вверх (дизайн и анимации), не приносят денег, а две, что решают судьбу продукта (работоспособность и финмодель), — самые слабые.</p>
+      <p style="margin:0;color:var(--ink-muted);font-size:13px">Веса: работоспособность 30% · бизнес-логика 25% · финмодель 20% · дизайн 15% · анимации 10%.</p>
+    </div>
+  </div>
+
+  <div class="axes">
+    <div class="axis">
+      <div class="name">Работоспособность<em>что живёт e2e</em></div>
+      <div class="track"><div class="fill mid" style="width:51.8%"></div></div>
+      <div class="val">56<small>/108</small></div>
+    </div>
+    <div class="axis">
+      <div class="name">Бизнес-логика<em>деньги, комиссии, наём</em></div>
+      <div class="track"><div class="fill mid" style="width:50%"></div></div>
+      <div class="val">54<small>/108</small></div>
+    </div>
+    <div class="axis">
+      <div class="name">Дизайн<em>DESIGN.md / PRODUCT.md</em></div>
+      <div class="track"><div class="fill high" style="width:70.4%"></div></div>
+      <div class="val">76<small>/108</small></div>
+    </div>
+    <div class="axis">
+      <div class="name">Анимации<em>aiag-* + reduced-motion</em></div>
+      <div class="track"><div class="fill high" style="width:85.2%"></div></div>
+      <div class="val">92<small>/108</small></div>
+    </div>
+    <div class="axis">
+      <div class="name">Финмодель<em>юнит-экономика</em></div>
+      <div class="track"><div class="fill low" style="width:35.2%"></div></div>
+      <div class="val">38<small>/108</small></div>
+    </div>
+  </div>
+
+  <!-- ================= AXES DETAIL ================= -->
+  <h2>Почему такие баллы</h2>
+
+  <div class="card">
+    <h3>Работоспособность — <span class="mono">56</span></h3>
+    <ul class="why">
+      <li><b>Шлюз <code>:4000</code> — настоящий, и это лучший кусок системы.</b> Реестр моделей (<code>packages/api-gateway/src/routing/resolver.ts:42-54</code>, неизвестный слаг → 400), реальные адаптеры (<code>upstreams/registry.ts:40-58</code>), атомарное списание через SQL-функцию <code>aiag_settle_charge</code> (<code>src/billing/settle.ts</code>), аутентификация по хэшу ключа (<code>middleware/auth-plan04.ts:45-95</code>). Мок отдаётся только под явным <code>AIAG_FORCE_MOCK=1</code>.</li>
+      <li><b>Конкурсы — не Потёмкин.</b> Полный конвейер: таблицы <code>contests/contest_submissions/evaluator_scripts</code>, реальная загрузка в S3 и постановка BullMQ-джобы <code>contest-eval</code> (<code>apps/web/src/app/api/contests/[slug]/submit/route.ts</code>). Прод отвечает <span class="mono">200</span>.</li>
+      <li><b>Оплата картой на вебе физически не зачисляется.</b> Живой вебхук <code>api/subscriptions/webhook/[provider]/route.ts:64-68</code> проверяет подпись — и делает <code>// TODO: persist + settle. For now respond OK.</code> Полноценный обработчик с записью в БД существует (<code>api/webhooks/tinkoff/route.ts</code>), но <b>на него никто не ссылается</b>: оба инициатора платежа (<code>api/payments/topup/route.ts:61</code>, <code>api/subscriptions/create/route.ts:64</code>) указывают <code>notificationUrl</code> на роут-заглушку. Это не «не построено» — это построено дважды и подключено к пустышке.</li>
+      <li><b>TMA написан целиком, но не запускался ни разу.</b> На проде: <span class="mono">agents = 2</span> (оба founder-овские), <span class="mono">agent_runs = 0</span> за всю историю, <span class="mono">agent_sessions = 0</span>, <span class="mono">tg_ledger_entries(agent_run) = 0</span>, верифицированных кошельков — 1. Ни один пользователь, кроме основателя, никогда не касался продукта.</li>
+      <li><b>Hermes: ветка кода жива, применений — ноль.</b> <code>agent-runner.ts:140-149</code> реально маршрутизирует <code>hermes_managed</code> на <code>HERMES_GATEWAY_URL</code> (<code>127.0.0.1:8642</code> в allowlist, <code>:43</code>), ключ изоляции <code>X-Hermes-Session-Key</code> выводится сервер-сайд (<code>:698</code>). Но <span class="mono">hermes_profile IS NOT NULL = 0</span> — движок, объявленный единственным, не крутил ещё ни одного агента.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Бизнес-логика — <span class="mono">54</span></h3>
+    <ul class="why">
+      <li><b>Всё, что построено вокруг денег, построено строго.</b> <code>settleRun</code> (<code>apps/agent-worker/src/db.ts:683-752</code>) — один <code>sql.begin</code>: идемпотентность через <code>UPDATE … WHERE status &lt;&gt; 'completed' RETURNING</code>, guard дневного бюджета, guard баланса <code>WHERE balance_credits &gt;= cost RETURNING</code>, append-only лог с <code>ON CONFLICT DO NOTHING</code>. Гонок нет.</li>
+      <li><b>Правило BYOK = 0 — в коде, а не в доке.</b> <code>db.ts:716</code>: <code>if (isExternal) return;</code> — ни списания, ни трат, ни строки в ledger.</li>
+      <li><b>Наём изолирован корректно.</b> <code>resolveRunScope</code> (<code>db.ts:365-384</code>) выводит namespace из <code>run.tg_user_id</code> vs <code>agent.tg_user_id</code> + активной сессии — <b>с сервера, не из тела запроса</b>; <code>loadHistory</code> (<code>db.ts:325-346</code>) фильтрует по нанимателю. Платит запустивший, а не владелец (<code>agent-runner.ts:594-604</code>). OWASP LLM06 закрыт по конструкции.</li>
+      <li><b>Ярусов членства и rev-share в коде НЕТ.</b> Грепом по <code>apps/tg-miniapp</code>: ни <code>tier</code>, ни <code>rev_share</code>. На проде <code>tg_memberships</code> — 4 колонки, бинарный гейт «член / не член», 1 строка (founder-сид). Схема 2/10/30 TON с 0/15/30% существует только в спеке.</li>
+      <li><b>Мина на проде подтверждена.</b> Задеплоенный <code>POST /api/tma/membership</code> выдаёт членство по факту владения NFT — без проверки оплаты и без идемпотентности. Держится <b>только</b> на том, что <code>MEMBERSHIP_NFT_COLLECTION_ADDRESS</code> не задана (fail-closed). Хуже: <code>grantMembership</code> (<code>src/lib/membership.ts:36-50</code>) — <b>односторонний upsert, пути отзыва не существует нигде в кодовой базе</b>. При решении «NFT передаваем» это значит: продал NFT — права создателя остались у продавца навсегда.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Дизайн — <span class="mono">76</span></h3>
+    <ul class="why">
+      <li><b>Токены — дословно по DESIGN.md, в обоих приложениях.</b> <code>apps/web/src/app/globals.css:35-51</code> и <code>apps/tg-miniapp/app/globals.css:5-25</code>: <code>--bg #0a0a0b</code>, <code>--ink #f4f4f5</code>, <code>--accent #f59e0b</code>, <code>--line rgba(255,255,255,.08)</code>, <code>--radius 8px</code>. Второй палитры нет. Это редкость и это сделано хорошо.</li>
+      <li><b>Коллекционная карточка в TMA — сильнее, чем требует спека.</b> <code>src/components/AgentCard.tsx</code>: OKLCH-оттенок на персонажа, 2-буквенная монограмма, детерминированный паттерн-глиф, голографический foil с наклоном по указателю, featured-ring, рейтинг. Подпись бренда жива.</li>
+      <li><b>На вебе та же карточка выродилась.</b> <code>src/components/agentmarket/AgentTemplateCard.tsx</code> — shadcn-карточка с <code>hsl()</code>-градиентом вместо мандата OKLCH, одна буква, ни foil, ни featured-ring. Витрина, которую видит внешний мир, слабее внутренней.</li>
+      <li><b>Веб по умолчанию тёмный — это прямо против решения основателя №8 и DESIGN.md («Light = web»).</b> <code>apps/web/src/app/layout.tsx:78</code>: <code>defaultTheme="dark"</code>, переопределения нет нигде.</li>
+      <li><b>Дисциплина янтаря протекает в админке:</b> <code>text-3xl font-bold text-amber-400</code> на крупных числах (<code>admin/kyc-queue/page.tsx:74</code>, <code>admin/jobs/page.tsx:127</code>, <code>admin/page.tsx:204</code>), янтарь в hover-ссылках и в абзаце текста (<code>marketplace/[org]/[model]/page.tsx:193</code>) — запрещённый DESIGN.md паттерн.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Анимации — <span class="mono">92</span></h3>
+    <ul class="why">
+      <li><b>Мёртвых классов нет.</b> Каждый <code>aiag-*</code> в обоих <code>globals.css</code> имеет живого потребителя в TSX (проверено грепом). Проблема #23 закрыта по-настоящему.</li>
+      <li><b>Ноль инлайновых <code>animation:</code> в TSX по всему репозиторию</b> — правило «инлайн убивает reduced-motion» реально соблюдено, а не задекларировано.</li>
+      <li><b>Покрытие reduced-motion — полное и совпадает с доком до структуры блоков:</b> веб — один сводный блок (<code>globals.css:807-869</code>) с закреплением конечных состояний; TMA — один сводный (<code>:1659-1700</code>) + ровно 5 локальных, включая тот, что вложен в <code>@supports (transition-behavior: allow-discrete)</code> и потому не поднимается наверх. Док описывает это верно.</li>
+      <li><b>Правило transform/opacity держится,</b> исключения ровно те два, что заранее объявлены (<code>stroke-dashoffset</code> у draw-in, <code>background-position</code> у holo-foil).</li>
+      <li>Минус: «вау» асимметричен — holo-tilt есть только в TMA, веб-витрина без моторики; и янтарные pulse/glow едут поверх уже перерасходованного янтаря в админке.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Финмодель — <span class="mono">38</span></h3>
+    <ul class="why">
+      <li><b>Из всей задуманной экономики в коде живёт ровно один механизм — наценка на модели.</b> <code>calcCostRub = upstreamUsd × rate × markup × batchDiscount × caching</code> (<code>packages/api-gateway/src/lib/pricing.ts:23-35</code>), markup берётся из <code>model_upstreams.markup</code> (дефолт конфига <span class="mono">1.25</span>). Реализованная маржа честно возвращается заголовками <code>X-AIAG-Charged-Rub</code> / <code>X-AIAG-Upstream-Cost-Rub</code>.</li>
+      <li><b>Выручка = 0, и это не фигура речи.</b> 0 ранов за всю историю → 0 наценки. 0 аренд → 0 дохода авторов. 0 проданных членств. Юнит-экономика ни разу не была исполнена ни одним юнитом.</li>
+      <li><b>Единственный фиатный канал сбора денег сломан</b> (см. работоспособность): рубли с карты не зачисляются. То есть рублёвый продукт, ради которого существует РФ-юрлицо, сейчас не умеет принимать деньги.</li>
+      <li><b>Аренда автору = 0% комиссии — по решению; значит AIAG с аренды не зарабатывает ничего.</b> При нулевом трафике моделей это оставляет ровно ноль источников дохода. Членство (2/10/30 TON) должно было быть вторым — оно не выкачено.</li>
+      <li><b>Стоимость инфры под managed-Hermes не смоделирована и упирается в железо:</b> ~300-600 МБ резидентно на профиль против VPS на 2 ГБ с пятью pm2-процессами. Ярус «creator за 2 TON» (~$12 разово) не оплачивает даже месяц резидентного профиля — при живом спросе этот ярус убыточен by design.</li>
+      <li>Валютный шов: шлюз считает в рублях (<code>calcCostRub</code>), TMA обязан быть в USD-привязанных кредитах. Пока трафика нет — незаметно; при первом ране это расхождение станет реальным.</li>
+    </ul>
+  </div>
+
+  <!-- ================= PRODUCTS ================= -->
+  <h2>По продуктам: что работает / что не работает / где ошибки</h2>
+
+  <div class="card">
+    <h3>1. Веб-агрегатор моделей + конкурсы <span class="pill ok">прод 200</span></h3>
+    <p class="lede" style="margin-bottom:12px">Самая большая и самая зрелая кодовая база: маркетплейс моделей, конкурсы, кабинет автора, выплаты, KYC, рефералы, промо, большая админка. И при этом — единственный продукт, который берёт деньги картой и теряет их.</p>
+    <p><span class="pill ok">работает</span></p>
+    <ul class="works">
+      <li>Шлюз <code>:4000</code>: реестр моделей, наценка на апстрим, атомарное списание с орг-баланса, идемпотентность, аутентификация по хэшированному ключу, возврат реализованной маржи в заголовках.</li>
+      <li>B2B org-ключи end-to-end: <code>api/dashboard/keys</code> пишет в <code>gateway_api_keys</code> — ту же таблицу, из которой читает аутентификация шлюза.</li>
+      <li>Конкурсы: приём заявки → S3 → BullMQ <code>contest-eval</code>. Реальные таблицы, реальный воркер, страницы конкурса/лидерборда/регистрации живы.</li>
+      <li>Проверка подписи Tinkoff (<code>packages/tinkoff/src/utils.ts:7-38</code>) и YooKassa (IP + re-fetch) — криптографически корректна.</li>
+      <li>Публичные поверхности: <span class="mono">/</span>, <span class="mono">/marketplace</span>, <span class="mono">/contests</span>, <span class="mono">/pricing</span>, <span class="mono">/business</span>, <span class="mono">/docs</span>, <span class="mono">/status</span> — все <span class="mono">200</span>.</li>
+    </ul>
+    <p><span class="pill err">не работает</span></p>
+    <ul class="broken">
+      <li><b>Зачисление платежа.</b> Подпись проверена → в ответ <code>OK</code> → и ничего. Ни баланса, ни подписки. Рабочий обработчик лежит рядом мёртвым кодом.</li>
+      <li><b>Подписки целиком.</b> Инициация платежа настоящая, активации не существует; <code>api/subscriptions/cancel</code> возвращает <code>success:true</code> с комментарием «TODO: persist to DB».</li>
+      <li><b>Авто-пополнение</b>: форма настроек пишет в БД, но исполнителя (крона/консьюмера) в репозитории нет.</li>
+    </ul>
+    <p><span class="pill warn">ошибки</span></p>
+    <ul class="bugs">
+      <li>Админский рефанд дёргает настоящее API провайдера, но не обновляет <code>payments</code>/<code>balance_transactions</code> → внутренний реестр молча расходится с реальностью денег.</li>
+      <li><code>dashboard/billing/page.tsx:150-183</code> — «Активная подписка: Free» и «Баланс: 0,00 ₽» захардкожены литералами, а не читаются из БД.</li>
+      <li>Цены <span class="mono">990₽</span> / <span class="mono">6 990₽</span> захардкожены в <code>src/app/page.tsx:237,256</code> параллельно <code>TIERS</code> — два источника истины при прямом запрете хардкодить цены.</li>
+      <li>Устаревший комментарий «Stub upstream (mock)» в <code>routes/v1/chat.ts:2</code> — док врёт в минус, адаптеры настоящие.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>2. TMA — маркет агентов в Telegram <span class="pill warn">0 пользователей</span></h3>
+    <p class="lede" style="margin-bottom:12px">Инженерно — самая аккуратная часть проекта. Продуктово — пустая комната: всё построено, ничего не эксплуатировалось.</p>
+    <p><span class="pill ok">работает</span></p>
+    <ul class="works">
+      <li>Раннер агента — не «тупой цикл»: инструменты (<code>web_search</code>, <code>calc</code>, <code>image_gen</code>, <code>memory</code>, <code>call_agent</code>), подключение внешних MCP-серверов, провайдер-пикер, BYOK, ветка Hermes.</li>
+      <li>Денежный путь: <code>settleRun</code> атомарен, дневной бюджет проверяется трижды (до цикла, на каждой итерации, в самой транзакции), BYOK = 0 гарантирован ранним возвратом.</li>
+      <li>Наём: изоляция памяти и истории по <code>(agent_id, hirer)</code>, выводится сервером; платит наниматель; self-hire запрещён.</li>
+      <li>TON-пополнение: <code>ton-proof</code> проверяется по-настоящему (свежесть payload, домен, привязка <code>stateInit</code> к адресу, ed25519 <code>signVerify</code>); глобальный дедуп по <code>tx_hash</code> (<code>tg_topup_tx_claims</code>, PK + <code>ON CONFLICT DO NOTHING</code>) — CRIT-баг #4 закрыт.</li>
+      <li>Честные лейблы действительно есть: <code>◷ скоро</code>, <code>R&amp;D</code>, «Покупка членства — скоро» (<code>app/agents/page.tsx:509,554,683</code>), skills-хаб честно делит live / soon / rnd.</li>
+    </ul>
+    <p><span class="pill err">не работает</span></p>
+    <ul class="broken">
+      <li><b>Ничего не запускалось.</b> <span class="mono">agent_runs = 0</span>, <span class="mono">agent_sessions = 0</span>, <span class="mono">ledger(agent_run) = 0</span>. Наём построен, но E2E не пройден ни разу.</li>
+      <li><b>Покупка членства не выкачена</b> (#29, 7 раундов состязательного ревью), при том что гейт «нужно членство» уже стоит на создании агента и на AI-билдере (<code>api/tma/agents/route.ts:128-130</code>, <code>ai-builder/route.ts:107-109</code>). То есть вход закрыт, а касса не работает.</li>
+      <li><b>Hermes как движок</b> — 0 профилей, 0 запусков. Решение «движок = только Hermes» пока не подтверждено ни одним фактом исполнения.</li>
+    </ul>
+    <p><span class="pill warn">ошибки</span></p>
+    <ul class="bugs">
+      <li><b>Взведённая мина:</b> выдача членства без оплаты и без идемпотентности, заблокированная лишь незаданной env-переменной. Задать <code>MEMBERSHIP_NFT_COLLECTION_ADDRESS</code> = открыть дыру в тот же миг.</li>
+      <li><b>Отзыва членства не существует.</b> Продажа передаваемого NFT не снимает права с продавца — прямое противоречие решению основателя от 2026-07-12 («источник истины — блокчейн»).</li>
+      <li><code>apps/agent-worker/src/hermes-client.ts</code> — мёртвый код: <code>hermesChat</code> не вызывается нигде, кроме собственного теста.</li>
+      <li><code>apps/agent-worker/CLAUDE.md</code> и <code>docs/ARCHITECTURE.md</code> по-прежнему <b>врут в минус</b>: числят MCP, skills-хаб и Hermes-ветку как «не построено», хотя они в коде и достижимы.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3. Веб-версия маркета агентов — <span class="mono">/agentmarket</span> <span class="pill ok">выкачено сегодня</span></h3>
+    <p><span class="pill ok">работает</span></p>
+    <ul class="works">
+      <li><span class="mono">200</span> на проде, 7 настоящих карточек из <code>agent_templates</code> (Алиса, Макс, Ника, Орион, Нова, Лея, Гриша), реальный SQL (<code>src/lib/agentmarket/catalog.ts</code>) с явным запретом на секретные колонки.</li>
+      <li>Действительно read-only: покупки/запуска здесь нет, CTA ведёт в бота <code>@aiaggbot</code>. Сортировка — <code>created_at DESC</code>, не фейковый «trending».</li>
+    </ul>
+    <p><span class="pill err">не работает / Потёмкин</span></p>
+    <ul class="broken">
+      <li><b>Счётчики клонов лгут.</b> Прод отдаёт «<span class="mono">3 клонов</span>» у Леи при <b>нуле</b> существующих клонов в <code>agents</code> (там всего 2 строки, обе founder-овские и не связанные с шаблонами). Колонка настоящая — <b>данные засеяны руками</b>. Это прямое нарушение принципа «UI = реальность».</li>
+      <li><code>author_tg_user_id = 1</code> у всех семи — не существующий Telegram-id. Витрина выдаёт кураторский сид за общественный контент.</li>
+      <li>Семь строк вставлены в прод напрямую SQL-ом: ни миграции, ни сид-скрипта в репозитории нет.</li>
+      <li><span class="mono">/agentmarket/1</span> → <span class="mono">404</span> (id — UUID; ссылка по числовому id не резолвится, ловушка для внешних ссылок).</li>
+    </ul>
+  </div>
+
+  <!-- ================= PRIORITIES ================= -->
+  <h2>Топ-10 приоритетов</h2>
+  <p class="lede">Отсортировано по (влияние на деньги и доверие) ÷ (стоимость). Первые три — дешёвые и критические.</p>
+  <ol class="prio">
+    <li class="p0"><b>Перевесить <code>notificationUrl</code> на живой обработчик</b> (или перенести тело <code>api/webhooks/tinkoff</code> в роут-заглушку) — сейчас веб принимает деньги картой и не зачисляет их. Код уже написан, работы на день, разблокирует всю рублёвую выручку.</li>
+    <li class="p0"><b>Не задавать <code>MEMBERSHIP_NFT_COLLECTION_ADDRESS</code> до релиза фикса #29</b> и вкрутить в задеплоенный роут явный kill-switch, чтобы мину нельзя было взвести случайно.</li>
+    <li class="p0"><b>Обнулить фейковые <code>clone_count</code> и заменить <code>author_tg_user_id=1</code></b> на честную метку «кураторский шаблон» — единственная ложь, которую прямо сейчас видит внешний посетитель.</li>
+    <li><b>Пройти founder E2E в TMA на двух аккаунтах</b> (найм → ран → списание → строка в ledger): весь денежный путь написан безупречно и не проверен ни разу; 0 ранов — главный факт этой оценки.</li>
+    <li><b>Добавить отзыв/реконсиляцию членства по блокчейну</b> — без этого передаваемый NFT означает, что продавец навсегда сохраняет права создателя.</li>
+    <li><b>Довыкатить покупку членства (#29)</b> — гейт «нужно членство» уже стоит на создании агента, а кассы за ним нет: продукт закрыт на замок без замочной скважины.</li>
+    <li><b>Починить расхождение реестра при рефанде и убрать заглушку отмены подписки</b> — молча расходящийся с провайдером ledger дороже починить потом, чем сейчас.</li>
+    <li><b>Запустить одного агента на настоящем Hermes</b> (<code>hermes_managed</code> + профиль): подтвердить или опровергнуть решение «движок = только Hermes» фактом, а не спекой.</li>
+    <li><b>Синхронизировать доки с кодом</b> (<code>agent-worker/CLAUDE.md</code>, <code>ARCHITECTURE.md</code>, комментарий-«mock» в <code>chat.ts:2</code>) — они снова врут в минус и заставляют переделывать построенное.</li>
+    <li><b>Убрать хардкод цен с лендинга, «Free / 0,00 ₽» с биллинга и включить светлую тему вебу по умолчанию</b> (решение основателя №8) — три дешёвых правки, каждая закрывает прямое нарушение собственного правила.</li>
+  </ol>
+
+  <!-- ================= DELTA ================= -->
+  <h2>Что изменилось с прошлых оценок</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Ось</th><th class="n">Аудит 06-12</th><th class="n">Промеж. 07-10</th><th class="n">Сейчас</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr><td>Продукт / работоспособность</td><td class="n">58</td><td class="n">74</td><td class="n">56</td><td>Не регресс кода — регресс <b>оценки</b>. Июльские 74 считали построенное работающим. Построено много, исполнено ноль ранов, а фиатный приём денег оказался разорван.</td></tr>
+      <tr><td>UX</td><td class="n">42</td><td class="n">—</td><td class="n">≈70*</td><td>Реальный рост: дубликаты навигации убраны, ×100 в деньгах пофикшен, честные лейблы <code>скоро/R&amp;D</code> появились. (*не отдельная ось этого прогона, оценка внутри дизайна)</td></tr>
+      <tr><td>Дизайн</td><td class="n">63</td><td class="n">—</td><td class="n">76</td><td>Токены сведены к одному источнику, коллекционная карточка в TMA восстановлена и превзошла спеку. Минус — веб-витрина осталась бледной копией и тёмной вопреки решению.</td></tr>
+      <tr><td>Анимации</td><td class="n">—</td><td class="n">—</td><td class="n">92</td><td>Новая ось. Issue #23 закрыт честно: мёртвых классов нет, инлайновых анимаций нет, reduced-motion полный.</td></tr>
+      <tr><td>Полнота vs интент</td><td class="n">55</td><td class="n">—</td><td class="n">54</td><td>Стоит на месте: закрыли наём и изоляцию памяти, но открыли долг по членствам, ярусам и rev-share, которых в коде нет вовсе.</td></tr>
+      <tr><td>Финмодель</td><td class="n">—</td><td class="n">—</td><td class="n">38</td><td>Новая ось и самая честная. Единственный работающий источник дохода — наценка 1.25 на модели, применённая ноль раз.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Главный сдвиг с 12 июня — <b>исчезло враньё в плюс</b>: Потёмкины в TMA заменены честными плашками, деньги считаются атомарно, изоляция найма настоящая. Но появилось новое: <b>Потёмкин переехал на витрину</b> (<code>/agentmarket</code> с засеянными счётчиками), а <b>враньё в минус в доках так и не вычищено</b> — Hermes-ветка, MCP и skills-хаб до сих пор числятся «не построено».</p>
+
+  <!-- ================= VERDICT ================= -->
+  <h2>Честный вердикт</h2>
+  <div class="verdict">
+    <p><b>Это не demo-ware по качеству кода — это demo-ware по доказательствам.</b> Денежный путь TMA написан на уровне, который я редко вижу в живых проектах: атомарные списания с guard-ами, идемпотентность, серверный вывод namespace памяти, настоящая криптопроверка ton-proof, глобальный дедуп депозитов. И ровно ничего из этого никогда не исполнялось: <span class="mono">0</span> ранов, <span class="mono">0</span> наймов, <span class="mono">0</span> проданных членств, <span class="mono">1</span> кошелёк, <span class="mono">2</span> агента — и оба ваши.</p>
+    <p>Параллельно рублёвый продукт, ради которого существует РФ-юрлицо, <b>не умеет принимать деньги</b>: подпись платежа проверяется корректно, а зачисление заменено строкой <code>// TODO</code>, при том что рабочий обработчик лежит в двух файлах рядом и никем не вызывается. Это не «не успели» — это подключено не туда.</p>
+    <p><b>Что это сейчас на самом деле:</b> тщательно отревьюенный, красиво анимированный, экономически безупречный на бумаге двигатель, который ни разу не заводили, стоящий в машине без бензобака. Следующий балл должен зарабатываться не строчками кода, а первой строкой в <code>tg_ledger_entries</code> и первым зачисленным рублём.</p>
+  </div>
+
+  <p class="foot">Составлено 2026-07-12 · источники: код ветки <code>feat/r2-readiness</code>, git-история, HTTP-ответы прода, инвентаризация прод-БД из отчётов сессии. Прод не изменялся, БД не изменялась.</p>
+
+</div>
+</body>
+</html>
