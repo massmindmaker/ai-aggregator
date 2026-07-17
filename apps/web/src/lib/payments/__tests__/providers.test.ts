@@ -27,11 +27,11 @@ describe('payments/providers — registry', () => {
 });
 
 describe('payments/providers — tiers', () => {
-  it('exposes Free/Basic/Starter/Pro', () => {
-    expect(TIERS.free.monthly).toBe(0);
+  it('exposes Basic/Starter/Pro (no Free tier — founder decision 2026-07-17)', () => {
     expect(TIERS.basic.monthly).toBe(990);
     expect(TIERS.starter.monthly).toBe(2490);
     expect(TIERS.pro.monthly).toBe(6990);
+    expect('free' in TIERS).toBe(false);
   });
 
   it('yearly = monthly * 10 (~17% discount)', () => {

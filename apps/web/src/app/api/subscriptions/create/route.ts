@@ -39,16 +39,13 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => ({}))) as CreateSubBody;
+  // No tier in TIERS has monthly === 0 (Free tier removed — founder 2026-07-17,
+  // see /CLAUDE.md founder decisions). getTier('free') now returns null, same
+  // as any other bogus id, and falls into the Unknown-tier 400 below.
   const tier = getTier(body.tierId || '');
   if (!tier) {
     return NextResponse.json(
       { error: { message: 'Unknown tier', code: 'BAD_TIER' } },
-      { status: 400 }
-    );
-  }
-  if (tier.monthly === 0) {
-    return NextResponse.json(
-      { error: { message: 'Free tier — карта не нужна', code: 'FREE_TIER' } },
       { status: 400 }
     );
   }

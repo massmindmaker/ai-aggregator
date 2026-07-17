@@ -67,10 +67,12 @@ vi.mock('@/lib/payments/providers', () => ({
   getTinkoffClient: () => ({ parseWebhook: () => ({ isValid: false, status: 'NEW', orderId: 'x' }) }),
   getYooKassaClient: () => ({ verifyAndFetch: vi.fn() }),
   getTier: (id: string) => {
+    // No 'free' entry — the Free tier was removed (founder 2026-07-17); it
+    // must behave exactly like any other unrecognised tier id (see the
+    // 'rejects "free" as an unknown tier' test below).
     const t: Record<string, { name: string; monthly: number; yearly: number; credits: number }> = {
       basic: { name: 'Basic', monthly: 990, yearly: 9900, credits: 1200 },
       starter: { name: 'Starter', monthly: 2490, yearly: 24900, credits: 3200 },
-      free: { name: 'Free', monthly: 0, yearly: 0, credits: 200 },
     };
     return t[id] || null;
   },
@@ -126,12 +128,12 @@ describe('POST /api/subscriptions/create', () => {
     expect(data.error.code).toBe('BAD_TIER');
   });
 
-  it('rejects free tier (no card needed)', async () => {
+  it('rejects "free" as an unknown tier (Free tier removed 2026-07-17)', async () => {
     mockedAuth.mockResolvedValue({ user: { id: 'u1' } });
     const r = await createSub(makeReq({ tierId: 'free' }) as never);
     expect(r.status).toBe(400);
     const data = await r.json();
-    expect(data.error.code).toBe('FREE_TIER');
+    expect(data.error.code).toBe('BAD_TIER');
   });
 
   it('returns paymentUrl on successful init', async () => {
