@@ -7,16 +7,6 @@ import { getEarnedRoles } from '@/lib/dashboard/roles';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CountUp } from '@/components/ui/CountUp';
-import { Sparkline } from '@/components/ui/Sparkline';
-
-// FIXME: replace with real per-tile daily series from API
-function placeholderSeries(seed: string, len = 14): number[] {
-  let h = 0;
-  for (const c of seed) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
-  const rng = (i: number) =>
-    Math.sin(h + i * 0.7) * 50 + 100 + Math.sin(i * 0.3) * 20;
-  return Array.from({ length: len }, (_, i) => Math.max(10, rng(i)));
-}
 
 /**
  * Renders tile value. If string is purely numeric (with optional decimals)
@@ -105,14 +95,6 @@ export default async function DashboardPage({
               <div className="text-3xl font-bold tabular-nums">
                 <TileValue value={t.value} />
               </div>
-              <Sparkline
-                data={placeholderSeries(`dash-tile-${t.label}-${i}`, 14)}
-                width={140}
-                height={28}
-                color="var(--accent, #f59e0b)"
-                fill
-                className="mt-1"
-              />
               {t.sublabel && (
                 <div className="text-xs text-muted-foreground">{t.sublabel}</div>
               )}
