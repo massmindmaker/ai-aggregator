@@ -14,7 +14,9 @@ const mainMenu = [
   { title: 'Конкурсы', href: '/contests' },
   { title: 'Документация', href: '/docs' },
   { title: 'Тарифы', href: '/pricing' },
-  { title: 'Для бизнеса', href: '/business' },
+  // 'Для бизнеса' (/business) HIDDEN 2026-07-17 — founder decision: no
+  // separate business terms, business just picks a pricing tier. See
+  // docs/specs/2026-07-15-agentmarket-web-hidden.md for the hide pattern.
 ];
 
 /**

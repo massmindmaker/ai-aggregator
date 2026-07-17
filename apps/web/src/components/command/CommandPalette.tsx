@@ -20,7 +20,6 @@ import {
   Receipt,
   GitBranch,
   Globe,
-  Briefcase,
   FileText,
   Search,
   ArrowRight,
@@ -48,7 +47,7 @@ const COMMANDS: Command[] = [
   { id: 'playground', label: 'Песочница', icon: Play, href: '/playground', group: 'navigation' },
   { id: 'pricing', label: 'Тарифы', icon: CreditCard, href: '/pricing', group: 'navigation', keywords: ['цены'] },
   { id: 'docs', label: 'Документация', icon: FileText, href: '/docs', group: 'docs' },
-  { id: 'business', label: 'Для бизнеса', icon: Briefcase, href: '/business', group: 'navigation' },
+  // 'business' (/business) HIDDEN 2026-07-17 — see MainNavbar.tsx.
 
   // Account
   { id: 'dashboard', label: 'Личный кабинет', icon: Activity, href: '/dashboard', group: 'account' },

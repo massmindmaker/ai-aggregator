@@ -1266,10 +1266,7 @@ export default function HomePage() {
             {
               h: 'Компания',
               links: [
-                ['Для бизнеса', '/business'],
                 ['Хроника', '/manifesto'],
-                ['Telegram', 'https://t.me/aiaggregatorsupport'],
-                ['Email', 'mailto:team@ai-aggregator.ru'],
               ],
             },
             {
@@ -1322,7 +1319,6 @@ export default function HomePage() {
           }}
         >
           <div>© {new Date().getFullYear()} AI-AGGREGATOR · MADE IN RU</div>
-          <div>team@ai-aggregator.ru · @aiaggregatorsupport</div>
         </div>
       </footer>
     </MainLayout>
