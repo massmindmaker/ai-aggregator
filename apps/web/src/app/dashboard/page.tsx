@@ -3,6 +3,7 @@ import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { resolveMode } from '@/lib/dashboard/mode';
 import { fetchOverview } from '@/lib/dashboard/overview';
+import { getEarnedRoles } from '@/lib/dashboard/roles';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CountUp } from '@/components/ui/CountUp';
@@ -63,7 +64,8 @@ export default async function DashboardPage({
   if (!session?.user?.id) redirect('/login?callbackUrl=/dashboard');
 
   const params = await searchParams;
-  const mode = resolveMode(params.mode, '/dashboard');
+  const earned = await getEarnedRoles(session.user.id);
+  const mode = resolveMode(params.mode, '/dashboard', earned);
   const data = await fetchOverview(session.user.id, mode);
 
   return (
