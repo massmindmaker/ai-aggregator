@@ -182,27 +182,30 @@ export async function resolveUpstream(agent: AgentRow, role: ModelRole = 'chat')
     return { url, apiKey, model, isExternal: true };
   }
 
-  // R0-1: aiag path → the :4000 gateway (OpenAI-compatible) when AIAG_GATEWAY_KEY
-  // is provisioned. The gateway applies markup, writes the gateway_transactions
-  // audit row, and keeps the upstream white-labelled.
+  // R0-1: aiag path → the :4000 gateway (OpenAI-compatible). AIAG_GATEWAY_KEY is
+  // REQUIRED here — the aiag path is where billing, markup, gateway_transactions
+  // and white-label all live.
   //
-  // Graceful fallback (deploy-safety): until AIAG_GATEWAY_KEY is set on the host,
-  // fall back to OpenRouter directly so runs keep working — the R0-2 balance debit
-  // and the auth fixes still apply; only the gateway routing/markup/white-label is
-  // OFF. Logged loudly so the missing-key state is visible in the worker logs.
+  // 🔴 FAIL-CLOSED (split-task-2, risk #2): a missing/empty AIAG_GATEWAY_KEY used
+  // to "gracefully" fall back to a direct OpenRouter call using OUR OWN
+  // OPENROUTER_API_KEY. That is a config-time money-path bug: on OUR
+  // misconfiguration (e.g. an env-var rotation gone wrong) the worker would
+  // silently start paying OpenRouter out of our own pocket for every aiag run —
+  // margin leak, wrong billing entity, and a white-label break — with only a
+  // console.warn to notice it by. TMA is a CLIENT of the aggregator gateway and
+  // must always route through it; a config error we can see beats a silent
+  // wrong-account charge. Refuse the run instead.
   // Role-resolved slug: vision/image/voice override → primary model_slug fallback.
   const model = resolveModelForRole(agent, role) || DEFAULT_MODEL;
   const gwKey = process.env.AIAG_GATEWAY_KEY;
-  if (gwKey) {
-    return { url: AIAG_GATEWAY_URL, apiKey: gwKey, model, isExternal: false };
+  if (!gwKey) {
+    throw new Error(
+      'AIAG_GATEWAY_KEY not set — refusing to run: the aiag path must route through the ' +
+        ':4000 gateway (billing/markup/white-label). Falling back to a direct upstream on ' +
+        'our own misconfiguration would silently pay from our own pocket.',
+    );
   }
-  const orKey = process.env.OPENROUTER_API_KEY;
-  if (!orKey) throw new Error('neither AIAG_GATEWAY_KEY nor OPENROUTER_API_KEY set');
-  console.warn(
-    '[agent-worker] AIAG_GATEWAY_KEY not set — aiag run falling back to direct OpenRouter ' +
-      '(gateway routing/markup/white-label OFF until the key is provisioned)',
-  );
-  return { url: OPENROUTER_URL, apiKey: orKey, model, isExternal: false };
+  return { url: AIAG_GATEWAY_URL, apiKey: gwKey, model, isExternal: false };
 }
 
 // OpenRouter approximate pricing per model (USD per 1M tokens).
