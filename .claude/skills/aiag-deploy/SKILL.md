@@ -2,12 +2,15 @@
 name: aiag-deploy
 description: >
   Deploy AIAG (this monorepo) to the bare-metal Timeweb VPS, restart pm2,
-  apply DB migrations, and troubleshoot deploys. Use whenever the user wants to
+  apply DB migrations by hand, and troubleshoot deploys. Use whenever the user wants to
   ship/deploy/release AIAG, restart a pm2 process on the VPS (web/gateway/worker/
-  tma/agent-worker), run pending Drizzle migrations on the prod Postgres, SSH into
+  tma/agent-worker), apply pending SQL migrations on the prod Postgres, SSH into
   the VPS, or debug a failed deploy (pm2 "Process not found", SSH "banner exchange"
   timeout / fail2ban ban, bun --frozen-lockfile drift, 404-after-deploy, build fail).
   Single source of truth for the AIAG release procedure.
+  ⚠️ Migrations on prod are MANUAL psql only — do NOT point drizzle-kit db:push/db:migrate
+  at prod while src/schema is incomplete (see §1e — db:push would drop live TMA tables
+  the schema doesn't declare; the restriction is conditional, not a permanent ban).
 ---
 
 # AIAG Deploy — single source of truth
@@ -139,31 +142,64 @@ ssh aiag-vps 'pm2 status'
 `pm2 save` persists the process list so `pm2 resurrect` (on reboot, via the systemd
 startup unit) brings them back. Always `save` after a restart that you want to survive.
 
-### (e) Apply pending migrations (manual — pipeline does NOT run them)
+### (e) Apply pending migrations (manual psql ONLY — pipeline does NOT run them)
 
-Drizzle migrations live in the repo; apply them against the **prod Postgres** through the
-tunnel. Two ways — prefer running the project's migrate script on the VPS against the
-already-deployed `current`:
+> # 🔴 P0 — do NOT run `drizzle-kit push` / `db:migrate` against prod, and here is the actual (not dogmatic) reason
+>
+> This is a **conditional** rule, not a blanket "push is evil" — drizzle's own docs treat
+> `push` as a legitimate prod workflow for schema-first setups, and `db:migrate` failing
+> against tables it doesn't recognize is an **explicit SQL error**, not silent corruption.
+> Neither tool is inherently unsafe. **Our specific situation is unsafe:**
+> - `packages/database/src/schema` is **incomplete** — it does not declare `agent_sessions`,
+>   `tg_user_balances`, `balance_credits`, `scope_tg_user_id`, `tg_topup_tx_claims`,
+>   `tg_membership_charges`, `hermes_profile`, `daily_budget_credits`, and more, all of
+>   which are live and load-bearing (the entire TMA money/hire contour).
+> - `db:push` diffs `src/schema` against the **live** DB and drops whatever the schema
+>   doesn't declare — with today's incomplete schema, that means it **would drop**
+>   `agents`, `agent_memory`, `tg_user_balances`, `tg_topups`, `tg_memberships`,
+>   `agent_sessions` and friends. That's the entire TMA product's data, gone in one command.
+> - Migrations `0004`–`0055` were applied **by hand** (`sudo -u postgres psql aiag -f <file>`,
+>   one at a time, in order). There is **no `__drizzle_migrations` tracking table on prod**,
+>   so `db:migrate` has no baseline to reconcile against — expect it to error out on tables
+>   it doesn't know were already created (annoying, not catastrophic) rather than proceed.
+>
+> **The condition that lifts this restriction:** once `src/schema` is brought to full parity
+> with the live DB (every table/column above declared) **and** a proper drizzle baseline is
+> established (introspect + `__drizzle_migrations` seeded to match reality), `db:push`/
+> `db:migrate` become the normal, docs-sanctioned path again — don't treat this as a
+> permanent ban, treat it as "not yet, because the schema lies about what's live."
+>
+> Until that day: use the manual procedure below. This rule is mirrored in
+> `packages/database/CLAUDE.md` ("db:push/db:migrate are for local/dev only") — if you
+> find yourself about to violate one of these two files, you are about to violate both,
+> and the actual reason is schema-incompleteness, not the tool.
+
+**Actual prod migration procedure — manual, per-file, idempotent-checked:**
 
 ```bash
-# Run drizzle migrations from the freshly-deployed release on the VPS:
-ssh aiag-vps 'set -a; . /srv/aiag/shared/.env; set +a; \
-  cd /srv/aiag/gateway/current && bun run db:migrate'   # <-- confirm the script name
+# 1. Copy the new migration file(s) to the VPS (or they're already in the deployed release).
+scp packages/database/migrations/00NN_foo.sql aiag-vps:/tmp/00NN_foo.sql
+
+# 2. BEFORE applying: check what's already live — prod sequence numbers may not match
+#    what you expect, since there is no tracking table. Confirm with a SELECT
+#    (e.g. does the table/column already exist?) rather than assuming.
+ssh aiag-vps "sudo -u postgres psql aiag -c \"\\d agent_sessions\""   # example check
+
+# 3. Apply ONE file at a time, in numeric order, as the postgres superuser
+#    (the app role 'aiag' cannot run ALTER — DDL must go through postgres).
+ssh aiag-vps "sudo -u postgres psql aiag -f /tmp/00NN_foo.sql"
+
+# 4. Verify the effect with a SELECT, not just "no error" (e.g. \d the new table/column).
+ssh aiag-vps "sudo -u postgres psql aiag -c \"\\d agent_sessions\""
+
+# 5. Clean up the temp file.
+ssh aiag-vps "rm /tmp/00NN_foo.sql"
 ```
 
-If there is no `db:migrate` script, tunnel the prod Postgres to localhost and run the
-migration tool locally:
-
-```bash
-# Forward VPS Postgres :5432 → local :15432 over the SAME multiplexed tunnel
-ssh -fNL 15432:127.0.0.1:5432 aiag-vps
-# then point DATABASE_URL at localhost:15432 and run your drizzle-kit migrate
-# (confirm exact command from packages/database/package.json)
-ssh -O exit aiag-vps   # close forward + master when done
-```
-
-> UNCERTAIN: exact migrate command/script name — verify in `packages/database/package.json`
-> before running. Migrations are forward-only; take a `pg_dump` first if risky.
+Migrations are forward-only and untracked, so re-running a file that already applied can
+error or double-apply depending on the SQL (`IF NOT EXISTS` guards help but aren't
+universal in this repo) — always check state first (step 2/4), and `pg_dump` before
+anything that touches existing data or drops a column.
 
 ### (f) Verify
 

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIAG Web — полная диагностика 2026-07-15</title>
+<style>
+:root{--bg:#0a0a0b;--elev:#111114;--surf:#18181b;--ink:#f4f4f5;--mut:#8b8b94;--faint:#71717a;--acc:#f59e0b;--line:rgba(255,255,255,.08);--ls:rgba(255,255,255,.16);--ok:#22c55e;--dng:#ef4444;--warn:#eab308}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 Inter,system-ui,sans-serif;padding:2rem 1.2rem;max-width:1000px;margin:0 auto}
+h1{font-size:28px;margin:0 0 .2rem}h2{font-size:20px;margin:2rem 0 .6rem;border-bottom:1px solid var(--line);padding-bottom:.4rem}h3{font-size:16px;margin:1.2rem 0 .4rem;color:var(--acc)}
+.eye{font:12px/1 ui-monospace,'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
+.mono,td .n{font-family:ui-monospace,'JetBrains Mono',monospace}
+table{width:100%;border-collapse:collapse;margin:.6rem 0;font-size:13.5px}th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.p0{color:var(--dng);font-weight:700}.hi{color:var(--warn);font-weight:600}.med{color:var(--mut)}.ok{color:var(--ok)}
+.pill{display:inline-block;padding:.1rem .5rem;border-radius:99px;font:11px/1.4 ui-monospace,monospace;border:1px solid var(--line)}
+.pill.p0{border-color:var(--dng);color:var(--dng)}.pill.hi{border-color:var(--warn);color:var(--warn)}.pill.ok{border-color:var(--ok);color:var(--ok)}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:1rem 1.2rem;margin:.8rem 0}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem}@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.stat{background:var(--elev);border:1px solid var(--line);border-radius:8px;padding:.8rem}.stat .v{font:28px/1 ui-monospace,monospace;color:var(--acc)}.stat .l{font-size:12px;color:var(--mut);margin-top:.2rem}
+ul{margin:.3rem 0;padding-left:1.2rem}li{margin:.2rem 0}code{font-family:ui-monospace,monospace;background:var(--elev);padding:.05rem .3rem;border-radius:4px;font-size:12.5px}
+.muted{color:var(--mut)}.small{font-size:13px}
+</style></head><body>
+
+<div class="eye">AI·Aggregator · web · диагностика</div>
+<h1>Полная диагностика веб-агрегатора</h1>
+<p class="muted small">2026-07-15 · по коду + проду + браузер-QA (Playwright, 41 страница) + workflow 13 направлений · <b>не по докам</b> (доки врали в обе стороны)</p>
+
+<div class="grid">
+  <div class="stat"><div class="v">59→?</div><div class="l">оценка (пересчёт после фиксов)</div></div>
+  <div class="stat"><div class="v">6 / 21</div><div class="l">P0 / HIGH находок</div></div>
+  <div class="stat"><div class="v">0₽</div><div class="l">выручка (0 платежей за историю)</div></div>
+</div>
+
+<h2>1. Вердикт: demo-ware по доказательствам</h2>
+<div class="card">
+Витрина <b>живая</b> (не Потёмкин): страницы 200, регистрация (email+Яндекс, VK за флагом), B2B-ключи, каталог, подача модели, регистрация на конкурс — <b>реально пишут/читают БД</b> (проверено кодом + прод-curl + браузер-QA). Инфраструктура крепкая: списание атомарно, markup-флор на проде стоит (0 моделей в убыток), white-label в гейтвее закрыт, API-ключи полностью работают.
+<br><br>
+Но <b>два сквозных потока мертвы</b>: (1) <b>попробовать модель</b> — чат-апстрим 403 IP-бан РФ; (2) <b>потратить деньги</b> — три несвязанных леджера, оплата не даёт баланса гейтвею. Ни один живой юзер не может ни оплатить сквозь, ни получить ответ модели.
+</div>
+
+<h2>2. 🔴 Ядро финмодели — 3 P0 = одна проблема</h2>
+<div class="card">
+<b>Три несвязанных леджера, моста нет</b> (подтверждено комментарием в самом коде <code>billing/summary/route.ts:16-22</code>):
+<ul>
+<li>топап → пишет <code>users.balance</code></li>
+<li>покупка тарифа → пишет <code>subscriptions.credits_limit</code></li>
+<li>гейтвей списывает → <b>только</b> <code>organizations.payg_credits</code></li>
+</ul>
+Итог: <b>оплатил Pro → баланс шлюза 0 → первый вызов → 402 INSUFFICIENT_FUNDS.</b> Замаскировано тем, что Tinkoff-env не задан и чат 403 — до 402 никто не доходит. При включении оплаты дефект гарантирован.
+<br><br>
+Плюс «кредиты подписки» — <b>чистая декорация</b>: <code>creditsUsed</code> не инкрементится нигде. Лимит 1200/3200/10000 не считается и не блокирует. <b>Учёта токенов по подписке — нет.</b>
+</div>
+
+<h2>3. Финмодель — решение основателя 2026-07-15</h2>
+<p class="small muted">Юнит: <b>1 кредит = 1₽</b> retail-расхода (markup внутри). Markup <b>1.8×</b>. Убрать фиктивный COUNT-леджер, остаток = org-бакеты. Мост оплата→org в CONFIRMED-транзакции. Реальный инкремент расхода. Капы: месячный hard = allowance, дневной soft = /15.</p>
+<table>
+<tr><th>Тариф</th><th>Цена</th><th>Кредиты(≈₽)</th><th>COGS</th><th>Маржа</th></tr>
+<tr><td>Free</td><td class="mono">0₽</td><td class="mono">100</td><td>—</td><td>—</td></tr>
+<tr><td><b>Lite</b> <span class="pill">новый</span></td><td class="mono">290₽</td><td class="mono">~320</td><td>—</td><td>~воронка</td></tr>
+<tr><td>Basic</td><td class="mono">990₽</td><td class="mono">1089</td><td class="mono">605₽</td><td class="ok">28%</td></tr>
+<tr><td>Starter</td><td class="mono">2490₽</td><td class="mono">2988</td><td class="mono">1660₽</td><td class="ok">23%</td></tr>
+<tr><td>Pro</td><td class="mono">6990₽</td><td class="mono">9087</td><td class="mono">5048₽</td><td class="ok">17%</td></tr>
+</table>
+<p class="small muted">Токен-йилд Basic: gpt-4o-mini ~25M · DeepSeek ~14M · Claude Sonnet ~1.65M. Breakage +10-18 п.п. маржи. ⚠️ <b>Открыто:</b> web-«кредит» (1₽) vs TMA-«кредит» (1¢ USD-peg, <code>ton-rate.ts:5</code>) — коллизия слова. Рекомендация: web = «баланс ₽» (убрать слово «кредит»), TMA = «кредиты». Решение основателя ожидается.</p>
+
+<h2>4. Конкуренты РФ (топ-5)</h2>
+<table>
+<tr><th>Сервис</th><th>Вход</th><th>Модель</th><th>vs AIAG</th></tr>
+<tr><td>ChadGPT</td><td class="mono">290₽/мес</td><td>50+ моделей, мультимодал, без VPN</td><td>шире каталог</td></tr>
+<tr><td>BotHub</td><td class="mono">290₽</td><td>PAYG-токены + API</td><td>ближе всех к нам</td></tr>
+<tr><td>GoGPT</td><td>free 10/день</td><td>сильный free-tier</td><td>наш free деградирует в 403</td></tr>
+<tr><td>Нейроцех</td><td>подписка</td><td>«честная цена в ₽»</td><td>без токен-обёртки</td></tr>
+<tr><td>Cyber AI</td><td>прямая ₽</td><td>подписка/оплата</td><td>то же</td></tr>
+</table>
+<p class="small muted">Линия фронта: <b>«честная цена в ₽ vs спрятанная в токенах»</b>. Диапазон 290–2500₽. Конкуренты решили гео-обход <b>server-side</b> (собственные туннели) — у нас чат мёртв на 403. Это ядро категории, не фича.</p>
+
+<h2>5. Топ находок по severity</h2>
+<table>
+<tr><th>Sev</th><th>Что</th><th>Evidence</th></tr>
+<tr><td><span class="pill p0">P0</span></td><td>Разрыв денежного цикла (3 леджера, 402)</td><td class="mono small">billing/summary:16-22</td></tr>
+<tr><td><span class="pill p0">P0</span></td><td>Кредиты подписки = декорация (creditsUsed не растёт)</td><td class="mono small">grep: 0 инкрементов</td></tr>
+<tr><td><span class="pill p0">P0</span></td><td>Чат-ядро мёртво из РФ (все флагманы→OpenRouter 403)</td><td class="mono small">seed 0006:131</td></tr>
+<tr><td><span class="pill p0">P0</span></td><td>Лендинг «работает без VPN/РФ-регион» = инверсия реальности</td><td class="mono small">page.tsx:167</td></tr>
+<tr><td><span class="pill hi">HIGH</span></td><td>✅ ИСПРАВЛЕНО: @b0brov личный TG в UI</td><td class="ok small">deploy 8b7a727</td></tr>
+<tr><td><span class="pill hi">HIGH</span></td><td>Юр-страницы /offer /terms /privacy = ЧЕРНОВИК на проде; фейк ОГРНИП <code>0000000000</code>; утечка «Plan 08»</td><td class="mono small">browser-QA</td></tr>
+<tr><td><span class="pill hi">HIGH</span></td><td>White-label: «(Kie)» в БД <code>models.display_name</code> → главная+детальные (фикс в работе)</td><td class="mono small">prod SELECT</td></tr>
+<tr><td><span class="pill hi">HIGH</span></td><td>Конкурс-скоринг: sink воркера заглушка → лидерборд вечно пуст</td><td class="mono small">worker/index:49</td></tr>
+<tr><td><span class="pill hi">HIGH</span></td><td>Сортировка каталога не применяется кликом (фикс в работе)</td><td class="mono small">browser-QA</td></tr>
+<tr><td><span class="pill hi">HIGH</span></td><td>Онбординг-тур глушит логин-форму (фикс в работе)</td><td class="mono small">browser-QA</td></tr>
+<tr><td><span class="pill hi">HIGH</span></td><td>media-генерация async: upstream-poll sink заглушка</td><td class="mono small">worker/index:42</td></tr>
+</table>
+
+<h2>6. Что подтверждённо РАБОТАЕТ (эффектом)</h2>
+<div class="card small">
+✅ Регистрация (email, 152-ФЗ 2 согласия) + логин · ✅ Яндекс-OAuth (VK за флагом, ждёт креды) · ✅ B2B API-ключи полный цикл (создать→reveal-once→disable→delete, 200/201) · ✅ Биллинг ЛК реальные данные (хардкод «200 кредитов» убран) · ✅ Каталог/поиск/фильтры/калькулятор из БД · ✅ markup-флор 1.20 на проде (0 в убыток) · ✅ Tinkoff-вебхук атомарен+идемпотентен · ✅ white-label гейтвей (заголовки/стрим/ошибки) · ✅ адаптив 375px без overflow · ✅ /agentmarket спрятан (404)
+</div>
+
+<h2>7. Требует решения основателя</h2>
+<ol class="small">
+<li><b>Кредит-нейминг:</b> web = «баланс ₽» (рекоменд.) vs «кредит» на обоих с разным пегом (web 1₽ / TMA 1¢).</li>
+<li><b>Юр-страницы:</b> оферта/условия/политика — черновики с фейк-ОГРНИП на сайте, принимающем рубли. Нужны реальные реквизиты ИП + финал текстов (юр-риск 152/54-ФЗ). Не выдумываю.</li>
+<li><b>Чат-прокси (деньги):</b> VPS вне РФ, чтобы оживить чат из РФ. Без него чат-продукт мёртв, лендинг врёт. #1 стратегический блокер.</li>
+<li><b>Рекуррент подписки:</b> строить scheduled-charge (MRR) или разовый доступ?</li>
+<li><b>Дедуп моделей:</b> дубли base + <code>-kie</code> версий в каталоге — мержить?</li>
+</ol>
+
+<p class="small muted" style="margin-top:2rem;border-top:1px solid var(--line);padding-top:1rem">Источники: workflow <code>wf_568e9ef1</code> (10 направлений, 75 находок), браузер-QA публичный (23 стр) + приватный ЛК (18 стр), прод-SELECT. Скриншоты: <code>scratchpad/screenshots|shots/</code>. Полные отчёты: <code>scratchpad/reports/</code>.</p>
+
+</body></html>

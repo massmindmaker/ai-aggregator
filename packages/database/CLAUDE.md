@@ -21,4 +21,12 @@ Single Postgres `aiag`, shared by both products. Schema (Drizzle) + raw `.sql` f
 - `bun run build` (tsup → `dist/`, both `.` and `./schema` exports). type-check: `type-check`.
 - `bun run gen:catalog` regenerates the static marketplace catalog from a prod dump.
 - NOTE: `db:push`/`db:migrate` are for local/dev only — **do not point them at prod**
-  (use the manual `sudo -u postgres psql` path above).
+  (use the manual `sudo -u postgres psql` path above). This is not a blanket "push is
+  unsafe" rule (drizzle's own docs endorse `push` for prod schema-first workflows) — it's
+  conditional on **our schema being incomplete right now**: `src/schema` is missing
+  `agent_sessions`, `tg_user_balances`, `balance_credits`, `scope_tg_user_id`,
+  `tg_topup_tx_claims`, `tg_membership_charges`, `hermes_profile`, `daily_budget_credits`
+  and more, so `db:push` would diff against live prod and **drop** every TMA table it
+  doesn't know about. Once schema parity + a real `__drizzle_migrations` baseline exist,
+  this restriction lifts. Until then: manual psql, one file at a time, verify with a
+  `SELECT`/`\d` after (no tracking table on prod — you can't trust "already applied").
