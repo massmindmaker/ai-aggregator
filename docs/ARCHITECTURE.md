@@ -6,6 +6,17 @@ System map. Product reality lives in `/CLAUDE.md`; this is the technical topolog
 - **Web aggregator** (`apps/web` + `packages/api-gateway`) — RU market, rubles. RF entity.
 - **TMA** (`apps/tg-miniapp` + `apps/agent-worker`) — Telegram agents marketplace, crypto credits. Foreign entity.
 - Separated by currency + entity + audience; they only share Postgres + the gateway as a model provider.
+- **Founder decision 2026-07-17: this is a client relationship, not co-tenancy.** The
+  aggregator is a **provider** of models (RF entity); TMA is its **client**, billed at
+  the same transfer rate as any other client (no per-org markup). As of 2026-07-17 TMA
+  has its **own gateway org, API key, and wallet** (migration `0060_tma_own_org.sql`;
+  wallet starts at **0** — every TMA run 402s honestly until manually funded) and the
+  two silent direct-OpenRouter fallbacks in `agent-worker/src/agent-runner.ts` are
+  closed (402/401/403/empty-key now fail loud instead of leaking margin + breaking
+  white-label). **Still shared:** one physical Postgres `aiag` (DB split parked), TMA
+  still reads `models`/`model_upstreams` by raw SQL (catalog-via-`/v1/models` parked),
+  2 hard cross-contour FKs (`agents.provider_id`, `agent_provider_credentials.provider_id`
+  → `providers`) not yet broken. Plan: `docs/superpowers/plans/2026-07-17-split-web-tma.md`.
 
 ## Service map (pm2 on a single 2GB Timeweb VPS)
 - `web` — Next 14.x (rubles aggregator)
@@ -18,12 +29,33 @@ System map. Product reality lives in `/CLAUDE.md`; this is the technical topolog
 ## Request → money flow (TMA)
 TMA → `agent-worker` (BullMQ) → resolveUpstream → gateway `:4000` (AIAG model, +markup, debit) OR user's own provider (BYOK = no charge) → upstream. `settleRun` does the atomic debit. See `/SECURITY.md`.
 
+## Money unit — credit ledger (fixed 2026-07-17, tip `d16cc39`)
+- Unit = **micro-credits** (BIGINT). 1 credit = 1 US cent = 1000 micro; real USD =
+  cents / 100. `model_upstreams.price_per_1k_*` / `price_per_image` store **cents**
+  (USD×100), not USD — a prior bug read them as USD and multiplied by the CBR rate,
+  producing a **~120x overcharge** (showcase ₽18/1M would have invoiced ₽1656). Fixed
+  via migrations `0056`-`0059`/`0061`; anchor regression test pins Sonnet 1k in + 0.5k
+  out @ markup 1.8 = 1890 micro (bug gave 189000).
+- Formula: `costCredits(micro) = round(upstreamCents × markup × batchDiscount × caching × 1000)`.
+  Markup = **1.8** across all 76 model↔upstream bindings (was 1.20/1.25).
+- Debit function renamed to `aiag_settle_charge_credits` (migration 0058) — a new name
+  as a guard against accidentally calling the old ₽-unit function by its old name.
+- FX (CBR rate) is **not in the runtime hot path anymore** — `fetchUsdRubRate` no
+  longer ships in `dist`; the only remaining FX use is a one-time fixed-rate (90)
+  conversion baked into migration 0061 for the key spend-cap column.
+- Known unfixed leaks: `/v1/embeddings` returns `Math.sin()`-based fake 8-dim vectors
+  and still charges (`docs/specs/2026-07-17-audit-round3-findings.md` P0 #5);
+  `/v1/audio/speech` is **intentionally 503** (fail-closed) — TTS never worked (no
+  `case 'hf'` in `registry.ts` for `elevenlabs-tts-hf`; `-kie` had no input-length cap).
+
 ## Data stores
 - Postgres 16.14 `aiag` — **self-hosted on the same VPS as everything else** (NOT Timeweb
   managed Postgres; earlier drafts of this doc said "managed" — that was wrong). Single
   source of truth. `tg_user_balances` (TMA spendable; ₽→USD-credit migration done, D-1),
   gateway org-balances, `agent_*`, `agent_templates` (public spec, 0 secret columns),
-  `gateway_transactions`, `agent_provider_credentials`.
+  `gateway_transactions`, `agent_provider_credentials`. As of migration `0060` there are
+  now **two** gateway orgs of note: the original (web + legacy TMA key, still shared)
+  and `agents-market` (TMA's own org/key/wallet — see "Two products" above).
   - `agent_sessions` — hire container (one hirer ↔ one foreign agent); **PROJECT, not built** (canon §3-4).
   - `agent_memory` — KV memory scoped per project-namespace `(agent_id, scope_tg_user_id)`; scope column is **PROJECT, not built** (canon §3-4, §11).
 - Redis 7 — BullMQ queues.
