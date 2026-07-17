@@ -15,10 +15,16 @@ import {
 import { formatPriceLabel } from '@/lib/marketplace/pricing-calc';
 import { PlaygroundEmbed } from '@/components/marketplace/PlaygroundEmbed';
 import { TransferWarningBadge } from '@/components/TransferWarningBadge';
+import { auth } from '@/auth';
 
 interface RouteParams {
   params: { org: string; model: string };
 }
+
+// This page reads the session (auth()), so it must render per-request, not
+// be baked once by generateStaticParams below — otherwise every visitor
+// (logged in or not) gets whichever auth state was true at build time.
+export const dynamic = 'force-dynamic';
 
 export async function generateStaticParams() {
   return getAllModels().map((m) => ({
@@ -34,7 +40,7 @@ export async function generateMetadata({
   if (!model) return { title: 'Playground — модель не найдена' };
   return {
     title: `Playground ${model.name} | AI Aggregator`,
-    description: `Попробуйте ${model.name} прямо в браузере. Бесплатный mock-playground.`,
+    description: `Попробуйте ${model.name} прямо в браузере. Бесплатный демо-режим.`,
     robots: { index: false, follow: true },
     alternates: {
       canonical: `/marketplace/${params.org}/${params.model}/playground`,
@@ -42,11 +48,13 @@ export async function generateMetadata({
   };
 }
 
-export default function PlaygroundPage({ params }: RouteParams) {
+export default async function PlaygroundPage({ params }: RouteParams) {
   const model = getModelByOrgAndSlug(params.org, params.model);
   if (!model) notFound();
 
   const foreign = isForeignHosted(model.orgSlug);
+  const session = await auth();
+  const isLoggedIn = Boolean(session?.user);
 
   return (
     <MainLayout>
@@ -86,29 +94,36 @@ export default function PlaygroundPage({ params }: RouteParams) {
           <aside className="space-y-4">
             <Card>
               <CardContent className="p-4 text-sm space-y-2">
-                <div className="font-semibold">Ограничения mock-версии</div>
+                <div className="font-semibold">Ограничения демо-режима</div>
                 <ul className="list-disc ms-4 space-y-1 text-muted-foreground">
-                  <li>5 запросов в сутки без авторизации</li>
+                  <li>
+                    {isLoggedIn
+                      ? '5 запросов в сутки — общий лимит демо-режима'
+                      : '5 запросов в сутки без авторизации'}
+                  </li>
                   <li>Ответы заранее заготовлены</li>
                   <li>Стриминг эмулирован</li>
                 </ul>
                 <p className="text-xs text-muted-foreground pt-2">
-                  Реальная маршрутизация появится после мерджа Plan 04 gateway.
+                  Это демо: ответы не идут через боевую модель. Реальная маршрутизация
+                  подключится в одном из ближайших обновлений.
                 </p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardContent className="p-4 text-sm space-y-2">
-                <div className="font-semibold">Хотите больше?</div>
-                <p className="text-muted-foreground">
-                  Зарегистрируйтесь и получите API-ключ — до 50 запросов/день.
-                </p>
-                <Button asChild size="sm" className="w-full">
-                  <Link href="/register">Зарегистрироваться</Link>
-                </Button>
-              </CardContent>
-            </Card>
+            {!isLoggedIn && (
+              <Card>
+                <CardContent className="p-4 text-sm space-y-2">
+                  <div className="font-semibold">Хотите больше?</div>
+                  <p className="text-muted-foreground">
+                    Зарегистрируйтесь и получите API-ключ — до 50 запросов/день.
+                  </p>
+                  <Button asChild size="sm" className="w-full">
+                    <Link href="/register">Зарегистрироваться</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </aside>
         </div>
       </section>
