@@ -205,7 +205,7 @@ function EmptyPrompt({ modelName }: { modelName: string }) {
         </p>
         <p className="mt-1">Напишите запрос и нажмите Enter.</p>
         <p className="mt-4 text-xs">
-          Это mock-версия. Реальные ответы появятся после подключения Plan 04 gateway.
+          Это демо-режим: ответы не идут через боевую модель.
         </p>
       </div>
     </div>
