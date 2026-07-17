@@ -27,6 +27,7 @@ type DbRow = {
   price_per_1k_input: string | number;
   price_per_1k_output: string | number;
   price_per_image: string | number | null;
+  price_per_audio_sec: string | number | null;
   markup: string | number;
 };
 
@@ -44,7 +45,7 @@ export async function resolveModel(slug: string): Promise<ResolvedModel> {
            mu.upstream_id, mu.upstream_model_id,
            u.provider, u.ru_residency, u.latency_p50_ms, u.uptime,
            mu.price_per_1k_input, mu.price_per_1k_output, mu.price_per_image,
-           mu.markup
+           mu.price_per_audio_sec, mu.markup
       FROM models m
       JOIN model_upstreams mu ON mu.model_id = m.id AND mu.enabled = TRUE
       JOIN upstreams u       ON u.id = mu.upstream_id AND u.enabled = TRUE
@@ -59,6 +60,8 @@ export async function resolveModel(slug: string): Promise<ResolvedModel> {
     price_per_1k_input: Number(r.price_per_1k_input),
     price_per_1k_output: Number(r.price_per_1k_output),
     price_per_image: r.price_per_image == null ? undefined : Number(r.price_per_image),
+    price_per_audio_sec:
+      r.price_per_audio_sec == null ? undefined : Number(r.price_per_audio_sec),
     latency_p50_ms: Number(r.latency_p50_ms),
     uptime: Number(r.uptime),
     ru_residency: r.ru_residency,

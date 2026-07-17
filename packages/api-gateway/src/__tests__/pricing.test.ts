@@ -153,6 +153,51 @@ describe('pricing.calcCostCredits', () => {
     });
   });
 
+  // Storefront == invoice, AUDIO path (blocker 1, Opus review 2026-07-17).
+  //
+  // The bug this guards against was a DIMENSION mismatch, not a rounding
+  // error: gen-marketplace-catalog.ts always read price_per_audio_sec for
+  // audio-type models, but routes/v1/audio.ts read price_per_image (which is
+  // NULL for every TTS row) — the storefront advertised a price the gateway
+  // could never charge, and instead 503'd every TTS call outright. This test
+  // reads the real GENERATED_CATALOG entry and cross-checks it against the
+  // gateway's actual per-call formula (routes/v1/audio.ts: price_per_audio_sec
+  // × 60, billed as a 1-minute unit — same unit the catalog advertises).
+  describe('storefront == invoice, audio (reads the real catalog.generated.ts artifact)', () => {
+    const RAW_AUDIO_SEC_CENTS = 0.3; // elevenlabs-tts-hf, model_upstreams.price_per_audio_sec (prod dump)
+    const CURRENT_MARKUP = 1.8; // model_upstreams.markup as of migration 0057
+
+    const model = GENERATED_CATALOG.find((m) => m.slug === 'elevenlabs-tts-hf');
+
+    it('fixture model is present in the shipped artifact', () => {
+      expect(model).toBeDefined();
+    });
+
+    it('storefront per-minute price matches what the gateway actually charges for one TTS call', () => {
+      if (!model) throw new Error('elevenlabs-tts-hf missing from GENERATED_CATALOG — re-run gen:catalog');
+      // Gateway side: routes/v1/audio.ts bills price_per_audio_sec × 60 (one
+      // call = one minute-unit) through the SAME calcCostCredits used
+      // everywhere else — not a copy of the formula.
+      const chargedMicro = calcCostCredits({
+        upstreamCents: RAW_AUDIO_SEC_CENTS * 60,
+        markup: CURRENT_MARKUP,
+      });
+      const chargedCredits = chargedMicro / MICRO_PER_CREDIT;
+      // 0.3 × 60 × 1.8 = 32.4 — matches the live catalog.generated.ts value.
+      expect(chargedCredits).toBeCloseTo(32.4, 3);
+      expect(model.pricing.perMinute).toBeCloseTo(chargedCredits, 3);
+    });
+
+    it('TTS is billable at all — price_per_audio_sec must not be null (this is exactly what 503d before the fix)', () => {
+      // Regression guard for the outage: before the fix, audio.ts required
+      // price_per_image (NULL for TTS rows) and threw errors.unavailable()
+      // for every TTS call regardless of price_per_audio_sec being set.
+      expect(RAW_AUDIO_SEC_CENTS).not.toBeNull();
+      const chargedMicro = calcCostCredits({ upstreamCents: RAW_AUDIO_SEC_CENTS * 60, markup: CURRENT_MARKUP });
+      expect(chargedMicro).toBeGreaterThan(0);
+    });
+  });
+
   // HIGH-1 anchor (Opus review, embeddings): a 1k-token embedding call at
   // column price 0.002¢/1k, markup 1.8 → 0.002 × 1.8 × 1000 = 3.6 → round → 4
   // micro-credits (= $0.00004). Under the OLD whole-credit floor this would

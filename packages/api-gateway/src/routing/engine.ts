@@ -17,6 +17,7 @@ export type Upstream = {
   price_per_1k_input: number;
   price_per_1k_output: number;
   price_per_image?: number;
+  price_per_audio_sec?: number;
   latency_p50_ms: number;
   uptime: number;
   ru_residency: boolean;
@@ -30,7 +31,7 @@ export type UpstreamCandidate = Upstream & {
 };
 
 export type Mode = 'auto' | 'fastest' | 'cheapest' | 'balanced' | 'ru-only';
-export type CostMetric = 'chat' | 'embedding' | 'image';
+export type CostMetric = 'chat' | 'embedding' | 'image' | 'audio';
 
 export type ApiKeyPolicies = {
   default_mode?: Mode;
@@ -45,6 +46,11 @@ export type ApiKeyPolicies = {
 // FIX H4.1: explicit metric-aware cost
 export function effCost(u: Upstream, metric: CostMetric = 'chat'): number {
   if (metric === 'image') return u.price_per_image ?? 0.01;
+  // Audio models are priced by whichever column the model row actually
+  // fills (Suno-style per-track flat price_per_image, or ElevenLabs-style
+  // per-second price_per_audio_sec — see routes/v1/audio.ts). This is a
+  // routing-rank heuristic only (cheapest/balanced), not billing math.
+  if (metric === 'audio') return u.price_per_audio_sec ?? u.price_per_image ?? 0.01;
   if (metric === 'embedding') return u.price_per_1k_input;
   // chat: input-heavy weighted average (70/30)
   return u.price_per_1k_input * 0.7 + u.price_per_1k_output * 0.3;

@@ -80,10 +80,27 @@ function roundCredits(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Format a credit amount for display — NOT a currency, no FX. */
+/**
+ * Format a credit amount for display — NOT a currency, no FX.
+ *
+ * 🔴 MED fix (Opus review, 2026-07-17): a flat `maximumFractionDigits: 2` cap
+ * rendered genuinely paid, sub-cent models as "0 кр" — e.g.
+ * openai/text-embedding-3-small at 0.0036 credits/1k, or
+ * yandex/yandexgpt-pro at 0.00144/0.00432 — indistinguishable from actually
+ * free. Widen precision only when 2 decimals would collapse a non-zero price
+ * to zero; normal-priced models (>=10 or already representable at 2dp) are
+ * unaffected.
+ */
 export function formatCredits(amount: number): string {
+  let maxDigits = 0;
+  if (amount > 0 && amount < 10) {
+    maxDigits = 2;
+    while (maxDigits < 6 && Number(amount.toFixed(maxDigits)) === 0) {
+      maxDigits += 2;
+    }
+  }
   const formatted = new Intl.NumberFormat('ru-RU', {
-    maximumFractionDigits: amount < 10 ? 2 : 0,
+    maximumFractionDigits: maxDigits,
   }).format(amount);
   return `${formatted} кр`;
 }

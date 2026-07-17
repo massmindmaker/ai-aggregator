@@ -177,16 +177,14 @@ chat.post('/completions', async (c) => {
   // so BYOK's fixed fee counts too. key-limits.ts middleware reads this
   // counter read-only on the NEXT request; this is the only place it's
   // incremented.
-  // ⚠️ T1 scope note (widened by the 2026-07-16 micro-credit rework): the
-  // field/redis-key are still named "..._rub" and the policy value
-  // (`key.cost_limit_monthly_rub`) is still ₽-denominated — this counter
-  // accumulates MICRO-credits (1/1000 of a US-cent credit), NOT ₽. The
-  // comparison side (key-limits.ts) converts through the CBR USD/RUB rate
-  // before comparing, so the unit mismatch is corrected there — this INCR
-  // stays in micro-credits (the settlement's native unit) on purpose.
+  // ⚠️ T1/T2 scope note: the field/redis-key are still named "..._rub" but
+  // as of migration 0061 (2026-07-17) `cost_limit_monthly_rub` actually holds
+  // CREDITS, the same unit this counter accumulates (MICRO-credits, 1000 =
+  // 1 credit = 1 US cent) — key-limits.ts compares them directly, no FX.
+  // This INCR itself is unchanged by that migration; it always stored
+  // micro-credits (the settlement's native unit).
   // Renaming the column/redis-key to a real credits unit is still T6/T4
-  // (finmodel-build-spec §6/§8); until then this is the accumulator +
-  // FX-at-read-time bridge.
+  // (finmodel-build-spec §6/§8).
   if (key.cost_limit_monthly_rub) {
     try {
       const redis = makeRedis('ratelimit');

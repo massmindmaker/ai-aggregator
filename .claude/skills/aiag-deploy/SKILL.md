@@ -190,6 +190,17 @@ ssh -O exit aiag-vps   # close forward + master when done
 > then commit `catalog.generated.ts` (+ `legacy-redirects.generated.json` if it changed) and deploy
 > `web` — a markup/pricing migration is not "done" until this artifact matches prod.
 
+> 🔴 **After migration `0061_cost_cap_unit_to_credits.sql` (or any future migration that changes the
+> UNIT of `gateway_api_keys.cost_limit_monthly_rub`)**: flush the per-key monthly spend counters —
+> `redis-cli -n <ratelimit-db> --scan --pattern 'cost_month:*' | xargs redis-cli -n <ratelimit-db> DEL`.
+> Reason: those counters (`monthlyCostCounterKey` in `packages/api-gateway/src/middleware/key-limits.ts`)
+> accumulate MICRO-credits going forward, but any value already sitting in Redis before this deploy was
+> accumulated under the OLD comparison (the cap itself was ₽, compared through a live CBR conversion —
+> see 0061's header). Migration 0061 converts the CAP column, not the Redis counter; a stale counter
+> compared against the newly-converted credits cap reads as a wildly wrong number relative to what was
+> actually spent since. Flushing means every key starts this month's cap fresh, not zeroed forever —
+> `key-limits.ts` re-accumulates from the next billed request.
+
 ### (f) Verify
 
 ```bash

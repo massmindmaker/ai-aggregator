@@ -83,19 +83,27 @@ describe('keyLimits middleware — cost_limit_monthly_rub', () => {
     expect(res.status).toBe(200);
   });
 
-  // Unit fix (2026-07-17): the counter is MICRO-credits (1 credit = 1000
-  // micro = 1 US cent), the cap is ₽ — key-limits.ts now bridges the two via
-  // the CBR rate (lib/cbr.ts), read from redis's daily cache. Seed that cache
-  // so the test never makes a real network call, at a round rate (90) that
-  // makes the fixture math exact: 100,000 micro = 100 credits = $1 = 90₽.
+  // Blocker 2 fix (Opus review, 2026-07-17): migration 0061 converted
+  // `cost_limit_monthly_rub` from a genuine ₽ figure to CREDITS (1 credit =
+  // 1 US cent), the same unit chat.ts's INCR already accumulates
+  // (MICRO-credits, 1000 = 1 credit). key-limits.ts now compares the two
+  // directly — no CBR rate, no network call, ever, on this path.
+  //
+  // These tests DELIBERATELY do NOT seed 'cbr:usd_rub:today' or mock
+  // lib/cbr.ts — that's the point. The PREVIOUS version of this file seeded
+  // the CBR cache to keep the "below cap" / "at cap" tests off the network,
+  // which is exactly how a cold-cache prod outage (up to ~88s of blocking
+  // per request, cbr.ru 2 URLs x 3 retries, no fail-open) went untested:
+  // every green run had quietly warmed the branch it needed to prove was
+  // safe. If key-limits.ts ever re-imports fetchUsdRubRate, these tests will
+  // hang/fail on the real network call instead of silently passing.
 
   it('passes when accumulated spend is below the cap', async () => {
     const mock: any = new (IORedisMock as any)();
     setRedisFactory(() => mock);
-    await mock.set('cbr:usd_rub:today', '90');
-    // 50,000 micro = 50 credits = $0.50 = 45₽ — below a 90₽ cap.
+    // 50,000 micro = 50 credits — below a 100-credit cap.
     await mock.set(monthlyCostCounterKey('k1'), '50000');
-    const app = buildApp({ cost_limit_monthly_rub: 90 as any });
+    const app = buildApp({ cost_limit_monthly_rub: 100 as any });
     const res = await app.fetch(
       new Request('http://x/v1/chat/completions', { method: 'POST' })
     );
@@ -105,10 +113,9 @@ describe('keyLimits middleware — cost_limit_monthly_rub', () => {
   it('402s once accumulated spend reaches the cap', async () => {
     const mock: any = new (IORedisMock as any)();
     setRedisFactory(() => mock);
-    await mock.set('cbr:usd_rub:today', '90');
-    // 100,000 micro = 100 credits = $1 = 90₽ — exactly at a 90₽ cap.
+    // 100,000 micro = 100 credits — exactly at a 100-credit cap.
     await mock.set(monthlyCostCounterKey('k1'), '100000');
-    const app = buildApp({ cost_limit_monthly_rub: 90 as any });
+    const app = buildApp({ cost_limit_monthly_rub: 100 as any });
     const res = await app.fetch(
       new Request('http://x/v1/chat/completions', { method: 'POST' })
     );
@@ -117,19 +124,33 @@ describe('keyLimits middleware — cost_limit_monthly_rub', () => {
     expect(body.error.code).toBe('PAYMENT_REQUIRED');
   });
 
-  it('never touches CBR when nothing has been spent yet (no cache seed needed)', async () => {
+  it('never touches the network when nothing has been spent yet', async () => {
     const mock: any = new (IORedisMock as any)();
     setRedisFactory(() => mock);
     // ioredis-mock shares its in-memory store across instances (verified),
     // so an earlier test's counter for the same key id + calendar month
     // would otherwise leak in here — use a fresh key id instead of relying
     // on isolation the mock doesn't provide.
-    // No 'cbr:usd_rub:today' seeded, no counter set — if the middleware tried
-    // a real CBR fetch this test would hang/fail on the network call.
-    const app = buildApp({ id: 'k-fresh-no-spend', cost_limit_monthly_rub: 90 as any });
+    const app = buildApp({ id: 'k-fresh-no-spend', cost_limit_monthly_rub: 100 as any });
     const res = await app.fetch(
       new Request('http://x/v1/chat/completions', { method: 'POST' })
     );
     expect(res.status).toBe(200);
+  });
+
+  it('a cold CBR cache cannot block this route — no fetchUsdRubRate call exists on this path', async () => {
+    // Regression guard for the outage itself: even with spend present and no
+    // CBR-related key of any kind in redis, the request resolves
+    // synchronously (fast, deterministic) rather than hanging on a fetch.
+    const mock: any = new (IORedisMock as any)();
+    setRedisFactory(() => mock);
+    await mock.set(monthlyCostCounterKey('k-cold-cbr'), '10000'); // 10 credits, well under cap
+    const start = Date.now();
+    const app = buildApp({ id: 'k-cold-cbr', cost_limit_monthly_rub: 100 as any });
+    const res = await app.fetch(
+      new Request('http://x/v1/chat/completions', { method: 'POST' })
+    );
+    expect(res.status).toBe(200);
+    expect(Date.now() - start).toBeLessThan(1000); // no retry/backoff schedule ran
   });
 });

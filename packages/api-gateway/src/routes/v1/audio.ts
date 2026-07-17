@@ -41,15 +41,24 @@ audio.post('/speech', async (c) => {
 
   const model = await resolveModelWithOverride(body.model);
   const mode: Mode = (body.aiag_mode ?? policies.default_mode ?? 'auto') as Mode;
-  const upstream = pickUpstream(model.candidates, mode, policies, 'image');
+  // FIX (blocker 1, Opus review 2026-07-17): this route serves TWO different
+  // pricing shapes under the 'audio' model type — Suno-style song generation
+  // (flat per-track price, model_upstreams.price_per_image) and ElevenLabs-
+  // style TTS (per-second rate, model_upstreams.price_per_audio_sec). The
+  // previous code hardcoded 'image' as the cost metric and required
+  // price_per_image on EVERY audio row — that field is NULL for every TTS
+  // model (elevenlabs-tts-hf/-kie), so the earlier fail-closed check 503'd
+  // the entire TTS surface. 'audio' metric picks whichever column routing
+  // ranks by; the fail-closed check below accepts either column being set.
+  const upstream = pickUpstream(model.candidates, mode, policies, 'audio');
 
-  // Fail closed, before spending on the upstream job: a missing price means
-  // we cannot bill correctly. A numeric fallback here was the MED bug (Opus
-  // review) — `?? 0.05` was written when the column was believed to be USD;
-  // now that price_per_image is confirmed US CENTS, that fallback would have
-  // billed ~100x too little instead of erroring. The price is required in
-  // the DB (model_upstreams.price_per_image) — there is no safe guess.
-  if (!byok && upstream.price_per_image == null) {
+  // Fail closed, before spending on the upstream job: no price in EITHER
+  // column means we cannot bill correctly for this model. A numeric fallback
+  // here was the MED bug (Opus review) — `?? 0.05` was written when the
+  // column was believed to be USD; now that these columns are confirmed US
+  // CENTS, that fallback would have billed ~100x too little instead of
+  // erroring. The price is required in the DB — there is no safe guess.
+  if (!byok && upstream.price_per_audio_sec == null && upstream.price_per_image == null) {
     throw errors.unavailable('Pricing not configured for this model — cannot bill safely');
   }
 
@@ -78,14 +87,30 @@ audio.post('/speech', async (c) => {
     }
   }
 
-  // T1-fix: whole MICRO-credits, no ₽/FX. upstream.price_per_image is
-  // already US CENTS — see lib/pricing.ts.
+  // T1-fix: whole MICRO-credits, no ₽/FX. Both pricing columns are already
+  // US CENTS — see lib/pricing.ts.
   let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
   let upstreamCents = 0;
   if (byok) {
     costCredits = calcByokFeeCredits();
+  } else if (upstream.price_per_audio_sec != null) {
+    // ElevenLabs-style TTS: price_per_audio_sec is a genuine $/second RATE,
+    // not a flat call price (the storefront catalog shows it scaled to a
+    // per-minute display price — gen-marketplace-catalog.ts). Kie's
+    // completed-job response carries no actual output-audio duration (only
+    // a result URL), so true per-second metering isn't available from this
+    // upstream today. Bill one call as a 1-minute unit — the same unit the
+    // storefront already advertises (pricing.unit = 'минута') — rather than
+    // inventing a text-length heuristic. This is a documented approximation
+    // (like video.ts's per-clip-at-default-duration), not a guess dressed
+    // up as precision; real duration-based metering is follow-up debt.
+    upstreamCents = upstream.price_per_audio_sec * 60;
+    costCredits = calcCostCredits({ upstreamCents, markup: upstream.markup });
   } else {
-    upstreamCents = upstream.price_per_image!; // per-clip baseline; validated non-null above
+    // Suno-style song generation: flat per-track price stored in
+    // price_per_image (reused the way video.ts reuses it for per-clip
+    // pricing — validated non-null by the fail-closed check above).
+    upstreamCents = upstream.price_per_image!;
     costCredits = calcCostCredits({ upstreamCents, markup: upstream.markup });
   }
   if (job.status === 'completed' && costCredits > 0) {
