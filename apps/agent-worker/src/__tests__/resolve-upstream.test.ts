@@ -68,14 +68,54 @@ describe('resolveUpstream', () => {
     expect(u.isExternal).toBe(false);
   });
 
-  it('aiag with neither AIAG_GATEWAY_KEY nor OPENROUTER_API_KEY → throws', async () => {
-    // wave0 (aab50ee) added a graceful OpenRouter fallback when AIAG_GATEWAY_KEY
-    // is unset; resolveUpstream only throws when BOTH keys are missing.
+  it('aiag with empty AIAG_GATEWAY_KEY → fail-closed config error (no OPENROUTER_API_KEY set either)', async () => {
     vi.stubEnv('AIAG_GATEWAY_KEY', '');
     vi.stubEnv('OPENROUTER_API_KEY', '');
     await expect(resolveUpstream(makeAgent({ connection_type: 'aiag' }))).rejects.toThrow(
-      'neither AIAG_GATEWAY_KEY nor OPENROUTER_API_KEY set',
+      /AIAG_GATEWAY_KEY/,
     );
+  });
+
+  it('🔴 split-task-2 (config-time mine): aiag with empty AIAG_GATEWAY_KEY but OPENROUTER_API_KEY ' +
+    'SET → still fail-closed, NEVER silently returns a direct-OpenRouter upstream. This is the ' +
+    'exact misconfiguration risk when rotating AIAG_GATEWAY_KEY on the host: an empty gateway key ' +
+    'must refuse the run, not quietly spend our own OpenRouter key.', async () => {
+    vi.stubEnv('AIAG_GATEWAY_KEY', '');
+    vi.stubEnv('OPENROUTER_API_KEY', 'or_key_should_never_be_used');
+    const fetchMock = vi.fn(async () => {
+      throw new Error('MUST NOT fetch anything — resolveUpstream must throw before any upstream call');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(resolveUpstream(makeAgent({ connection_type: 'aiag' }))).rejects.toThrow(
+      /AIAG_GATEWAY_KEY/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('aiag with AIAG_GATEWAY_KEY unset (not just empty string) → same fail-closed error', async () => {
+    vi.stubEnv('AIAG_GATEWAY_KEY', undefined as unknown as string);
+    delete process.env.AIAG_GATEWAY_KEY;
+    vi.stubEnv('OPENROUTER_API_KEY', 'or_key_should_never_be_used');
+    await expect(resolveUpstream(makeAgent({ connection_type: 'aiag' }))).rejects.toThrow(
+      /AIAG_GATEWAY_KEY/,
+    );
+  });
+
+  it('BYOK (external_openai) is UNAFFECTED by AIAG_GATEWAY_KEY being empty — proves the two paths ' +
+    'are not intertwined', async () => {
+    vi.stubEnv('AIAG_GATEWAY_KEY', '');
+    const u = await resolveUpstream(
+      makeAgent({
+        connection_type: 'external_openai',
+        external_base_url: 'https://x/v1',
+        external_api_key_encrypted: Buffer.from('userkey'),
+        external_model_slug: 'gpt-4o',
+      }),
+    );
+    expect(u.url).toBe('https://x/v1/chat/completions');
+    expect(u.isExternal).toBe(true);
+    expect(u.model).toBe('gpt-4o');
   });
 
   it('external_openai with base "https://x/v1" → appends /chat/completions, isExternal true', async () => {
