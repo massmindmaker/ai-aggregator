@@ -27,6 +27,8 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   isAdmin: boolean;
+  hasAuthored: boolean;
+  hasEntered: boolean;
 }
 
 const ITEMS_USER = [
@@ -64,6 +66,13 @@ const MODE_CHIPS: { mode: Mode; label: string; emoji: string }[] = [
   { mode: 'participant', label: 'Participant', emoji: '🏆' },
 ];
 
+// Shown in place of the Author / Participant chip until the user has earned
+// it — a subtle link to the action that earns it, not a dead end.
+const UNEARNED_CTA: Record<'author' | 'participant', { label: string; href: string }> = {
+  author: { label: 'Опубликовать модель', href: '/dashboard/models/new' },
+  participant: { label: 'Конкурсы', href: '/contests' },
+};
+
 function itemsFor(mode: Mode) {
   switch (mode) {
     case 'author':
@@ -76,10 +85,13 @@ function itemsFor(mode: Mode) {
   }
 }
 
-export default function DashboardSidebar({ isAdmin }: Props) {
+export default function DashboardSidebar({ isAdmin, hasAuthored, hasEntered }: Props) {
   const pathname = usePathname() ?? '/dashboard';
   const searchParams = useSearchParams();
-  const mode = resolveMode(searchParams.get('mode') ?? undefined, pathname);
+  const mode = resolveMode(searchParams.get('mode') ?? undefined, pathname, {
+    hasAuthored,
+    hasEntered,
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Close drawer on route change.
@@ -113,6 +125,21 @@ export default function DashboardSidebar({ isAdmin }: Props) {
         </div>
         <div className="flex flex-col gap-1 mb-3">
           {MODE_CHIPS.map((c) => {
+            if (c.mode !== 'user') {
+              const isEarned = c.mode === 'author' ? hasAuthored : hasEntered;
+              if (!isEarned) {
+                const cta = UNEARNED_CTA[c.mode];
+                return (
+                  <Link
+                    key={c.mode}
+                    href={cta.href}
+                    className="flex items-center px-3 py-2 text-[13px] rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                  >
+                    {cta.label}
+                  </Link>
+                );
+              }
+            }
             const active = mode === c.mode;
             return (
               <Link
