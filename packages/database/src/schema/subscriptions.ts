@@ -84,7 +84,9 @@ export const subscriptions = pgTable(
 
     // Tier state (migration 0054) — read by dashboard/overview.ts. plan_name =
     // TIERS[tier].name; creditsLimit = TIERS[tier].credits (a COUNT of monthly
-    // credits, NOT rubles); creditsUsed = consumption this period.
+    // credits, NOT rubles), scaled ×12 for yearly billing to match the 12-month
+    // active period (see api/subscriptions/create/route.ts); creditsUsed =
+    // consumption this period.
     planName: text('plan_name'),
     creditsLimit: integer('credits_limit'),
     creditsUsed: integer('credits_used').default(0).notNull(),
