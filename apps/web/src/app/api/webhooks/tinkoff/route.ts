@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tinkoff } from '@/lib/tinkoff';
-import { resolveTinkoffSecret } from '@/lib/payments/providers';
+import { resolveTinkoffSecret, getTier } from '@/lib/payments/providers';
+import { getOrCreateDefaultOrg } from '@/lib/dashboard/org';
 import { db } from '@/lib/db';
 import { eq, and, ne, sql } from '@aiag/database';
 import { payments, subscriptions, balanceTransactions, users } from '@aiag/database/schema';
@@ -203,6 +204,27 @@ async function creditBalance(
     referenceType: 'payment',
     referenceId: payment.id,
   });
+
+  // ─── BRIDGE: payment → gateway-spendable credits ────────────────────────
+  // users.balance above is LEGACY (rubles, text) and is NOT what the gateway
+  // debits. The gateway's aiag_settle_charge_credits reads
+  // organizations.payg_credits (BIGINT MICRO-credits, 1 credit = 1000 micro =
+  // 1¢) scoped by the user's default org — the SAME org getOrCreateDefaultOrg
+  // resolves for /api/dashboard/billing/summary. Without this grant a paid
+  // top-up leaves the org at 0 → every model call 402s. PAYG rate = the Basic
+  // bundle (990 ₽ = 1200 credits = 1_200_000 micro), applied linearly.
+  // payg_credits ACCUMULATES (`+=`). Runs in the SAME guarded tx as the
+  // idempotency gate → grants exactly once per payment; the atomic
+  // `+ ${micro}` is safe for concurrent top-ups of the same org (no lost
+  // update). organizations.* columns are not in the Drizzle schema (BIGINT
+  // added by migration 0004/0056), so raw SQL — same as billing/summary.
+  const paygMicro = Math.round((webhookData.amount * 1_200_000) / 990);
+  const orgId = await getOrCreateDefaultOrg(payment.userId);
+  await tx.execute(sql`
+    UPDATE organizations
+    SET payg_credits = payg_credits + ${paygMicro}::bigint
+    WHERE id = ${orgId}::uuid
+  `);
 }
 
 /**
@@ -219,7 +241,8 @@ async function activateSubscriptionTier(
   payment: typeof payments.$inferSelect,
   webhookData: ReturnType<typeof tinkoff.parseWebhook>
 ) {
-  const yearly = (payment.metadata as { billing?: string } | null)?.billing === 'yearly';
+  const meta = payment.metadata as { billing?: string; tier_id?: string } | null;
+  const yearly = meta?.billing === 'yearly';
   const now = new Date();
   const periodEnd = yearly
     ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
@@ -243,6 +266,37 @@ async function activateSubscriptionTier(
       updatedAt: now,
     })
     .where(and(eq(subscriptions.id, payment.subscriptionId!), eq(subscriptions.status, 'pending')));
+
+  // ─── BRIDGE: tier → gateway-spendable credits ───────────────────────────
+  // Flipping the subscriptions row to active is NOT enough: the gateway debits
+  // organizations.subscription_credits (BIGINT MICRO-credits), scoped by the
+  // user's default org (the SAME org billing/summary shows). Without this the
+  // paid tier still 402s. tier.credits is the MONTHLY allowance; a yearly
+  // purchase grants 12 months up-front (the annual deal — billed at
+  // tier.yearly = 10×monthly, but 12 months of credits). SET (not `+=`): a
+  // fresh period REPLACES the subscription bucket — these credits do not roll
+  // over — while payg_credits (a separate column) is left untouched.
+  // subscription_credits_expires_at is read by the gateway to expire the bucket.
+  const tier = getTier(meta?.tier_id || '');
+  if (tier) {
+    const grantedMicro = tier.credits * (yearly ? 12 : 1) * 1000;
+    const orgId = await getOrCreateDefaultOrg(payment.userId);
+    await tx.execute(sql`
+      UPDATE organizations
+      SET subscription_credits = ${grantedMicro}::bigint,
+          subscription_credits_expires_at = ${periodEnd}
+      WHERE id = ${orgId}::uuid
+    `);
+  } else {
+    // Payment metadata carried no known tier_id — can't size the grant. Do NOT
+    // throw: that rolls back the whole settlement (status flip included) and
+    // the bank retry would loop forever on the same bad metadata. Log for
+    // reconciliation; in practice /api/subscriptions/create always sets tier_id.
+    console.error(
+      '[webhook/tinkoff] subscription CONFIRMED but tier_id missing/unknown — org NOT credited',
+      { paymentId: payment.id, subscriptionId: payment.subscriptionId, tierId: meta?.tier_id }
+    );
+  }
 
   // TODO (recurring renewal): webhookData.rebillId is now bound to the
   // subscription; a scheduled job charging it each period to renew the tier is
