@@ -10,6 +10,10 @@ import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { settleCharge } from '../billing/settle';
 import {
+  incrementSpendCounters,
+  type SpendCounterArgs,
+} from '../billing/spend-counters';
+import {
   BILLING_HEADERS,
   formatUsdMicroHeader,
 } from '../lib/billing-headers';
@@ -22,7 +26,16 @@ import { stripUpstreamFields } from './scrub';
 export type StreamSettleOpts = {
   upstream: UpstreamCandidate;
   model: { slug: string; type: string };
-  key: { id: string; org_id: string };
+  /**
+   * Widened from `{id, org_id}` to the cap-bearing fields: the stream path
+   * settled money but never moved the daily-USD / monthly-cost / session
+   * counters, so `stream:true` was a free bypass of every enforced cap. The
+   * shape is exactly what incrementSpendCounters needs (any route's `key`
+   * satisfies it).
+   */
+  key: SpendCounterArgs['key'];
+  /** `x-aiag-session-id`, forwarded so the per-session budget accumulates. */
+  sessionId?: string | null;
   requestId: string;
   byok: boolean;
 };
@@ -89,14 +102,21 @@ export async function streamSseAndSettle(
     // lib/pricing.ts (upstreamCents, not upstreamUsd — the original bug).
     let costCredits = 0; // MICRO-credits (1 credit = 1000 micro = 1¢)
     let upstreamCostUsd = 0;
+    // Hoisted out of the `else` branch: the cap-counter increment below needs
+    // it (daily_usd_cap accumulates real USD = cents / 100).
+    let upstreamCents = 0;
     // D-1 (USD-native): costCredits (micro) / MICRO_PER_USD = real USD.
     let chargedUsd = 0;
+    // Whether settlement completed. In the non-stream branch a settle failure
+    // throws out of the handler and the counters are never reached — mirror
+    // that here rather than counting spend that was never actually charged.
+    let settled = true;
     try {
       if (opts.byok) {
         costCredits = calcByokFeeCredits();
         chargedUsd = costCredits / MICRO_PER_USD;
       } else {
-        const upstreamCents =
+        upstreamCents =
           (inputTokens / 1000) * opts.upstream.price_per_1k_input +
           (outputTokens / 1000) * opts.upstream.price_per_1k_output;
         costCredits = calcCostCredits({
@@ -121,10 +141,26 @@ export async function streamSseAndSettle(
         });
       }
     } catch (e) {
+      settled = false;
       logger.error(
         { err: String(e), requestId: opts.requestId },
         'sse_settle_failed'
       );
+    }
+
+    // Cap counters — the stream path's missing half. Runs on the same terms
+    // as the non-stream branch in chat.ts (after settlement, best-effort so a
+    // Redis blip can't break an already-served response). Deliberately
+    // OUTSIDE the settle try/catch (the helper swallows its own Redis errors),
+    // but gated on `settled` so a failed charge is not counted as spend.
+    if (settled) {
+      await incrementSpendCounters({
+        key: opts.key,
+        byok: opts.byok,
+        upstreamCents,
+        costCredits,
+        sessionId: opts.sessionId,
+      });
     }
 
     // T1: legacy ₽ headers (X-AIAG-Charged-Rub / X-AIAG-Upstream-Cost-Rub) are
