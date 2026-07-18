@@ -41,6 +41,45 @@ export type SettleResult = {
 };
 
 /**
+ * PREFLIGHT balance gate — call at the TOP of every billing route, BEFORE the
+ * upstream is invoked (and, for streaming, before a single chunk is sent).
+ *
+ * WHY: the settlement order was `upstream → settle → 402`, so a zero-balance
+ * key still received a full (streamed) answer and only 402'd *after* the fact —
+ * a free-answer leak on the stream path (sse.ts calls the upstream before any
+ * balance check). This reads the org's spendable balance
+ * (`subscription_credits + payg_credits`, BIGINT micro-credits) and throws 402
+ * up front if it is <= 0.
+ *
+ * Constraints honoured: **one indexed SELECT, no network, no estimate.** It is
+ * deliberately a coarse "is there anything to spend?" gate (<= 0), not a
+ * per-request cost projection — the exact charge is still settled atomically
+ * afterwards (settleCharge re-checks funds under `SELECT FOR UPDATE`, so this
+ * is a cheap early-out, not the authority).
+ *
+ * NOT called for BYOK/external — the caller pays their own provider and the
+ * commission rule charges zero for upstream (CLAUDE.md); callers guard with
+ * `if (!byok)`.
+ */
+export async function assertPositiveBalance(
+  orgId: string,
+  client: typeof defaultSql = defaultSql
+): Promise<void> {
+  const rows = await client<Array<{ balance: string }>>`
+    SELECT (subscription_credits + payg_credits)::text AS balance
+      FROM organizations
+     WHERE id = ${orgId}::uuid
+  `;
+  const row = rows[0];
+  // No org row (shouldn't happen once auth resolved a key with this org_id) OR
+  // a non-positive balance → fail closed with 402 before spending upstream.
+  // BigInt keeps the comparison exact at the BIGINT micro-credit scale.
+  if (!row || BigInt(row.balance) <= 0n) {
+    throw errors.paymentRequired();
+  }
+}
+
+/**
  * Accepts an injectable sql client to simplify testing.
  */
 export async function settleCharge(

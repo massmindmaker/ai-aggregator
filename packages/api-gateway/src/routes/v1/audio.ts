@@ -9,7 +9,8 @@ import { errors } from '../../lib/errors';
 import { resolveModelWithOverride } from '../../routing/resolver';
 import { pickUpstream, type Mode, type ApiKeyPolicies } from '../../routing/engine';
 import { calcCostCredits, calcByokFeeCredits } from '../../lib/pricing';
-import { settleCharge } from '../../billing/settle';
+import { settleCharge, assertPositiveBalance } from '../../billing/settle';
+import { incrementSpendCounters } from '../../billing/spend-counters';
 import { logRequest } from '../../logging/stream';
 import { getUpstream } from '../../upstreams/registry';
 import type { AuthenticatedApiKey } from '../../middleware/auth-plan04';
@@ -53,6 +54,9 @@ audio.post('/speech', async (c) => {
     throw errors.unavailable('Pricing not configured for this model — cannot bill safely');
   }
 
+  // PREFLIGHT: 402 before submitting a paid upstream job (see settle.ts).
+  if (!byok) await assertPositiveBalance(key.org_id);
+
   const start = Date.now();
   const adapter = getUpstream(upstream.provider);
   if (!adapter.audioSpeech) {
@@ -94,6 +98,17 @@ audio.post('/speech', async (c) => {
       requestId,
       costCredits,
       metadata: { model_slug: body.model },
+    });
+  }
+
+  // Cap counters — gated on the same `completed` condition as the charge.
+  if (job.status === 'completed') {
+    await incrementSpendCounters({
+      key,
+      byok,
+      upstreamCents,
+      costCredits,
+      sessionId: c.req.header('x-aiag-session-id'),
     });
   }
 

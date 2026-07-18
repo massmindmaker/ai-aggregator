@@ -3,21 +3,17 @@
  * Plan 05 real adapters ship.
  */
 import { Hono } from 'hono';
-import { makeRedis } from '../../lib/redis';
 import { errors } from '../../lib/errors';
-import { logger } from '../../lib/logger';
 import { resolveModelWithOverride } from '../../routing/resolver';
 import {
   pickUpstream,
   type Mode,
   type ApiKeyPolicies,
 } from '../../routing/engine';
-import {
-  checkSessionBudget,
-  accumulateSessionCost,
-} from '../../routing/policies';
+import { checkSessionBudget } from '../../routing/policies';
 import { calcCostCredits, calcByokFeeCredits, MICRO_PER_USD } from '../../lib/pricing';
-import { settleCharge } from '../../billing/settle';
+import { settleCharge, assertPositiveBalance } from '../../billing/settle';
+import { incrementSpendCounters } from '../../billing/spend-counters';
 import {
   BILLING_HEADERS,
   formatUsdMicroHeader,
@@ -26,7 +22,6 @@ import { logRequest } from '../../logging/stream';
 import { streamSseAndSettle } from '../../streaming/sse';
 import { getUpstream } from '../../upstreams/registry';
 import type { AuthenticatedApiKey } from '../../middleware/auth-plan04';
-import { monthlyCostCounterKey } from '../../middleware/key-limits';
 
 export const chat = new Hono();
 
@@ -68,6 +63,12 @@ chat.post('/completions', async (c) => {
     await checkSessionBudget({ apiKeyId: key.id, sessionId, capRub: sessionCap });
   }
 
+  // PREFLIGHT: 402 BEFORE the upstream is called. Previously the order was
+  // upstream → settle → 402, so a zero-balance org still got a full answer
+  // (and on the stream path the settle error was swallowed in sse.ts, making
+  // the answer free). BYOK is skipped — the caller pays their own provider.
+  if (!byok) await assertPositiveBalance(key.org_id);
+
   const start = Date.now();
   const upstreamAdapter = getUpstream(upstream.provider);
 
@@ -81,7 +82,10 @@ chat.post('/completions', async (c) => {
     return streamSseAndSettle(c, iter, {
       upstream,
       model: { slug: model.slug, type: model.type },
-      key: { id: key.id, org_id: key.org_id },
+      // Full key (not just id/org_id): sse.ts now bumps the SAME cap counters
+      // the non-stream branch does — `stream:true` used to bypass all three.
+      key,
+      sessionId,
       requestId,
       byok,
     });
@@ -152,64 +156,20 @@ chat.post('/completions', async (c) => {
     }
   }
 
-  // FIX H2.3: daily USD cap INCR. 🔴 T1-fix (2026-07-16 rework): this
-  // previously accumulated `upstreamUsd` (actually cents, mislabeled) as if
-  // it were USD against a real-USD cap (`daily_usd_cap`) — tripping the cap
-  // ~100× too early. Now divides by 100 so the accumulator is real USD.
-  if (!byok && key.daily_usd_cap) {
-    try {
-      const redis = makeRedis('ratelimit');
-      const today = new Date().toISOString().slice(0, 10);
-      const usedKey = `usd_day:${key.org_id}:${today}`;
-      await redis.incrbyfloat(usedKey, upstreamCents / 100);
-      await redis.expireat(
-        usedKey,
-        Math.floor(new Date().setUTCHours(24, 0, 0, 0) / 1000)
-      );
-    } catch (e) {
-      logger.warn({ err: String(e) }, 'daily_usd_incr_fail');
-    }
-  }
-
-  // Security review 2026-07 (#3): cost_limit_monthly_rub INCR. Same shape as
-  // the daily USD cap above but keyed per-key (not per-org) — it must reflect
-  // what the caller was actually CHARGED (costCredits), not our upstream cost,
-  // so BYOK's fixed fee counts too. key-limits.ts middleware reads this
-  // counter read-only on the NEXT request; this is the only place it's
-  // incremented.
-  // ⚠️ T1/T2 scope note: the field/redis-key are still named "..._rub" but
-  // as of migration 0061 (2026-07-17) `cost_limit_monthly_rub` actually holds
-  // CREDITS, the same unit this counter accumulates (MICRO-credits, 1000 =
-  // 1 credit = 1 US cent) — key-limits.ts compares them directly, no FX.
-  // This INCR itself is unchanged by that migration; it always stored
-  // micro-credits (the settlement's native unit).
-  // Renaming the column/redis-key to a real credits unit is still T6/T4
-  // (finmodel-build-spec §6/§8).
-  if (key.cost_limit_monthly_rub) {
-    try {
-      const redis = makeRedis('ratelimit');
-      const usedKey = monthlyCostCounterKey(key.id);
-      await redis.incrbyfloat(usedKey, costCredits);
-      // ~32 days: comfortably outlives the current calendar month regardless
-      // of when in the month the first request landed; the counter key
-      // itself rolls over to a fresh YYYY-MM string next month anyway.
-      await redis.expire(usedKey, 32 * 24 * 3600);
-    } catch (e) {
-      logger.warn({ err: String(e) }, 'monthly_cost_incr_fail');
-    }
-  }
-
-  // ⚠️ Same widened T1 scope note as above: policies.per_session_budget_cap_rub /
-  // accumulateSessionCost's `deltaRub` param are still ₽-named; fed
-  // MICRO-credits here (same ~1000-92000× unit mismatch). T4 follow-up.
-  if (sessionCap && sessionId) {
-    await accumulateSessionCost({
-      apiKeyId: key.id,
-      sessionId,
-      deltaRub: costCredits,
-      ttlSec: 86400,
-    });
-  }
+  // Cap counters (daily USD / monthly cost / per-session budget). These three
+  // INCRs used to live inline HERE and only here — every other billing path
+  // (stream, completions, embeddings, images, video, audio) settled real
+  // money without moving them, so a capped key was bypassable by switching
+  // endpoint or setting `stream:true`. Now a shared helper called from all of
+  // them; thresholds/402 logic are untouched (rate-limit-plan04.ts,
+  // key-limits.ts, checkSessionBudget still own those).
+  await incrementSpendCounters({
+    key,
+    byok,
+    upstreamCents,
+    costCredits,
+    sessionId,
+  });
 
   void logRequest({
     requestId,

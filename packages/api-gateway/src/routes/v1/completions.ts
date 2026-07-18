@@ -4,7 +4,8 @@ import { errors } from '../../lib/errors';
 import { resolveModelWithOverride } from '../../routing/resolver';
 import { pickUpstream, type Mode, type ApiKeyPolicies } from '../../routing/engine';
 import { calcCostCredits, calcByokFeeCredits } from '../../lib/pricing';
-import { settleCharge } from '../../billing/settle';
+import { settleCharge, assertPositiveBalance } from '../../billing/settle';
+import { incrementSpendCounters } from '../../billing/spend-counters';
 import { logRequest } from '../../logging/stream';
 import { getUpstream } from '../../upstreams/registry';
 import type { AuthenticatedApiKey } from '../../middleware/auth-plan04';
@@ -32,6 +33,11 @@ completions.post('/', async (c) => {
   const model = await resolveModelWithOverride(body.model);
   const mode: Mode = (body.aiag_mode ?? policies.default_mode ?? 'auto') as Mode;
   const upstream = pickUpstream(model.candidates, mode, policies, 'chat');
+
+  // PREFLIGHT: 402 before spending on the upstream (see billing/settle.ts).
+  // BYOK skipped — the caller pays their own provider.
+  if (!byok) await assertPositiveBalance(key.org_id);
+
   const start = Date.now();
 
   const promptText = Array.isArray(body.prompt) ? body.prompt.join('\n') : body.prompt;
@@ -70,6 +76,17 @@ completions.post('/', async (c) => {
       },
     });
   }
+
+  // Cap counters — this route settled money without moving them before, so a
+  // capped key could bypass the cap by calling /v1/completions instead of
+  // /v1/chat/completions. Thresholds/402 logic unchanged.
+  await incrementSpendCounters({
+    key,
+    byok,
+    upstreamCents,
+    costCredits,
+    sessionId: c.req.header('x-aiag-session-id'),
+  });
 
   void logRequest({
     requestId,
