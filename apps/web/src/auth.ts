@@ -116,6 +116,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
+        // Mirrors the admin step-up check in api/admin/auth/route.ts: a
+        // banned or deactivated user must be refused login the same way a
+        // wrong password is — returning null fails the credentials grant
+        // without leaking which check tripped.
+        if (user.isBanned || user.isActive === false) {
+          return null;
+        }
+
         return {
           id: user.id,
           email: user.email,

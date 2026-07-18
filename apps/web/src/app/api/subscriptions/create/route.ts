@@ -62,6 +62,19 @@ export async function POST(req: NextRequest) {
   const provider = getPaymentProvider(providerId);
 
   const amount = body.yearly ? tier.yearly : tier.monthly;
+  // tier.credits is a MONTHLY allotment (see TIERS docblock + the pricing page,
+  // which literally labels it "N кредитов / мес" for both billing toggles —
+  // apps/web/src/app/pricing/PricingClient.tsx:36,52,70). The webhook grants
+  // this as a single lump sum for the whole active period and activates a
+  // 12-month period for yearly (see activateSubscriptionTier in
+  // api/webhooks/tinkoff/route.ts: periodEnd = +1 year vs +1 month), so a flat
+  // `tier.credits` here previously gave a yearly buyer 1 month of credits for a
+  // 12-month-long subscription. All 3 TIERS price yearly at exactly 10×
+  // monthly (basic 990→9900, starter 2490→24900, pro 6990→69900) — the
+  // standard "pay for 10, get 12" annual discount — so credits must scale ×12
+  // (not ×10) to match the 12-month period and honor the "credits/month" promise
+  // on the pricing page for every month of that period.
+  const credits = body.yearly ? tier.credits * 12 : tier.credits;
   const orderId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-aggregator.ru';
   const description = `Подписка ${tier.name} (${body.yearly ? 'год' : 'месяц'})`;
@@ -126,7 +139,7 @@ export async function POST(req: NextRequest) {
         userId,
         status: 'pending',
         planName: tier.name,
-        creditsLimit: tier.credits,
+        creditsLimit: credits,
         creditsUsed: 0,
         currentPeriodStart: now,
         currentPeriodEnd: now,
