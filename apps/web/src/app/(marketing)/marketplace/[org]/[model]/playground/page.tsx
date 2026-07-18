@@ -94,19 +94,14 @@ export default async function PlaygroundPage({ params }: RouteParams) {
           <aside className="space-y-4">
             <Card>
               <CardContent className="p-4 text-sm space-y-2">
-                <div className="font-semibold">Ограничения демо-режима</div>
+                <div className="font-semibold">Демо-доступ</div>
                 <ul className="list-disc ms-4 space-y-1 text-muted-foreground">
-                  <li>
-                    {isLoggedIn
-                      ? '5 запросов в сутки — общий лимит демо-режима'
-                      : '5 запросов в сутки без авторизации'}
-                  </li>
-                  <li>Ответы заранее заготовлены</li>
-                  <li>Стриминг эмулирован</li>
+                  <li>5 запросов в сутки на IP</li>
+                  <li>Реальная модель через боевой шлюз, без регистрации</li>
                 </ul>
                 <p className="text-xs text-muted-foreground pt-2">
-                  Это демо: ответы не идут через боевую модель. Реальная маршрутизация
-                  подключится в одном из ближайших обновлений.
+                  Ответы не заготовлены: playground обращается к той же
+                  модели, что и API.
                 </p>
               </CardContent>
             </Card>
@@ -116,7 +111,8 @@ export default async function PlaygroundPage({ params }: RouteParams) {
                 <CardContent className="p-4 text-sm space-y-2">
                   <div className="font-semibold">Хотите больше?</div>
                   <p className="text-muted-foreground">
-                    Зарегистрируйтесь и получите API-ключ — до 50 запросов/день.
+                    Зарегистрируйтесь и получите API-ключ: запросы через API
+                    идут без демо-лимита, оплата по балансу.
                   </p>
                   <Button asChild size="sm" className="w-full">
                     <Link href="/register">Зарегистрироваться</Link>

@@ -2,12 +2,12 @@
  * Live "Top models" leaderboard for the home page.
  *
  * Source of truth: gateway `requests` table (last 7 days, GROUP BY model_slug).
- * Falls back to the marketplace catalog with deterministic placeholderRuns()
- * when telemetry is missing or schema doesn't match (e.g. fresh DB).
+ * Renders NOTHING when there isn't enough real telemetry (< 3 distinct
+ * models) — the section must never claim "Live" over placeholder/hash-based
+ * numbers. See `isLive` below: only the real-telemetry branch is shown.
  */
 
 import { db, sql } from '@/lib/db';
-import { placeholderRuns } from '@/lib/marketplace/placeholders';
 import { stripProviderBrand } from '@/lib/marketplace/strip-provider-brand';
 
 interface TopModel {
@@ -23,15 +23,10 @@ function orgFromSlug(slug: string): string | null {
   return idx > 0 ? slug.slice(0, idx) : null;
 }
 
-function parseRunsToken(token: string): number {
-  // `1.4M` / `420K` → integer
-  if (token.endsWith('M')) return Math.round(parseFloat(token) * 1_000_000);
-  if (token.endsWith('K')) return Math.round(parseFloat(token) * 1_000);
-  return parseInt(token, 10) || 0;
-}
-
-async function getTopModels(): Promise<TopModel[]> {
-  // Try live telemetry first.
+async function getTopModels(): Promise<{ models: TopModel[]; isLive: boolean }> {
+  // Try live telemetry first. This is the ONLY branch allowed to render —
+  // no fallback/placeholder data is computed, so there's nothing fake left
+  // to accidentally show under a "Live" badge.
   try {
     const result = await db.execute(sql`
       SELECT
@@ -50,41 +45,22 @@ async function getTopModels(): Promise<TopModel[]> {
       (result as unknown as Array<{ slug: string; name: string | null; runs: number }>);
 
     if (Array.isArray(rows) && rows.length >= 3) {
-      return rows.map((r) => ({
-        slug: r.slug,
-        name: r.name ? stripProviderBrand(r.name) : r.name,
-        org_slug: orgFromSlug(r.slug),
-        runs: r.runs,
-      }));
+      return {
+        isLive: true,
+        models: rows.map((r) => ({
+          slug: r.slug,
+          name: r.name ? stripProviderBrand(r.name) : r.name,
+          org_slug: orgFromSlug(r.slug),
+          runs: r.runs,
+        })),
+      };
     }
   } catch {
     // schema mismatch / no requests / build-time DB not initialized — fall through
   }
 
-  // Fallback: marketplace catalog with deterministic placeholder counts.
-  try {
-    const result = await db.execute(sql`
-      SELECT m.slug, m.display_name AS name
-      FROM models m
-      WHERE m.enabled = true
-      LIMIT 24
-    `);
-    const rows =
-      (result as unknown as { rows?: Array<{ slug: string; name: string | null }> }).rows ??
-      (result as unknown as Array<{ slug: string; name: string | null }>);
-
-    return (rows ?? [])
-      .map((r) => ({
-        slug: r.slug,
-        name: r.name ? stripProviderBrand(r.name) : r.name,
-        org_slug: orgFromSlug(r.slug),
-        runs: parseRunsToken(placeholderRuns(r.slug)),
-      }))
-      .sort((a, b) => b.runs - a.runs)
-      .slice(0, 10);
-  } catch {
-    return [];
-  }
+  // No real telemetry yet (e.g. requests=0) — do not fabricate a leaderboard.
+  return { models: [], isLive: false };
 }
 
 function formatRuns(n: number): string {
@@ -94,8 +70,10 @@ function formatRuns(n: number): string {
 }
 
 export async function TopModelsLeaderboard() {
-  const models = await getTopModels();
-  if (models.length === 0) return null;
+  const { models, isLive } = await getTopModels();
+  // Honesty gate: only render when backed by real 7-day request telemetry.
+  // Never show the "Live" badge over placeholder/hash-based numbers.
+  if (!isLive || models.length === 0) return null;
 
   return (
     <section className="container mx-auto max-w-5xl px-4 py-16">
@@ -108,7 +86,7 @@ export async function TopModelsLeaderboard() {
             lineHeight: 1.05,
           }}
         >
-          Топ моделей сегодня
+          Топ моделей за неделю
         </h2>
         <p
           className="text-xs uppercase tracking-widest flex items-center gap-2 font-mono"
@@ -122,7 +100,7 @@ export async function TopModelsLeaderboard() {
               background: 'var(--success, #22c55e)',
             }}
           />
-          Live · обновляется каждый час
+          Live · за 7 дней
         </p>
       </div>
 

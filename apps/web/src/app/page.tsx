@@ -11,13 +11,23 @@ import { CodeTabsDemo } from '@/components/home/CodeTabsDemo';
 import { TopModelsLeaderboard } from '@/components/home/TopModelsLeaderboard';
 import { CountUp } from '@/components/ui/CountUp';
 import type { ModelType } from '@/lib/marketplace/catalog';
+import { getAllModels, getAllOrgs } from '@/lib/marketplace/catalog';
 import { filtersToSearchParams } from '@/lib/marketplace/filters';
+
+/**
+ * Storefront numbers are derived from the live catalog, never hand-written —
+ * the hardcoded "400+ моделей" claimed ~6x the real catalog. `getAllModels`
+ * and `getAllOrgs` are synchronous pure reads over the generated catalog
+ * (no DB, no network), so module scope is safe here.
+ */
+const MODEL_COUNT = getAllModels().length;
+const ORG_COUNT = getAllOrgs().length;
 
 export const metadata: Metadata = {
   title:
     'AI-Aggregator — любая AI-модель, один API, оплата в ₽',
   description:
-    'Подключайте любую AI-модель через OpenAI-совместимый API. GPT-5, Claude, Flux, Veo, Whisper и сотни открытых моделей. Оплата картой РФ, СБП, по счёту. Deploy в РФ-регионе — latency < 100ms.',
+    'Подключайте любую AI-модель через OpenAI-совместимый API. GPT-5, Claude, Flux, Veo, Whisper и открытые модели. Оплата картой РФ, СБП, по счёту. Deploy в РФ-регионе.',
 };
 
 /**
@@ -84,7 +94,6 @@ const providers = [
   'Qwen',
   'Meta Llama',
   'Mistral',
-  'Cohere',
   'xAI',
   'Stability AI',
   'Black Forest Labs',
@@ -103,11 +112,13 @@ interface HeroStat {
   staticValue?: string;
 }
 
+// Counts come from the catalog (see MODEL_COUNT/ORG_COUNT above).
+// Uptime and latency stats were REMOVED, not re-estimated: we have no
+// measurement pipeline (`requests` is empty), so any number here would be
+// invented. Re-add only when backed by real telemetry.
 const heroStats: HeroStat[] = [
-  { end: 400, suffix: '+', label: 'моделей' },
-  { end: 12, label: 'провайдеров' },
-  { end: 99.9, decimals: 1, suffix: '%', label: 'аптайм' },
-  { staticValue: '<150мс', label: 'latency p50' },
+  { end: MODEL_COUNT, label: 'моделей' },
+  { end: ORG_COUNT, label: 'провайдеров' },
 ];
 
 const topModels = [
@@ -118,7 +129,6 @@ const topModels = [
     chips: ['chat', 'vision', 'tools'],
     desc: 'Флагманская multimodal LLM с 1M ctx, reasoning и tool use.',
     price: '0.2 ₽ / 1k tok',
-    stats: '⭐ 4.9 · 12M req',
   },
   {
     code: 'SD',
@@ -127,7 +137,6 @@ const topModels = [
     chips: ['image', 'open'],
     desc: 'Генерация 1024×1024 за ~2 сек. LoRA, ControlNet, IP-Adapter.',
     price: '0.04 ₽ / img',
-    stats: '⭐ 4.8 · 8M req',
   },
   {
     code: 'C4',
@@ -136,7 +145,6 @@ const topModels = [
     chips: ['chat', '200k ctx'],
     desc: 'Лучший coding LLM, agentic workflows, artifact mode.',
     price: '0.35 ₽ / 1k tok',
-    stats: '⭐ 4.9 · 5M req',
   },
   {
     code: 'FX',
@@ -145,7 +153,6 @@ const topModels = [
     chips: ['image', 'photo'],
     desc: 'Фотореалистичная генерация, превосходит MJ v6 на людях.',
     price: '0.12 ₽ / img',
-    stats: '⭐ 4.9 · 3M req',
   },
 ];
 
@@ -153,7 +160,7 @@ const steps = [
   {
     num: '// 01',
     title: 'Выберите модель',
-    desc: '400+ моделей с фильтром по модальности, цене и latency. Playground без регистрации.',
+    desc: `${MODEL_COUNT} моделей с фильтром по модальности, цене и latency. Playground без регистрации.`,
     code: (
       <>
         GET <span style={{ color: '#a1e89b' }}>/marketplace?tag=image</span>
@@ -205,7 +212,7 @@ const compareRows = [
   },
   {
     feat: 'Каталог моделей',
-    us: { kind: 'check', text: '✓ 400+, LLM + image + audio' },
+    us: { kind: 'check', text: `✓ ${MODEL_COUNT}, LLM + image + audio` },
     cells: [
       { kind: 'check', text: '✓ 1000+ (image heavy)' },
       { kind: 'check', text: '✓ 500k+ (часто без API)' },
@@ -221,15 +228,9 @@ const compareRows = [
       { kind: 'check', text: '✓' },
     ],
   },
-  {
-    feat: 'Latency из РФ',
-    us: { kind: 'check', text: '< 100ms' },
-    cells: [
-      { kind: 'meh', text: '~ 300ms' },
-      { kind: 'meh', text: '~ 400ms' },
-      { kind: 'check', text: '< 150ms' },
-    ],
-  },
+  // "Latency из РФ" row removed: it quoted "< 100ms" for us and invented
+  // per-competitor numbers, none of which are measured anywhere. Restore only
+  // with a real latency benchmark behind it.
   {
     feat: 'Конкурсы / кастом-модели',
     us: { kind: 'check', text: '✓ open contests + 70% ML-инженеру' },
@@ -379,7 +380,7 @@ export default function HomePage() {
                   background: 'var(--accent)',
                 }}
               />
-              400+ моделей · оплата в ₽ · без VPN
+              {MODEL_COUNT} моделей · оплата в ₽ · без VPN
             </span>
 
             <h1
@@ -412,9 +413,8 @@ export default function HomePage() {
               } as CSSProperties}
             >
               Подключайте любую AI-модель через OpenAI-совместимый API. GPT-5,
-              Claude, Flux, Veo, Whisper и сотни открытых моделей. Оплата
-              картой РФ, СБП, по счёту. Deploy в РФ-регионе — latency &lt;
-              100ms.
+              Claude, Flux, Veo, Whisper и открытые модели. Оплата
+              картой РФ, СБП, по счёту. Deploy в РФ-регионе.
             </p>
 
             <div className="flex gap-3.5 flex-wrap">
@@ -469,10 +469,6 @@ export default function HomePage() {
                 <span style={{ color: 'var(--success)' }}>✓</span>{' '}
                 OpenAI-совместимый API
               </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span style={{ color: 'var(--success)' }}>✓</span> 99.9% uptime
-                SLA
-              </span>
             </div>
           </div>
 
@@ -485,7 +481,7 @@ export default function HomePage() {
       {/* ═══ Inline stat counters ═══ */}
       <section style={{ padding: '48px 20px 8px' }}>
         <div
-          className="mx-auto grid grid-cols-2 gap-6 sm:grid-cols-4"
+          className="mx-auto grid grid-cols-2 gap-6"
           style={{ maxWidth: 1280 }}
         >
           {heroStats.map((s) => (
@@ -565,7 +561,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══ Code-tabs demo with streaming preview ═══ */}
-      <CodeTabsDemo />
+      <CodeTabsDemo modelCount={MODEL_COUNT} />
 
       {/* ═══ Live top-models leaderboard ═══ */}
       <TopModelsLeaderboard />
@@ -671,7 +667,7 @@ export default function HomePage() {
                 Горячее сейчас
               </h2>
               <p style={{ fontSize: 17, color: 'var(--ink-muted)', maxWidth: 600 }}>
-                По количеству запросов за 7 дней. Цены в ₽, latency РФ-регион.
+                Модели из каталога. Цены в ₽, деплой в РФ-регионе.
               </p>
             </div>
             <Link
@@ -758,7 +754,7 @@ export default function HomePage() {
                   {m.desc}
                 </div>
                 <div
-                  className="flex justify-between items-center font-mono"
+                  className="flex items-center font-mono"
                   style={{
                     paddingTop: 12,
                     borderTop: '1px solid var(--line)',
@@ -770,9 +766,6 @@ export default function HomePage() {
                     style={{ color: 'var(--accent)' }}
                   >
                     {m.price}
-                  </div>
-                  <div style={{ color: 'var(--ink-muted)', fontSize: 11 }}>
-                    {m.stats}
                   </div>
                 </div>
               </Link>
@@ -1204,8 +1197,8 @@ export default function HomePage() {
             maxWidth: 520,
           }}
         >
-          400+ моделей, рублёвая оплата, SDK на 6 языках. Первый запрос за 2
-          минуты.
+          {MODEL_COUNT} моделей, рублёвая оплата, SDK на 6 языках. Первый
+          запрос за 2 минуты.
         </p>
         <div className="flex gap-3.5 flex-wrap justify-center">
           <Link
