@@ -16,9 +16,10 @@ interface Props {
 }
 
 /**
- * Mock chat playground. Sends prompt to /api/playground/run which returns
- * an SSE stream of delta events. When Plan 04 gateway lands, the endpoint
- * swaps transparently — this UI stays.
+ * Chat playground UI. Sends prompt to /api/playground/run, which streams
+ * real SSE delta events from the model via the gateway (rate-limited to
+ * 5 requests/day/IP, see route.ts). Falls back to a local canned response
+ * only outside production when GATEWAY_SYSTEM_API_KEY is unset.
  */
 export function PlaygroundEmbed({ model }: Props) {
   const [messages, setMessages] = React.useState<Message[]>([]);
@@ -205,7 +206,7 @@ function EmptyPrompt({ modelName }: { modelName: string }) {
         </p>
         <p className="mt-1">Напишите запрос и нажмите Enter.</p>
         <p className="mt-4 text-xs">
-          Это демо-режим: ответы не идут через боевую модель.
+          Отвечает реальная модель. Демо-доступ: 5 запросов в сутки на IP.
         </p>
       </div>
     </div>

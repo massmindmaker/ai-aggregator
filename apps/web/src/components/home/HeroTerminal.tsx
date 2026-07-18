@@ -31,9 +31,12 @@ const script: Part[] = [
 
 const streamTokens = [
   'Any ', 'AI ', 'model. ', 'One ', 'API. ', 'Payment ', 'in ', '₽. ',
-  '\n\n', 'Вы ', 'получаете ', 'доступ ', 'к ', '400+ ', 'моделям ',
+  // No model count here on purpose: this is a client component, so the real
+  // number would mean shipping the catalog to the browser. The exact count is
+  // rendered in the hero stats (server-side, derived from the catalog).
+  '\n\n', 'Вы ', 'получаете ', 'доступ ', 'к ', 'каталогу ', 'моделей ',
   'через ', 'единый ', 'endpoint ', '— ', 'GPT-5, ', 'Claude, ', 'Gemini, ',
-  'Flux, ', 'Veo, ', 'и ', 'сотни ', 'открытых.', '\n\n',
+  'Flux, ', 'Veo ', 'и ', 'другие.', '\n\n',
   '— AI-Aggregator',
 ];
 

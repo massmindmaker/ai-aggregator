@@ -18,7 +18,8 @@ interface Step {
 const STEPS: Step[] = [
   {
     icon: <Sparkles className="w-5 h-5" />,
-    title: 'Один API. 400+ моделей.',
+    // No hardcoded model count: the old "400+" claimed ~6x the real catalog.
+    title: 'Один API. Весь каталог моделей.',
     description: 'AIAG — это шлюз ко всем популярным LLM и AI-моделям. Платишь в рублях, без VPN, drop-in замена OpenAI SDK.',
     visual: <CellsSpot width={320} height={180} />,
   },

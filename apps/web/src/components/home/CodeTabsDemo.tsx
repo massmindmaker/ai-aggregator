@@ -48,7 +48,16 @@ const TAB_LABELS: Record<TabKey, string> = {
 const DEMO_OUTPUT =
   'Привет! Я работаю через AI-Aggregator — единый шлюз ко всем популярным LLM-провайдерам. Чем могу помочь?';
 
-export function CodeTabsDemo() {
+interface CodeTabsDemoProps {
+  /**
+   * Real catalog size, passed down from the server page. Kept as a prop
+   * rather than importing the catalog here: this is a client component and
+   * the catalog module would land in the browser bundle.
+   */
+  modelCount: number;
+}
+
+export function CodeTabsDemo({ modelCount }: CodeTabsDemoProps) {
   const [tab, setTab] = useState<TabKey>('curl');
   const [out, setOut] = useState('');
 
@@ -99,7 +108,7 @@ export function CodeTabsDemo() {
             margin: '0 auto',
           }}
         >
-          Совместимый API. Меняешь <code className="font-mono" style={{ color: 'var(--accent)' }}>base_url</code> — получаешь доступ к 400+ моделям.
+          Совместимый API. Меняешь <code className="font-mono" style={{ color: 'var(--accent)' }}>base_url</code> — получаешь доступ к {modelCount} моделям.
         </p>
       </div>
 
