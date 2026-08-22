@@ -91,7 +91,7 @@ ssh -O exit  aiag-vps     # close it (forces a fresh tunnel next time)
 ### (a) Pre-deploy checks (local) — catch lockfile drift + type errors BEFORE the runner
 
 ```bash
-cd "C:/Users/боб/projects/aggregator"
+cd "C:/Users/боб/projects/aggregator/core"
 
 # 1. Lockfile drift guard (the --frozen-lockfile failure). If bun.lock changes,
 #    a workspace pkg was added without committing the lock → commit it.
@@ -111,7 +111,7 @@ git status -sb && git push
 ### (b) Trigger the deploy
 
 ```bash
-cd "C:/Users/боб/projects/aggregator"
+cd "C:/Users/боб/projects/aggregator/core"
 gh workflow run deploy-production.yml --ref master -f apps=web,gateway,worker
 # tma / agent-worker: add them to the apps list, e.g. -f apps=tma,agent-worker
 ```
@@ -318,7 +318,7 @@ fail2ban-client reload'
 ## 4. QUICK REFERENCE (copy-paste happy path)
 
 ```bash
-cd "C:/Users/боб/projects/aggregator"
+cd "C:/Users/боб/projects/aggregator/core"
 bun install --frozen-lockfile && git diff --quiet bun.lock || echo "commit bun.lock!"
 git push
 gh workflow run deploy-production.yml --ref master -f apps=web,gateway,worker

@@ -13,10 +13,13 @@ Auth/security rules (JWT pin, nginx strip): `/SECURITY.md`. Topology: `/docs/ARC
   if secret unset/<32 chars. nginx strips spoofable headers — see `/SECURITY.md`.
 
 ## Currency — read before touching anything money-shaped
-- TMA currency is **crypto credits (USDT/TON), NOT rubles.** ₽ lives only in `apps/web`.
-- ⚠️ Code today still debits a **RUB** balance (`tg_user_balances`); the ₽→crypto-credit
-  unit migration is **pending**. Do not assume the column already means credits; do not
-  draw ₽ in any TMA UI. New money code should target the credit unit, not entrench ₽.
+- TMA currency is **crypto credits pegged to USD**, NOT rubles. ₽ lives only in `apps/web`.
+- Balance unit = **BIGINT micro-credits** (1 credit = $0.01 = 1000 micro). Migration is DONE,
+  not pending: **0056** (credit unit) + **0058** (`aiag_settle_charge_credits`). Cost formula:
+  `costCredits = round(cents × markup × batch × caching × 1000)`, markup 1.8 on model↔upstream
+  bindings. ₽ removed from TMA entirely — do not draw ₽ in any TMA UI or entrench ₽ in new code.
+- Legacy note: the column family behind `tg_user_balances` now holds micro-credits; do not
+  interpret stored numbers as kopecks/rubles.
 
 ## Build / run
 - `bun run dev` (next dev `-p 3100`), `bun run build`, `bun run start` (`-p 3100`).

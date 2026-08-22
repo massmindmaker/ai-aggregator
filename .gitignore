@@ -66,3 +66,7 @@ video/
 
 # SDD progress ledgers — scratch, recoverable from git log
 .superpowers/
+
+# Agent tool dirs (local, never commit)
+.agents/
+.codex/

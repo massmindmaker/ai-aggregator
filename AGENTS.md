@@ -8,6 +8,14 @@
 > **This file auto-loads every session.** It is the always-present "common denominator" so context is not lost between sessions.
 > Detailed state: `.serena/memories/aiag_*.md`. Deploy: skill `aiag-deploy`. Never expose personal Telegram (@b0brov) in artifacts.
 
+## How to work here (read order)
+- Behavior rules: @.Codex/rules/coding-behavior.md
+- Architecture & service map: @docs/ARCHITECTURE.md
+- Security & money-path rules: @SECURITY.md
+- Design/product (frontend): @PRODUCT.md
+- Design system / tokens (single SoT): @DESIGN.md
+<!-- ANIMATION.md and per-app AGENTS.md load lazily (on UI work / on touching that app) — not imported, to save context. Status page for humans: docs/specs/STATUS.html -->
+
 ## SUITE TOPOLOGY (reorg 2026-08-22)
 - **Канон-путь репо: `C:\Users\боб\projects\aggregator\core`.** Все пути в доках вида `apps/...`, `docs/...` отсчитываются отсюда.
 - **Канон-ветка: `feat/r2-readiness`. Master заморожен** — история; не мержить/не пушить в master без явной команды основателя.
@@ -19,14 +27,6 @@
 | 1 | **AI-Aggregator (WEB)** — ai-aggregator.ru | `apps/web` + `packages/api-gateway` (`:4000`) | RUBLES (₽): Tinkoff + подписки + B2B org keys |
 | 2 | **Agent-Market TMA** | `apps/tg-miniapp` (`:3100`) + `apps/agent-worker`; Web-App = `/agentmarket` внутри `apps/web` | Крипто-кредиты USD-peg: BIGINT микро-кредиты (миграции 0056/0058); ₽ из TMA убраны |
 | 3 | **AI-Contest** | contests-роуты внутри `apps/web` + `apps/worker` (eval-sink) | Призовой фонд/судейство — открытые вопросы (черновик зоны 4 дашборда) |
-
-## How to work here (read order)
-- Behavior rules: @.claude/rules/coding-behavior.md
-- Architecture & service map: @docs/ARCHITECTURE.md
-- Security & money-path rules: @SECURITY.md
-- Design/product (frontend): @PRODUCT.md
-- Design system / tokens (single SoT): @DESIGN.md
-<!-- ANIMATION.md and per-app CLAUDE.md load lazily (on UI work / on touching that app) — not imported, to save context. Status page for humans: docs/specs/STATUS.html -->
 
 ## THREE PRODUCTS in detail — never conflate them
 
@@ -43,7 +43,7 @@
 - An agent = a composable **SPEC**, not a prompt: persona (`SOUL.md`) + models (separate chat/image/voice/vision) + skills + tools + MCP servers + knowledge/memory + cron.
 - Templates are **published, not sold**: public template shares the spec (model names, skills, tool/MCP defs WITHOUT keys), keeps private the keys/memory/data/history. Others clone the setup.
 - Code: `apps/tg-miniapp` (Next 14.2.33, `:3100`), `apps/agent-worker` (BullMQ, `:3101`).
-- **Billing: CRYPTO CREDITS, USD-peg — DONE (миграции 0056/0058).** Баланс = **BIGINT микро-кредиты** (1 кредит = 1¢ USD = 1000 микро); формула `costCredits = round(cents × markup × batch × caching × 1000)`, markup 1.8 на привязках модель↔апстрим; ₽ из TMA убраны целиком. Telegram **Stars = deferred — do NOT implement/show now** (founder 2026-06-03).
+- **Billing: CRYPTO CREDITS, USD-peg — DONE (миграции 0056/0058).** Баланс = **BIGINT микро-кредиты** (1 кредит = 1¢ USD = 1000 микро); формула `costCredits = round(cents × markup × batch × caching × 1000)`, markup 1.8 на привязках модель↔апстрим; ₽ из TMA убраны целиком. Telegram **Stars = deferred — do NOT implement/show now** (founder 2026-06-03). Draw TMA mockups in crypto credits.
 - Web-App версия маркетплейса = `/agentmarket` внутри `apps/web` (сейчас скрыта 404, код жив — см. `docs/specs/2026-07-15-agentmarket-web-hidden.md`).
 
 ### 3) AI-Contest
@@ -89,7 +89,7 @@
 - **THIS file** = always-loaded anchor.
 - **Canon** = `docs/specs/2026-06-02-WHAT-WE-ARE-BUILDING.md`; coherence gaps = `docs/specs/2026-06-02-product-coherence-map.md`.
 - **Serena** `.serena/memories/aiag_*.md` = detailed session/exec state.
-- **Auto-memory** `~/.claude/projects/.../memory/MEMORY.md` = indexed fact pointers.
+- **Auto-memory** `~/.Codex/projects/.../memory/MEMORY.md` = indexed fact pointers.
 - **LightRAG** (pinglass.ru/lightrag) = semantic, slow/timeout-prone, SHARED with PinGlass.
 - **memgraph** (`mcp__memory`) = now seeded with AIAG (11 entities + 18 relations, 2026-06-02). Was PinGlass-only before. Query via `mcp__memory__search_nodes`.
 
@@ -128,3 +128,8 @@ Rules:
 - После кода → `graphify update .`.
 - Новый ресёрч → `LightRAG upload_document`.
 - Старьё **не удалять** — помечать `DEPRECATED → канон`.
+
+## HERMES NOTES (не мешает Claude Code / Codex)
+- Hermes НЕ разворачивает `@file`-импорты из раздела «How to work here» — читай эти файлы из репы по мере задачи (`docs/ARCHITECTURE.md`, `SECURITY.md`, `PRODUCT.md`, `DESIGN.md`).
+- Детальное состояние проекта: Serena-MCP `list_memories` / `read_memory("aiag_...")` (`.serena/memories/aiag_*.md`). Код-навигация: `graphify query`. Ресёрч: LightRAG `query_text`. Общий граф сущностей: MCP `memory` (memory.jsonl).
+- Деплой: skill `aiag-deploy`; пайплайн фичи: skill `aiag-pipeline`.
