@@ -50,7 +50,8 @@ $only = @()
 Get-ChildItem "$aw\apps","$aw\packages" -Recurse -File -ErrorAction SilentlyContinue |
   Where-Object { $_.FullName -notmatch 'node_modules|\.next|dist|\.turbo' } | ForEach-Object {
     $rel = $_.FullName.Substring($aw.Length+1) -replace '\\','/'
-    if (-not (git -C $agg rev-parse "HEAD:$rel" 2>$null)) {
+    git -C $agg cat-file -e ("HEAD:" + $rel) 2>$null
+    if ($LASTEXITCODE -ne 0) {
       $only += [pscustomobject]@{ Rel = $rel; Src = $_.FullName }
     }
   }
@@ -79,7 +80,7 @@ foreach ($rel in @(
   'apps/tg-miniapp/app/api/tma/templates/[id]/clone/route.ts',
   'apps/tg-miniapp/src/components/CatalogNav.tsx')) {
   $src = Join-Path $amOld ($rel -replace '/','\')
-  if ((Test-Path -LiteralPath $src) -and (-not (git -C $agg rev-parse "HEAD:$rel" 2>$null))) {
+  if ((Test-Path -LiteralPath $src) -and ((git -C $agg cat-file -e ("HEAD:" + $rel) 2>$null); $LASTEXITCODE -ne 0)) {
     $t = Join-Path $rec $rel; New-Item -ItemType Directory -Force (Split-Path $t) | Out-Null
     Copy-Item -LiteralPath $src $t; "copied: $rel"
   } else { "skip (нет в клоне ИЛИ есть в HEAD): $rel" }
@@ -93,6 +94,11 @@ git -C $agg add docs/superpowers/recovered
 git -C $agg commit -m "restore unique features from stale splits (parked under docs/superpowers/recovered)"
 ```
 Проверка: `git -C $agg status --porcelain docs/superpowers/recovered` пусто.
+
+### Уроки исполнения (2026-08-22)
+- Существование файла в HEAD проверять ТОЛЬКО `git cat-file -e HEAD:<rel>` по `$LASTEXITCODE`; stdout-проверки ненадёжны.
+- Пути со скобками `[] ()` — исключительно `-LiteralPath` у Test-Path/Copy-Item.
+- Факт: реально уникальных файлов оказалось 15 (14 aiag-web + 1 agent-market; clone-route в HEAD отсутствует — удалён историей fba98da). Зона contests upload/confirm спасена из дубля aiag-web.
 
 ## Task W3: Архивация дублей
 
