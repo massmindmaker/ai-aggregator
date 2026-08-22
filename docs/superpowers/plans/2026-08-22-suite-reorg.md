@@ -98,7 +98,7 @@ git -C $agg commit -m "restore unique features from stale splits (parked under d
 ### Уроки исполнения (2026-08-22)
 - Существование файла в HEAD проверять ТОЛЬКО `git cat-file -e HEAD:<rel>` по `$LASTEXITCODE`; stdout-проверки ненадёжны.
 - Пути со скобками `[] ()` — исключительно `-LiteralPath` у Test-Path/Copy-Item.
-- Факт: реально уникальных файлов оказалось 15 (14 aiag-web + 1 agent-market; clone-route в HEAD отсутствует — удалён историей fba98da). Зона contests upload/confirm спасена из дубля aiag-web.
+- Факт: итого уникальных файлов 16 (14 из aiag-web + 2 из agent-market: CatalogNav и clone-route — оба в HEAD канона отсутствуют). Зона contests upload/confirm спасена из дубля aiag-web.
 
 ## Task W3: Архивация дублей
 
