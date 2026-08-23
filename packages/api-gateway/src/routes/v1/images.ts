@@ -80,6 +80,7 @@ images.post('/generations', async (c) => {
     negative_prompt: body.negative_prompt,
     reference_image_url: body.reference_image_url,
     byokKey,
+    egressProxyUrl: upstream.egress_proxy ?? undefined,
   });
 
   // Synchronously poll if adapter has pollJob
@@ -89,7 +90,9 @@ images.post('/generations', async (c) => {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, intervalMs));
-      job = await adapter.pollJob(job.job_id, 'image');
+      job = await adapter.pollJob(job.job_id, 'image', {
+        egressProxyUrl: upstream.egress_proxy ?? undefined,
+      });
       if (job.status === 'completed' || job.status === 'failed') break;
     }
   }

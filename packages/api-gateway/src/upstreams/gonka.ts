@@ -23,7 +23,7 @@ import type {
   EmbeddingsRequest,
   EmbeddingsResponse,
 } from './interface';
-import { safeFetch } from '@aiag/shared/server';
+import { fetchUpstream } from './fetch-upstream';
 import { logger } from '../lib/logger';
 import { upstreamHttpError } from '../lib/client-errors';
 
@@ -53,12 +53,16 @@ export const gonkaUpstream: UpstreamAdapter = {
     });
 
     const start = Date.now();
-    const res = await safeFetch(`${GONKA_BASE}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body,
-      allowlist: GONKA_ALLOWLIST,
-    });
+    const res = await fetchUpstream(
+      `${GONKA_BASE}/chat/completions`,
+      {
+        method: 'POST',
+        headers,
+        body,
+        allowlist: GONKA_ALLOWLIST,
+      },
+      req.egressProxyUrl,
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       // Server-side log keeps the real provider + body for debugging.
@@ -119,18 +123,22 @@ export const gonkaUpstream: UpstreamAdapter = {
       accept: 'text/event-stream',
     };
 
-    const res = await safeFetch(`${GONKA_BASE}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: req.modelId,
-        messages: req.messages,
-        stream: true,
-        temperature: req.temperature,
-        max_tokens: req.max_tokens,
-      }),
-      allowlist: GONKA_ALLOWLIST,
-    });
+    const res = await fetchUpstream(
+      `${GONKA_BASE}/chat/completions`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: req.modelId,
+          messages: req.messages,
+          stream: true,
+          temperature: req.temperature,
+          max_tokens: req.max_tokens,
+        }),
+        allowlist: GONKA_ALLOWLIST,
+      },
+      req.egressProxyUrl,
+    );
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
       logger.warn(
@@ -172,12 +180,16 @@ export const gonkaUpstream: UpstreamAdapter = {
     };
 
     const start = Date.now();
-    const res = await safeFetch(`${GONKA_BASE}/embeddings`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ model: req.modelId, input: req.input }),
-      allowlist: GONKA_ALLOWLIST,
-    });
+    const res = await fetchUpstream(
+      `${GONKA_BASE}/embeddings`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model: req.modelId, input: req.input }),
+        allowlist: GONKA_ALLOWLIST,
+      },
+      req.egressProxyUrl,
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       logger.warn(

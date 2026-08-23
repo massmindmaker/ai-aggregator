@@ -57,6 +57,7 @@ embeddings.post('/', async (c) => {
     modelId: upstream.upstream_model_id,
     input: body.input,
     byokKey: c.req.header('x-upstream-key'),
+    egressProxyUrl: upstream.egress_proxy ?? undefined,
   });
 
   // T1-fix: whole MICRO-credits, no ₽/FX. price_per_1k_input is already US

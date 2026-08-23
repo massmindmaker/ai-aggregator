@@ -14,7 +14,7 @@ import type {
   EmbeddingsRequest,
   EmbeddingsResponse,
 } from './interface';
-import { safeFetch } from '@aiag/shared/server';
+import { fetchUpstream } from './fetch-upstream';
 import { logger } from '../lib/logger';
 import { upstreamHttpError } from '../lib/client-errors';
 
@@ -49,12 +49,16 @@ export const openRouterUpstream: UpstreamAdapter = {
     });
 
     const start = Date.now();
-    const res = await safeFetch(`${OPENROUTER_BASE}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body,
-      allowlist: OPENROUTER_ALLOWLIST,
-    });
+    const res = await fetchUpstream(
+      `${OPENROUTER_BASE}/chat/completions`,
+      {
+        method: 'POST',
+        headers,
+        body,
+        allowlist: OPENROUTER_ALLOWLIST,
+      },
+      req.egressProxyUrl,
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       logger.warn(
@@ -119,18 +123,23 @@ export const openRouterUpstream: UpstreamAdapter = {
     if (process.env.OPENROUTER_APP_URL) headers['http-referer'] = process.env.OPENROUTER_APP_URL;
     if (process.env.OPENROUTER_APP_NAME) headers['x-title'] = process.env.OPENROUTER_APP_NAME;
 
-    const res = await safeFetch(`${OPENROUTER_BASE}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: req.modelId,
-        messages: req.messages,
-        stream: true,
-        temperature: req.temperature,
-        max_tokens: req.max_tokens,
-      }),
-      allowlist: OPENROUTER_ALLOWLIST,
-    });
+    const start = Date.now();
+    const res = await fetchUpstream(
+      `${OPENROUTER_BASE}/chat/completions`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: req.modelId,
+          messages: req.messages,
+          stream: true,
+          temperature: req.temperature,
+          max_tokens: req.max_tokens,
+        }),
+        allowlist: OPENROUTER_ALLOWLIST,
+      },
+      req.egressProxyUrl,
+    );
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
       logger.warn(
@@ -176,12 +185,16 @@ export const openRouterUpstream: UpstreamAdapter = {
     if (process.env.OPENROUTER_APP_NAME) headers['x-title'] = process.env.OPENROUTER_APP_NAME;
 
     const start = Date.now();
-    const res = await safeFetch(`${OPENROUTER_BASE}/embeddings`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ model: req.modelId, input: req.input }),
-      allowlist: OPENROUTER_ALLOWLIST,
-    });
+    const res = await fetchUpstream(
+      `${OPENROUTER_BASE}/embeddings`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model: req.modelId, input: req.input }),
+        allowlist: OPENROUTER_ALLOWLIST,
+      },
+      req.egressProxyUrl,
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       logger.warn(

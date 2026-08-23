@@ -45,6 +45,7 @@ completions.post('/', async (c) => {
   const resp = await upstreamAdapter.chat({
     modelId: upstream.upstream_model_id,
     messages: [{ role: 'user', content: promptText }],
+    egressProxyUrl: upstream.egress_proxy ?? undefined,
   });
 
   // T1-fix: whole MICRO-credits, no ₽/FX. price_per_1k_input/output are

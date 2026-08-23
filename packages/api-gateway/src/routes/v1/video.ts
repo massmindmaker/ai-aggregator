@@ -74,6 +74,7 @@ video.post('/generations', async (c) => {
     aspect_ratio: body.aspect_ratio,
     image_url: body.image_url,
     byokKey,
+    egressProxyUrl: upstream.egress_proxy ?? undefined,
   });
 
   if (adapter.pollJob && (job.status === 'queued' || job.status === 'processing')) {
@@ -82,7 +83,9 @@ video.post('/generations', async (c) => {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, intervalMs));
-      job = await adapter.pollJob(job.job_id, 'video');
+      job = await adapter.pollJob(job.job_id, 'video', {
+        egressProxyUrl: upstream.egress_proxy ?? undefined,
+      });
       if (job.status === 'completed' || job.status === 'failed') break;
     }
   }

@@ -27,6 +27,8 @@ export type UpstreamCandidate = Upstream & {
   upstream_id: string;
   upstream_model_id: string;
   markup: number;
+  /** Raw model_upstreams.egress_proxy (T2). NULL/undefined → env/direct. */
+  egress_proxy?: string | null;
 };
 
 export type Mode = 'auto' | 'fastest' | 'cheapest' | 'balanced' | 'ru-only';

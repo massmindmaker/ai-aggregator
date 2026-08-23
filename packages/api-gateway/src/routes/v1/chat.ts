@@ -78,6 +78,7 @@ chat.post('/completions', async (c) => {
       messages: body.messages,
       stream: true,
       byokKey,
+      egressProxyUrl: upstream.egress_proxy ?? undefined,
     });
     return streamSseAndSettle(c, iter, {
       upstream,
@@ -96,6 +97,7 @@ chat.post('/completions', async (c) => {
     messages: body.messages,
     stream: false,
     byokKey,
+    egressProxyUrl: upstream.egress_proxy ?? undefined,
   });
 
   const usage = resp.usage;

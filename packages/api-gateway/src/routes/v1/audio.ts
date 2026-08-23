@@ -69,6 +69,7 @@ audio.post('/speech', async (c) => {
     voice: body.voice,
     format: body.format,
     byokKey,
+    egressProxyUrl: upstream.egress_proxy ?? undefined,
   });
 
   if (adapter.pollJob && (job.status === 'queued' || job.status === 'processing')) {
@@ -77,7 +78,9 @@ audio.post('/speech', async (c) => {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, intervalMs));
-      job = await adapter.pollJob(job.job_id, 'suno');
+      job = await adapter.pollJob(job.job_id, 'suno', {
+        egressProxyUrl: upstream.egress_proxy ?? undefined,
+      });
       if (job.status === 'completed' || job.status === 'failed') break;
     }
   }
