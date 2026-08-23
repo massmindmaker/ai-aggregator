@@ -1,4 +1,4 @@
-# AIAG — Project Context Anchor
+﻿# AIAG — Project Context Anchor
 
 > **КАНОН: `docs/canon/AIAG-CANON.md` — единственный источник истины. При конфликте побеждает он. Этот файл = тонкий якорь.**
 > **⚠️ ОБЯЗАТЕЛЬНО сверяйся с каноном перед любой нетривиальной работой (продукт/модель/найм/Hermes/статус). Если recalled-память противоречит канону — побеждает канон, старую память пометить DEPRECATED→канон.**
@@ -33,6 +33,7 @@
 ### 1) Aggregator (WEB) — ai-aggregator.ru
 - AI **models + agents marketplace for the RU market** + OpenAI-compatible API gateway (white-label, hides upstream brand).
 - Code: `apps/web` (Next 14.x), `packages/api-gateway` (Hono/Bun, `:4000`).
+- **Native egress integration (2026-08-22, ветка feat/native-egress-integration):** egress-прокси per-upstream (`model_upstreams.egress_proxy` > env `AIAG_EGRESS_PROXY_URL`; SOCKS5/CONNECT туннели в `api-gateway/src/proxy/`) + failover с circuit breaker (`routing/failover.ts`, `failover/breaker.ts`, персист БД 0064) + каталог-sync models.dev → черновики → `/api/admin/catalog/{diff,apply}` (0065). Частично перенесено из OmniRoute (MIT) — см. THIRD_PARTY_NOTICES.md.
 - **Billing: RUBLES (₽) ONLY** — Tinkoff card pay + subscriptions + B2B org keys. No crypto.
 - Entity: RF (ИП → производственный кооператив). IT 7.6%.
 - Status: live; admin (Phase 14) live; marketplace ~80%; contests/supply deferred.

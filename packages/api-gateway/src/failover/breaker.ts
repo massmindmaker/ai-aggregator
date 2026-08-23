@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Per-upstream circuit breaker (native egress integration T3).
  *
  * Own implementation INSPIRED BY OmniRoute src/shared/utils/circuitBreaker.ts
@@ -84,9 +84,17 @@ function asDate(value: unknown): number | null {
  * first touch (so an OPEN circuit set by a previous process keeps skipping
  * traffic). Never throws — a broken DB degrades to memory-only operation.
  */
+function persistEnabled(): boolean {
+  return process.env.AIAG_BREAKER_PERSIST !== 'off';
+}
+
 async function ensureLoaded(upstreamId: string): Promise<Entry> {
   if (loadAttempted.has(upstreamId)) {
     return mem.get(upstreamId) ?? mem.set(upstreamId, freshEntry()).get(upstreamId)!;
+  }
+  if (!persistEnabled()) {
+    mem.set(upstreamId, mem.get(upstreamId) ?? freshEntry());
+    return mem.get(upstreamId)!;
   }
   loadAttempted.add(upstreamId);
   const entry = freshEntry();
@@ -125,6 +133,7 @@ async function ensureLoaded(upstreamId: string): Promise<Entry> {
 
 /** Upsert the current entry. Best-effort — persistence must not break traffic. */
 async function persist(upstreamId: string, e: Entry): Promise<void> {
+  if (!persistEnabled()) return;
   try {
     await sql`
       INSERT INTO circuit_breakers

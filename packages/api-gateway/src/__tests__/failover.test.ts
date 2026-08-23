@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Failover + circuit breaker tests (native egress integration, T3).
  * DB-less: breaker persistence is best-effort and degrades to memory.
  */
@@ -41,8 +41,14 @@ function err429(message: string): Error {
 const A = '11111111-1111-1111-1111-111111111111';
 const B = '22222222-2222-2222-2222-222222222222';
 
-beforeEach(() => __resetBreakerForTests());
-afterEach(() => __resetBreakerForTests());
+beforeEach(() => {
+  process.env.AIAG_BREAKER_PERSIST = 'off'; // DB-less unit tests
+  __resetBreakerForTests();
+});
+afterEach(() => {
+  delete process.env.AIAG_BREAKER_PERSIST;
+  __resetBreakerForTests();
+});
 
 describe('executeWithFailover', () => {
   it('first candidate fails → second serves; winner returned for settle', async () => {
