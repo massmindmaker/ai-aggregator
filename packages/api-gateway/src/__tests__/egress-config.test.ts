@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tests for egress configuration (T2 of the native egress integration plan):
  *   - resolveEgressProxy precedence (upstream column > env > direct)
  *   - fetchUpstream wiring (proxy actually reaches the executor; SSRF guards
@@ -33,6 +33,13 @@ afterEach(() => {
 });
 
 /* ------------------------ resolveEgressProxy precedence -------------------- */
+
+beforeEach(() => {
+  process.env.AIAG_ADMIN_RATE_LIMIT = 'off'; // isolation: other files own the RL tests
+});
+afterEach(() => {
+  delete process.env.AIAG_ADMIN_RATE_LIMIT;
+});
 
 describe('resolveEgressProxy precedence', () => {
   it('upstream column wins over the env param', () => {
@@ -106,6 +113,13 @@ afterEach(() => {
   unregisterEgressExecutor();
 });
 
+beforeEach(() => {
+  process.env.AIAG_ADMIN_RATE_LIMIT = 'off'; // isolation: other files own the RL tests
+});
+afterEach(() => {
+  delete process.env.AIAG_ADMIN_RATE_LIMIT;
+});
+
 describe('fetchUpstream egress wiring', () => {
   it('column proxy reaches the executor; response passes through', async () => {
     const res = await fetchUpstream(
@@ -144,6 +158,13 @@ describe('fetchUpstream egress wiring', () => {
 });
 
 /* ------------------------- SSE guard (review HIGH) ------------------------- */
+
+beforeEach(() => {
+  process.env.AIAG_ADMIN_RATE_LIMIT = 'off'; // isolation: other files own the RL tests
+});
+afterEach(() => {
+  delete process.env.AIAG_ADMIN_RATE_LIMIT;
+});
 
 describe('fetchUpstream SSE guard (honest refusal on the proxy path)', () => {
   it('sse:true + resolved column proxy → typed STREAM_NOT_SUPPORTED, no tunnel', async () => {
@@ -189,6 +210,13 @@ function mini(): Hono {
   app.route('/api/admin/proxy', adminProxy);
   return app;
 }
+
+beforeEach(() => {
+  process.env.AIAG_ADMIN_RATE_LIMIT = 'off'; // isolation: other files own the RL tests
+});
+afterEach(() => {
+  delete process.env.AIAG_ADMIN_RATE_LIMIT;
+});
 
 describe('GET /api/admin/proxy/test guard', () => {
   it.each([
@@ -267,6 +295,13 @@ describe('GET /api/admin/proxy/test guard', () => {
 });
 
 /* ---------------- real-app mount smoke (path + guard wiring) --------------- */
+
+beforeEach(() => {
+  process.env.AIAG_ADMIN_RATE_LIMIT = 'off'; // isolation: other files own the RL tests
+});
+afterEach(() => {
+  delete process.env.AIAG_ADMIN_RATE_LIMIT;
+});
 
 describe('server.ts mount smoke', () => {
   it('GET /api/admin/proxy/test on the REAL app → guarded 403 without a key', async () => {

@@ -12,9 +12,11 @@ import { errors } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { sql } from '../../lib/db';
 import { requireAdminKey } from './proxyTest';
+import { adminRateLimit } from './rate-limit';
 
 export const adminCatalog = new Hono();
 
+adminCatalog.use('*', adminRateLimit());
 adminCatalog.use('*', requireAdminKey);
 
 type DraftRow = {
@@ -91,43 +93,44 @@ adminCatalog.post('/apply', async (c) => {
 
   for (const id of ids.slice(0, 500)) {
     try {
-      const rows = (await sql`
-        SELECT d.id, d.provider_slug, d.model_slug, d.normalized, u.id AS upstream_id
-          FROM model_catalog_drafts d
-          LEFT JOIN upstreams u ON u.provider = d.provider_slug AND u.enabled = TRUE
-         WHERE d.id = ${id}::uuid AND d.status = 'draft'
-         FOR UPDATE OF d
-      `) as Array<Record<string, unknown>>;
-      const d = rows[0];
-      if (!d?.upstream_id) {
+      const rows = (await sql.begin(async (tx) => {
+        const sel = (await tx`
+          SELECT d.id, d.provider_slug, d.model_slug, d.normalized, u.id AS upstream_id
+            FROM model_catalog_drafts d
+            LEFT JOIN upstreams u ON u.provider = d.provider_slug AND u.enabled = TRUE
+           WHERE d.id = ${id}::uuid AND d.status = 'draft'
+           FOR UPDATE OF d
+        `) as Array<Record<string, unknown>>;
+        const dd = sel[0];
+        if (!dd?.upstream_id) return null;
+        const nn = dd.normalized as DraftRow['normalized'];
+        const inCents2 = toCentsPer1k(nn.price_usd_per_1m_input);
+        const outCents2 = toCentsPer1k(nn.price_usd_per_1m_output);
+        await tx`
+          INSERT INTO models (slug, type, enabled, display_name)
+          VALUES (${dd.model_slug}, 'chat', FALSE, NULL)
+          ON CONFLICT (slug) DO UPDATE SET updated_at = now()
+        `;
+        await tx`
+          INSERT INTO model_upstreams
+            (model_id, upstream_id, upstream_model_id,
+             price_per_1k_input, price_per_1k_output, markup, priority, enabled)
+          SELECT m.id, ${dd.upstream_id}, ${dd.model_slug},
+                 ${inCents2}::numeric, ${outCents2}::numeric, 1.8, 200, TRUE
+            FROM models m
+           WHERE m.slug = ${dd.model_slug}
+          ON CONFLICT (model_id, upstream_id) DO NOTHING
+        `;
+        await tx`
+          UPDATE model_catalog_drafts SET status = 'applied' WHERE id = ${id}::uuid
+        `;
+        return dd;
+      })) as Array<Record<string, unknown>> | null;
+      if (!d) {
         failed.push({ id, reason: 'not a draft or provider has no enabled upstream' });
         continue;
       }
-      const n = d.normalized as DraftRow['normalized'];
-      const inCents = toCentsPer1k(n.price_usd_per_1m_input);
-      const outCents = toCentsPer1k(n.price_usd_per_1m_output);
 
-      // Manual rows win: ON CONFLICT only fills a missing pair; prices are
-      // NOT overwritten for existing pairs (changed merges go through the
-      // same endpoint but only when the admin explicitly re-applies).
-      await sql`
-        INSERT INTO models (slug, type, enabled, display_name)
-        VALUES (${d.model_slug}, 'chat', FALSE, NULL)
-        ON CONFLICT (slug) DO UPDATE SET updated_at = now()
-      `;
-      await sql`
-        INSERT INTO model_upstreams
-          (model_id, upstream_id, upstream_model_id,
-           price_per_1k_input, price_per_1k_output, markup, priority, enabled)
-        SELECT m.id, ${d.upstream_id}, ${d.model_slug},
-               ${inCents}::numeric, ${outCents}::numeric, 1.8, 200, TRUE
-          FROM models m
-         WHERE m.slug = ${d.model_slug}
-        ON CONFLICT (model_id, upstream_id) DO NOTHING
-      `;
-      await sql`
-        UPDATE model_catalog_drafts SET status = 'applied' WHERE id = ${id}::uuid
-      `;
       applied += 1;
     } catch (err) {
       logger.warn({ err: String(err), id }, 'catalog_apply_failed');

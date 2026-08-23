@@ -20,6 +20,7 @@
  */
 import { Hono } from 'hono';
 import type { MiddlewareHandler } from 'hono';
+import { adminRateLimit } from './rate-limit';
 import { timingSafeEqual } from 'node:crypto';
 import { errors } from '../../lib/errors';
 import { logger } from '../../lib/logger';
@@ -90,6 +91,7 @@ export const requireAdminKey: MiddlewareHandler = async (c, next) => {
 
 export const adminProxy = new Hono();
 
+adminProxy.use('/test', adminRateLimit());
 adminProxy.use('/test', requireAdminKey);
 
 adminProxy.get('/test', async (c) => {

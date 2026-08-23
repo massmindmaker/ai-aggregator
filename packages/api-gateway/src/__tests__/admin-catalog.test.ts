@@ -1,7 +1,14 @@
-﻿import { describe, expect, it } from 'vitest';
+﻿import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import { adminCatalog } from '../routes/admin/catalog';
 import { applyAiagErrorHandler } from '../lib/errors';
+
+beforeEach(() => {
+  process.env.AIAG_ADMIN_RATE_LIMIT = 'off'; // isolation: other files own the RL tests
+});
+afterEach(() => {
+  delete process.env.AIAG_ADMIN_RATE_LIMIT;
+});
 
 describe('GET /api/admin/catalog/* guard', () => {
   it('403 without AIAG_ADMIN_KEY (fail-closed)', async () => {
