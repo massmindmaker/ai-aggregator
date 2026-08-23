@@ -126,6 +126,7 @@ adminCatalog.post('/apply', async (c) => {
         `;
         return dd;
       })) as Array<Record<string, unknown>> | null;
+      const d = Array.isArray(rows) ? rows[0] : null;
       if (!d) {
         failed.push({ id, reason: 'not a draft or provider has no enabled upstream' });
         continue;
