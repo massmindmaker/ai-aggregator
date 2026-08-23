@@ -63,11 +63,15 @@ export interface SafeFetchOptions extends RequestInit {
    *
    * Execution difference vs the direct path (documented): Bun's fetch ignores
    * undici dispatchers, so proxied requests cannot go through global fetch.
-   * The registered executor performs raw HTTP(S) over the tunnel socket and
-   * returns a fully BUFFERED Response — streaming/SSE bodies are not
-   * supported on this path. Requires registerEgressExecutor() to have been
-   * called by the host package (api-gateway), otherwise this option throws
-   * SsrfError rather than silently falling back to direct egress.
+    * The registered executor performs raw HTTP(S) over the tunnel socket and
+    * returns a fully BUFFERED Response — streaming/SSE bodies are not
+    * supported on this path. Body limitation: only trivially encodable bodies
+    * are accepted — undefined / string / Uint8Array (plus URLSearchParams /
+    * ArrayBuffer). FormData, Blob and ReadableStream bodies THROW TypeError
+    * on the proxy path — they cannot be buffered deterministically over the
+    * raw tunnel. Requires registerEgressExecutor() to have been
+    * called by the host package (api-gateway), otherwise this option throws
+    * SsrfError rather than silently falling back to direct egress.
    *
    * Unset → behavior identical to before this option existed.
    */

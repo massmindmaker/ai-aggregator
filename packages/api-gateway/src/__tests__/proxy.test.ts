@@ -11,7 +11,7 @@ import net from 'node:net';
 import type { Socket } from 'node:net';
 import { extractExplicitPort, normalizeProxyUrl } from '../proxy/url';
 import type { ProxyConfig } from '../proxy/url';
-import { parseProxyUrl, tunneledSocket, fetchViaProxy } from '../proxy/index';
+import { parseProxyUrl, tunneledSocket, fetchViaProxy, TimeoutError } from '../proxy/index';
 import { httpConnect } from '../proxy/httpConnect';
 // Relative source import (not '@aiag/shared/server') so the hook tests always
 // exercise the CURRENT safeFetch source rather than a possibly stale dist.
@@ -41,6 +41,8 @@ interface SocksMockOptions {
   rejectAll?: boolean;
   /** When set, answer CONNECT with this RFC1928 reply code instead of success. */
   connectReplyCode?: number;
+  /** Accept the HTTP request but NEVER answer, keeping the tunnel socket open. */
+  silentAfterConnect?: boolean;
 }
 
 interface SocksMockHandle {
@@ -136,6 +138,7 @@ async function startSocksMock(opts: SocksMockOptions = {}): Promise<SocksMockHan
           }
           relayed = true;
           buf = Buffer.alloc(0);
+          if (opts.silentAfterConnect) return; // hung upstream: socket stays open, no bytes ever
           client.write(
             Buffer.from(
               'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello',
@@ -318,6 +321,24 @@ describe('SOCKS5 tunnel (mock RFC1928 server)', () => {
       fetchViaProxy('http://destination.test/', {}, `socks5://127.0.0.1:${m.port}`),
     ).rejects.toThrow(/connection refused/i);
   });
+
+  it('hung upstream (CONNECT ok, request accepted, then silence) trips the response read deadline', async () => {
+    const m = await socks({ silentAfterConnect: true });
+    const startedAt = Date.now();
+    const err: unknown = await fetchViaProxy(
+      'http://destination.test/hello',
+      {},
+      `socks5://127.0.0.1:${m.port}`,
+      { responseIdleTimeoutMs: 200 },
+    ).then(
+      () => null,
+      (e) => e,
+    );
+    expect(err).toBeInstanceOf(TimeoutError);
+    expect((err as Error).message).toMatch(/read deadline/i);
+    // The injected 200ms deadline drove the rejection — NOT the 15s default.
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
+  }, 10_000);
 });
 
 /* ---------------------------- httpConnect.ts ----------------------------- */

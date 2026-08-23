@@ -20,7 +20,7 @@ import { Socket } from 'node:net';
 import tls from 'node:tls';
 import { extractExplicitPort, normalizeProxyUrl } from './url';
 import type { ProxyConfig } from './url';
-import { socksConnect } from './socks';
+import { socksConnect, DEFAULT_TUNNEL_TIMEOUT_MS } from './socks';
 import { httpConnect } from './httpConnect';
 
 export { extractExplicitPort, normalizeProxyUrl };
@@ -70,6 +70,14 @@ export async function tunneledSocket(
 
 const MAX_RESPONSE_HEADER_BYTES = 64 * 1024;
 const MAX_RESPONSE_BODY_BYTES = 64 * 1024 * 1024;
+
+/** Raised when the upstream stops sending data for longer than the read deadline. */
+export class TimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
 
 function collectHeaders(init?: HeadersInit): Record<string, string> {
   const out: Record<string, string> = {};
@@ -140,18 +148,31 @@ function decodeChunked(buf: Buffer): Buffer {
   return parts.length ? Buffer.concat(parts) : Buffer.alloc(0);
 }
 
+interface RawReadDeadline {
+  /** Idle deadline (ms): silence longer than this destroys the tunnel. */
+  idleMs: number;
+  /** True when a caller AbortSignal has fired (its error then wins the race). */
+  aborted?: () => boolean;
+}
+
 function readRawResponse(
   socket: Socket,
   method: string,
   cleanupExtra?: () => void,
+  deadline: RawReadDeadline = { idleMs: DEFAULT_TUNNEL_TIMEOUT_MS },
 ): Promise<ParsedResponseHead & { body: Buffer }> {
   return new Promise((resolve, reject) => {
     let acc = Buffer.alloc(0);
     let headParsed = false;
     let head: ParsedResponseHead | null = null;
     let settled = false;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
     const cleanup = (): void => {
+      if (idleTimer != null) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
       socket.removeListener('data', onData);
       socket.removeListener('error', onError);
       socket.removeListener('end', onEnd);
@@ -170,7 +191,31 @@ function readRawResponse(
       cleanup();
       resolve({ ...head, body });
     };
+    // Idle read-deadline: re-armed on every received chunk. A silent upstream
+    // must never hang the promise forever.
+    const armIdle = (): void => {
+      if (idleTimer != null) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        idleTimer = null;
+        if (settled) return;
+        // A fired caller AbortSignal outranks this deadline — its handler
+        // destroys the socket and settles with the abort cause instead.
+        if (deadline.aborted?.()) {
+          socket.destroy();
+          return;
+        }
+        const err = new TimeoutError(
+          `[proxy] upstream silent for ${deadline.idleMs}ms — response read deadline exceeded`,
+        );
+        // fail() detaches our 'error' listener; swallow the destroy-time
+        // emission so it cannot surface as an unhandled 'error' event.
+        socket.once('error', () => {});
+        socket.destroy(err);
+        fail(err);
+      }, deadline.idleMs);
+    };
     const onData = (chunk: Buffer): void => {
+      armIdle(); // data is flowing → restart the idle window
       acc = acc.length ? Buffer.concat([acc, chunk]) : chunk;
       if (!headParsed) {
         const idx = acc.indexOf('\r\n\r\n');
@@ -227,6 +272,7 @@ function readRawResponse(
     socket.on('error', onError);
     socket.on('end', onEnd);
     socket.on('close', onClose);
+    armIdle();
   });
 }
 
@@ -237,6 +283,13 @@ export interface FetchViaProxyOptions {
    * survives tunneling; the hostname still drives TLS SNI + the Host header.
    */
   connectAddr?: string;
+  /**
+   * Idle deadline (ms) for reading the upstream response. Every received
+   * chunk resets it; silence longer than this destroys the tunnel socket and
+   * rejects with {@link TimeoutError}. A fired caller AbortSignal takes
+   * priority over this deadline. Default: DEFAULT_TUNNEL_TIMEOUT_MS.
+   */
+  responseIdleTimeoutMs?: number;
 }
 
 /**
@@ -277,22 +330,28 @@ export async function fetchViaProxy(
   headBlock += '\r\n';
 
   const baseSocket = await tunneledSocket(proxyUrl, connectAddr, port);
+  // Abort wiring happens BEFORE the TLS upgrade: an abort arriving between
+  // tunnel establishment and handshake completion must kill the operation
+  // immediately instead of waiting out the handshake.
+  const signal = init.signal;
+  let wire: Socket | tls.TLSSocket = baseSocket;
+  let abortCleanup: (() => void) | undefined;
+  if (signal) {
+    const abortHandler = (): void =>
+      wire.destroy(new Error('[proxy] request aborted via AbortSignal'));
+    signal.addEventListener('abort', abortHandler, { once: true });
+    abortCleanup = (): void => signal.removeEventListener('abort', abortHandler);
+    if (signal.aborted) abortHandler();
+  }
   try {
-    const wire = isTls ? await upgradeTls(baseSocket, hostHeaderName) : baseSocket;
-    let abortCleanup: (() => void) | undefined;
-    const signal = init.signal;
-    let abortHandler: (() => void) | undefined;
-    if (signal) {
-      abortHandler = (): void =>
-        wire.destroy(new Error('[proxy] request aborted via AbortSignal'));
-      signal.addEventListener('abort', abortHandler, { once: true });
-      abortCleanup = (): void => signal.removeEventListener('abort', abortHandler!);
-      if (signal.aborted) abortHandler();
-    }
+    if (isTls) wire = await upgradeTls(baseSocket, hostHeaderName);
     try {
       wire.write(Buffer.from(headBlock, 'utf8'));
       if (bodyBytes && bodyBytes.length > 0) wire.write(bodyBytes);
-      const res = await readRawResponse(wire, method, abortCleanup);
+      const res = await readRawResponse(wire, method, abortCleanup, {
+        idleMs: opts.responseIdleTimeoutMs ?? DEFAULT_TUNNEL_TIMEOUT_MS,
+        aborted: (): boolean => signal?.aborted ?? false,
+      });
 
       const respHeaders = new Headers();
       for (const [k, v] of Object.entries(res.headers)) {
