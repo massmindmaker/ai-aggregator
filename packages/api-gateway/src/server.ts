@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Plan 04 Gateway — Hono server.
  *
  * Default export is Bun.serve-compatible: { port, fetch, idleTimeout }.
@@ -24,6 +24,7 @@ import { video } from './routes/v1/video';
 import { audio } from './routes/v1/audio';
 import { batches } from './routes/v1/batches';
 import { adminProxy } from './routes/admin/proxyTest';
+import { adminCatalog } from './routes/admin/catalog';
 
 const bootTime = Date.now();
 
@@ -80,6 +81,7 @@ app.route('/v1/batches', batches);
 // ---- /api/admin: ops diagnostics. Own guard (AIAG_ADMIN_KEY bearer/x-admin-
 // key, fail-closed) — deliberately OUTSIDE the /v1 API-key middleware chain.
 app.route('/api/admin/proxy', adminProxy);
+app.route('/api/admin/catalog', adminCatalog);
 
 app.notFound((c) =>
   c.json(errors.notFound('Route not found').toResponseBody(), 404)

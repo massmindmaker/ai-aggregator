@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AIAG worker entry point.
  *
  * Wires up:
@@ -21,6 +21,7 @@ import { startCloseContestsCron } from './queues/close-contests-cron.js';
 import { startFinalizeEarningsCron } from './queues/finalize-earnings-cron.js';
 import { runEvaluation } from './eval-runner/runner.js';
 import { startInternalProbe } from './probes/internal-probe.js';
+import { startCatalogSyncCron } from './catalog/sync-cron.js';
 
 async function main(): Promise<void> {
   loadSharedEnv();
@@ -92,6 +93,7 @@ async function main(): Promise<void> {
   // Probes
   // ---------------------------------------------------------------------------
   const internalProbe = startInternalProbe({
+startCatalogSyncCron();
     pingPg: async () => {
       // Lazy DB import to keep the worker bootable without DATABASE_URL in dev.
       if (!process.env.DATABASE_URL) return;
