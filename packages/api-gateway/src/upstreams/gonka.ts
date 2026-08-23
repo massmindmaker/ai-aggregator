@@ -136,6 +136,7 @@ export const gonkaUpstream: UpstreamAdapter = {
           max_tokens: req.max_tokens,
         }),
         allowlist: GONKA_ALLOWLIST,
+        sse: true,
       },
       req.egressProxyUrl,
     );

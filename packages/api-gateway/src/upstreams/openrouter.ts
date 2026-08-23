@@ -137,6 +137,7 @@ export const openRouterUpstream: UpstreamAdapter = {
           max_tokens: req.max_tokens,
         }),
         allowlist: OPENROUTER_ALLOWLIST,
+        sse: true,
       },
       req.egressProxyUrl,
     );

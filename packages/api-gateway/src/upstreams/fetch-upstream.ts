@@ -18,6 +18,24 @@
  */
 import { safeFetch } from '@aiag/shared/server';
 import { logger } from '../lib/logger';
+import { AiagError } from '../lib/errors';
+
+/**
+ * Typed 400 thrown when an SSE request would have to traverse an egress
+ * proxy (whose tunneled path is buffered — see FetchUpstreamInit.sse).
+ * Brand-neutral by construction: names no upstream provider.
+ */
+export class StreamNotSupportedError extends AiagError {
+  constructor(host: string, source: EgressSource) {
+    super(
+      'STREAM_NOT_SUPPORTED',
+      400,
+      'Streaming is not supported for this model configuration; retry with stream:false',
+      { host, source }
+    );
+    this.name = 'StreamNotSupportedError';
+  }
+}
 
 export type EgressSource = 'upstream_column' | 'env' | 'direct';
 
@@ -42,6 +60,16 @@ export function resolveEgressProxy(
 export type FetchUpstreamInit = Omit<RequestInit, 'body'> & {
   body?: RequestInit['body'];
   allowlist?: string[];
+  /**
+   * Marks an SSE/streaming request (`chatStream`). When an egress proxy
+   * RESOLVES for the call, the request is rejected fail-loud with
+   * STREAM_NOT_SUPPORTED (400): the tunneled executor returns a fully
+   * BUFFERED response (see shared/safe-fetch.ts JSDoc), so a proxied
+   * "stream" would silently degrade to one giant chunk at completion —
+   * i.e. no streaming at all. Honest refusal beats fake SSE. Direct calls
+   * (source === 'direct') are never affected.
+   */
+  sse?: boolean;
 };
 
 function hostOf(url: string): string {
@@ -71,7 +99,15 @@ export async function fetchUpstream(
   } else {
     logger.info({ host: hostOf(url), source }, 'egress_via_proxy');
   }
-  const { allowlist, ...rest } = init;
+  const { allowlist, sse, ...rest } = init;
+  // SSE guard (review HIGH, honest-refusal decision): the proxied executor
+  // buffers the whole body before resolving, so streaming through a proxy is
+  // physically impossible — reject BEFORE the tunnel with a typed error
+  // instead of returning a fake "stream" of one chunk. Direct egress keeps
+  // real streaming via global fetch.
+  if (sse && proxyUrl) {
+    throw new StreamNotSupportedError(hostOf(url), source);
+  }
   return safeFetch(url, {
     ...rest,
     ...(allowlist ? { allowlist } : {}),

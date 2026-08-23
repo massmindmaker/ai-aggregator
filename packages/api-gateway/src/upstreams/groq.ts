@@ -112,6 +112,7 @@ export const groqUpstream: UpstreamAdapter = {
           ...(req.max_tokens !== undefined && { max_tokens: req.max_tokens }),
         }),
         allowlist: GROQ_ALLOWLIST,
+        sse: true,
       },
       req.egressProxyUrl,
     );

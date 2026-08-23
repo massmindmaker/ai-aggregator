@@ -12,7 +12,7 @@ import {
   unregisterEgressExecutor,
   SsrfError,
 } from '@aiag/shared/server';
-import { fetchUpstream, resolveEgressProxy } from '../upstreams/fetch-upstream';
+import { fetchUpstream, resolveEgressProxy, StreamNotSupportedError } from '../upstreams/fetch-upstream';
 import { adminProxy, setRunProxyTestOverride } from '../routes/admin/proxyTest';
 import { applyAiagErrorHandler } from '../lib/errors';
 
@@ -140,6 +140,43 @@ describe('fetchUpstream egress wiring', () => {
       fetchUpstream('http://169.254.169.254/meta', {}, 'socks5://col:1080')
     ).rejects.toBeInstanceOf(SsrfError);
     expect(calls).toHaveLength(0); // blocked destination never reached the proxy
+  });
+});
+
+/* ------------------------- SSE guard (review HIGH) ------------------------- */
+
+describe('fetchUpstream SSE guard (honest refusal on the proxy path)', () => {
+  it('sse:true + resolved column proxy → typed STREAM_NOT_SUPPORTED, no tunnel', async () => {
+    const err = await fetchUpstream(
+      'http://gateway.internal/v1/chat',
+      { allowlist: ['gateway.internal'], sse: true },
+      'socks5://col:1080'
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(StreamNotSupportedError);
+    const aiag = err as InstanceType<typeof StreamNotSupportedError>;
+    expect(aiag.code).toBe('STREAM_NOT_SUPPORTED');
+    expect(aiag.status).toBe(400);
+    // details must not leak credentials from the proxy URL
+    expect(JSON.stringify(aiag.details ?? {})).not.toContain('socks5://col');
+    expect(calls).toHaveLength(0); // executor never invoked
+  });
+
+  it('sse:true + env-tier proxy → same refusal', async () => {
+    process.env.AIAG_EGRESS_PROXY_URL = 'http://fleet-proxy:3128';
+    await expect(
+      fetchUpstream('http://gateway.internal/v1/chat', { allowlist: ['gateway.internal'], sse: true })
+    ).rejects.toBeInstanceOf(StreamNotSupportedError);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('sse:true + direct egress → real fetch path, streaming untouched', async () => {
+    delete process.env.AIAG_EGRESS_PROXY_URL;
+    // Hermetic: loopback refuse-port proves we took the DIRECT path (no
+    // StreamNotSupportedError, no executor call).
+    await expect(
+      fetchUpstream('http://127.0.0.1:1/', { allowlist: ['127.0.0.1'], sse: true })
+    ).rejects.not.toBeInstanceOf(StreamNotSupportedError);
+    expect(calls).toHaveLength(0);
   });
 });
 
