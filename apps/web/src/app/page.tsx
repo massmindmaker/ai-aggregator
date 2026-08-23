@@ -1057,7 +1057,7 @@ export default function HomePage() {
             {pricingTiers.map((p) => (
               <div
                 key={p.tier}
-                className={`relative transition-all hover:-translate-y-0.5${p.featured ? ' aiag-featured-ring' : ''}`}
+                className={`relative transition-all hover:-translate-y-0.5`}
                 style={{
                   background: p.featured
                     ? 'linear-gradient(180deg, rgba(245,158,11,0.08) 0%, var(--bg-surface) 100%)'
