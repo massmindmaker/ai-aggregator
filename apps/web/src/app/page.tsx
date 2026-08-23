@@ -1,4 +1,4 @@
-import Link from 'next/link';
+﻿import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import type { Metadata } from 'next';
 import MainLayout from '@/components/layout/MainLayout';
@@ -11,7 +11,6 @@ import { CodeTabsDemo } from '@/components/home/CodeTabsDemo';
 import { TopModelsLeaderboard } from '@/components/home/TopModelsLeaderboard';
 import { CountUp } from '@/components/ui/CountUp';
 import type { ModelType } from '@/lib/marketplace/catalog';
-import { getAllModels, getAllOrgs } from '@/lib/marketplace/catalog';
 import { filtersToSearchParams } from '@/lib/marketplace/filters';
 
 /**
@@ -20,8 +19,6 @@ import { filtersToSearchParams } from '@/lib/marketplace/filters';
  * and `getAllOrgs` are synchronous pure reads over the generated catalog
  * (no DB, no network), so module scope is safe here.
  */
-const MODEL_COUNT = getAllModels().length;
-const ORG_COUNT = getAllOrgs().length;
 
 export const metadata: Metadata = {
   title:
@@ -112,14 +109,11 @@ interface HeroStat {
   staticValue?: string;
 }
 
-// Counts come from the catalog (see MODEL_COUNT/ORG_COUNT above).
+// Hero counters removed by founder decision (2026-08-23):
 // Uptime and latency stats were REMOVED, not re-estimated: we have no
 // measurement pipeline (`requests` is empty), so any number here would be
 // invented. Re-add only when backed by real telemetry.
-const heroStats: HeroStat[] = [
-  { end: MODEL_COUNT, label: 'моделей' },
-  { end: ORG_COUNT, label: 'провайдеров' },
-];
+const heroStats: HeroStat[] = []; // счётчики убраны по решению основателя (2026-08-23)
 
 const topModels = [
   {
@@ -160,7 +154,7 @@ const steps = [
   {
     num: '// 01',
     title: 'Выберите модель',
-    desc: `${MODEL_COUNT} моделей с фильтром по модальности, цене и latency. Playground без регистрации.`,
+    desc: `Каталог с фильтром по модальности, цене и latency. Playground без регистрации.`,
     code: (
       <>
         GET <span style={{ color: '#a1e89b' }}>/marketplace?tag=image</span>
@@ -212,7 +206,7 @@ const compareRows = [
   },
   {
     feat: 'Каталог моделей',
-    us: { kind: 'check', text: `✓ ${MODEL_COUNT}, LLM + image + audio` },
+    us: { kind: 'check', text: `✓ LLM + image + audio` },
     cells: [
       { kind: 'check', text: '✓ 1000+ (image heavy)' },
       { kind: 'check', text: '✓ 500k+ (часто без API)' },
@@ -380,7 +374,7 @@ export default function HomePage() {
                   background: 'var(--accent)',
                 }}
               />
-              {MODEL_COUNT} моделей · оплата в ₽ · без VPN
+              оплата в ₽ · без VPN
             </span>
 
             <h1
@@ -561,7 +555,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══ Code-tabs demo with streaming preview ═══ */}
-      <CodeTabsDemo modelCount={MODEL_COUNT} />
+      <CodeTabsDemo />
 
       {/* ═══ Live top-models leaderboard ═══ */}
       <TopModelsLeaderboard />
@@ -1197,7 +1191,7 @@ export default function HomePage() {
             maxWidth: 520,
           }}
         >
-          {MODEL_COUNT} моделей, рублёвая оплата, SDK на 6 языках. Первый
+          Рублёвая оплата, SDK на 6 языках. Первый
           запрос за 2 минуты.
         </p>
         <div className="flex gap-3.5 flex-wrap justify-center">

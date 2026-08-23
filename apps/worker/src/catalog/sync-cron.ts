@@ -58,7 +58,7 @@ export function startCatalogSyncCron(): void {
   const run = () => {
     (async () => {
       const { sql } = await import('@aiag/database');
-      await runCatalogSyncOnce({ sql });
+      await runCatalogSyncOnce({ sql: sql as unknown as SqlTag });
     })().catch((err) => logger.error({ err: String(err) }, 'catalog_sync_failed'));
   };
   run();

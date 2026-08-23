@@ -93,7 +93,6 @@ async function main(): Promise<void> {
   // Probes
   // ---------------------------------------------------------------------------
   const internalProbe = startInternalProbe({
-startCatalogSyncCron();
     pingPg: async () => {
       // Lazy DB import to keep the worker bootable without DATABASE_URL in dev.
       if (!process.env.DATABASE_URL) return;
@@ -109,6 +108,9 @@ startCatalogSyncCron();
 
   // Upstream probe is wired to a no-op listUpstreams in Phase 1 — real impl
   // pulls from `upstreams` table once gateway/admin agree on slugs.
+
+  // models.dev catalog sync (T4) — no-op unless MODELS_DEV_SYNC=on.
+  startCatalogSyncCron();
 
   // ---------------------------------------------------------------------------
   // /health server
