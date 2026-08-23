@@ -1,6 +1,28 @@
 /**
  * Typed gateway error classes mapped to HTTP responses (per Spec §10).
  */
+import type { Hono } from 'hono';
+import { logger } from './logger';
+
+/**
+ * Standard AiagError→response mapping. Mount on ANY Hono app (server.ts and
+ * bare test apps alike) so thrown AiagErrors become proper HTTP responses
+ * instead of unhandled 500s.
+ */
+export function applyAiagErrorHandler(app: Hono): void {
+  app.onError((err, c) => {
+    if (err instanceof AiagError) {
+      logger.warn({ err, code: err.code }, 'aiag_error');
+      return c.json(err.toResponseBody(), err.status as any);
+    }
+    logger.error({ err: String(err) }, 'unhandled');
+    return c.json(
+      { error: { code: 'INTERNAL', message: 'Internal error' } },
+      500
+    );
+  });
+}
+
 export class AiagError extends Error {
   constructor(
     public code: string,

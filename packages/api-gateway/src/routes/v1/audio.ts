@@ -8,6 +8,11 @@ import { Hono } from 'hono';
 import { errors } from '../../lib/errors';
 import { resolveModelWithOverride } from '../../routing/resolver';
 import { pickUpstream, type Mode, type ApiKeyPolicies } from '../../routing/engine';
+import {
+  executeWithFailover,
+  orderCandidates,
+  type FailoverOpts,
+} from '../../routing/failover';
 import { calcCostCredits, calcByokFeeCredits } from '../../lib/pricing';
 import { settleCharge, assertPositiveBalance } from '../../billing/settle';
 import { incrementSpendCounters } from '../../billing/spend-counters';
@@ -42,7 +47,12 @@ audio.post('/speech', async (c) => {
 
   const model = await resolveModelWithOverride(body.model);
   const mode: Mode = (body.aiag_mode ?? policies.default_mode ?? 'auto') as Mode;
-  const upstream = pickUpstream(model.candidates, mode, policies, 'image');
+  const preferred = pickUpstream(model.candidates, mode, policies, 'image');
+  // T3 failover — BYOK keeps the pre-T3 single-upstream passthrough.
+  const ordered = byok ? [preferred] : orderCandidates(model.candidates, preferred);
+  const failoverOpts: FailoverOpts = byok
+    ? { useBreaker: false, wrapErrors: false }
+    : {};
 
   // Fail closed, before spending on the upstream job: a missing price means
   // we cannot bill correctly. A numeric fallback here was the MED bug (Opus
@@ -50,7 +60,7 @@ audio.post('/speech', async (c) => {
   // now that price_per_image is confirmed US CENTS, that fallback would have
   // billed ~100x too little instead of erroring. The price is required in
   // the DB (model_upstreams.price_per_image) — there is no safe guess.
-  if (!byok && upstream.price_per_image == null) {
+  if (!byok && preferred.price_per_image == null) {
     throw errors.unavailable('Pricing not configured for this model — cannot bill safely');
   }
 
@@ -58,29 +68,45 @@ audio.post('/speech', async (c) => {
   if (!byok) await assertPositiveBalance(key.org_id);
 
   const start = Date.now();
-  const adapter = getUpstream(upstream.provider);
-  if (!adapter.audioSpeech) {
+  // Capability guard preserved for the preferred candidate exactly as pre-T3.
+  if (!getUpstream(preferred.provider).audioSpeech) {
     throw errors.badRequest('Selected model does not support audio speech');
   }
 
-  let job = await adapter.audioSpeech({
-    modelId: upstream.upstream_model_id,
-    input: body.input,
-    voice: body.voice,
-    format: body.format,
-    byokKey,
-  });
+  // T3: submit (+sync poll) inside the failover window; the poll always talks
+  // to the SAME upstream's adapter — the job belongs to that provider.
+  const { resp: job, usedUpstream } = await executeWithFailover(
+    ordered,
+    async (u) => {
+      const a = getUpstream(u.provider);
+      if (!a.audioSpeech) {
+        throw errors.badRequest('Selected model does not support audio speech');
+      }
+      let j = await a.audioSpeech({
+        modelId: u.upstream_model_id,
+        input: body.input,
+        voice: body.voice,
+        format: body.format,
+        byokKey,
+        egressProxyUrl: u.egress_proxy ?? undefined,
+      });
 
-  if (adapter.pollJob && (job.status === 'queued' || job.status === 'processing')) {
-    const timeoutMs = Number(process.env.KIE_SYNC_POLL_MS || 60_000);
-    const intervalMs = 5_000;
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, intervalMs));
-      job = await adapter.pollJob(job.job_id, 'suno');
-      if (job.status === 'completed' || job.status === 'failed') break;
-    }
-  }
+      if (a.pollJob && (j.status === 'queued' || j.status === 'processing')) {
+        const timeoutMs = Number(process.env.KIE_SYNC_POLL_MS || 60_000);
+        const intervalMs = 5_000;
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, intervalMs));
+          j = await a.pollJob(j.job_id, 'suno', {
+            egressProxyUrl: u.egress_proxy ?? undefined,
+          });
+          if (j.status === 'completed' || j.status === 'failed') break;
+        }
+      }
+      return j;
+    },
+    failoverOpts,
+  );
 
   // T1-fix: whole MICRO-credits, no ₽/FX. upstream.price_per_image is
   // already US CENTS — see lib/pricing.ts.
@@ -89,8 +115,8 @@ audio.post('/speech', async (c) => {
   if (byok) {
     costCredits = calcByokFeeCredits();
   } else {
-    upstreamCents = upstream.price_per_image!; // per-clip baseline; validated non-null above
-    costCredits = calcCostCredits({ upstreamCents, markup: upstream.markup });
+    upstreamCents = usedUpstream.price_per_image!; // per-clip baseline; validated non-null above
+    costCredits = calcCostCredits({ upstreamCents, markup: usedUpstream.markup });
   }
   if (job.status === 'completed' && costCredits > 0) {
     await settleCharge({
@@ -118,12 +144,12 @@ audio.post('/speech', async (c) => {
     apiKeyId: key.id,
     type: 'image', // audio logs as 'image' until type enum extended
     modelSlug: body.model,
-    upstreamId: upstream.upstream_id,
+    upstreamId: usedUpstream.upstream_id,
     modeApplied: mode,
     inputTokens: 0,
     outputTokens: 0,
     upstreamCostUsd: upstreamCents / 100,
-    markup: upstream.markup,
+    markup: usedUpstream.markup,
     totalCostCredits: costCredits,
     statusCode: job.status === 'failed' ? 502 : 200,
     latencyMs: Date.now() - start,
@@ -138,7 +164,7 @@ audio.post('/speech', async (c) => {
     // White-label: job.error carries the raw upstream failure text (Kie's
     // failMsg/failCode) — log it server-side, never forward it to the client.
     logger.warn(
-      { requestId, upstreamId: upstream.upstream_id, jobId: job.job_id, upstreamError: job.error },
+      { requestId, upstreamId: usedUpstream.upstream_id, jobId: job.job_id, upstreamError: job.error },
       'audio_job_failed'
     );
     return c.json(

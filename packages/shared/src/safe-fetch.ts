@@ -23,6 +23,10 @@
  *      (redirect: 'manual') and each Location is run through the same checks.
  *   6. Optional exact host[:port] allowlist for the few endpoints we trust
  *      (127.0.0.1:4000 internal gateway, openrouter.ai).
+ *   7. Optional egress proxy (opts.egressProxyUrl): after all checks above
+ *      pass for the destination, the request is tunneled via SOCKS5 /
+ *      HTTP-CONNECT (executor injected by the gateway package — see
+ *      registerEgressExecutor). Guards apply identically with or without it.
  *
  * Runtime notes: the undici Agent / dispatcher path applies on Node (the
  * agent-worker runtime). On Bun the dispatcher option is ignored, but the
@@ -47,6 +51,56 @@ export interface SafeFetchOptions extends RequestInit {
   allowlist?: string[];
   /** Override the redirect cap (default 5). */
   maxRedirects?: number;
+  /**
+   * Route this request's network egress through a SOCKS5 / HTTP-CONNECT proxy
+   * (`socks5://[user:pass@]host:port` or `http://[user:pass@]host:port`).
+   *
+   * Validation order is unchanged: ALL SSRF checks below run FIRST against
+   * the DESTINATION host on every hop (HTTPS-only, numeric-literal hygiene,
+   * allowlist, DNS resolve + IP-range blocklist). Only after the destination
+   * is vetted is the request handed to the registered tunnel executor, with
+   * the vetted IP passed along so the CONNECT target stays anti-rebind-safe.
+   *
+   * Execution difference vs the direct path (documented): Bun's fetch ignores
+   * undici dispatchers, so proxied requests cannot go through global fetch.
+    * The registered executor performs raw HTTP(S) over the tunnel socket and
+    * returns a fully BUFFERED Response — streaming/SSE bodies are not
+    * supported on this path. Body limitation: only trivially encodable bodies
+    * are accepted — undefined / string / Uint8Array (plus URLSearchParams /
+    * ArrayBuffer). FormData, Blob and ReadableStream bodies THROW TypeError
+    * on the proxy path — they cannot be buffered deterministically over the
+    * raw tunnel. Requires registerEgressExecutor() to have been
+    * called by the host package (api-gateway), otherwise this option throws
+    * SsrfError rather than silently falling back to direct egress.
+   *
+   * Unset → behavior identical to before this option existed.
+   */
+  egressProxyUrl?: string;
+}
+
+/**
+ * Executes one already-vetted request through an egress proxy tunnel and
+ * returns a Response. Implemented by packages/api-gateway (proxy/index.ts);
+ * injected here because @aiag/shared must not depend on the gateway package.
+ */
+export type EgressExecutor = (
+  url: string,
+  init: RequestInit,
+  proxyUrl: string,
+  /** Pre-validated destination address for the CONNECT target (anti-rebind). */
+  connectAddr?: string,
+) => Promise<Response>;
+
+let egressExecutor: EgressExecutor | null = null;
+
+/** Wire (or re-wire) the tunnel executor used when opts.egressProxyUrl is set. */
+export function registerEgressExecutor(fn: EgressExecutor): void {
+  egressExecutor = fn;
+}
+
+/** Drop the registered executor (mainly for tests). */
+export function unregisterEgressExecutor(): void {
+  egressExecutor = null;
 }
 
 export class SsrfError extends Error {
@@ -275,7 +329,12 @@ export async function safeFetch(
   input: string | URL,
   options: SafeFetchOptions = {},
 ): Promise<Response> {
-  const { allowlist: allowArr, maxRedirects = MAX_REDIRECTS, ...init } = options;
+  const {
+    allowlist: allowArr,
+    maxRedirects = MAX_REDIRECTS,
+    egressProxyUrl,
+    ...init
+  } = options;
   const allowlist = new Set((allowArr ?? []).map((s) => s.toLowerCase()));
 
   let currentUrl = typeof input === 'string' ? input : input.toString();
@@ -285,21 +344,36 @@ export async function safeFetch(
   for (let hop = 0; hop <= maxRedirects; hop++) {
     const { url, pinnedIp, family } = await vetUrl(currentUrl, allowlist);
 
-    const dispatcher = pinnedIp
-      ? await buildPinnedDispatcher(pinnedIp, family)
-      : undefined;
+    let res: Response;
+    if (egressProxyUrl) {
+      // Destination is already vetted above — hand the request to the tunnel
+      // executor with the pinned IP so CONNECT targets the validated address.
+      if (!egressExecutor) {
+        throw new SsrfError(
+          'opts.egressProxyUrl is set but no egress executor is registered (registerEgressExecutor)',
+        );
+      }
+      res = await egressExecutor(
+        url.toString(),
+        { ...init, method, body, redirect: 'manual' },
+        egressProxyUrl,
+        pinnedIp ?? undefined,
+      );
+    } else {
+      const dispatcher = pinnedIp ? await buildPinnedDispatcher(pinnedIp, family) : undefined;
 
-    const fetchInit: Record<string, unknown> = {
-      ...init,
-      method,
-      body,
-      redirect: 'manual', // we follow + re-validate ourselves
-    };
-    // `dispatcher` is a Node/undici-only RequestInit extension (ignored on Bun);
-    // it pins the socket to the vetted IP. Typed loosely to stay runtime-portable.
-    if (dispatcher) fetchInit.dispatcher = dispatcher;
+      const fetchInit: Record<string, unknown> = {
+        ...init,
+        method,
+        body,
+        redirect: 'manual', // we follow + re-validate ourselves
+      };
+      // `dispatcher` is a Node/undici-only RequestInit extension (ignored on Bun);
+      // it pins the socket to the vetted IP. Typed loosely to stay runtime-portable.
+      if (dispatcher) fetchInit.dispatcher = dispatcher;
 
-    const res = await fetch(url.toString(), fetchInit as RequestInit);
+      res = await fetch(url.toString(), fetchInit as RequestInit);
+    }
 
     // Not a redirect → done.
     if (res.status < 300 || res.status > 399) return res;

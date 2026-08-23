@@ -3,6 +3,11 @@ import { Hono } from 'hono';
 import { errors } from '../../lib/errors';
 import { resolveModelWithOverride } from '../../routing/resolver';
 import { pickUpstream, type Mode, type ApiKeyPolicies } from '../../routing/engine';
+import {
+  executeWithFailover,
+  orderCandidates,
+  type FailoverOpts,
+} from '../../routing/failover';
 import { calcCostCredits, calcByokFeeCredits } from '../../lib/pricing';
 import { settleCharge, assertPositiveBalance } from '../../billing/settle';
 import { incrementSpendCounters } from '../../billing/spend-counters';
@@ -32,7 +37,12 @@ embeddings.post('/', async (c) => {
 
   const model = await resolveModelWithOverride(body.model);
   const mode: Mode = (body.aiag_mode ?? policies.default_mode ?? 'auto') as Mode;
-  const upstream = pickUpstream(model.candidates, mode, policies, 'embedding');
+  const preferred = pickUpstream(model.candidates, mode, policies, 'embedding');
+  // T3 failover — BYOK keeps the pre-T3 single-upstream passthrough.
+  const ordered = byok ? [preferred] : orderCandidates(model.candidates, preferred);
+  const failoverOpts: FailoverOpts = byok
+    ? { useBreaker: false, wrapErrors: false }
+    : {};
 
   // PREFLIGHT: 402 before spending on the upstream (see billing/settle.ts).
   if (!byok) await assertPositiveBalance(key.org_id);
@@ -47,17 +57,20 @@ embeddings.post('/', async (c) => {
   // reachable only via AIAG_FORCE_MOCK=1 (CI), which getUpstream owns.
   // ⚠️ Do not re-introduce the literal mock import here — a test asserts this
   // file never names it again (see __tests__/billing-preflight.test.ts).
-  const adapter = getUpstream(upstream.provider);
-  if (!adapter.embeddings) {
-    // White-label: never name the upstream. Same neutral shape images.ts uses
-    // for an unsupported capability — an honest error beats a billable fake.
-    throw errors.badRequest('Selected model does not support embeddings');
-  }
-  const resp = await adapter.embeddings({
-    modelId: upstream.upstream_model_id,
-    input: body.input,
-    byokKey: c.req.header('x-upstream-key'),
-  });
+  const { resp, usedUpstream } = await executeWithFailover(ordered, (upstream) => {
+    const adapter = getUpstream(upstream.provider);
+    if (!adapter.embeddings) {
+      // White-label: never name the upstream. Same neutral shape images.ts uses
+      // for an unsupported capability — an honest error beats a billable fake.
+      throw errors.badRequest('Selected model does not support embeddings');
+    }
+    return adapter.embeddings({
+      modelId: upstream.upstream_model_id,
+      input: body.input,
+      byokKey: c.req.header('x-upstream-key'),
+      egressProxyUrl: upstream.egress_proxy ?? undefined,
+    });
+  }, failoverOpts);
 
   // T1-fix: whole MICRO-credits, no ₽/FX. price_per_1k_input is already US
   // CENTS — see lib/pricing.ts. This is exactly the route Opus flagged
@@ -68,8 +81,8 @@ embeddings.post('/', async (c) => {
   if (byok) {
     costCredits = calcByokFeeCredits();
   } else {
-    upstreamCents = (resp.usage.prompt_tokens / 1000) * upstream.price_per_1k_input;
-    costCredits = calcCostCredits({ upstreamCents, markup: upstream.markup });
+    upstreamCents = (resp.usage.prompt_tokens / 1000) * usedUpstream.price_per_1k_input;
+    costCredits = calcCostCredits({ upstreamCents, markup: usedUpstream.markup });
   }
   if (costCredits > 0) {
     await settleCharge({
@@ -95,12 +108,12 @@ embeddings.post('/', async (c) => {
     apiKeyId: key.id,
     type: 'embedding',
     modelSlug: body.model,
-    upstreamId: upstream.upstream_id,
+    upstreamId: usedUpstream.upstream_id,
     modeApplied: mode,
     inputTokens: resp.usage.prompt_tokens,
     outputTokens: 0,
     upstreamCostUsd: upstreamCents / 100,
-    markup: upstream.markup,
+    markup: usedUpstream.markup,
     totalCostCredits: costCredits,
     statusCode: 200,
     latencyMs: Date.now() - start,

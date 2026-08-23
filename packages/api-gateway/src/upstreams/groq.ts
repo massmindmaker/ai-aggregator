@@ -16,10 +16,15 @@ import type {
   EmbeddingsRequest,
   EmbeddingsResponse,
 } from './interface';
+import { fetchUpstream } from './fetch-upstream';
 import { logger } from '../lib/logger';
 import { upstreamHttpError } from '../lib/client-errors';
 
 const GROQ_BASE = 'https://api.groq.com/openai/v1';
+// safeFetch allowlist: fixed public host, allowlisted so the vetting path
+// needs no DNS (offline-safe unit runs). T2: all adapter traffic funnels
+// through fetchUpstream for egress-proxy resolution.
+const GROQ_ALLOWLIST = ['api.groq.com'];
 
 function selectKey(byok?: string): string | undefined {
   return byok || process.env.GROQ_API_KEY;
@@ -38,17 +43,22 @@ export const groqUpstream: UpstreamAdapter = {
     };
 
     const start = Date.now();
-    const res = await fetch(`${GROQ_BASE}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: req.modelId,
-        messages: req.messages,
-        stream: false,
-        ...(req.temperature !== undefined && { temperature: req.temperature }),
-        ...(req.max_tokens !== undefined && { max_tokens: req.max_tokens }),
-      }),
-    });
+    const res = await fetchUpstream(
+      `${GROQ_BASE}/chat/completions`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: req.modelId,
+          messages: req.messages,
+          stream: false,
+          ...(req.temperature !== undefined && { temperature: req.temperature }),
+          ...(req.max_tokens !== undefined && { max_tokens: req.max_tokens }),
+        }),
+        allowlist: GROQ_ALLOWLIST,
+      },
+      req.egressProxyUrl,
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       logger.warn(
@@ -89,17 +99,23 @@ export const groqUpstream: UpstreamAdapter = {
       accept: 'text/event-stream',
     };
 
-    const res = await fetch(`${GROQ_BASE}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: req.modelId,
-        messages: req.messages,
-        stream: true,
-        ...(req.temperature !== undefined && { temperature: req.temperature }),
-        ...(req.max_tokens !== undefined && { max_tokens: req.max_tokens }),
-      }),
-    });
+    const res = await fetchUpstream(
+      `${GROQ_BASE}/chat/completions`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: req.modelId,
+          messages: req.messages,
+          stream: true,
+          ...(req.temperature !== undefined && { temperature: req.temperature }),
+          ...(req.max_tokens !== undefined && { max_tokens: req.max_tokens }),
+        }),
+        allowlist: GROQ_ALLOWLIST,
+        sse: true,
+      },
+      req.egressProxyUrl,
+    );
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
       logger.warn(
@@ -137,14 +153,19 @@ export const groqUpstream: UpstreamAdapter = {
       logger.warn({ model: req.modelId }, 'groq_apikey_missing');
       throw new Error('model provider not configured');
     }
-    const res = await fetch(`${GROQ_BASE}/embeddings`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        'content-type': 'application/json',
+    const res = await fetchUpstream(
+      `${GROQ_BASE}/embeddings`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ model: req.modelId, input: req.input }),
+        allowlist: GROQ_ALLOWLIST,
       },
-      body: JSON.stringify({ model: req.modelId, input: req.input }),
-    });
+      req.egressProxyUrl,
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       logger.warn(

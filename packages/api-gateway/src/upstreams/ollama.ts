@@ -12,6 +12,7 @@ import type {
 } from './interface';
 import { logger } from '../lib/logger';
 import { upstreamHttpError } from '../lib/client-errors';
+import { fetchUpstream } from './fetch-upstream';
 
 function getBaseUrl(): string {
   const url = process.env.OLLAMA_CLOUD_URL;
@@ -20,6 +21,20 @@ function getBaseUrl(): string {
     throw new Error('model provider not configured');
   }
   return url;
+}
+
+// OLLAMA_CLOUD_URL is operator-configured (may be an internal / plain-http
+// host in self-hosted setups). Allowlist exactly that host so safeFetch
+// accepts what worked before T2 — the operator vetted this endpoint by
+// configuring it.
+function allowlistFor(baseUrl: string): string[] {
+  try {
+    const u = new URL(baseUrl);
+    const host = u.hostname.toLowerCase();
+    return [u.port ? `${host}:${u.port}` : host];
+  } catch {
+    return [];
+  }
 }
 
 export const ollamaUpstream: UpstreamAdapter = {
@@ -32,17 +47,22 @@ export const ollamaUpstream: UpstreamAdapter = {
     if (apiKey) headers['authorization'] = `Bearer ${apiKey}`;
 
     // Ollama Cloud is OpenAI-compatible — use /v1/chat/completions, not /api/chat
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: req.modelId,
-        messages: req.messages,
-        stream: false,
-        ...(req.temperature !== undefined && { temperature: req.temperature }),
-        ...(req.max_tokens !== undefined && { max_tokens: req.max_tokens }),
-      }),
-    });
+    const res = await fetchUpstream(
+      `${baseUrl}/v1/chat/completions`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: req.modelId,
+          messages: req.messages,
+          stream: false,
+          ...(req.temperature !== undefined && { temperature: req.temperature }),
+          ...(req.max_tokens !== undefined && { max_tokens: req.max_tokens }),
+        }),
+        allowlist: allowlistFor(baseUrl),
+      },
+      req.egressProxyUrl,
+    );
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
       logger.warn({ status: res.status, body: txt }, 'ollama_chat_error');
@@ -85,11 +105,16 @@ export const ollamaUpstream: UpstreamAdapter = {
 
     const data: EmbeddingsResponse['data'] = [];
     for (let i = 0; i < inputs.length; i++) {
-      const res = await fetch(`${baseUrl}/api/embeddings`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ model: req.modelId, prompt: inputs[i] }),
-      });
+      const res = await fetchUpstream(
+        `${baseUrl}/api/embeddings`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ model: req.modelId, prompt: inputs[i] }),
+          allowlist: allowlistFor(baseUrl),
+        },
+        req.egressProxyUrl,
+      );
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
         logger.warn({ status: res.status, body: txt }, 'ollama_embeddings_error');

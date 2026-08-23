@@ -28,6 +28,8 @@ type DbRow = {
   price_per_1k_output: string | number;
   price_per_image: string | number | null;
   markup: string | number;
+  egress_proxy: string | null;
+  priority: number;
 };
 
 export async function resolveModel(slug: string): Promise<ResolvedModel> {
@@ -39,16 +41,21 @@ export async function resolveModel(slug: string): Promise<ResolvedModel> {
     /* cache optional */
   }
 
+  // T3 (native egress integration): deterministic FAILOVER order —
+  // model_upstreams.priority ASC (lower = tried first), upstream_id as the
+  // stable tiebreak. The routing engine still picks the preferred candidate
+  // from this list; the order matters to executeWithFailover only.
   const rows = (await sql<DbRow[]>`
     SELECT m.slug, m.type,
            mu.upstream_id, mu.upstream_model_id,
            u.provider, u.ru_residency, u.latency_p50_ms, u.uptime,
            mu.price_per_1k_input, mu.price_per_1k_output, mu.price_per_image,
-           mu.markup
+           mu.markup, mu.egress_proxy, mu.priority
       FROM models m
       JOIN model_upstreams mu ON mu.model_id = m.id AND mu.enabled = TRUE
-      JOIN upstreams u       ON u.id = mu.upstream_id AND u.enabled = TRUE
-     WHERE m.slug = ${slug} AND m.enabled = TRUE
+       JOIN upstreams u       ON u.id = mu.upstream_id AND u.enabled = TRUE
+      WHERE m.slug = ${slug} AND m.enabled = TRUE
+      ORDER BY mu.priority ASC, mu.upstream_id ASC
   `) as DbRow[];
 
   if (rows.length === 0) throw errors.badRequest(`Unknown model: ${slug}`);
@@ -65,6 +72,11 @@ export async function resolveModel(slug: string): Promise<ResolvedModel> {
     upstream_id: r.upstream_id,
     upstream_model_id: r.upstream_model_id,
     markup: Number(r.markup),
+    // Raw column value — precedence vs env AIAG_EGRESS_PROXY_URL is applied
+    // per-request in upstreams/fetch-upstream.ts (T2), not here, so cached
+    // payloads never bake the env tier in.
+    egress_proxy: r.egress_proxy,
+    priority: Number(r.priority),
   }));
 
   const payload: ResolvedModel = {

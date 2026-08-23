@@ -1,6 +1,11 @@
 /**
  * Upstream adapter interface (abstract). Plan 05 implements concrete
  * adapters (OpenRouter, Yandex, Fal, Together, etc.).
+ *
+ * `egressProxyUrl` (all request types) carries the RAW
+ * model_upstreams.egress_proxy column value for the selected routing row.
+ * Adapters must pass it straight into fetchUpstream() — resolution against
+ * env/direct happens there, never in the adapter (T2 native egress).
  */
 export type ChatRequest = {
   modelId: string;
@@ -9,6 +14,7 @@ export type ChatRequest = {
   temperature?: number;
   max_tokens?: number;
   byokKey?: string | undefined;
+  egressProxyUrl?: string | undefined;
 };
 
 export type ChatUsage = {
@@ -35,6 +41,7 @@ export type EmbeddingsRequest = {
   modelId: string;
   input: string | string[];
   byokKey?: string | undefined;
+  egressProxyUrl?: string | undefined;
 };
 
 export type EmbeddingsResponse = {
@@ -53,6 +60,7 @@ export type ImageRequest = {
   negative_prompt?: string;
   reference_image_url?: string;
   byokKey?: string | undefined;
+  egressProxyUrl?: string | undefined;
 };
 
 export type VideoRequest = {
@@ -62,6 +70,7 @@ export type VideoRequest = {
   aspect_ratio?: string;
   image_url?: string;
   byokKey?: string | undefined;
+  egressProxyUrl?: string | undefined;
 };
 
 export type AudioSpeechRequest = {
@@ -70,6 +79,7 @@ export type AudioSpeechRequest = {
   voice?: string;
   format?: string;
   byokKey?: string | undefined;
+  egressProxyUrl?: string | undefined;
 };
 
 export type AudioTranscriptionRequest = {
@@ -78,6 +88,7 @@ export type AudioTranscriptionRequest = {
   audio_b64?: string;
   language?: string;
   byokKey?: string | undefined;
+  egressProxyUrl?: string | undefined;
 };
 
 export type MediaJob = {
@@ -96,5 +107,9 @@ export interface UpstreamAdapter {
   videoGeneration?(req: VideoRequest): Promise<MediaJob>;
   audioSpeech?(req: AudioSpeechRequest): Promise<MediaJob>;
   audioTranscription?(req: AudioTranscriptionRequest): Promise<MediaJob>;
-  pollJob?(jobId: string, family: 'image' | 'video' | 'suno'): Promise<MediaJob>;
+  pollJob?(
+    jobId: string,
+    family: 'image' | 'video' | 'suno',
+    opts?: { egressProxyUrl?: string | undefined }
+  ): Promise<MediaJob>;
 }

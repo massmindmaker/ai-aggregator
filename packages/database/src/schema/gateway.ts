@@ -80,6 +80,9 @@ export const modelUpstreams = pgTable(
     pricePerImage: numeric('price_per_image', { precision: 18, scale: 10 }),
     pricePerAudioSec: numeric('price_per_audio_sec', { precision: 18, scale: 10 }),
     markup: numeric('markup', { precision: 5, scale: 4 }).notNull().default('1.25'),
+    // Native egress integration T2 — mirrors migrations/0062_upstream_egress_proxy.sql.
+    // Optional per-row egress proxy; NULL = inherit env/direct.
+    egressProxy: text('egress_proxy'),
     enabled: boolean('enabled').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

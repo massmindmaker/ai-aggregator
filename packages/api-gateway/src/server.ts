@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Plan 04 Gateway — Hono server.
  *
  * Default export is Bun.serve-compatible: { port, fetch, idleTimeout }.
@@ -7,7 +7,7 @@
 import { Hono } from 'hono';
 import { logger } from './lib/logger';
 import { config } from './config';
-import { AiagError, errors } from './lib/errors';
+import { applyAiagErrorHandler, errors } from './lib/errors';
 import { requireApiKey } from './middleware/auth-plan04';
 import { rateLimit } from './middleware/rate-limit-plan04';
 import { keyLimits } from './middleware/key-limits';
@@ -23,6 +23,8 @@ import { images } from './routes/v1/images';
 import { video } from './routes/v1/video';
 import { audio } from './routes/v1/audio';
 import { batches } from './routes/v1/batches';
+import { adminProxy } from './routes/admin/proxyTest';
+import { adminCatalog } from './routes/admin/catalog';
 
 const bootTime = Date.now();
 
@@ -41,17 +43,7 @@ app.use('*', async (_c, next) => {
 
 app.use('*', requestIdMiddleware());
 
-app.onError((err, c) => {
-  if (err instanceof AiagError) {
-    logger.warn({ err, code: err.code }, 'aiag_error');
-    return c.json(err.toResponseBody(), err.status as any);
-  }
-  logger.error({ err: String(err) }, 'unhandled');
-  return c.json(
-    { error: { code: 'INTERNAL', message: 'Internal error' } },
-    500
-  );
-});
+applyAiagErrorHandler(app);
 
 app.get('/health', (c) =>
   c.json({
@@ -85,6 +77,11 @@ app.route('/v1/images', images);
 app.route('/v1/video', video);
 app.route('/v1/audio', audio);
 app.route('/v1/batches', batches);
+
+// ---- /api/admin: ops diagnostics. Own guard (AIAG_ADMIN_KEY bearer/x-admin-
+// key, fail-closed) — deliberately OUTSIDE the /v1 API-key middleware chain.
+app.route('/api/admin/proxy', adminProxy);
+app.route('/api/admin/catalog', adminCatalog);
 
 app.notFound((c) =>
   c.json(errors.notFound('Route not found').toResponseBody(), 404)

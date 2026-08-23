@@ -31,8 +31,23 @@ import type {
 } from './interface';
 import { logger } from '../lib/logger';
 import { upstreamHttpError } from '../lib/client-errors';
+import { fetchUpstream } from './fetch-upstream';
 
 const KIE_BASE = process.env.KIE_BASE_URL || 'https://api.kie.ai';
+
+// KIE_BASE_URL is operator-configured (may be an internal / plain-http host in
+// self-hosted setups). Allowlist exactly that host so safeFetch accepts what
+// worked before T2 — the operator already vetted this endpoint by configuring
+// it. Public default keeps its normal DNS/IP vetting via the same entry.
+const KIE_ALLOWLIST: string[] = (() => {
+  try {
+    const u = new URL(KIE_BASE);
+    const host = u.hostname.toLowerCase();
+    return [u.port ? `${host}:${u.port}` : host];
+  } catch {
+    return [];
+  }
+})();
 
 function selectKey(byok?: string): string | undefined {
   return byok || process.env.KIE_API_KEY;
@@ -81,6 +96,7 @@ async function createTask(
   model: string,
   input: Record<string, unknown>,
   byokKey?: string,
+  egressProxyUrl?: string | null,
 ): Promise<MediaJob> {
   const apiKey = selectKey(byokKey);
   if (!apiKey) {
@@ -98,14 +114,19 @@ async function createTask(
       ? { model, input }
       : { model, ...input };
   const start = Date.now();
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      'content-type': 'application/json',
+  const res = await fetchUpstream(
+    url,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      allowlist: KIE_ALLOWLIST,
     },
-    body: JSON.stringify(body),
-  });
+    egressProxyUrl,
+  );
   const text = await res.text();
   if (!res.ok) {
     logger.warn(
@@ -169,7 +190,11 @@ function extractUrls(resultJson?: string): string[] {
   return [];
 }
 
-async function pollOnce(prefixedJobId: string, byokKey?: string): Promise<MediaJob> {
+async function pollOnce(
+  prefixedJobId: string,
+  byokKey?: string,
+  egressProxyUrl?: string | null,
+): Promise<MediaJob> {
   const apiKey = selectKey(byokKey);
   if (!apiKey) {
     logger.warn({ jobId: prefixedJobId }, 'kie_apikey_missing');
@@ -182,10 +207,15 @@ async function pollOnce(prefixedJobId: string, byokKey?: string): Promise<MediaJ
   const taskId = sep > 0 ? prefixedJobId.slice(sep + 1) : prefixedJobId;
   const ep = endpointsFor(family);
   const url = `${KIE_BASE}${ep.status(taskId)}`;
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: { authorization: `Bearer ${apiKey}` },
-  });
+  const res = await fetchUpstream(
+    url,
+    {
+      method: 'GET',
+      headers: { authorization: `Bearer ${apiKey}` },
+      allowlist: KIE_ALLOWLIST,
+    },
+    egressProxyUrl,
+  );
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     logger.warn({ status: res.status, body: text.slice(0, 500) }, 'kie_recordinfo_error');
@@ -233,7 +263,7 @@ export const kieUpstream: UpstreamAdapter = {
     if (req.size) input.size = req.size;
     if (req.negative_prompt) input.negative_prompt = req.negative_prompt;
     if (req.reference_image_url) input.image_url = req.reference_image_url;
-    return createTask(req.modelId, input, req.byokKey);
+    return createTask(req.modelId, input, req.byokKey, req.egressProxyUrl);
   },
 
   async videoGeneration(req: VideoRequest): Promise<MediaJob> {
@@ -241,14 +271,14 @@ export const kieUpstream: UpstreamAdapter = {
     if (req.duration_s) input.duration = req.duration_s;
     if (req.aspect_ratio) input.aspect_ratio = req.aspect_ratio;
     if (req.image_url) input.image_url = req.image_url;
-    return createTask(req.modelId, input, req.byokKey);
+    return createTask(req.modelId, input, req.byokKey, req.egressProxyUrl);
   },
 
   async audioSpeech(req: AudioSpeechRequest): Promise<MediaJob> {
     const input: Record<string, unknown> = { prompt: req.input };
     if (req.voice) input.voice = req.voice;
     if (req.format) input.format = req.format;
-    return createTask(req.modelId, input, req.byokKey);
+    return createTask(req.modelId, input, req.byokKey, req.egressProxyUrl);
   },
 
   async audioTranscription(_req: AudioTranscriptionRequest): Promise<MediaJob> {
@@ -256,7 +286,11 @@ export const kieUpstream: UpstreamAdapter = {
     throw new Error('speech-to-text is not available for this model');
   },
 
-  async pollJob(jobId: string): Promise<MediaJob> {
-    return pollOnce(jobId);
+  async pollJob(
+    jobId: string,
+    _family: 'image' | 'video' | 'suno',
+    opts?: { egressProxyUrl?: string | undefined },
+  ): Promise<MediaJob> {
+    return pollOnce(jobId, undefined, opts?.egressProxyUrl);
   },
 };

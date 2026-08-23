@@ -3,6 +3,11 @@ import { Hono } from 'hono';
 import { errors } from '../../lib/errors';
 import { resolveModelWithOverride } from '../../routing/resolver';
 import { pickUpstream, type Mode, type ApiKeyPolicies } from '../../routing/engine';
+import {
+  executeWithFailover,
+  orderCandidates,
+  type FailoverOpts,
+} from '../../routing/failover';
 import { calcCostCredits, calcByokFeeCredits } from '../../lib/pricing';
 import { settleCharge, assertPositiveBalance } from '../../billing/settle';
 import { incrementSpendCounters } from '../../billing/spend-counters';
@@ -32,7 +37,12 @@ completions.post('/', async (c) => {
 
   const model = await resolveModelWithOverride(body.model);
   const mode: Mode = (body.aiag_mode ?? policies.default_mode ?? 'auto') as Mode;
-  const upstream = pickUpstream(model.candidates, mode, policies, 'chat');
+  const preferred = pickUpstream(model.candidates, mode, policies, 'chat');
+  // T3 failover — BYOK keeps the pre-T3 single-upstream passthrough.
+  const ordered = byok ? [preferred] : orderCandidates(model.candidates, preferred);
+  const failoverOpts: FailoverOpts = byok
+    ? { useBreaker: false, wrapErrors: false }
+    : {};
 
   // PREFLIGHT: 402 before spending on the upstream (see billing/settle.ts).
   // BYOK skipped — the caller pays their own provider.
@@ -41,11 +51,16 @@ completions.post('/', async (c) => {
   const start = Date.now();
 
   const promptText = Array.isArray(body.prompt) ? body.prompt.join('\n') : body.prompt;
-  const upstreamAdapter = getUpstream(upstream.provider);
-  const resp = await upstreamAdapter.chat({
-    modelId: upstream.upstream_model_id,
-    messages: [{ role: 'user', content: promptText }],
-  });
+  const { resp, usedUpstream } = await executeWithFailover(
+    ordered,
+    (u) =>
+      getUpstream(u.provider).chat({
+        modelId: u.upstream_model_id,
+        messages: [{ role: 'user', content: promptText }],
+        egressProxyUrl: u.egress_proxy ?? undefined,
+      }),
+    failoverOpts,
+  );
 
   // T1-fix: whole MICRO-credits, no ₽/FX. price_per_1k_input/output are
   // already US CENTS — see lib/pricing.ts.
@@ -55,11 +70,11 @@ completions.post('/', async (c) => {
     costCredits = calcByokFeeCredits();
   } else {
     upstreamCents =
-      (resp.usage.prompt_tokens / 1000) * upstream.price_per_1k_input +
-      (resp.usage.completion_tokens / 1000) * upstream.price_per_1k_output;
+      (resp.usage.prompt_tokens / 1000) * usedUpstream.price_per_1k_input +
+      (resp.usage.completion_tokens / 1000) * usedUpstream.price_per_1k_output;
     costCredits = calcCostCredits({
       upstreamCents,
-      markup: upstream.markup,
+      markup: usedUpstream.markup,
       cachedInputTokens: resp.usage.cached_input_tokens,
       totalInputTokens: resp.usage.prompt_tokens,
     });
@@ -94,12 +109,12 @@ completions.post('/', async (c) => {
     apiKeyId: key.id,
     type: 'completion',
     modelSlug: body.model,
-    upstreamId: upstream.upstream_id,
+    upstreamId: usedUpstream.upstream_id,
     modeApplied: mode,
     inputTokens: resp.usage.prompt_tokens,
     outputTokens: resp.usage.completion_tokens,
     upstreamCostUsd: upstreamCents / 100,
-    markup: upstream.markup,
+    markup: usedUpstream.markup,
     totalCostCredits: costCredits,
     statusCode: 200,
     latencyMs: Date.now() - start,
