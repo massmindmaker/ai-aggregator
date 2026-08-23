@@ -29,6 +29,11 @@ export type UpstreamCandidate = Upstream & {
   markup: number;
   /** Raw model_upstreams.egress_proxy (T2). NULL/undefined → env/direct. */
   egress_proxy?: string | null;
+  /**
+   * model_upstreams.priority (T3): failover order across candidates — lower
+   * is tried first (resolver ORDER BY priority, upstream_id).
+   */
+  priority?: number;
 };
 
 export type Mode = 'auto' | 'fastest' | 'cheapest' | 'balanced' | 'ru-only';

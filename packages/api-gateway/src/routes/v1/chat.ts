@@ -11,6 +11,11 @@ import {
   type ApiKeyPolicies,
 } from '../../routing/engine';
 import { checkSessionBudget } from '../../routing/policies';
+import {
+  executeWithFailover,
+  orderCandidates,
+  type FailoverOpts,
+} from '../../routing/failover';
 import { calcCostCredits, calcByokFeeCredits, MICRO_PER_USD } from '../../lib/pricing';
 import { settleCharge, assertPositiveBalance } from '../../billing/settle';
 import { incrementSpendCounters } from '../../billing/spend-counters';
@@ -24,6 +29,20 @@ import { getUpstream } from '../../upstreams/registry';
 import type { AuthenticatedApiKey } from '../../middleware/auth-plan04';
 
 export const chat = new Hono();
+
+/**
+ * Continue an async iterable whose FIRST chunk was already pulled inside the
+ * failover window: replay that chunk, then delegate the rest. Mid-stream
+ * errors stay handled by sse.ts (they cannot be retried — headers/body are
+ * already flowing to the client).
+ */
+function resumeAfterFirst<T>(iter: AsyncIterable<T>, first: IteratorResult<T>): AsyncIterable<T> {
+  async function* gen(): AsyncGenerator<T> {
+    if (!first.done) yield first.value;
+    yield* iter;
+  }
+  return gen();
+}
 
 type ChatBody = {
   model: string;
@@ -54,7 +73,14 @@ chat.post('/completions', async (c) => {
 
   const model = await resolveModelWithOverride(body.model);
   const mode: Mode = (body.aiag_mode ?? policies.default_mode ?? 'auto') as Mode;
-  const upstream = pickUpstream(model.candidates, mode, policies, 'chat');
+  const preferred = pickUpstream(model.candidates, mode, policies, 'chat');
+  // T3 failover: preferred first, remaining candidates in resolver (priority)
+  // order. BYOK keeps the exact pre-T3 single-upstream passthrough — the
+  // caller's key is provider-specific, failing over would send it elsewhere.
+  const ordered = byok ? [preferred] : orderCandidates(model.candidates, preferred);
+  const failoverOpts: FailoverOpts = byok
+    ? { useBreaker: false, wrapErrors: false }
+    : {};
 
   // FIX H4.3: per_session_budget_cap_rub
   const sessionId = c.req.header('x-aiag-session-id');
@@ -70,18 +96,27 @@ chat.post('/completions', async (c) => {
   if (!byok) await assertPositiveBalance(key.org_id);
 
   const start = Date.now();
-  const upstreamAdapter = getUpstream(upstream.provider);
 
   if (body.stream) {
-    const iter = upstreamAdapter.chatStream!({
-      modelId: upstream.upstream_model_id,
-      messages: body.messages,
-      stream: true,
-      byokKey,
-      egressProxyUrl: upstream.egress_proxy ?? undefined,
-    });
-    return streamSseAndSettle(c, iter, {
-      upstream,
+    // Pull the FIRST chunk inside the failover window so connect/first-token
+    // failures move to the next candidate before any header is sent.
+    const { resp: primed, usedUpstream } = await executeWithFailover(
+      ordered,
+      async (u) => {
+        const iter = getUpstream(u.provider).chatStream!({
+          modelId: u.upstream_model_id,
+          messages: body.messages,
+          stream: true,
+          byokKey,
+          egressProxyUrl: u.egress_proxy ?? undefined,
+        });
+        const first = await iter.next();
+        return { iter, first };
+      },
+      failoverOpts,
+    );
+    return streamSseAndSettle(c, resumeAfterFirst(primed.iter, primed.first), {
+      upstream: usedUpstream,
       model: { slug: model.slug, type: model.type },
       // Full key (not just id/org_id): sse.ts now bumps the SAME cap counters
       // the non-stream branch does — `stream:true` used to bypass all three.
@@ -92,13 +127,18 @@ chat.post('/completions', async (c) => {
     });
   }
 
-  const resp = await upstreamAdapter.chat({
-    modelId: upstream.upstream_model_id,
-    messages: body.messages,
-    stream: false,
-    byokKey,
-    egressProxyUrl: upstream.egress_proxy ?? undefined,
-  });
+  const { resp, usedUpstream } = await executeWithFailover(
+    ordered,
+    (u) =>
+      getUpstream(u.provider).chat({
+        modelId: u.upstream_model_id,
+        messages: body.messages,
+        stream: false,
+        byokKey,
+        egressProxyUrl: u.egress_proxy ?? undefined,
+      }),
+    failoverOpts,
+  );
 
   const usage = resp.usage;
   // T1-fix (2026-07-16 rework): org buckets are whole MICRO-credits now — no
@@ -131,11 +171,11 @@ chat.post('/completions', async (c) => {
     }
   } else {
     upstreamCents =
-      (usage.prompt_tokens / 1000) * upstream.price_per_1k_input +
-      (usage.completion_tokens / 1000) * upstream.price_per_1k_output;
+      (usage.prompt_tokens / 1000) * usedUpstream.price_per_1k_input +
+      (usage.completion_tokens / 1000) * usedUpstream.price_per_1k_output;
     costCredits = calcCostCredits({
       upstreamCents,
-      markup: upstream.markup,
+      markup: usedUpstream.markup,
       cachedInputTokens: usage.cached_input_tokens,
       totalInputTokens: usage.prompt_tokens,
     });
@@ -179,13 +219,13 @@ chat.post('/completions', async (c) => {
     apiKeyId: key.id,
     type: 'chat',
     modelSlug: body.model,
-    upstreamId: upstream.upstream_id,
+    upstreamId: usedUpstream.upstream_id,
     modeRequested: body.aiag_mode ?? null,
     modeApplied: mode,
     inputTokens: usage.prompt_tokens,
     outputTokens: usage.completion_tokens,
     upstreamCostUsd,
-    markup: upstream.markup,
+    markup: usedUpstream.markup,
     totalCostCredits: costCredits,
     statusCode: 200,
     latencyMs: Date.now() - start,
