@@ -18,7 +18,8 @@ export default function PrivacyPage() {
         toc={TOC}
       >
         <p className="mb-6 text-muted-foreground">
-          Редакция от 2026-04-18. Оператор: ИП Боборов, ОГРНИП 0000000000.
+          Редакция от 2026-04-18. Оператор: ИП Боборов, [ОГРНИП: заполняет основатель],
+          [ИНН: заполняет основатель].
         </p>
 
         <h2 id="processing" className="text-xl font-semibold mt-8 mb-3">
