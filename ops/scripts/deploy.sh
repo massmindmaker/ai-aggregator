@@ -81,7 +81,7 @@ else
 fi
 
 node "$REPO_ROOT/ops/scripts/verify-ecosystem-config.cjs" \
-  "$REPO_ROOT/ops/ecosystem.config.cjs"
+  "$REPO_ROOT/ops/ecosystem.config.cjs" "$REPO_ROOT/.env.example"
 for app in "${APPS[@]}"; do
   aiag_verify_release_artifacts "$REPO_ROOT" "$app" \
     || fail "Release artifact preflight failed for $app"
@@ -125,27 +125,33 @@ for APP in $APPS; do
 
   # The release contains the reviewed process contract. Validate it before
   # installing the exact file used by the pm2 self-heal fallback.
-  node ops/scripts/verify-ecosystem-config.cjs ops/ecosystem.config.cjs
+  node ops/scripts/verify-ecosystem-config.cjs \
+    ops/ecosystem.config.cjs /srv/aiag/shared/.env
   install -d "$(dirname "$ECOSYSTEM")"
+  install -m 0644 ops/runtime-env.cjs "$(dirname "$ECOSYSTEM")/runtime-env.cjs"
   install -m 0644 ops/ecosystem.config.cjs "$ECOSYSTEM"
+
+  # Every lifecycle and inspection command targets the root-owned daemon.
+  # shellcheck source=pm2-root.sh
+  source ops/scripts/pm2-root.sh
 
   # Atomic symlink swap
   ln -sfn "$TARGET" "$CURRENT"
 
   # Reload an existing process or recreate it from the committed contract.
-  pm2 reload "$APP" --update-env \
-    || pm2 restart "$APP" --update-env \
-    || pm2 startOrReload "$ECOSYSTEM" --only "$APP" --update-env
+  aiag_pm2_reload_or_create "$APP" "$ECOSYSTEM"
+  aiag_pm2 save
 
   # Healthcheck (HTTP /health on PM2-reported port)
-  PORT=$(pm2 jlist 2>/dev/null | jq -r ".[] | select(.name==\"$APP\") | .pm2_env.env.PORT // empty")
+  PORT=$(aiag_pm2 jlist | jq -r ".[] | select(.name==\"$APP\") | .pm2_env.env.PORT // empty")
   if [[ -n "$PORT" ]]; then
     sleep 4
     if ! curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null; then
       log "HEALTH FAILED for $APP — rolling back"
       if [[ -n "$PREV_LINK" ]]; then
         ln -sfn "$PREV_LINK" "$CURRENT"
-        pm2 reload "$APP" --update-env
+        aiag_pm2_reload_or_create "$APP" "$ECOSYSTEM"
+        aiag_pm2 save
         log "Rollback to $PREV_LINK done"
       fi
       exit 1

@@ -204,3 +204,63 @@ node --check: verify-ecosystem-config.cjs, ecosystem.config.cjs
 YAML parse: .github/workflows/deploy-production.yml
 git diff --check
 ```
+
+## Review fix round 2: runtime environment and PM2 owner
+
+The second TypeScript review found two runtime failures in the round 1 deploy
+contract: PM2 does not document `env_file` as an application attribute, and
+the manual deploy could operate an SSH-user PM2 daemon while production is
+root-owned. The scoped scripts/configuration repair is:
+
+- `ops/runtime-env.cjs` parses the shared file with Node's standard
+  `node:util.parseEnv` and returns an environment object without importing its
+  values into the validator's `process.env`. The deployment contract now
+  requires Node >= 20.12.0, where this API is available.
+- `ops/ecosystem.config.cjs` spreads those parsed values into each application's
+  documented PM2 `env` object. Web, gateway, and worker therefore receive the
+  shared environment when `startOrReload` creates a missing process as well as
+  when it reloads one.
+- Both deploy paths validate the release ecosystem against the real shared env
+  path before changing the live symlink, install the matching parser next to
+  the shared ecosystem file, and package all three contract files as required
+  release artifacts.
+- `ops/scripts/pm2-root.sh` is the single lifecycle/inspection boundary. Create
+  or reload, status, save, and rollback all invoke `sudo -n pm2`; there is no
+  SSH-user daemon fallback.
+
+Focused runtime proof:
+
+```text
+bash tests/deploy/runtime-contract.test.sh
+runtime env and root PM2 contract passed
+```
+
+That test starts from an empty validator environment, parses a temporary dotenv
+fixture with quoted, commented, multiline, and shell-like values, confirms the
+validator's `process.env` remains free of database/auth secrets, then launches
+a fresh Node child for each of the three PM2 app definitions and verifies its
+actual environment. The shell-like value remains literal, its marker is not
+created, and the secret value never appears in output. A fake PM2 executable
+rejects every call unless it arrived through `sudo -n`; `startOrReload`,
+`jlist` status, and `save` all pass that owner check. Log:
+`/tmp/ai-aggregator-runtime-contract-round2.log`.
+
+The existing deploy test remains green and covers the default three-app target,
+fail-fast shared builds, artifact preflight, and workflow integration:
+
+```text
+bash tests/deploy/deploy-contract.test.sh
+deploy contract tests passed
+```
+
+Log: `/tmp/ai-aggregator-deploy-contract-round2.log`. Shell and Node syntax,
+workflow YAML parsing, and `git diff --check` passed. A pinned Bun 1.4.2
+`bun install --frozen-lockfile --ignore-scripts` checked 823 installs across
+926 packages with no changes, confirming the Node engine metadata does not
+require a lockfile update.
+
+No SSH connection, real PM2 process, or deployment was run. Production Node,
+the external `/srv/aiag/shared/.env`, sudo policy, PM2 daemon state, and file
+permissions remain unverified external preconditions; the committed preflight
+will stop before the live symlink swap if Node is too old or required runtime
+environment keys are absent.

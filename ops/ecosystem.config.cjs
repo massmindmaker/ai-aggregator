@@ -7,7 +7,10 @@
  * restart. The external server copy is not assumed or verified from checkout.
  */
 
-const SHARED_ENV = '/srv/aiag/shared/.env';
+const { loadRuntimeEnv } = require('./runtime-env.cjs');
+
+const SHARED_ENV_PATH = process.env.AIAG_SHARED_ENV_PATH || '/srv/aiag/shared/.env';
+const sharedEnv = loadRuntimeEnv(SHARED_ENV_PATH);
 const current = (app) => `/srv/aiag/${app}/current`;
 
 module.exports = {
@@ -20,8 +23,7 @@ module.exports = {
       interpreter: 'node',
       exec_mode: 'fork',
       instances: 1,
-      env_file: SHARED_ENV,
-      env: { NODE_ENV: 'production', PORT: '3000' },
+      env: { ...sharedEnv, NODE_ENV: 'production', PORT: '3000' },
       max_restarts: 10,
       restart_delay: 3000,
     },
@@ -32,8 +34,7 @@ module.exports = {
       interpreter: 'node',
       exec_mode: 'fork',
       instances: 1,
-      env_file: SHARED_ENV,
-      env: { NODE_ENV: 'production', PORT: '4000' },
+      env: { ...sharedEnv, NODE_ENV: 'production', PORT: '4000' },
       max_restarts: 10,
       restart_delay: 3000,
     },
@@ -44,8 +45,7 @@ module.exports = {
       interpreter: 'node',
       exec_mode: 'fork',
       instances: 1,
-      env_file: SHARED_ENV,
-      env: { NODE_ENV: 'production' },
+      env: { ...sharedEnv, NODE_ENV: 'production' },
       max_restarts: 10,
       restart_delay: 3000,
     },

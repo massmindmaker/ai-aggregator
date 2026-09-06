@@ -3,6 +3,9 @@
 const path = require('node:path');
 
 const configPath = path.resolve(process.argv[2] || 'ops/ecosystem.config.cjs');
+if (process.argv[3]) {
+  process.env.AIAG_SHARED_ENV_PATH = path.resolve(process.argv[3]);
+}
 const config = require(configPath);
 const apps = Array.isArray(config.apps) ? config.apps : [];
 
@@ -20,6 +23,12 @@ const expected = {
     cwd: '/srv/aiag/worker/current',
     script: 'apps/worker/dist/index.js',
   },
+};
+
+const requiredEnv = {
+  web: ['DATABASE_URL', 'REDIS_URL', 'NEXTAUTH_SECRET'],
+  gateway: ['DATABASE_URL', 'REDIS_URL'],
+  worker: ['DATABASE_URL', 'REDIS_URL'],
 };
 
 const errors = [];
@@ -42,6 +51,16 @@ for (const [name, contract] of Object.entries(expected)) {
 
   if (app.interpreter !== 'node') {
     errors.push(`${name}.interpreter must be "node"`);
+  }
+
+  if ('env_file' in app) {
+    errors.push(`${name}.env_file is unsupported; parsed values must be in env`);
+  }
+
+  for (const key of requiredEnv[name]) {
+    if (!app.env || !app.env[key]) {
+      errors.push(`${name}.env is missing required ${key}`);
+    }
   }
 }
 

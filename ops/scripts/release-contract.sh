@@ -41,6 +41,9 @@ packages/telegram-alerts/dist/index.js
 packages/tinkoff/dist/index.js
 packages/yookassa/dist/index.js
 ops/ecosystem.config.cjs
+ops/runtime-env.cjs
+ops/scripts/pm2-root.sh
+ops/scripts/verify-ecosystem-config.cjs
 ARTIFACTS
 
   case "$app" in

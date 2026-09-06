@@ -48,7 +48,7 @@ if aiag_verify_release_artifacts "$RELEASE_ROOT" worker 2>/dev/null; then
 fi
 
 node "$REPO_ROOT/ops/scripts/verify-ecosystem-config.cjs" \
-  "$REPO_ROOT/ops/ecosystem.config.cjs" >/dev/null
+  "$REPO_ROOT/ops/ecosystem.config.cjs" "$REPO_ROOT/.env.example" >/dev/null
 
 grep -q 'aiag_build_shared_packages' "$REPO_ROOT/.github/workflows/deploy-production.yml" \
   || fail 'workflow does not use the fail-fast shared build contract'

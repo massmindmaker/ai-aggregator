@@ -155,7 +155,8 @@ jobs:
       - name: Verify release contract (${{ matrix.app }})
         run: |
           source ops/scripts/release-contract.sh
-          node ops/scripts/verify-ecosystem-config.cjs ops/ecosystem.config.cjs
+          node ops/scripts/verify-ecosystem-config.cjs \
+            ops/ecosystem.config.cjs .env.example
           aiag_verify_release_artifacts "$GITHUB_WORKSPACE" "${{ matrix.app }}"
 
       # Tests are advisory for now (kept non-gating until the suite stabilizes).
@@ -235,11 +236,6 @@ jobs:
           ssh "$USER@$HOST" "APP='$APP' RELEASE='$RELEASE' bash -s" <<'REMOTE'
           set -euo pipefail
           ECOSYSTEM="/srv/aiag/shared/ecosystem.config.cjs"
-          # pm2 runs under root but the deploy user is non-root → plain `pm2
-          # restart` hit "Process or Namespace not found" and the deploy needed
-          # a MANUAL restart every single time. Try the local pm2, then sudo to
-          # root's pm2 (passwordless sudo on the box) so deploys self-complete.
-          pm2do() { pm2 "$@" 2>/dev/null || sudo -n pm2 "$@"; }
           TARGET="/srv/aiag/$APP/releases/$RELEASE"
           CURRENT="/srv/aiag/$APP/current"
           # Capture the PREVIOUS release BEFORE we swap, for a precise rollback
@@ -257,9 +253,14 @@ jobs:
 
           # Install the exact reviewed process map included in this release.
           # Do not assume the external shared copy already exists or is current.
-          node ops/scripts/verify-ecosystem-config.cjs ops/ecosystem.config.cjs
+          node ops/scripts/verify-ecosystem-config.cjs \
+            ops/ecosystem.config.cjs /srv/aiag/shared/.env
           install -d "$(dirname "$ECOSYSTEM")"
+          install -m 0644 ops/runtime-env.cjs "$(dirname "$ECOSYSTEM")/runtime-env.cjs"
           install -m 0644 ops/ecosystem.config.cjs "$ECOSYSTEM"
+
+          # All PM2 lifecycle and inspection commands use the root-owned daemon.
+          source ops/scripts/pm2-root.sh
 
           # ---- Atomic swap: the ONLY thing that flips a release live. -------
           ln -sfn "$TARGET" "$CURRENT"
@@ -270,14 +271,9 @@ jobs:
           ( cd "/srv/aiag/$APP/releases" && ls -1t | tail -n +6 | xargs -r rm -rf ) || true
           rm -rf "/srv/aiag/deploy/tmp/$RELEASE/$APP" || true
 
-          # ---- Restart (root's pm2 via pm2do). self-heal chain:
-          #   reload  — graceful, works if proc exists (cluster or fork)
-          #   restart — fork-mode safe re-exec
-          #   startOrReload <ecosystem> --only $APP — recreate if proc gone
-          pm2do reload "$APP" --update-env \
-            || pm2do restart "$APP" --update-env \
-            || pm2do startOrReload "$ECOSYSTEM" --only "$APP" --update-env
-          pm2do save || true
+          # ---- Reload existing or create missing from the same ecosystem. ---
+          aiag_pm2_reload_or_create "$APP" "$ECOSYSTEM"
+          aiag_pm2 save || true
 
           # ---- Per-app health check (F9). --------------------------------------
           # web → :3000/health, gateway → :4000/health.
@@ -298,7 +294,7 @@ jobs:
             # root's pm2 — `pm2 jlist` as the non-root deploy user SUCCEEDS with
             # an EMPTY list (exit 0), so the proc (in root's daemon) looks absent
             # → false-fail + rollback. (Fixed in agent-market split; ported here.)
-            STATUS="$( { sudo -n pm2 jlist 2>/dev/null || pm2 jlist; } | jq -r ".[] | select(.name==\"$APP\") | .pm2_env.status" | head -n1)"
+            STATUS="$(aiag_pm2_status "$APP")"
             [[ "$STATUS" == "online" ]] || HEALTHY=0
           fi
 
@@ -306,10 +302,8 @@ jobs:
             echo "[$APP] HEALTH FAILED — rolling back"
             if [[ -n "$PREV_LINK" ]]; then
               ln -sfn "$PREV_LINK" "$CURRENT"
-              pm2do reload "$APP" --update-env \
-                || pm2do restart "$APP" --update-env \
-                || pm2do startOrReload "$ECOSYSTEM" --only "$APP" --update-env
-              pm2do save || true
+              aiag_pm2_reload_or_create "$APP" "$ECOSYSTEM"
+              aiag_pm2 save || true
               echo "[$APP] rolled back to $PREV_LINK"
             else
               echo "[$APP] no previous release to roll back to"
