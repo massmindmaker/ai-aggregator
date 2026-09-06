@@ -33,7 +33,7 @@ export const SCENARIOS: Scenario[] = [
       'Автоматически выделяйте суть из длинных обращений клиентов.',
     longDescription:
       'Сократите время первого ответа: модель читает переписку и выдаёт 3-пунктное резюме, теги и предложение решения.',
-    recommendedModelSlug: 'yandex/yandexgpt-5',
+    recommendedModelSlug: 'yandex/yandexgpt-5-pro',
     prompt:
       'Ты — ассистент службы поддержки. Прочитай обращение клиента и верни JSON с полями:\n' +
       '- summary: 1-2 предложения о сути\n' +
@@ -64,7 +64,7 @@ export const SCENARIOS: Scenario[] = [
       'Загрузите аудио → получите транскрипт, action items и решения.',
     longDescription:
       'Сценарий двух-шаговый: сначала транскрибируете аудио моделью STT, потом прогоняете текст через LLM для структурированных заметок. Ниже — промпт для второго шага.',
-    recommendedModelSlug: 'openai/whisper-large-v3',
+    recommendedModelSlug: 'whisper-large-v3',
     prompt:
       'Из приведённого транскрипта встречи извлеки:\n' +
       '1. Ключевые решения\n' +
@@ -80,7 +80,7 @@ export const SCENARIOS: Scenario[] = [
     shortDescription: 'Сгенерируйте обложку под тему материала — 1024×1024.',
     longDescription:
       'Быстрый способ сделать обложку для блога, e-mail-рассылки или поста в соцсетях. Опишите тему — модель нарисует.',
-    recommendedModelSlug: 'stability/sdxl',
+    recommendedModelSlug: 'stable-diffusion-3-5',
     prompt:
       'Минималистичная обложка для статьи про искусственный интеллект в корпоративной автоматизации. Тёплые янтарные акценты на тёмном фоне, абстрактные нейронные узоры, без текста. Формат 1024×1024.',
     tags: ['изображения', 'контент'],
@@ -93,7 +93,7 @@ export const SCENARIOS: Scenario[] = [
       'Векторизуйте внутреннюю базу знаний и отвечайте по ней через LLM.',
     longDescription:
       'Сценарий RAG: embeddings для индексации + LLM для ответа. Ниже — промпт финального шага после retrieval.',
-    recommendedModelSlug: 'anthropic/claude-3-5-sonnet',
+    recommendedModelSlug: 'anthropic/claude-sonnet-4-6',
     prompt:
       'Ты отвечаешь на вопрос пользователя ТОЛЬКО на основе приведённых фрагментов документации. Если информации не хватает — так и скажи.\n\n' +
       'Вопрос: Как изменить тариф в середине месяца?\n\n' +

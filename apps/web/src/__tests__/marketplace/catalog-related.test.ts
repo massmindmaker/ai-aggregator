@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   findRelatedModels,
   getAllModels,
-  getModelByOrgAndSlug,
 } from '@/lib/marketplace/catalog';
 
 describe('findRelatedModels', () => {
@@ -19,12 +18,16 @@ describe('findRelatedModels', () => {
   });
 
   it('ranks same-type models higher', () => {
-    const src = getModelByOrgAndSlug('openai', 'gpt-4-turbo');
+    const models = getAllModels();
+    const src = models.find((candidate) =>
+      models.some(
+        (other) => other.slug !== candidate.slug && other.type === candidate.type,
+      ),
+    );
     expect(src).toBeDefined();
     if (!src) return;
     const related = findRelatedModels(src, 4);
-    // Top result should share type 'llm'
-    expect(related[0].type).toBe('llm');
+    expect(related[0].type).toBe(src.type);
   });
 
   it('returns an empty array gracefully when only one model exists', () => {

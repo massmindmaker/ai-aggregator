@@ -44,7 +44,9 @@ export default defineConfig({
     },
   },
   resolve: {
+    dedupe: ['next', 'react', 'react-dom'],
     alias: {
+      next: path.resolve(__dirname, './node_modules/next'),
       '@': path.resolve(__dirname, './apps/web/src'),
       '@aiag/database': path.resolve(__dirname, './packages/database/src'),
       '@aiag/shared': path.resolve(__dirname, './packages/shared/src'),

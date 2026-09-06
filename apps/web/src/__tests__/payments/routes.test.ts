@@ -14,6 +14,8 @@ vi.mock('@/auth', () => ({
 // cookie — neither is exercised by the non-admin routes in this file, but
 // both must be mocked at module scope for the refund-route tests below.
 const userFindFirst = vi.fn();
+const subscriptionFindFirst = vi.fn();
+const paymentFindFirst = vi.fn();
 // fix/rub-payments-tinkoff: after a successful provider.initPayment(),
 //   - /payments/topup       → db.insert(payments).values(...)            (awaited)
 //   - /subscriptions/create → db.transaction(tx => tx.insert(subscriptions)
@@ -25,6 +27,7 @@ const dbInsertValues = vi.fn();
 // The admin refund route persists via db.execute(sql`…`). Lazy arrow keeps the
 // hoisted mock factory TDZ-safe (same reason as insertStub below).
 const dbExecute = vi.fn();
+const dbUpdate = vi.fn();
 const valuesResult = {
   returning: () => Promise.resolve([{ id: 'sub_test' }]),
   then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
@@ -36,14 +39,41 @@ const insertStub = () => ({
     return valuesResult;
   },
 });
+const updateStub = (table: unknown) => ({
+  set: (values: Record<string, unknown>) => ({
+    where: (condition: unknown) => {
+      dbUpdate(table, values, condition);
+      return {
+        returning: () => Promise.resolve([
+          {
+            id: 's_1',
+            status: typeof values.status === 'string' ? values.status : 'active',
+            cancelAtPeriodEnd: values.cancelAtPeriodEnd ?? true,
+          },
+        ]),
+        then: (
+          resolve: (value: unknown) => unknown,
+          reject?: (reason: unknown) => unknown,
+        ) => Promise.resolve(undefined).then(resolve, reject),
+      };
+    },
+  }),
+});
 vi.mock('@/lib/db', () => ({
   db: {
-    query: { users: { findFirst: (...args: unknown[]) => userFindFirst(...args) } },
+    query: {
+      users: { findFirst: (...args: unknown[]) => userFindFirst(...args) },
+      subscriptions: {
+        findFirst: (...args: unknown[]) => subscriptionFindFirst(...args),
+      },
+      payments: { findFirst: (...args: unknown[]) => paymentFindFirst(...args) },
+    },
     // Lazy arrows so the hoisted factory doesn't touch insertStub before its
     // const is initialized (TDZ).
     insert: (...args: unknown[]) => insertStub(...(args as [])),
     transaction: (fn: (tx: unknown) => unknown) =>
       fn({ insert: (...args: unknown[]) => insertStub(...(args as [])) }),
+    update: (...args: unknown[]) => updateStub(args[0]),
     execute: (...args: unknown[]) => dbExecute(...args),
   },
   eq: (a: unknown, b: unknown) => ({ a, b }),
@@ -104,10 +134,26 @@ beforeEach(() => {
   mockInitPayment.mockReset();
   mockRefund.mockReset();
   userFindFirst.mockReset();
+  subscriptionFindFirst.mockReset().mockResolvedValue({
+    id: 's_1',
+    userId: 'u1',
+    status: 'active',
+    cancelAtPeriodEnd: false,
+  });
+  paymentFindFirst.mockReset().mockResolvedValue({
+    id: 'pay_1',
+    subscriptionId: 's_1',
+    status: 'confirmed',
+    paymentMethod: 'tinkoff',
+    tinkoffPaymentId: 'db_payment_1',
+    amount: '990',
+    refundedAmount: '0',
+  });
   cookieGet.mockReset();
   verifyAdminSessionMock.mockReset();
   dbInsertValues.mockReset().mockResolvedValue(undefined);
   dbExecute.mockReset();
+  dbUpdate.mockReset();
 });
 
 /** dbExecute stub for the admin refund route: one confirmed, un-refunded payment
@@ -240,12 +286,12 @@ describe('POST /api/subscriptions/cancel', () => {
       makeReq({
         subscriptionId: 's1',
         refundAmount: 990,
-        provider: 'tinkoff',
-        providerPaymentId: 'pmt_1',
+        provider: 'attacker-controlled',
+        providerPaymentId: 'attacker-controlled',
       }) as never
     );
     expect(r.status).toBe(200);
-    expect(mockRefund).toHaveBeenCalledWith('pmt_1', 990, expect.any(String));
+    expect(mockRefund).toHaveBeenCalledWith('db_payment_1', 990, expect.any(String));
   });
 });
 

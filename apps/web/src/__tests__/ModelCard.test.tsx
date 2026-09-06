@@ -38,9 +38,7 @@ describe('ModelCard', () => {
 
   it('shows transfer warning for foreign-hosted orgs', () => {
     render(<ModelCard model={makeModel({ orgSlug: 'openai', hostingRegion: 'us' })} />);
-    // TransferWarningBadge renders text containing "перенос" or "трансгран"
-    const text = document.body.textContent ?? '';
-    expect(/Трансгр\.|трансгран/i.test(text)).toBe(true);
+    expect(screen.getByLabelText(/трансгран/i)).toBeTruthy();
   });
 
   it('shows Hosting-RF badge for ru-hosted models', () => {
@@ -55,7 +53,7 @@ describe('ModelCard', () => {
         })}
       />,
     );
-    expect(screen.getByText(/Хостинг РФ/i)).toBeTruthy();
+    expect(screen.getByLabelText(/Хостинг РФ/i)).toBeTruthy();
   });
 });
 

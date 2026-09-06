@@ -21,7 +21,13 @@ function makeProc(): FakeProc {
 describe('runEvaluation', () => {
   it('parses score from stdout JSON on success', async () => {
     const proc = makeProc();
-    const spawn = vi.fn().mockReturnValue(proc);
+    const spawn = vi.fn().mockImplementation(() => {
+      setImmediate(() => {
+        proc.stdout.emit('data', Buffer.from('{"score":0.5}'));
+        proc.emit('exit', 0);
+      });
+      return proc;
+    });
     const promise = runEvaluation(
       {
         evaluatorScript: 'print(1)',
@@ -32,11 +38,6 @@ describe('runEvaluation', () => {
       // cast spawn impl to satisfy type
       spawn as unknown as typeof import('node:child_process').spawn
     );
-    // emit data and exit
-    setImmediate(() => {
-      proc.stdout.emit('data', Buffer.from('{"score":0.5}'));
-      proc.emit('exit', 0);
-    });
     const r = await promise;
     expect(r.ok).toBe(true);
     expect(r.score).toBe(0.5);
@@ -45,7 +46,13 @@ describe('runEvaluation', () => {
 
   it('returns invalid JSON error when stdout is not parseable', async () => {
     const proc = makeProc();
-    const spawn = vi.fn().mockReturnValue(proc);
+    const spawn = vi.fn().mockImplementation(() => {
+      setImmediate(() => {
+        proc.stdout.emit('data', Buffer.from('not json'));
+        proc.emit('exit', 0);
+      });
+      return proc;
+    });
     const promise = runEvaluation(
       {
         evaluatorScript: 'print(1)',
@@ -55,10 +62,6 @@ describe('runEvaluation', () => {
       },
       spawn as unknown as typeof import('node:child_process').spawn
     );
-    setImmediate(() => {
-      proc.stdout.emit('data', Buffer.from('not json'));
-      proc.emit('exit', 0);
-    });
     const r = await promise;
     expect(r.ok).toBe(false);
     expect(r.error).toBe('Invalid JSON output');
@@ -66,7 +69,13 @@ describe('runEvaluation', () => {
 
   it('returns error containing stderr on non-zero exit', async () => {
     const proc = makeProc();
-    const spawn = vi.fn().mockReturnValue(proc);
+    const spawn = vi.fn().mockImplementation(() => {
+      setImmediate(() => {
+        proc.stderr.emit('data', Buffer.from('boom'));
+        proc.emit('exit', 1);
+      });
+      return proc;
+    });
     const promise = runEvaluation(
       {
         evaluatorScript: '',
@@ -76,10 +85,6 @@ describe('runEvaluation', () => {
       },
       spawn as unknown as typeof import('node:child_process').spawn
     );
-    setImmediate(() => {
-      proc.stderr.emit('data', Buffer.from('boom'));
-      proc.emit('exit', 1);
-    });
     const r = await promise;
     expect(r.ok).toBe(false);
     expect(r.error).toContain('boom');
@@ -87,6 +92,9 @@ describe('runEvaluation', () => {
 
   it('reports timeout when SIGKILL fired', async () => {
     const proc = makeProc();
+    proc.kill = vi.fn(() => {
+      proc.emit('exit', null);
+    });
     const spawn = vi.fn().mockReturnValue(proc);
     const promise = runEvaluation(
       {
@@ -97,10 +105,9 @@ describe('runEvaluation', () => {
       },
       spawn as unknown as typeof import('node:child_process').spawn
     );
-    // simulate kill triggering exit
-    setTimeout(() => proc.emit('exit', null), 30);
     const r = await promise;
     expect(r.ok).toBe(false);
     expect(r.error).toBe('timeout');
+    expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
   });
 });

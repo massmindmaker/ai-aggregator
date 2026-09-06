@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { consumePlaygroundHit, refundPlaygroundHit } from './rate-limit';
+import { getModelBySlug } from '@/lib/marketplace/catalog';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,9 +69,14 @@ export async function POST(req: NextRequest) {
   if (!modelSlug) return Response.json({ error: 'model_required' }, { status: 400 });
   if (!prompt) return Response.json({ error: 'prompt_required' }, { status: 400 });
 
-  // Slug validation is enforced by the gateway (DB lookup) — no static catalog needed
+  // The public playground only exposes models from the generated storefront
+  // catalog. Validate here as well so local fallback mode cannot accept an
+  // arbitrary syntactically valid slug that production would later reject.
   if (!/^[a-z0-9_\-/.]+$/.test(modelSlug)) {
     return Response.json({ error: 'invalid_model_slug' }, { status: 400 });
+  }
+  if (!getModelBySlug(modelSlug)) {
+    return Response.json({ error: 'model_not_found' }, { status: 404 });
   }
 
   const gatewayUrl = process.env.GATEWAY_INTERNAL_URL ?? 'http://localhost:8787';

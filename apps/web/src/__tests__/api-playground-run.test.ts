@@ -32,7 +32,7 @@ describe('POST /api/playground/run', () => {
   });
 
   it('rejects request without prompt', async () => {
-    const res = await POST(makeRequest({ model: 'openai/gpt-4-turbo' }));
+    const res = await POST(makeRequest({ model: 'openai/gpt-4o' }));
     expect(res.status).toBe(400);
     const j = await res.json();
     expect(j.error).toBe('prompt_required');
@@ -49,7 +49,7 @@ describe('POST /api/playground/run', () => {
 
   it('streams SSE events with delta chunks for known model', async () => {
     const res = await POST(
-      makeRequest({ model: 'openai/gpt-4-turbo', prompt: 'Привет' }),
+      makeRequest({ model: 'openai/gpt-4o', prompt: 'Привет' }),
     );
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
