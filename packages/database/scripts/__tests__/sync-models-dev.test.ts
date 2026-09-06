@@ -94,8 +94,6 @@ const FIXTURE = {
   },
 };
 
-const RATE = 100; // RUB per USD, matches 0006_seed_models.sql convention
-
 // ---------------------------------------------------------------------------
 // slugifyModelId
 // ---------------------------------------------------------------------------
@@ -120,7 +118,7 @@ describe('slugifyModelId', () => {
 // buildCatalog
 // ---------------------------------------------------------------------------
 describe('buildCatalog', () => {
-  const { models, stats } = buildCatalog(FIXTURE, RATE);
+  const { models, stats } = buildCatalog(FIXTURE);
 
   it('emits one entry per normalized slug, merging cross-provider duplicates', () => {
     const slugs = models.map((m) => m.slug).sort();
@@ -148,7 +146,7 @@ describe('buildCatalog', () => {
     expect(mistral!.metadata.source_id).toBe('openrouter/mistralai/mistral-small-3.2');
   });
 
-  it('converts USD-per-million prices to RUB-per-1k (rate × 100 / 1000)', () => {
+  it('converts USD-per-million prices to US cents per 1k (USD × 100 / 1000)', () => {
     const gpt4o = models.find((m) => m.slug === 'openai/gpt-4o');
     expect(gpt4o!.upstreams[0]!.price_per_1k_input).toBeCloseTo(0.25, 10);
     expect(gpt4o!.upstreams[0]!.price_per_1k_output).toBeCloseTo(1.0, 10);
@@ -184,12 +182,13 @@ describe('buildCatalog', () => {
 // renderSql
 // ---------------------------------------------------------------------------
 describe('renderSql', () => {
-  const { models } = buildCatalog(FIXTURE, RATE);
-  const sql = renderSql(models, RATE);
+  const { models } = buildCatalog(FIXTURE);
+  const bundle = renderSql(models);
+  const sql = bundle.statements.map((statement) => statement.text).join('\n');
 
   it('is deterministic (same input → byte-identical output)', () => {
-    const again = renderSql(buildCatalog(FIXTURE, RATE).models, RATE);
-    expect(sql).toBe(again);
+    const again = renderSql(buildCatalog(FIXTURE).models);
+    expect(bundle).toEqual(again);
   });
 
   it('uses idempotent upserts with conflict targets', () => {
@@ -203,13 +202,43 @@ describe('renderSql', () => {
   });
 
   it('links price rows to models by slug via a subquery', () => {
-    expect(sql).toMatch(/\(SELECT id FROM models WHERE slug =/);
+    expect(sql).toMatch(/\(SELECT id FROM models WHERE slug = \$1\)/);
   });
 
-  it('emits prices as non-negative numeric literals', () => {
-    const nums = sql.match(/price_per_1k_input\s*=\s*([0-9.]+)/g) ?? [];
-    expect(nums.length).toBeGreaterThan(0);
-    for (const n of nums) expect(Number(n.split('=')[1])).toBeGreaterThanOrEqual(0);
+  it('keeps non-negative prices in bind values instead of SQL literals', () => {
+    const priceStatements = bundle.statements.filter((statement) =>
+      statement.text.includes('INSERT INTO model_upstreams'),
+    );
+    expect(priceStatements.length).toBeGreaterThan(0);
+    for (const statement of priceStatements) {
+      expect(statement.values[3]).toEqual(expect.any(Number));
+      expect(statement.values[4]).toEqual(expect.any(Number));
+      expect(statement.values[3] as number).toBeGreaterThanOrEqual(0);
+      expect(statement.values[4] as number).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('binds models.dev providers to the existing upstream registry ids', () => {
+    const providers = bundle.statements
+      .filter((statement) => statement.text.includes('INSERT INTO model_upstreams'))
+      .map((statement) => statement.values[1])
+      .sort();
+    expect(providers).toEqual(['hf', 'openrouter', 'openrouter', 'together']);
+  });
+
+  it('keeps dynamic text in bind values instead of interpolating executable SQL', () => {
+    const hostile = structuredClone(FIXTURE);
+    hostile.openrouter.models['openai/gpt-4o'].description =
+      "model'); DROP TABLE models; --";
+    const hostileBundle = renderSql(buildCatalog(hostile).models);
+    const hostileSql = hostileBundle.statements
+      .map((statement) => statement.text)
+      .join('\n');
+
+    expect(hostileSql).not.toContain("model'); DROP TABLE models; --");
+    expect(hostileSql).toContain('$1');
+    expect(hostileBundle.statements.flatMap((statement) => statement.values))
+      .toContain("model'); DROP TABLE models; --");
   });
 });
 
