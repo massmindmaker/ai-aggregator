@@ -42,6 +42,18 @@
 
 Остались предупреждения Next14 config/runtime, Browserslist, Tailwind и shared dynamic import. Нет неинтерактивного ESLint/hooks конфига. Minor ревью: диапазон Node>=20.12 формально допускает21.0–21.6 без parseEnv; следующая baseline задача добавляет проверку возможности API.
 
+## Aggregator: принятая native DB baseline
+
+Проверенный commit `320fe21608c6deab883e0dfd01af0b02899e8692`; task base `7c464d2`. TypeScript/spec и React review приняли результат после одного раунда исправлений.
+
+- Полная историческая цепочка: начальная Drizzle migration + 64 SQL-файла. Чистое применение — 65, повторное — 0; readback — 65 записей миграций и 96 таблиц.
+- Исторические файлы не изменялись. Native test migrator содержит две ограниченные адаптации: индекс payouts в 0005 и недостающие поля/индекс audit_log в 0011. Он проверяет исходную и фактически исполняемую контрольные суммы; неизвестная структура payouts отклоняется.
+- Любая мутация требует явного тестового режима, совпадающих URL единственной разрешённой локальной БД и её marker. Отрицательные тесты доказывают отсутствие импорта модулей приложения при ошибочном адресе или marker.
+- Покрывающий набор: 5 файлов, 45/45 тестов. В него входят 8 real PostgreSQL integration tests, 3 import-boundary tests и 2 real registration tests. Отдельная команда baseline, подключённая в CI, прошла локально 13/13; это пересекающиеся наборы, а не дополнительные 13 тестов.
+- Реальная БД подтверждает rollback DDL/ledger, идемпотентность миграций, subscription-first/PAYG списание, replay, insufficient-funds rollback и сохранение согласий регистрации. Focused TypeScript checks прошли.
+
+Это локальная проверка. Запуск GitHub CI не заявляется, production schema не изменялась. Общий unit/lint/type baseline, refund clawback и canonical gateway startup остаются следующими задачами.
+
 ## AI Arena
 
 Foundation `692bc12` и review fix `d742077` прошли TypeScript/spec и React review. Удалены 3276 отслеживаемых generated-файлов; исходники и package manifests сохранены. Native PostgreSQL разрешён только в явном тестовом режиме с проверкой адреса и DB marker; production driver остаётся Neon.
