@@ -152,3 +152,55 @@ tests, and factual discovery proof are green.
 
 No refund implementation, provider port, schema mutation, production deploy,
 or money feature was added in Task 2B.
+
+## Review fix round 1: deploy contract
+
+TypeScript/spec review found that the manual default omitted `worker`, shared
+package build failures were advisory in the workflow, and the PM2 fallback
+referred to an ecosystem file absent from the checkout. The fix remains within
+scripts and configuration:
+
+- `ops/scripts/release-contract.sh` is the shared source of the exact active
+  targets (`web gateway worker`), the six packages that actually declare a
+  build script, and required runtime artifacts.
+- `ops/scripts/deploy.sh --print-plan` now returns `web gateway worker`; argument
+  and `APPS` overrides remain supported. Manual shared and gateway builds no
+  longer swallow failures, and artifacts are checked before tar creation.
+- `.github/workflows/deploy-production.yml` uses the same fail-fast package
+  function. It validates the PM2 contract and every required runtime artifact
+  after the selected app build and before the tarball step.
+- `ops/ecosystem.config.cjs` is a committed three-process PM2 template with
+  current-symlink paths and the actual Web, gateway, and worker entrypoints.
+  `ops/scripts/verify-ecosystem-config.cjs` checks that exact contract. The
+  workflow and manual deploy validate the release copy and install it as
+  `/srv/aiag/shared/ecosystem.config.cjs` before PM2 self-heal.
+
+No SSH connection or deployment was performed. The external server copy and
+its permissions remain unverified; the pipeline now fails instead of assuming
+that the file already exists.
+
+Focused red/green evidence:
+
+```text
+bash tests/deploy/deploy-contract.test.sh
+RED:   FAIL: shared build failure was swallowed
+GREEN: deploy contract tests passed
+```
+
+The red run caught Bash's conditional-function `errexit` exception in the new
+helper. Adding an explicit `|| return $?` made package failure propagation
+independent of caller context. The test also executes the manual default plan,
+checks that a simulated database build failure stops before later packages,
+removes the worker entrypoint to prove artifact preflight fails, validates the
+PM2 template, and confirms workflow integration. Final log:
+`/tmp/ai-aggregator-deploy-contract-round1.log`.
+
+Additional final checks passed:
+
+```text
+artifact preflight: web, gateway, worker
+bash -n: deploy.sh, release-contract.sh, deploy-contract.test.sh
+node --check: verify-ecosystem-config.cjs, ecosystem.config.cjs
+YAML parse: .github/workflows/deploy-production.yml
+git diff --check
+```

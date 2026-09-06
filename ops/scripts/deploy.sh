@@ -6,23 +6,46 @@
 #   ops/scripts/deploy.sh                      # deploys всё (web, gateway, worker)
 #   ops/scripts/deploy.sh web gateway          # только указанные apps
 #   APPS="web" SSH_HOST=aiag-vps ops/scripts/deploy.sh
+#   ops/scripts/deploy.sh --print-plan         # показать default без SSH/deploy
 #
 # Env vars:
 #   SSH_HOST       — SSH alias (default: aiag-vps)
-#   APPS           — пробельный список apps (default: web gateway)
+#   APPS           — пробельный список apps (default: web gateway worker)
 #   DRY_RUN        — 1 = только показать команды
 #   SKIP_BUILD     — 1 = пропустить локальный build (использовать существующие dist)
 #   KEEP_RELEASES  — сколько последних releases оставить (default: 5)
 set -euo pipefail
 
 SSH_HOST="${SSH_HOST:-aiag-vps}"
-APPS_DEFAULT=(web gateway)
-APPS=("${@:-${APPS:-${APPS_DEFAULT[@]}}}")
+APPS_INPUT="${APPS:-}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
 DRY_RUN="${DRY_RUN:-0}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=release-contract.sh
+source "$REPO_ROOT/ops/scripts/release-contract.sh"
+
+PRINT_PLAN=0
+if [[ "${1:-}" == "--print-plan" ]]; then
+  PRINT_PLAN=1
+  shift
+fi
+
+if [[ "$#" -gt 0 ]]; then
+  APPS=("$@")
+elif [[ -n "$APPS_INPUT" ]]; then
+  read -r -a APPS <<< "$APPS_INPUT"
+else
+  APPS=("${AIAG_DEPLOY_APPS[@]}")
+fi
+aiag_validate_apps "${APPS[@]}" || exit 1
+
+if [[ "$PRINT_PLAN" == 1 ]]; then
+  echo "${APPS[*]}"
+  exit 0
+fi
+
 RELEASE="$(date -u +%Y%m%dT%H%M%SZ)-$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 
 log()  { echo "[$(date +%H:%M:%S)] $*" >&2; }
@@ -41,14 +64,14 @@ ssh -o ConnectTimeout=5 -o BatchMode=yes "$SSH_HOST" 'echo ok' >/dev/null 2>&1 \
 # 2. Build apps
 if [[ "$SKIP_BUILD" != "1" ]]; then
   log "Building shared packages"
-  for pkg in database shared tinkoff; do
-    run "bun run --cwd '$REPO_ROOT/packages/$pkg' build || true"
+  for pkg in "${AIAG_BUILD_PACKAGES[@]}"; do
+    run "bun run --cwd '$REPO_ROOT/packages/$pkg' build"
   done
 
   for app in "${APPS[@]}"; do
     case "$app" in
       web)          run "bun run --cwd '$REPO_ROOT/apps/web' build" ;;
-      gateway)      run "bun run --cwd '$REPO_ROOT/packages/api-gateway' build || true" ;;
+      gateway)      run "bun run --cwd '$REPO_ROOT/packages/api-gateway' build" ;;
       worker)       run "bun run --cwd '$REPO_ROOT/apps/worker' build" ;;
       *)            fail "Unknown app: $app" ;;
     esac
@@ -56,6 +79,13 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
 else
   log "Skipping build (SKIP_BUILD=1)"
 fi
+
+node "$REPO_ROOT/ops/scripts/verify-ecosystem-config.cjs" \
+  "$REPO_ROOT/ops/ecosystem.config.cjs"
+for app in "${APPS[@]}"; do
+  aiag_verify_release_artifacts "$REPO_ROOT" "$app" \
+    || fail "Release artifact preflight failed for $app"
+done
 
 # 3. Build release tarball
 PKG_DIR="$REPO_ROOT/.deploy"
@@ -78,6 +108,7 @@ APPS_STR="${APPS[*]}"
 ssh "$SSH_HOST" "RELEASE='$RELEASE' APPS='$APPS_STR' KEEP='$KEEP_RELEASES' bash -s" <<'REMOTE'
 set -euo pipefail
 log() { echo "[remote $(date +%H:%M:%S)] $*"; }
+ECOSYSTEM="/srv/aiag/shared/ecosystem.config.cjs"
 
 for APP in $APPS; do
   TARGET="/srv/aiag/$APP/releases/$RELEASE"
@@ -92,15 +123,19 @@ for APP in $APPS; do
   cd "$TARGET"
   bun install --production --frozen-lockfile
 
+  # The release contains the reviewed process contract. Validate it before
+  # installing the exact file used by the pm2 self-heal fallback.
+  node ops/scripts/verify-ecosystem-config.cjs ops/ecosystem.config.cjs
+  install -d "$(dirname "$ECOSYSTEM")"
+  install -m 0644 ops/ecosystem.config.cjs "$ECOSYSTEM"
+
   # Atomic symlink swap
   ln -sfn "$TARGET" "$CURRENT"
 
-  # Reload pm2 process (zero-downtime)
-  if pm2 describe "$APP" >/dev/null 2>&1; then
-    pm2 reload "$APP" --update-env
-  else
-    log "pm2 process '$APP' not found — start manually"
-  fi
+  # Reload an existing process or recreate it from the committed contract.
+  pm2 reload "$APP" --update-env \
+    || pm2 restart "$APP" --update-env \
+    || pm2 startOrReload "$ECOSYSTEM" --only "$APP" --update-env
 
   # Healthcheck (HTTP /health on PM2-reported port)
   PORT=$(pm2 jlist 2>/dev/null | jq -r ".[] | select(.name==\"$APP\") | .pm2_env.env.PORT // empty")

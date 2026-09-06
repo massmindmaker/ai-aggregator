@@ -12,8 +12,8 @@ name: Deploy to Production (bare-metal VPS)
 #       file pins every app's cwd/script to `/srv/aiag/<app>/current/...`, so
 #       once pm2 is re-pinned (one-time, see ops/ecosystem.config.cjs header)
 #       swap+restart ALWAYS runs new code.
-#   F3  No ecosystem file existed. FIX: ops/ecosystem.config.cjs (committed),
-#       deployed once to /srv/aiag/shared/ — the startOrReload recovery tier.
+#   F3  The committed ops/ecosystem.config.cjs is validated, packaged, and
+#       installed at /srv/aiag/shared/ before the startOrReload recovery tier.
 #   F5+F6  Build on the GitHub runner; ship .next/dist in the tarball. The box
 #       only runs `bun install --production` + `next start`/`node dist`.
 #   F7  Migrations are MANUAL + UNTRACKED on prod and the app DB role cannot
@@ -27,6 +27,7 @@ name: Deploy to Production (bare-metal VPS)
 #   Aggregator (RUB): web(:3000) + gateway(:4000) + worker(no port)
 #   Each app has its OWN /srv/aiag/<app>/{releases,current} tree + its OWN pm2
 #   entry. The `apps` input selects which to ship; passing web,gateway,worker
+#   deploys the complete active service set.
 #   The matrix below preserves one app per release tree.
 # ============================================================================
 
@@ -117,11 +118,8 @@ jobs:
       # @aiag/shared, @aiag/database, gateway etc. resolve. Cheap + idempotent.
       - name: Build shared libraries
         run: |
-          for pkg in shared database upstream-adapters email telegram-alerts tinkoff yookassa; do
-            if [[ -f "packages/$pkg/package.json" ]]; then
-              bun run --cwd "packages/$pkg" build || echo "::warning::lib $pkg has no build / build failed"
-            fi
-          done
+          source ops/scripts/release-contract.sh
+          aiag_build_shared_packages "$GITHUB_WORKSPACE"
 
       # Per-app real build. NOTE: build IS a gate now (no `|| true`) — a broken
       # build must NOT ship. Each `case` matches the matrix leg exactly.
@@ -153,6 +151,12 @@ jobs:
             gateway)      bun run --cwd packages/api-gateway build ;; # tsup       → packages/api-gateway/dist
             worker)       bun run --cwd apps/worker build ;;          # tsc        → apps/worker/dist
           esac
+
+      - name: Verify release contract (${{ matrix.app }})
+        run: |
+          source ops/scripts/release-contract.sh
+          node ops/scripts/verify-ecosystem-config.cjs ops/ecosystem.config.cjs
+          aiag_verify_release_artifacts "$GITHUB_WORKSPACE" "${{ matrix.app }}"
 
       # Tests are advisory for now (kept non-gating until the suite stabilizes).
       # The BUILD above is the real gate.
@@ -250,6 +254,12 @@ jobs:
           # the tarball — this only supplies node_modules to run them.
           cd "$TARGET"
           bun install --production --frozen-lockfile
+
+          # Install the exact reviewed process map included in this release.
+          # Do not assume the external shared copy already exists or is current.
+          node ops/scripts/verify-ecosystem-config.cjs ops/ecosystem.config.cjs
+          install -d "$(dirname "$ECOSYSTEM")"
+          install -m 0644 ops/ecosystem.config.cjs "$ECOSYSTEM"
 
           # ---- Atomic swap: the ONLY thing that flips a release live. -------
           ln -sfn "$TARGET" "$CURRENT"
