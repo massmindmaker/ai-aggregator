@@ -54,6 +54,17 @@
 
 Это локальная проверка. Запуск GitHub CI не заявляется, production schema не изменялась. Общий unit/lint/type baseline, refund clawback и canonical gateway startup остаются следующими задачами.
 
+## Aggregator: принятый unit/type/lint baseline
+
+Task2 принят TypeScript/spec и React review на `04bf3eea8b3097fae7d463e5aa4202955021e907` после одного раунда исправлений. Восстановлен offline-конвертер models.dev в параметризованный SQL с отдельными значениями; исправлены unknown-model 404, тестовые mocks/данные, Next/React resolution и детерминированность тестов worker. Добавлены неинтерактивный lint с hooks rules и отдельные обязательные проверки типов тестов.
+
+- На `875674b`: полный unit — 107 passed / 2 gated test files, 885 passed / 10 gated tests, ошибок нет. Эти 10 DB-тестов прошли отдельным native-запуском: 13/13 вместе с import-boundary checks.
+- На том же baseline: root lint — 7/7 задач, root typecheck — 16/16; frozen install не изменил lockfile.
+- Ревью обнаружило потерю закрытия внутреннего async iterator при отмене и недостаточную проверку SQL `enabled`. На финальном `04bf3ee` исправлены оба замечания: 23 focused tests и соответствующие typechecks прошли. Проверены отмена после первого/последующих фрагментов, ошибка, естественное завершение и однократные close/settlement/log effects в SSE.
+- Полный unit после этого узкого fix не повторялся; production build Task2 не запускал. Оба общих прогона запланированы в следующем runtime-этапе, который меняет shared executor registration и конфигурацию сборки.
+
+Minor ревью: unit output сохраняет Vite CJS/Node localStorage warnings и диагностические сообщения негативных тестов. Это не функциональные ошибки; очистка шума остаётся отдельной задачей. Полный продуктовый выпуск и 108-балльная приёмка не заявляются.
+
 ## AI Arena
 
 Foundation `692bc12` и review fix `d742077` прошли TypeScript/spec и React review. Удалены 3276 отслеживаемых generated-файлов; исходники и package manifests сохранены. Native PostgreSQL разрешён только в явном тестовом режиме с проверкой адреса и DB marker; production driver остаётся Neon.
