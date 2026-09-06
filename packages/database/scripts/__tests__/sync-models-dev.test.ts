@@ -197,8 +197,28 @@ describe('renderSql', () => {
   });
 
   it('does not touch enabled for pre-existing model rows', () => {
-    const upsert = sql.match(/INSERT INTO models[\s\S]*?ON CONFLICT/)?.[0] ?? '';
-    expect(upsert).not.toMatch(/enabled\s*=\s*(TRUE|FALSE|EXCLUDED)/);
+    const modelStatement = bundle.statements.find((statement) =>
+      statement.text.startsWith('INSERT INTO models'),
+    )!;
+    const updateTail = modelStatement.text.slice(
+      modelStatement.text.indexOf('DO UPDATE SET'),
+    );
+    const overwritesEnabled = (tail: string): boolean =>
+      /\benabled\s*=/.test(tail);
+
+    expect(overwritesEnabled(updateTail)).toBe(false);
+    expect(overwritesEnabled(`${updateTail}\nenabled = EXCLUDED.enabled`)).toBe(true);
+  });
+
+  it('does not overwrite upstream markup during conflict updates', () => {
+    const upstreamStatement = bundle.statements.find((statement) =>
+      statement.text.startsWith('INSERT INTO model_upstreams'),
+    )!;
+    const updateTail = upstreamStatement.text.slice(
+      upstreamStatement.text.indexOf('DO UPDATE SET'),
+    );
+
+    expect(updateTail).not.toMatch(/\bmarkup\s*=/);
   });
 
   it('links price rows to models by slug via a subquery', () => {

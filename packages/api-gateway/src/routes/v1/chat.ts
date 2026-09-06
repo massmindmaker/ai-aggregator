@@ -36,13 +36,25 @@ export const chat = new Hono();
  * errors stay handled by sse.ts (they cannot be retried — headers/body are
  * already flowing to the client).
  */
-function resumeAfterFirst<T>(iter: AsyncIterator<T>, first: IteratorResult<T>): AsyncIterable<T> {
+export function resumeAfterFirst<T>(
+  iter: AsyncIterator<T>,
+  first: IteratorResult<T>,
+): AsyncIterable<T> {
   async function* gen(): AsyncGenerator<T> {
-    if (!first.done) yield first.value;
-    for (;;) {
-      const next = await iter.next();
-      if (next.done) return;
-      yield next.value;
+    let completed = first.done === true;
+    try {
+      if (completed) return;
+      yield first.value;
+      for (;;) {
+        const next = await iter.next();
+        if (next.done) {
+          completed = true;
+          return;
+        }
+        yield next.value;
+      }
+    } finally {
+      if (!completed) await iter.return?.();
     }
   }
   return gen();
