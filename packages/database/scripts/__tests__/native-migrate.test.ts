@@ -125,6 +125,8 @@ describe("native ordered migrator", () => {
     expect(prepared.text).toContain("DO $$ BEGIN");
     expect(prepared.text).toContain("END $$;");
     expect(prepared.text).toContain("column_name = 'author_id'");
+    expect(prepared.text).toContain("column_name = 'user_id'");
+    expect(prepared.text).toContain("RAISE EXCEPTION");
     expect(prepared.text).toContain(
       "CREATE INDEX IF NOT EXISTS payouts_author_idx",
     );

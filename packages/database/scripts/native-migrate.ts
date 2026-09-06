@@ -131,6 +131,16 @@ export function prepareMigrationSql(
       AND column_name = 'author_id'
   ) THEN
     CREATE INDEX IF NOT EXISTS payouts_author_idx ON payouts(author_id);
+  ELSIF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'payouts'
+      AND column_name = 'user_id'
+  ) THEN
+    NULL;
+  ELSE
+    RAISE EXCEPTION 'unsupported payouts schema: expected author_id or canonical user_id';
   END IF;
 END $$;`,
     );

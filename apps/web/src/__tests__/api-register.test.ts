@@ -9,44 +9,30 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { NextRequest } from 'next/server';
-import { createPgTestClient } from '../../../../packages/database/scripts/pg-test-client';
-import {
-  assertTestDatabaseEnvironment,
-  withGuardedTestDatabase,
-} from '../../../../packages/database/scripts/test-db-guard';
+import { loadApiRegisterTestModules } from './api-register-test-loader';
 
 const RUN_DB_INTEGRATION =
   process.env.AIAG_TEST_DATABASE === '1' &&
   process.env.RUN_NATIVE_DB_INTEGRATION === '1';
 const d = RUN_DB_INTEGRATION ? describe : describe.skip;
 
-if (RUN_DB_INTEGRATION) {
-  assertTestDatabaseEnvironment(process.env);
-}
-
 d('POST /api/auth/register — 152-fz consents', () => {
   let POST: (req: NextRequest) => Promise<Response>;
   let db: typeof import('@/lib/db').db;
   let users: typeof import('@aiag/database/schema').users;
   let eq: typeof import('@aiag/database').eq;
+  let initialized = false;
 
   const TEST_EMAIL_1 = `test-consent-missing-${Date.now()}@example.com`;
   const TEST_EMAIL_2 = `test-consent-ok-${Date.now()}@example.com`;
 
   beforeAll(async () => {
-    await withGuardedTestDatabase(
-      process.env,
-      { clientFactory: createPgTestClient },
-      async () => undefined,
-    );
-    ({ POST } = await import('../app/api/auth/register/route'));
-    ({ db } = await import('@/lib/db'));
-    ({ users } = await import('@aiag/database/schema'));
-    ({ eq } = await import('@aiag/database'));
+    ({ POST, db, users, eq } = await loadApiRegisterTestModules(process.env));
+    initialized = true;
   });
 
   afterAll(async () => {
-    if (!RUN_DB_INTEGRATION) return;
+    if (!initialized) return;
     await db.delete(users).where(eq(users.email, TEST_EMAIL_2.toLowerCase()));
   });
 

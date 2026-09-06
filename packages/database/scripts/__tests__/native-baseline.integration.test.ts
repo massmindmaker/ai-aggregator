@@ -11,6 +11,7 @@ import { createPgTestClient } from "../pg-test-client";
 import {
   assertTestDatabaseEnvironment,
   withGuardedTestDatabase,
+  type QueryConfig,
   type TestDatabaseClient,
 } from "../test-db-guard";
 
@@ -144,7 +145,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     ).toMatch(/\(actor_email\)/);
   });
 
-  it("0005 creates the legacy payouts index only when author_id really exists", async () => {
+  it("0005 accepts user-only and author-only payouts but rejects neither", async () => {
     const migrations = await discoverNativeMigrations();
     const migration = migrations.find(
       ({ version }) => version === "migrations/0005_contests.sql",
@@ -166,19 +167,33 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
 
     await client.query({ text: "BEGIN", values: [] });
     try {
-      const canonical = await client.query<{ author_id: string | null }>({
+      const canonical = await client.query<{
+        author_id: string | null;
+        user_id: string | null;
+      }>({
         text: `
-          SELECT (
+          SELECT
+          (
             SELECT column_name
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'payouts'
               AND column_name = 'author_id'
-          ) AS author_id
+          ) AS author_id,
+          (
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'payouts'
+              AND column_name = 'user_id'
+          ) AS user_id
         `,
         values: [],
       });
-      expect(canonical.rows[0].author_id).toBeNull();
+      expect(canonical.rows[0]).toEqual({
+        author_id: null,
+        user_id: "user_id",
+      });
 
       await client.query({ text: adapter, values: [] });
       const withoutLegacyColumn = await client.query<{
@@ -189,8 +204,12 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       });
       expect(withoutLegacyColumn.rows[0].index_name).toBeNull();
 
+      await client.query({ text: "SAVEPOINT author_only", values: [] });
       await client.query({
-        text: "ALTER TABLE public.payouts ADD COLUMN author_id UUID",
+        text: `
+          ALTER TABLE public.payouts DROP COLUMN user_id CASCADE;
+          ALTER TABLE public.payouts ADD COLUMN author_id UUID
+        `,
         values: [],
       });
       await client.query({ text: adapter, values: [] });
@@ -206,6 +225,95 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     } finally {
       await client.query({ text: "ROLLBACK", values: [] });
     }
+
+    const beforeLedger = await client.query<{
+      checksum: string;
+      effective_checksum: string;
+      applied_at: Date;
+    }>({
+      text: `
+        SELECT checksum, effective_checksum, applied_at
+        FROM public.schema_migrations
+        WHERE version = $1
+      `,
+      values: ["migrations/0005_contests.sql"],
+    });
+    const migratorQueries: QueryConfig[] = [];
+    const migrationClient: TestDatabaseClient = {
+      async connect() {},
+      async end() {},
+      async query<Row extends Record<string, unknown> = Record<string, unknown>>(
+        config: QueryConfig,
+      ) {
+        migratorQueries.push(config);
+        // Present 0005 as pending so the real migrator exercises the adapter;
+        // every SQL statement and the surrounding rollback still hit PostgreSQL.
+        if (
+          config.text.includes(
+            "SELECT version, checksum, effective_checksum",
+          )
+        ) {
+          return { rows: [] as Row[], rowCount: 0 };
+        }
+        return client.query<Row>(config);
+      },
+    };
+
+    await client.query({ text: "BEGIN", values: [] });
+    try {
+      await client.query({
+        text: "ALTER TABLE public.payouts DROP COLUMN user_id CASCADE",
+        values: [],
+      });
+      await expect(
+        runNativeMigrations(migrationClient, [
+          {
+            version: "migrations/0005_contests.sql",
+            filename: "0005_contests.sql",
+            sql: "CREATE INDEX IF NOT EXISTS payouts_author_idx ON payouts(author_id);",
+            checksum: "0005-neither-column-probe",
+          },
+        ]),
+      ).rejects.toThrow(/unsupported payouts schema/i);
+    } finally {
+      await client.query({ text: "ROLLBACK", values: [] });
+    }
+
+    expect(
+      migratorQueries.some(({ text }) =>
+        text.includes("INSERT INTO public.schema_migrations"),
+      ),
+    ).toBe(false);
+    const restored = await client.query<{
+      user_id: string | null;
+      ledger_count: string;
+      checksum: string;
+      effective_checksum: string;
+      applied_at: Date;
+    }>({
+      text: `
+        SELECT
+          (
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'payouts'
+              AND column_name = 'user_id'
+          ) AS user_id,
+          COUNT(*)::text AS ledger_count,
+          MIN(checksum) AS checksum,
+          MIN(effective_checksum) AS effective_checksum,
+          MIN(applied_at) AS applied_at
+        FROM public.schema_migrations
+        WHERE version = $1
+      `,
+      values: ["migrations/0005_contests.sql"],
+    });
+    expect(restored.rows[0]).toEqual({
+      user_id: "user_id",
+      ledger_count: "1",
+      ...beforeLedger.rows[0],
+    });
   });
 
   it("0011 compatibility upgrades an early audit table and rolls back on a later error", async () => {
