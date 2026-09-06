@@ -3,6 +3,10 @@
  * Docs: https://bot.startonus.com/docs
  * Auth: secret in body (generate via @startonus_bot /createMinterSecret)
  *
+ * Legacy compatibility surface retained during repository extraction. Active
+ * Agents Market ownership is `/home/bob/Projects/agents-market/packages/common`;
+ * Aggregator code must not add new callers here.
+ *
  * Internal client — "Startonus" must NEVER appear in any user-facing response.
  * Callers must map errors to generic labels (e.g. `minter_unavailable`).
  * The `secret` field is sent ONLY in the outbound request body to Startonus
@@ -93,7 +97,7 @@ export interface StartonusError {
  *   - there are NO callback retries — a pm2 restart mid-deploy loses the callback forever;
  *   - callbacks are NOT signed and custom headers cannot be set on them.
  * Therefore a callback is a HINT, never the source of truth. Ownership is confirmed by
- * reading the chain (see apps/agent-worker/src/membership-reconciler.ts).
+ * reading the chain (see `/home/bob/Projects/agents-market/apps/worker/src/membership-reconciler.ts`).
  */
 export interface StartonusCallback {
   success: boolean;

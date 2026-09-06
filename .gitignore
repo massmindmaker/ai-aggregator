@@ -1,5 +1,7 @@
 # Dependencies
 node_modules
+!tests/fixtures/vendor/node_modules/
+!tests/fixtures/vendor/node_modules/vendor-fixture.test.ts
 .pnpm-store
 
 # Build outputs

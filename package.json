@@ -1,9 +1,10 @@
 {
-  "name": "aiag-marketplace",
+  "name": "ai-aggregator",
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "apps/*",
+    "apps/web",
+    "apps/worker",
     "packages/*"
   ],
   "scripts": {
@@ -11,8 +12,9 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "type-check": "turbo type-check",
-    "test": "npm run test:unit && npm run test:e2e",
+    "test": "bun run test:unit && bun run test:e2e",
     "test:unit": "vitest run",
+    "test:config": "vitest run tests/config/vitest-discovery.test.ts",
     "test:unit:watch": "vitest",
     "test:unit:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
@@ -21,7 +23,7 @@
     "db:generate": "turbo db:generate",
     "db:migrate": "turbo db:migrate",
     "db:push": "turbo db:push",
-    "db:studio": "pnpm --filter @aiag/database db:studio",
+    "db:studio": "bun run --filter @aiag/database db:studio",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
@@ -41,7 +43,7 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "packageManager": "npm@10.2.4",
+  "packageManager": "bun@1.4.2",
   "dependencies": {
     "bcryptjs": "^3.0.3"
   }

@@ -28,8 +28,8 @@
  *      HTTP-CONNECT (executor injected by the gateway package — see
  *      registerEgressExecutor). Guards apply identically with or without it.
  *
- * Runtime notes: the undici Agent / dispatcher path applies on Node (the
- * agent-worker runtime). On Bun the dispatcher option is ignored, but the
+ * Runtime notes: the undici Agent / dispatcher path applies on Node services.
+ * On Bun the dispatcher option is ignored, but the
  * pre-flight DNS validation (steps 1–3, 6) and per-hop re-validation (step 5)
  * still run, so the guard degrades safely rather than failing open.
  */

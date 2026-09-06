@@ -1,7 +1,7 @@
 name: Deploy to Production (bare-metal VPS)
 
 # ============================================================================
-# AIAG rolling deploy — build-EVERYTHING-in-CI → atomic `current` swap → pm2.
+# AI Aggregator rolling deploy — build in CI → atomic `current` swap → pm2.
 #
 # WHY THIS WAS REWRITTEN (audit F1–F9 / 2026-06):
 #   F1  `pm2 reload` errors on fork-mode procs ("Process not found"). Old
@@ -14,26 +14,20 @@ name: Deploy to Production (bare-metal VPS)
 #       swap+restart ALWAYS runs new code.
 #   F3  No ecosystem file existed. FIX: ops/ecosystem.config.cjs (committed),
 #       deployed once to /srv/aiag/shared/ — the startOrReload recovery tier.
-#   F4  tma/agent-worker release dirs were root:root → runner couldn't extract.
-#       FIX (one-time on box): chown -R aiag:aiag /srv/aiag/{tma,agent-worker}.
-#   F5+F6  tma/agent-worker were built MANUALLY on the 2GB VPS → next build
-#       OOM risk on the live money path. FIX: build EVERY app on the GitHub
-#       runner; ship the build outputs (.next / dist) in the tarball. The box
+#   F5+F6  Build on the GitHub runner; ship .next/dist in the tarball. The box
 #       only runs `bun install --production` + `next start`/`node dist`.
 #   F7  Migrations are MANUAL + UNTRACKED on prod and the app DB role cannot
 #       ALTER (see packages/database/CLAUDE.md). This pipeline DELIBERATELY
 #       does NOT run migrations — see the "Migrations" note in the deploy job.
-#   F9  Per-app health path+port (tma → /tg/health on :3100, no /health);
+#   F9  Per-app health path+port;
 #       rollback resolves "previous" from `readlink current` BEFORE swap,
 #       not by mtime; the build IS a gate (no `|| true`).
 #
-# ARCHITECTURE — two independent products, never co-mingled (see /CLAUDE.md):
-#   Product 1  Aggregator (₽/RUB):   web(:3000) + gateway(:4000) + worker(no port)
-#   Product 2  TMA (crypto credits): tma(:3100, basePath /tg) + agent-worker(:3101)
+# ARCHITECTURE (see /AGENTS.md):
+#   Aggregator (RUB): web(:3000) + gateway(:4000) + worker(no port)
 #   Each app has its OWN /srv/aiag/<app>/{releases,current} tree + its OWN pm2
 #   entry. The `apps` input selects which to ship; passing web,gateway,worker
-#   never touches tma/agent-worker and vice-versa. The matrix below preserves
-#   that isolation — one matrix leg == one app == one release tree.
+#   The matrix below preserves one app per release tree.
 # ============================================================================
 
 on:
@@ -44,7 +38,7 @@ on:
         required: true
         default: 'master'
       apps:
-        description: 'Apps (comma-sep). Product1: web,gateway,worker  Product2: tma,agent-worker'
+        description: 'Apps (comma-sep): web,gateway,worker'
         required: true
         default: 'web,gateway,worker'
 
@@ -55,7 +49,7 @@ concurrency:
 jobs:
   # --------------------------------------------------------------------------
   # plan — turn the comma-separated `apps` input into a JSON matrix of only the
-  # apps actually requested. This is what keeps the 2-product split intact:
+  # apps actually requested:
   # each selected app becomes one isolated matrix leg (own build + own swap).
   # --------------------------------------------------------------------------
   plan:
@@ -80,7 +74,7 @@ jobs:
           APPS: ${{ inputs.apps }}
         run: |
           # Validate against the known app set and emit {"app":[...]} for the matrix.
-          KNOWN="web gateway worker tma agent-worker"
+          KNOWN="web gateway worker"
           ITEMS=""
           for APP in $(echo "$APPS" | tr ',' ' '); do
             APP="$(echo "$APP" | xargs)"   # trim
@@ -113,14 +107,11 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.2
 
       - name: Install deps (workspace-wide)
-        # Prefer the frozen lockfile (reproducible). Fall back to a normal install
-        # if bun-version churn makes the committed lockfile look "changed" on the
-        # runner — the runner installs fresh each time anyway, so this only loses
-        # strict pinning when versions drift, and never blocks a deploy on it.
-        run: bun install --frozen-lockfile || bun install
+        # Use the same pinned Bun runtime and lockfile as local verification.
+        run: bun install --frozen-lockfile
 
       # Shared workspace libs must exist (dist/) before any app build so that
       # @aiag/shared, @aiag/database, gateway etc. resolve. Cheap + idempotent.
@@ -139,16 +130,8 @@ jobs:
           APP_VERSION: ${{ needs.plan.outputs.release }}
           GIT_SHA: ${{ needs.plan.outputs.sha }}
           BUILD_TIME: ${{ github.event.repository.updated_at }}
-          # tma next build is the heavy one; give the runner headroom (runner
-          # has ~7GB, unlike the 2GB VPS — this is exactly why we build here).
+          # Keep headroom for the Next.js web build.
           NODE_OPTIONS: --max-old-space-size=6144
-          # Build-time placeholder ONLY. The D-8 module-level fail-hard guard
-          # (apps/tg-miniapp/app/api/tma/auth/verify + middleware) throws at
-          # IMPORT during next build's page-data collection if TMA_JWT_SECRET is
-          # unset/<32 chars. The REAL secret lives in /srv/aiag/shared/.env and is
-          # read at runtime (server-side env, never baked into the bundle). This
-          # dummy only lets the build's module load succeed.
-          TMA_JWT_SECRET: ci-build-placeholder-not-a-real-secret-000000
           # apps/web login/register buttons gate on this NEXT_PUBLIC_* flag.
           # NEXT_PUBLIC_* vars are inlined into the JS bundle at `next build`
           # time, not read at runtime — so setting it only in
@@ -169,14 +152,12 @@ jobs:
             web)          bun run --cwd apps/web build ;;            # next build → apps/web/.next
             gateway)      bun run --cwd packages/api-gateway build ;; # tsup       → packages/api-gateway/dist
             worker)       bun run --cwd apps/worker build ;;          # tsc        → apps/worker/dist
-            tma)          bun run --cwd apps/tg-miniapp build ;;      # next build → apps/tg-miniapp/.next (NOT standalone; needs node_modules + next start)
-            agent-worker) bun run --cwd apps/agent-worker build ;;    # tsc        → apps/agent-worker/dist
           esac
 
       # Tests are advisory for now (kept non-gating until the suite stabilizes).
       # The BUILD above is the real gate.
       - name: Run tests (advisory)
-        run: bun test || echo "::warning::tests failed (advisory, not gating)"
+        run: bun run test:unit || echo "::warning::tests failed (advisory, not gating)"
 
       # Package the WHOLE repo INCLUDING build outputs. We only drop caches and
       # VCS/scratch dirs — .next/ and dist/ MUST be kept so the box never builds.
@@ -289,14 +270,13 @@ jobs:
           pm2do save || true
 
           # ---- Per-app health check (F9). --------------------------------------
-          # web → :3000/health, gateway → :4000/health, tma → :3100/tg/health.
-          # worker / agent-worker have NO HTTP port → verify pm2 status instead.
+          # web → :3000/health, gateway → :4000/health.
+          # worker has no HTTP port, so verify its pm2 status instead.
           HEALTH_URL=""
           case "$APP" in
             web)          HEALTH_URL="http://127.0.0.1:3000/health" ;;
             gateway)      HEALTH_URL="http://127.0.0.1:4000/health" ;;
-            tma)          HEALTH_URL="http://127.0.0.1:3100/tg/health" ;;  # basePath /tg, NOT /health
-            worker|agent-worker) HEALTH_URL="" ;;                          # no HTTP — pm2-status check below
+            worker)       HEALTH_URL="" ;;                          # no HTTP — pm2-status check below
           esac
 
           sleep 4

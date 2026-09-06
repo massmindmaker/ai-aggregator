@@ -8,8 +8,8 @@ import {
 /**
  * D-0 gateway↔worker header CONTRACT (gateway side).
  *
- * The TMA agent-worker reads `x-aiag-charged-usd-micro` /
- * `x-aiag-upstream-cost-usd-micro` (apps/agent-worker/src/agent-runner.ts,
+ * The Agents Market worker reads `x-aiag-charged-usd-micro` /
+ * `x-aiag-upstream-cost-usd-micro` (`/home/bob/Projects/agents-market/apps/worker/src/agent-runner.ts`,
  * exported HDR_CHARGED_USD_MICRO / HDR_UPSTREAM_COST_USD_MICRO). The worker
  * package can't import this gateway package, so both sides pin to ONE literal
  * source of truth. Here we assert the gateway's emitted constants equal those

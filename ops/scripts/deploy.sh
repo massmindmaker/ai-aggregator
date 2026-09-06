@@ -49,9 +49,7 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
     case "$app" in
       web)          run "bun run --cwd '$REPO_ROOT/apps/web' build" ;;
       gateway)      run "bun run --cwd '$REPO_ROOT/packages/api-gateway' build || true" ;;
-      worker)       run "bun run --cwd '$REPO_ROOT/packages/worker' build || true" ;;
-      tma)          run "bun run --cwd '$REPO_ROOT/apps/tg-miniapp' build" ;;
-      agent-worker) run "bun run --cwd '$REPO_ROOT/apps/agent-worker' build" ;;
+      worker)       run "bun run --cwd '$REPO_ROOT/apps/worker' build" ;;
       *)            fail "Unknown app: $app" ;;
     esac
   done
@@ -90,9 +88,9 @@ for APP in $APPS; do
   mkdir -p "$TARGET"
   tar -xzf "/srv/aiag/deploy/tmp/$RELEASE/release.tar.gz" -C "$TARGET"
 
-  # Production install — npm (we use npm workspaces, not bun lockfile)
+  # Production install from the committed Bun lockfile.
   cd "$TARGET"
-  npm ci --omit=dev --no-audit --no-fund --prefer-offline 2>&1 | tail -5 || npm install --omit=dev --no-audit --no-fund 2>&1 | tail -5
+  bun install --production --frozen-lockfile
 
   # Atomic symlink swap
   ln -sfn "$TARGET" "$CURRENT"

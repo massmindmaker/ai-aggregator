@@ -13,7 +13,7 @@
 export * from './revshare';
 export * from './tax';
 
-// Startonus NFT minter API client (Phase 15 — TG Mini-App).
+// Legacy Startonus compatibility; active ownership moved to Agents Market.
 // Isomorphic: plain fetch + BigInt math, no Node builtins.
 export * from './startonus';
 

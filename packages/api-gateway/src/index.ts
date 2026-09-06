@@ -12,7 +12,9 @@ import type { GatewayEnv, GatewayConfig, EndpointData, SubscriptionData, Gateway
 // Wire the egress tunnel executor so safeFetch({egressProxyUrl}) works in
 // every process that loads this package. No-op until an upstream actually
 // configures a proxy (resolver wiring lands in T2).
-registerEgressExecutor(fetchViaProxy);
+registerEgressExecutor((url, init, proxyUrl, connectAddr) =>
+  fetchViaProxy(url, init, proxyUrl, { connectAddr }),
+);
 
 export interface CreateGatewayOptions {
   config: Partial<GatewayConfig>;

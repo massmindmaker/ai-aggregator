@@ -5,18 +5,30 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: 'jsdom',
+    environment: 'node',
+    environmentMatchGlobs: [
+      ['apps/web/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}', 'jsdom'],
+    ],
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    exclude: ['node_modules', 'dist', '.next', 'e2e'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.next/**',
+      'docs/superpowers/recovered/**',
+      'e2e/**',
+      'tests/fixtures/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       exclude: [
-        'node_modules/',
-        'dist/',
-        '.next/',
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/.next/**',
+        'docs/superpowers/recovered/**',
+        'tests/fixtures/**',
         '**/*.d.ts',
         '**/*.config.*',
         '**/types/**',

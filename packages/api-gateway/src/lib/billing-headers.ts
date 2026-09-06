@@ -12,9 +12,9 @@
  * `CHARGED_USD_MICRO`/`UPSTREAM_COST_USD_MICRO` are the ONLY pair chat.ts and
  * sse.ts actually set on a live response today (grep confirms zero call sites
  * for `formatRubHeader`/`CHARGED_RUB`/`UPSTREAM_COST_RUB` outside this file
- * and its own contract test) — read by the TMA agent-worker
+ * and its own contract test) — read by the Agents Market worker
  * (`HDR_CHARGED_USD_MICRO`/`HDR_UPSTREAM_COST_USD_MICRO` in
- * apps/agent-worker/src/agent-runner.ts; the two sides pin to the same
+ * /home/bob/Projects/agents-market/apps/worker/src/agent-runner.ts; the two repositories pin to the same
  * literal via billing-headers.contract.test.ts so a rename on either side
  * fails loudly instead of silently disabling billing — the exact 2026-06-04
  * regression this contract test exists to prevent).
@@ -42,8 +42,8 @@ export const BILLING_HEADERS = {
   /**
    * LIVE — the actual authoritative figures, in integer micro-USD
    * ($0.000001 units, no float on the wire). Header NAMES here MUST stay
-   * byte-equal to the worker's reader constants (`HDR_CHARGED_USD_MICRO` /
-   * `HDR_UPSTREAM_COST_USD_MICRO` in apps/agent-worker/src/agent-runner.ts) —
+   * byte-equal to the external client's reader constants (`HDR_CHARGED_USD_MICRO` /
+   * `HDR_UPSTREAM_COST_USD_MICRO` in agents-market/apps/worker/src/agent-runner.ts) —
    * the gateway↔worker contract test asserts this so it can never silently
    * drift.
    */

@@ -1,7 +1,8 @@
 # packages/api-gateway — OpenAI-compatible gateway
 
-Hono on **Bun**, `:4000`. Shared by both products (web aggregator + TMA worker) as the
-model provider. Money/auth rules: `/SECURITY.md`. Topology: `/docs/ARCHITECTURE.md`.
+Hono on **Bun**, `:4000`. This is the Aggregator gateway. Other products consume it as
+external organization clients through a versioned HTTP contract. Money/auth rules:
+`/SECURITY.md`. Topology: `/docs/ARCHITECTURE.md`.
 
 ## Non-obvious facts
 - **White-label is a hard rule.** Never leak the upstream brand (OpenRouter / Kie) in
@@ -9,9 +10,9 @@ model provider. Money/auth rules: `/SECURITY.md`. Topology: `/docs/ARCHITECTURE.
   routes via this gateway; OpenRouter appears only as a documented degraded fallback.
 - **The model registry is the source of truth for valid slugs.** A slug absent from the
   registry → 400 "Unknown model". Routing/markup decisions key off the registered upstream,
-  not the caller's string. (This is why agent-worker's `DEFAULT_MODEL` must be registered.)
-- Auth: callers authenticate with **`AIAG_GATEWAY_KEY`** (`sk_aiag_live_…`). agent-worker →
-  gateway uses this key.
+  not the caller's string. Client default slugs must be registered.
+- Auth: callers authenticate with organization gateway keys (`sk_aiag_live_…`). Agents
+  Market owns its client key and reader implementation in `/home/bob/Projects/agents-market`.
 - **Markup is per-upstream**: `model_upstreams.markup` (column DEFAULT `1.8` as of migration
   0057; live values raised to `1.8` on all upstreams, floor is `1.20` via `chk_markup_floor`).
   Pricing math lives in `src/lib/pricing.ts` — **MICRO-credits, not ₽** as of T1-fix
