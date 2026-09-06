@@ -1,12 +1,21 @@
 # Проверка разделения трёх проектов
 
-Срез 06.09.2026. Это результаты локальной проверки этапа разделения, а не приёмка готовых продуктов. Исходные папки сохранены; публикация репозиториев и production deployment не выполнялись. Баллы в трёх 108-пунктных матрицах не начислялись за одну только успешную сборку.
+Срез обновлён 07.09.2026 после локального организационного cutover. Это результаты проверки этапа разделения, а не приёмка готовых продуктов. Исходные папки сохранены в выделенном source archive; публикация репозиториев и production deployment не выполнялись. Баллы в трёх 108-пунктных матрицах не начислялись за одну только успешную сборку или перенос путей.
 
 | Проект | Проверенный commit | Результат этапа |
 |---|---|---|
-| AI Aggregator | `ec5013098123194b11fab8bedc1cc42b36f09488` | Отдельный репозиторий, активные Web / gateway / async worker; этап прошёл TypeScript/spec и React review |
+| AI Aggregator | product review `ec5013098123194b11fab8bedc1cc42b36f09488`; cutover input `371f376cb3049e4f893a431f30168cb213e16dc8` | Отдельный репозиторий, активные Web / gateway / async worker; текущая ветка наследует принятый TypeScript/spec и React review |
 | Agents Market | `a0ad767132e4dffe1a312cef5197ec3a26cc784b` | Отдельный репозиторий, отдельные Web3200 и TMA3100, свой worker; этап прошёл TypeScript/spec и React review |
-| AI Arena | staging `61b05fbe55e7105778d05ae5a11dd83cb6ead7e6` | Локальная PostgreSQL foundation в работе; оригинал и внешняя рабочая копия Hermes сохранены |
+| AI Arena | `d7420771a9b4453cf7f20c3a98cebba58af6a0fe` | Reviewed PostgreSQL foundation активирована в каноническом repo на `feat/arena-foundation-reviewed`; tracked tree чист, 7 audit/plan файлов сохранены untracked |
+
+## Организационный cutover
+
+- Активные независимые Git-корни: `/home/bob/Projects/ai-aggregator`, `/home/bob/Projects/aiarena`, `/home/bob/Projects/agents-market`.
+- Старый контейнер Aggregator целиком перенесён в `/home/bob/Projects/archive/ai-ecosystem-sources-20260906/aggregator-sourcecontainer`; старый web-контейнер — в `/home/bob/Projects/archive/ai-ecosystem-sources-20260906/aiag-web-sourcecontainer`.
+- `legacy-source` в Aggregator и Agents Market указывает на архивный `aggregator-sourcecontainer/core`; donor refs доступны по новому пути.
+- Исходный Arena `wave2` HEAD `d0879334c6ce2050199d58ce54efaa99689255de` и 2622 status entries сохранены в stash commit `30c91e2d4d06a6e295cdf41c72097ae5118b183c`, устойчивом `refs/archive/pre-three-root-cutover-20260907` и проверенном `aiarena-pre-cutover-20260907.bundle`.
+- Внешний Hermes worktree `/home/bob/.hermes/worktrees/aiarena-wave5-release` остался на `wave5-release` `61b05fbe55e7105778d05ae5a11dd83cb6ead7e6`; его файлы cutover не изменял.
+- Полный manifest с inode/count/status/ref parity: `/home/bob/Projects/archive/ai-ecosystem-sources-20260906/three-root-cutover-manifest.md`.
 
 ## Agents Market
 

@@ -1,21 +1,22 @@
-# Active project topology — 2026-09-06
+# Active project topology — 2026-09-07
 
 Latest authority: founder requests three folders, projects and repositories; Agents Market has independent Web and TMA applications. Autonomous local development authorized. Historical monorepo/mirror rules are superseded for these products only.
 
 | Product | Canonical working root | Current integration workspace | Scope |
 |---|---|---|---|
 | AI Aggregator | /home/bob/Projects/ai-aggregator | same, feat/three-projects-completion | models/algorithm marketplace, gateway, consumer/author money |
-| AI Arena | /home/bob/Projects/aiarena | /tmp/aiarena-integration-20260906, feat/ecosystem-completion | contests, evaluation, blind comparison, prizes |
+| AI Arena | /home/bob/Projects/aiarena | same, feat/arena-foundation-reviewed | contests, evaluation, blind comparison, prizes |
 | Agents Market | /home/bob/Projects/agents-market | same, feat/standalone-agents-market | apps/web, apps/tma, apps/worker, shared product contracts |
 
 ## Source preservation
 
-- AI Aggregator starts from core 2252c95, not September web fork. Preserve core middleware CSP and sync-models test; manually port compatible donor features.
-- Arena integration starts from wave5-release 61b05fb; old wave2 substantive tracked diff is empty after CRLF normalization. Original worktrees remain unchanged until verified integration. External Hermes working changes are references, not approved code.
-- /home/bob/Projects/aggregator and /home/bob/Projects/aiag-web are source/asset containers pending final archive cutover. They are not newly endorsed duplicate development roots.
-- Snapshots at /home/bob/Projects/archive/ai-ecosystem-sources-20260906 contain all-ref Arena bundle, raw patches, status and ref inventories. Original untracked data remains in source folders.
+- AI Aggregator starts from archived core `2252c95`, not the September web fork. Preserve core middleware CSP and sync-models test; manually port compatible donor features.
+- Arena integration starts from `wave5-release` `61b05fb` and is active at reviewed commit `d742077` on `feat/arena-foundation-reviewed`. The original `wave2` state is recoverable through `refs/archive/pre-three-root-cutover-20260907` and the verified pre-cutover bundle. External Hermes working changes remain references, not approved code.
+- Former `/home/bob/Projects/aggregator` is preserved intact at `/home/bob/Projects/archive/ai-ecosystem-sources-20260906/aggregator-sourcecontainer`.
+- Former `/home/bob/Projects/aiag-web` is preserved intact at `/home/bob/Projects/archive/ai-ecosystem-sources-20260906/aiag-web-sourcecontainer`. This is distinct from the pre-existing `/home/bob/Projects/archive/aiag-web` task archive.
+- Snapshots and the exact cutover manifest live at `/home/bob/Projects/archive/ai-ecosystem-sources-20260906`. Historical references under either former source prefix resolve by the two mappings above.
 
-Repository split is local. No GitHub repository creation, remote history rewrite or production deployment has occurred. Active code extraction and baseline repairs are in progress, not production-ready.
+Repository split and source cutover are local. No GitHub repository creation, remote history rewrite or production deployment has occurred. Product baseline work remains in progress and is not a production-readiness claim.
 
 ## Validation infrastructure
 

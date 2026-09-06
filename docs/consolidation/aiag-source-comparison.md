@@ -1,10 +1,10 @@
 # Сравнение источников AI Aggregator
 
-Дата проверки: 2026-09-06. Проверка только чтением, без сборок и изменений исходников.
+Дата исходной проверки: 2026-09-06. Путь к источникам обновлён после cutover 2026-09-07. Проверка выполнялась только чтением, без сборок и изменений исходников.
 
 ## Решение
 
-Канонической базой брать `/home/bob/Projects/aggregator/core`, ветку `feat/r2-readiness`, HEAD `2252c95f3dbcfcae693a7a51bc3f910bfcf9b3cc`. Новый рабочий клон уже можно строить от этого HEAD. `/home/bob/Projects/aiag-web/repo` использовать как донор выбранных функций, но не как базу и не как полный overlay.
+Исторической базой служит `/home/bob/Projects/archive/ai-ecosystem-sources-20260906/aggregator-sourcecontainer/core`, ветка `feat/r2-readiness`, HEAD `2252c95f3dbcfcae693a7a51bc3f910bfcf9b3cc`. Активный AI Aggregator уже выделен в `/home/bob/Projects/ai-aggregator`. Архивный `/home/bob/Projects/archive/ai-ecosystem-sources-20260906/aiag-web-sourcecontainer/repo` использовать только как донор выбранных функций, не как базу или полный overlay.
 
 Оба репозитория имеют общий предок `abc4f842a6b22434957727a00604310a8db35de0`. После него `aiag-web` содержит 6 уникальных коммитов, из которых 5 затрагивают код, а `core` — 339 уникальных коммитов всего и 117 коммитов в `apps/web`, `packages/api-gateway`, `packages/database`, `apps/worker`. Сравнение HEAD в этих четырёх зонах: 225 файлов, `+4281/-12891` со стороны `aiag-web` относительно `core`; полный overlay удалил бы значительную часть актуального gateway и БД.
 
