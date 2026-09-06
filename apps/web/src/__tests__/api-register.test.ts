@@ -3,16 +3,26 @@
  *   1. Reject when required consents (processing/transborder) are missing.
  *   2. Persist all 3 consent flags + timestamp + IP + UA into the users table.
  *
- * Integration test: imports the route handler directly and calls it with a
- * NextRequest. Requires DATABASE_URL to point at a real Postgres instance
- * (SSH tunnel: 127.0.0.1:15432). After each successful insert the test row
- * is cleaned up so the test is rerunnable.
+ * Integration test: verifies the guarded local native Postgres target before
+ * importing the route handler, then calls it with a NextRequest. After each
+ * successful insert the test row is cleaned up so the test is rerunnable.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { NextRequest } from 'next/server';
+import { createPgTestClient } from '../../../../packages/database/scripts/pg-test-client';
+import {
+  assertTestDatabaseEnvironment,
+  withGuardedTestDatabase,
+} from '../../../../packages/database/scripts/test-db-guard';
 
-const RUN_DB_INTEGRATION = !!process.env.DATABASE_URL;
+const RUN_DB_INTEGRATION =
+  process.env.AIAG_TEST_DATABASE === '1' &&
+  process.env.RUN_NATIVE_DB_INTEGRATION === '1';
 const d = RUN_DB_INTEGRATION ? describe : describe.skip;
+
+if (RUN_DB_INTEGRATION) {
+  assertTestDatabaseEnvironment(process.env);
+}
 
 d('POST /api/auth/register — 152-fz consents', () => {
   let POST: (req: NextRequest) => Promise<Response>;
@@ -24,6 +34,11 @@ d('POST /api/auth/register — 152-fz consents', () => {
   const TEST_EMAIL_2 = `test-consent-ok-${Date.now()}@example.com`;
 
   beforeAll(async () => {
+    await withGuardedTestDatabase(
+      process.env,
+      { clientFactory: createPgTestClient },
+      async () => undefined,
+    );
     ({ POST } = await import('../app/api/auth/register/route'));
     ({ db } = await import('@/lib/db'));
     ({ users } = await import('@aiag/database/schema'));

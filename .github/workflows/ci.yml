@@ -59,6 +59,44 @@ jobs:
           files: ./coverage/coverage-final.json
           fail_ci_if_error: false
 
+  database-baseline:
+    name: Native PostgreSQL Baseline
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aiag_test
+          POSTGRES_PASSWORD: local_ci_only
+          POSTGRES_DB: ai_aggregator_test
+        ports:
+          - 15432:5432
+        options: >-
+          --health-cmd "pg_isready -U aiag_test -d ai_aggregator_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Apply and verify guarded native database baseline
+        run: bun run test:database-baseline
+        env:
+          DATABASE_URL: postgresql://aiag_test:local_ci_only@127.0.0.1:15432/ai_aggregator_test
+          TEST_DATABASE_URL: postgres://aiag_test:local_ci_only@127.0.0.1:15432/ai_aggregator_test
+          AIAG_TEST_DATABASE: 1
+
   # E2E tests with Playwright
   e2e-tests:
     name: E2E Tests

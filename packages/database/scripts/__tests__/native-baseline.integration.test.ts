@@ -1,0 +1,540 @@
+import { randomUUID } from "node:crypto";
+
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import {
+  discoverNativeMigrations,
+  prepareMigrationSql,
+  runNativeMigrations,
+} from "../native-migrate";
+import { createPgTestClient } from "../pg-test-client";
+import {
+  assertTestDatabaseEnvironment,
+  withGuardedTestDatabase,
+  type TestDatabaseClient,
+} from "../test-db-guard";
+
+const RUN_INTEGRATION =
+  process.env.AIAG_TEST_DATABASE === "1" &&
+  process.env.RUN_NATIVE_DB_INTEGRATION === "1";
+
+if (RUN_INTEGRATION) {
+  assertTestDatabaseEnvironment(process.env);
+}
+
+describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
+  let client: TestDatabaseClient;
+  let close: () => Promise<void>;
+
+  beforeAll(async () => {
+    await withGuardedTestDatabase(
+      process.env,
+      { clientFactory: createPgTestClient },
+      async (guardedClient) => {
+        client = guardedClient;
+        close = async () => undefined;
+
+        const migrations = await discoverNativeMigrations();
+        const before = await guardedClient.query<{
+          version: string;
+          checksum: string;
+          applied_at: Date;
+        }>({
+          text: `
+            SELECT version, checksum, applied_at
+            FROM public.schema_migrations
+            ORDER BY version
+          `,
+          values: [],
+        });
+        expect(before.rows).toHaveLength(65);
+
+        const rerun = await runNativeMigrations(guardedClient, migrations);
+        expect(rerun.applied).toEqual([]);
+        expect(rerun.skipped).toHaveLength(65);
+
+        const after = await guardedClient.query<{
+          version: string;
+          checksum: string;
+          applied_at: Date;
+        }>({
+          text: `
+            SELECT version, checksum, applied_at
+            FROM public.schema_migrations
+            ORDER BY version
+          `,
+          values: [],
+        });
+        expect(after.rows).toEqual(before.rows);
+
+        const originalEnd = guardedClient.end.bind(guardedClient);
+        guardedClient.end = async () => undefined;
+        close = async () => {
+          await originalEnd();
+        };
+      },
+    );
+  });
+
+  afterAll(async () => {
+    await close?.();
+  });
+
+  it("contains the complete registration and money-path schema", async () => {
+    const result = await client.query<{
+      users: string | null;
+      organizations: string | null;
+      transactions: string | null;
+      settle_function: string | null;
+      table_count: string;
+    }>({
+      text: `
+        SELECT
+          to_regclass($1)::text AS users,
+          to_regclass($2)::text AS organizations,
+          to_regclass($3)::text AS transactions,
+          to_regprocedure($4)::text AS settle_function,
+          (SELECT COUNT(*)::text
+             FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_type = 'BASE TABLE') AS table_count
+      `,
+      values: [
+        "public.users",
+        "public.organizations",
+        "public.gateway_transactions",
+        "public.aiag_settle_charge_credits(uuid,character varying,bigint,jsonb)",
+      ],
+    });
+
+    expect(result.rows[0]).toMatchObject({
+      users: "users",
+      organizations: "organizations",
+      transactions: "gateway_transactions",
+    });
+    expect(result.rows[0].settle_function).toContain(
+      "aiag_settle_charge_credits",
+    );
+    expect(Number(result.rows[0].table_count)).toBeGreaterThan(50);
+  });
+
+  it("keeps both legacy actor_id and compatible actor_email audit indexes", async () => {
+    const indexes = await client.query<{ indexname: string; indexdef: string }>(
+      {
+        text: `
+        SELECT indexname, indexdef
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname = ANY($1::text[])
+        ORDER BY indexname
+      `,
+        values: [["audit_log_actor_email_idx", "audit_log_actor_idx"]],
+      },
+    );
+
+    expect(indexes.rows).toHaveLength(2);
+    expect(
+      indexes.rows.find(({ indexname }) => indexname === "audit_log_actor_idx")
+        ?.indexdef,
+    ).toMatch(/\(actor_id\)/);
+    expect(
+      indexes.rows.find(
+        ({ indexname }) => indexname === "audit_log_actor_email_idx",
+      )?.indexdef,
+    ).toMatch(/\(actor_email\)/);
+  });
+
+  it("0005 creates the legacy payouts index only when author_id really exists", async () => {
+    const migrations = await discoverNativeMigrations();
+    const migration = migrations.find(
+      ({ version }) => version === "migrations/0005_contests.sql",
+    );
+    const prepared = prepareMigrationSql(migration!);
+    const compatibilityCheck = prepared.text.indexOf("table_name = 'payouts'");
+    const adapterStart = prepared.text.lastIndexOf(
+      "DO $$ BEGIN",
+      compatibilityCheck,
+    );
+    const adapterEnd = prepared.text.indexOf("END $$;", adapterStart);
+    expect(compatibilityCheck).toBeGreaterThanOrEqual(0);
+    expect(adapterStart).toBeGreaterThanOrEqual(0);
+    expect(adapterEnd).toBeGreaterThan(adapterStart);
+    const adapter = prepared.text.slice(
+      adapterStart,
+      adapterEnd + "END $$;".length,
+    );
+
+    await client.query({ text: "BEGIN", values: [] });
+    try {
+      const canonical = await client.query<{ author_id: string | null }>({
+        text: `
+          SELECT (
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'payouts'
+              AND column_name = 'author_id'
+          ) AS author_id
+        `,
+        values: [],
+      });
+      expect(canonical.rows[0].author_id).toBeNull();
+
+      await client.query({ text: adapter, values: [] });
+      const withoutLegacyColumn = await client.query<{
+        index_name: string | null;
+      }>({
+        text: "SELECT to_regclass($1)::text AS index_name",
+        values: ["public.payouts_author_idx"],
+      });
+      expect(withoutLegacyColumn.rows[0].index_name).toBeNull();
+
+      await client.query({
+        text: "ALTER TABLE public.payouts ADD COLUMN author_id UUID",
+        values: [],
+      });
+      await client.query({ text: adapter, values: [] });
+      const legacy = await client.query<{ indexdef: string }>({
+        text: `
+          SELECT indexdef
+          FROM pg_indexes
+          WHERE schemaname = 'public' AND indexname = $1
+        `,
+        values: ["payouts_author_idx"],
+      });
+      expect(legacy.rows[0].indexdef).toMatch(/\(author_id\)/);
+    } finally {
+      await client.query({ text: "ROLLBACK", values: [] });
+    }
+  });
+
+  it("0011 compatibility upgrades an early audit table and rolls back on a later error", async () => {
+    const migrations = await discoverNativeMigrations();
+    const migration = migrations.find(
+      ({ version }) => version === "migrations/0011_admin.sql",
+    );
+    expect(migration).toBeDefined();
+    const prepared = prepareMigrationSql(migration!);
+    const historicalStart = prepared.text.indexOf(
+      "CREATE TABLE IF NOT EXISTS audit_log",
+    );
+    const prelude = prepared.text.slice(0, historicalStart);
+
+    await client.query({ text: "BEGIN", values: [] });
+    try {
+      await client.query({
+        text: `
+          ALTER TABLE public.audit_log
+            DROP COLUMN actor_email CASCADE,
+            DROP COLUMN details,
+            DROP COLUMN ip_address
+        `,
+        values: [],
+      });
+      await client.query({
+        text: "SAVEPOINT before_compatibility",
+        values: [],
+      });
+
+      await client.query(prepared);
+      const upgraded = await client.query<{
+        column_name: string;
+        data_type: string;
+        is_nullable: string;
+        column_default: string | null;
+      }>({
+        text: `
+          SELECT column_name, data_type, is_nullable, column_default
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'audit_log'
+            AND column_name = ANY($1::text[])
+          ORDER BY column_name
+        `,
+        values: [["actor_email", "details", "ip_address"]],
+      });
+      expect(upgraded.rows).toEqual([
+        {
+          column_name: "actor_email",
+          data_type: "character varying",
+          is_nullable: "YES",
+          column_default: null,
+        },
+        {
+          column_name: "details",
+          data_type: "jsonb",
+          is_nullable: "YES",
+          column_default: null,
+        },
+        {
+          column_name: "ip_address",
+          data_type: "character varying",
+          is_nullable: "YES",
+          column_default: null,
+        },
+      ]);
+
+      await client.query({
+        text: "ROLLBACK TO SAVEPOINT before_compatibility",
+        values: [],
+      });
+      const early = await client.query<{ count: string }>({
+        text: `
+          SELECT COUNT(*)::text AS count
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'audit_log'
+            AND column_name = ANY($1::text[])
+        `,
+        values: [["actor_email", "details", "ip_address"]],
+      });
+      expect(early.rows[0].count).toBe("0");
+
+      await client.query({ text: "SAVEPOINT before_failure", values: [] });
+      await expect(
+        client.query({ text: `${prelude}\nSELECT 1 / 0`, values: [] }),
+      ).rejects.toThrow();
+      await client.query({
+        text: "ROLLBACK TO SAVEPOINT before_failure",
+        values: [],
+      });
+      const afterFailure = await client.query<{ count: string }>({
+        text: `
+          SELECT COUNT(*)::text AS count
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'audit_log'
+            AND column_name = ANY($1::text[])
+        `,
+        values: [["actor_email", "details", "ip_address"]],
+      });
+      expect(afterFailure.rows[0].count).toBe("0");
+    } finally {
+      await client.query({ text: "ROLLBACK", values: [] });
+    }
+  });
+
+  it("0011 compatibility is additive on an already complete audit table", async () => {
+    const migrations = await discoverNativeMigrations();
+    const migration = migrations.find(
+      ({ version }) => version === "migrations/0011_admin.sql",
+    );
+    const prepared = prepareMigrationSql(migration!);
+    const readColumns = () =>
+      client.query<{
+        column_name: string;
+        data_type: string;
+        is_nullable: string;
+      }>({
+        text: `
+          SELECT column_name, data_type, is_nullable
+          FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'audit_log'
+          ORDER BY ordinal_position
+        `,
+        values: [],
+      });
+    const before = await readColumns();
+
+    await client.query({ text: "BEGIN", values: [] });
+    try {
+      await client.query(prepared);
+      const after = await readColumns();
+      expect(after.rows).toEqual(before.rows);
+    } finally {
+      await client.query({ text: "ROLLBACK", values: [] });
+    }
+  });
+
+  it("rolls back DDL and the ledger row when a migration fails after DDL", async () => {
+    const probeVersion = "test/rollback-after-ddl.sql";
+    await expect(
+      runNativeMigrations(client, [
+        {
+          version: probeVersion,
+          filename: "rollback-after-ddl.sql",
+          sql: `
+            CREATE TABLE public._aiag_rollback_probe (id INTEGER PRIMARY KEY);
+            SELECT 1 / 0;
+          `,
+          checksum: "rollback-probe-v1",
+        },
+      ]),
+    ).rejects.toThrow();
+
+    const result = await client.query<{
+      table_name: string | null;
+      ledger_rows: string;
+    }>({
+      text: `
+        SELECT
+          to_regclass($1)::text AS table_name,
+          (SELECT COUNT(*)::text
+             FROM public.schema_migrations
+            WHERE version = $2) AS ledger_rows
+      `,
+      values: ["public._aiag_rollback_probe", probeVersion],
+    });
+    expect(result.rows[0]).toEqual({ table_name: null, ledger_rows: "0" });
+  });
+
+  it("settles subscription then payg atomically and is idempotent", async () => {
+    const userId = randomUUID();
+    const orgId = randomUUID();
+    const email = `native-money-${userId}@example.test`;
+    const requestId = `native-money-${randomUUID()}`;
+
+    await client.query({ text: "BEGIN", values: [] });
+    try {
+      await client.query({
+        text: "INSERT INTO public.users (id, email, name) VALUES ($1::uuid, $2, $3)",
+        values: [userId, email, "Native money fixture"],
+      });
+      await client.query({
+        text: `
+          INSERT INTO public.organizations (
+            id, slug, name, owner_id, subscription_credits, payg_credits
+          ) VALUES ($1::uuid, $2, $3, $4::uuid, $5::bigint, $6::bigint)
+        `,
+        values: [
+          orgId,
+          `native-money-${orgId}`,
+          "Native money org",
+          userId,
+          7,
+          11,
+        ],
+      });
+
+      const first = await client.query<{
+        sub_portion: string;
+        payg_portion: string;
+        new_sub: string;
+        new_payg: string;
+        idempotent: boolean;
+      }>({
+        text: `
+          SELECT * FROM public.aiag_settle_charge_credits(
+            $1::uuid, $2::varchar, $3::bigint, $4::jsonb
+          )
+        `,
+        values: [
+          orgId,
+          requestId,
+          10,
+          JSON.stringify({ scenario: "native-baseline" }),
+        ],
+      });
+      expect(first.rows[0]).toEqual({
+        sub_portion: "7",
+        payg_portion: "3",
+        new_sub: "0",
+        new_payg: "8",
+        idempotent: false,
+      });
+
+      const replay = await client.query<{
+        sub_portion: string;
+        payg_portion: string;
+        new_sub: string;
+        new_payg: string;
+        idempotent: boolean;
+      }>({
+        text: `
+          SELECT * FROM public.aiag_settle_charge_credits(
+            $1::uuid, $2::varchar, $3::bigint, $4::jsonb
+          )
+        `,
+        values: [orgId, requestId, 10, JSON.stringify({ scenario: "replay" })],
+      });
+      expect(replay.rows[0]).toEqual({
+        sub_portion: "7",
+        payg_portion: "3",
+        new_sub: "0",
+        new_payg: "8",
+        idempotent: true,
+      });
+
+      const ledger = await client.query<{ count: string }>({
+        text: `
+          SELECT COUNT(*)::text AS count
+          FROM public.gateway_transactions
+          WHERE org_id = $1::uuid AND request_id = $2
+        `,
+        values: [orgId, requestId],
+      });
+      expect(ledger.rows[0].count).toBe("2");
+    } finally {
+      await client.query({ text: "ROLLBACK", values: [] });
+    }
+  });
+
+  it("insufficient funds leaves the organization and ledger unchanged", async () => {
+    const userId = randomUUID();
+    const orgId = randomUUID();
+    const requestId = `native-insufficient-${randomUUID()}`;
+
+    await client.query({ text: "BEGIN", values: [] });
+    try {
+      await client.query({
+        text: "INSERT INTO public.users (id, email) VALUES ($1::uuid, $2)",
+        values: [userId, `native-insufficient-${userId}@example.test`],
+      });
+      await client.query({
+        text: `
+          INSERT INTO public.organizations (
+            id, slug, name, owner_id, subscription_credits, payg_credits
+          ) VALUES ($1::uuid, $2, $3, $4::uuid, $5::bigint, $6::bigint)
+        `,
+        values: [
+          orgId,
+          `native-insufficient-${orgId}`,
+          "Insufficient fixture",
+          userId,
+          2,
+          1,
+        ],
+      });
+      await client.query({ text: "SAVEPOINT before_settle", values: [] });
+
+      await expect(
+        client.query({
+          text: `
+            SELECT * FROM public.aiag_settle_charge_credits(
+              $1::uuid, $2::varchar, $3::bigint, $4::jsonb
+            )
+          `,
+          values: [orgId, requestId, 10, "{}"],
+        }),
+      ).rejects.toMatchObject({ code: "P0003" });
+      await client.query({
+        text: "ROLLBACK TO SAVEPOINT before_settle",
+        values: [],
+      });
+
+      const result = await client.query<{
+        subscription_credits: string;
+        payg_credits: string;
+        ledger_rows: string;
+      }>({
+        text: `
+          SELECT subscription_credits::text,
+                 payg_credits::text,
+                 (SELECT COUNT(*)::text
+                    FROM public.gateway_transactions
+                   WHERE org_id = $1::uuid AND request_id = $2) AS ledger_rows
+          FROM public.organizations
+          WHERE id = $1::uuid
+        `,
+        values: [orgId, requestId],
+      });
+      expect(result.rows[0]).toEqual({
+        subscription_credits: "2",
+        payg_credits: "1",
+        ledger_rows: "0",
+      });
+    } finally {
+      await client.query({ text: "ROLLBACK", values: [] });
+    }
+  });
+});
