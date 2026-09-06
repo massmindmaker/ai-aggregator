@@ -126,7 +126,7 @@ export default async function AdminReferralsPage({
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center justify-between">
-            <span>Все redemption'ы</span>
+            <span>Все redemption&apos;ы</span>
             <form className="flex gap-2 text-sm" method="GET">
               <select
                 name="filter"

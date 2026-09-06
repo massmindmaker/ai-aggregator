@@ -31,7 +31,7 @@ function readHeaderBlock(
   socket: Socket,
 ): Promise<{ head: Buffer; rest: Buffer }> {
   return new Promise((resolve, reject) => {
-    let acc = Buffer.alloc(0);
+    let acc: Buffer = Buffer.alloc(0);
     const cleanup = (): void => {
       socket.removeListener('data', onData);
       socket.removeListener('error', onError);

@@ -179,7 +179,7 @@ const steps = [
     code: (
       <>
         <span style={{ color: '#93c5fd' }}>base_url</span>=
-        <span style={{ color: '#a1e89b' }}>"api.ai-aggregator.ru/v1"</span>
+        <span style={{ color: '#a1e89b' }}>{'"api.ai-aggregator.ru/v1"'}</span>
       </>
     ),
   },
@@ -568,7 +568,7 @@ export default function HomePage() {
               className="font-mono uppercase mb-3.5"
               style={{ fontSize: 11, color: 'var(--accent)', letterSpacing: '0.12em' }}
             >
-              // Что вы строите?
+              {'// Что вы строите?'}
             </div>
             <h2
               className="font-bold"
@@ -647,7 +647,7 @@ export default function HomePage() {
                   letterSpacing: '0.12em',
                 }}
               >
-                // Топ-модели недели
+                {'// Топ-модели недели'}
               </div>
               <h2
                 className="font-bold"
@@ -784,7 +784,7 @@ export default function HomePage() {
                 letterSpacing: '0.12em',
               }}
             >
-              // Как это работает
+              {'// Как это работает'}
             </div>
             <h2
               className="font-bold"
@@ -876,7 +876,7 @@ export default function HomePage() {
                 letterSpacing: '0.12em',
               }}
             >
-              // Чем отличаемся
+              {'// Чем отличаемся'}
             </div>
             <h2
               className="font-bold"
@@ -1031,7 +1031,7 @@ export default function HomePage() {
                 letterSpacing: '0.12em',
               }}
             >
-              // Тарифы
+              {'// Тарифы'}
             </div>
             <h2
               className="font-bold"
@@ -1142,7 +1142,7 @@ export default function HomePage() {
                 letterSpacing: '0.12em',
               }}
             >
-              // FAQ
+              {'// FAQ'}
             </div>
             <h2
               className="font-bold"

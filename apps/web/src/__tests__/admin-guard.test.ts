@@ -20,7 +20,7 @@ vi.mock('@/lib/admin/session', () => ({
   verifyAdminSession: (...args: unknown[]) => verifyAdminSessionMock(...args),
 }));
 
-const dbExecute = vi.fn(async () => ({ rows: [] }));
+const dbExecute = vi.fn(async (..._args: unknown[]) => ({ rows: [] }));
 const userFindFirst = vi.fn();
 vi.mock('@/lib/db', () => ({
   db: {

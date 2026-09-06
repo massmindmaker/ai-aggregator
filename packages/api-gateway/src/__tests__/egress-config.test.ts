@@ -223,6 +223,7 @@ describe('GET /api/admin/proxy/test guard', () => {
     ['no auth header at all', undefined, undefined],
     ['wrong bearer key', 'Bearer wrong-key', undefined],
     ['key presented but AIAG_ADMIN_KEY unset', 'Bearer k', undefined],
+    ['wrong x-admin-key', undefined, 'wrong-key'],
   ])('%s → 403', async (_name, bearer, xKey) => {
     delete process.env.AIAG_ADMIN_KEY;
     const headers: Record<string, string> = {};

@@ -68,7 +68,6 @@ describe('rate-limit middleware — per-key RPM', () => {
     const app = buildApp({ daily_usd_cap: '0.10' as any });
     // pre-seed redis key directly through the same instance
     const IORedisModule: any = IORedisMock;
-    const _ignored = new IORedisModule();
     // grab shared mock factory
     // actually the factory returns a single instance — fetch from middleware
     // via a throwaway call first, then overwrite. Simplest: set a fresh instance

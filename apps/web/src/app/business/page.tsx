@@ -52,7 +52,7 @@ export default function BusinessPage() {
             }}
           >
             <span className="aiag-pulse-dot" />
-            // Для бизнеса
+            {'// Для бизнеса'}
           </div>
           <h1
             className="font-bold"

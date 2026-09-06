@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { sendAlert } from '../bot.js';
 
 const ORIG_TOKEN = process.env.TELEGRAM_ALERT_BOT_TOKEN;

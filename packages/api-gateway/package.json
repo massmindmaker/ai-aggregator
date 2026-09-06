@@ -15,7 +15,9 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "start": "bun dist/server.js",
-    "type-check": "tsc --noEmit"
+    "type-check": "bun run type-check:src && bun run type-check:test",
+    "type-check:src": "tsc --noEmit",
+    "type-check:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "@aiag/database": "*",

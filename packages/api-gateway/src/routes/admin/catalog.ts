@@ -100,7 +100,7 @@ adminCatalog.post('/apply', async (c) => {
             LEFT JOIN upstreams u ON u.provider = d.provider_slug AND u.enabled = TRUE
            WHERE d.id = ${id}::uuid AND d.status = 'draft'
            FOR UPDATE OF d
-        `) as Array<Record<string, unknown>>;
+        `) as DraftRow[];
         const dd = sel[0];
         if (!dd?.upstream_id) return null;
         const nn = dd.normalized as DraftRow['normalized'];

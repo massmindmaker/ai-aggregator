@@ -38,6 +38,8 @@ export function ImageUpload({ slug, currentImageUrl }: Props) {
     <div className="border rounded-sm p-4 space-y-3" style={{ borderColor: 'var(--line)' }}>
       <div className="font-semibold text-sm">Обложка модели</div>
       {currentImageUrl && (
+        // Admin previews may be local object/data URLs and cannot use next/image.
+        // eslint-disable-next-line @next/next/no-img-element
         <img src={currentImageUrl} alt="cover" className="w-32 h-32 object-cover rounded" />
       )}
       <form onSubmit={handleSubmit} className="flex items-center gap-2 flex-wrap">

@@ -78,7 +78,7 @@ export function CodeTabsDemo() {
             letterSpacing: '0.12em',
           }}
         >
-          // Drop-in API
+          {'// Drop-in API'}
         </div>
         <h2
           className="font-bold"

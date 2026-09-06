@@ -379,7 +379,9 @@ describe('safeFetch({egressProxyUrl}) hook', () => {
 
   it('routes a vetted allowlisted destination through the SOCKS tunnel', async () => {
     const m = await socks();
-    registerEgressExecutor(fetchViaProxy);
+    registerEgressExecutor((url, init, proxyUrl, connectAddr) =>
+      fetchViaProxy(url, init, proxyUrl, { connectAddr }),
+    );
     const res = await safeFetch('http://gateway.internal/hello', {
       allowlist: ['gateway.internal'],
       egressProxyUrl: `socks5://127.0.0.1:${m.port}`,
@@ -392,7 +394,9 @@ describe('safeFetch({egressProxyUrl}) hook', () => {
 
   it('SSRF guards still run BEFORE tunneling (blocked destination never reaches proxy)', async () => {
     const m = await socks();
-    registerEgressExecutor(fetchViaProxy);
+    registerEgressExecutor((url, init, proxyUrl, connectAddr) =>
+      fetchViaProxy(url, init, proxyUrl, { connectAddr }),
+    );
     await expect(
       safeFetch('http://169.254.169.254/latest/meta-data/', {
         egressProxyUrl: `socks5://127.0.0.1:${m.port}`,

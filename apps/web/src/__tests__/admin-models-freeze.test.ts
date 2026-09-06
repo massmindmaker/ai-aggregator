@@ -50,7 +50,9 @@ function ctx(id = MODEL_ID) {
 }
 
 describe('/api/admin/models/[id]/freeze', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('1. rejects non-admin (401)', async () => {
     (auth as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(null);
@@ -108,7 +110,9 @@ describe('/api/admin/models/[id]/freeze', () => {
 });
 
 describe('/api/admin/models/[id]/depublish', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('6a. happy path: depublish from live writes UPDATE + audit', async () => {
     withAdmin();

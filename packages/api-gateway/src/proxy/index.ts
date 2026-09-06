@@ -79,7 +79,7 @@ export class TimeoutError extends Error {
   }
 }
 
-function collectHeaders(init?: HeadersInit): Record<string, string> {
+function collectHeaders(init?: RequestInit['headers']): Record<string, string> {
   const out: Record<string, string> = {};
   if (!init) return out;
   if (init instanceof Headers) {
@@ -94,7 +94,7 @@ function collectHeaders(init?: HeadersInit): Record<string, string> {
   return out;
 }
 
-async function encodeBody(body: BodyInit | null | undefined): Promise<Buffer | null> {
+async function encodeBody(body: RequestInit['body'] | null | undefined): Promise<Buffer | null> {
   if (body == null) return null;
   if (typeof body === 'string') return Buffer.from(body, 'utf8');
   if (body instanceof Uint8Array) return Buffer.from(body);
@@ -162,7 +162,7 @@ function readRawResponse(
   deadline: RawReadDeadline = { idleMs: DEFAULT_TUNNEL_TIMEOUT_MS },
 ): Promise<ParsedResponseHead & { body: Buffer }> {
   return new Promise((resolve, reject) => {
-    let acc = Buffer.alloc(0);
+    let acc: Buffer = Buffer.alloc(0);
     let headParsed = false;
     let head: ParsedResponseHead | null = null;
     let settled = false;
@@ -337,8 +337,9 @@ export async function fetchViaProxy(
   let wire: Socket | tls.TLSSocket = baseSocket;
   let abortCleanup: (() => void) | undefined;
   if (signal) {
-    const abortHandler = (): void =>
+    const abortHandler = (): void => {
       wire.destroy(new Error('[proxy] request aborted via AbortSignal'));
+    };
     signal.addEventListener('abort', abortHandler, { once: true });
     abortCleanup = (): void => signal.removeEventListener('abort', abortHandler);
     if (signal.aborted) abortHandler();

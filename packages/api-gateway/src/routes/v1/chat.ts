@@ -36,10 +36,14 @@ export const chat = new Hono();
  * errors stay handled by sse.ts (they cannot be retried — headers/body are
  * already flowing to the client).
  */
-function resumeAfterFirst<T>(iter: AsyncIterable<T>, first: IteratorResult<T>): AsyncIterable<T> {
+function resumeAfterFirst<T>(iter: AsyncIterator<T>, first: IteratorResult<T>): AsyncIterable<T> {
   async function* gen(): AsyncGenerator<T> {
     if (!first.done) yield first.value;
-    yield* iter;
+    for (;;) {
+      const next = await iter.next();
+      if (next.done) return;
+      yield next.value;
+    }
   }
   return gen();
 }
@@ -110,8 +114,9 @@ chat.post('/completions', async (c) => {
           byokKey,
           egressProxyUrl: u.egress_proxy ?? undefined,
         });
-        const first = await iter.next();
-        return { iter, first };
+        const iterator = iter[Symbol.asyncIterator]();
+        const first = await iterator.next();
+        return { iter: iterator, first };
       },
       failoverOpts,
     );

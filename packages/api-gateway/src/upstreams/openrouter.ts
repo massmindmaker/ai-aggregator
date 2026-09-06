@@ -123,7 +123,6 @@ export const openRouterUpstream: UpstreamAdapter = {
     if (process.env.OPENROUTER_APP_URL) headers['http-referer'] = process.env.OPENROUTER_APP_URL;
     if (process.env.OPENROUTER_APP_NAME) headers['x-title'] = process.env.OPENROUTER_APP_NAME;
 
-    const start = Date.now();
     const res = await fetchUpstream(
       `${OPENROUTER_BASE}/chat/completions`,
       {
