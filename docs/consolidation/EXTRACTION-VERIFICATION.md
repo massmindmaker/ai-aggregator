@@ -42,10 +42,22 @@
 
 Остались предупреждения Next14 config/runtime, Browserslist, Tailwind и shared dynamic import. Нет неинтерактивного ESLint/hooks конфига. Minor ревью: диапазон Node>=20.12 формально допускает21.0–21.6 без parseEnv; следующая baseline задача добавляет проверку возможности API.
 
+## AI Arena
+
+Foundation `692bc12` и review fix `d742077` прошли TypeScript/spec и React review. Удалены 3276 отслеживаемых generated-файлов; исходники и package manifests сохранены. Native PostgreSQL разрешён только в явном тестовом режиме с проверкой адреса и DB marker; production driver остаётся Neon.
+
+- На `d742077`: 41/41 unit tests, typecheck, syntax и проверка текущего tracked tree на фиксированные credentials прошли.
+- На foundation commit: Next14.2.35 build прошёл; guarded bootstrap, миграции, direct/HTTP marker и fixtures выполнены на локальной БД.
+- Реальные Chromium-сценарии Wave1:26/26; T8, включая конкурентные callbacks, прошёл.
+- Полный E2E не прошёл: в Wave3 остаются три проверки reveal/visibility. Ревью выявило устаревшие selectors и отсутствие scroll перед проверкой admin heading; отдельная задача сверит их с исходной UX-спецификацией. После guard/scanner fix полный browser suite повторно не запускался.
+- После cutover выполнены canonical `npm ci --ignore-scripts` по lockfile и typecheck. `pg@8.23.0`, `next@14.2.35`, `tsx@4.23.12`, `playwright@1.62.1` разрешаются из основной копии; tracked files не менялись.
+
+Это не приёмка evaluator, рейтингов, выплат или production. Полный исторический secret audit и связанные operational проверки остаются отдельными задачами.
+
 ## Следующая проверяемая последовательность
 
-1. Arena: guarded native DB, credential hygiene, локальные E2E; затем оставшиеся Wave5 lifecycle/team/security задачи.
-2. Aggregator: применяемая native test schema, исправление полного baseline, versioned model metadata API и P0 money/runtime.
+1. Aggregator: применяемая native test schema, исправление полного baseline и P0 money/runtime; затем versioned model metadata API.
+2. Arena: оставшиеся lifecycle/team/security задачи и сохранение submission/evaluation результата; отдельное закрытие Wave3 UI baseline.
 3. Agents Market: собственная schema, безопасные terminal settlement/claim, native Web identity + dual-proof Telegram linking, полный Web/TMA product flow.
 4. Сквозные сценарии: Arena artifact→публикация Aggregator→модель для Agents Market; реальные контракты и evidence в соответствующих108матрицах.
 
