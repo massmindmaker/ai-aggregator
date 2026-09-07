@@ -75,3 +75,7 @@
 - Уже идущую задачу на другой модели не перезапускать только ради смены модели; новое правило применяется к следующим назначениям.
 
 Ни один локальный baseline, индекс или частичный UI не означает `108/108`, production readiness или завершённый продуктовый сценарий.
+
+## Shared Git index — 08.09.2026
+
+Непересекающиеся файлы не изолируют общий Git index. В f455318 одновременно staged файлы B2 и clean69 попали в один коммит; история сохранена, независимые reviews ограничены точными paths. При работе нескольких агентов в одном checkout stage+commit выполняются под repo-specific flock (для AG /tmp/ai-aggregator-git.lock), а commit использует --only и явные owned paths. Root следует тому же правилу. Не использовать add -A, reset/rewrite чужой истории или force-add private .superpowers reports. Private отчёты остаются на диске; canonical acceptance хранится в docs. Для удаления tracking private файла под lock сначала подтвердить точный staged manifest; физический файл сохраняется.
