@@ -222,7 +222,6 @@ $$;
 --   P0002 ORG_NOT_FOUND             if organization missing
 --   P0003 INSUFFICIENT_FUNDS        if payg insufficient for remainder
 --   P0004 CONCURRENT_MODIFICATION   if UPDATE WHERE-guards fail (should not normally)
---   P0005 REFUND_BLOCKED            if the org has refund debt or an active top-up claim
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION aiag_settle_charge_credits(
@@ -242,7 +241,6 @@ DECLARE
   _sub_avail     BIGINT;
   _payg_avail    BIGINT;
   _sub_expires   TIMESTAMPTZ;
-  _refund_debt   BIGINT;
   _sub_portion   BIGINT := 0;
   _payg_portion  BIGINT := 0;
   _existing_sub  BIGINT;
@@ -253,9 +251,8 @@ BEGIN
   END IF;
 
   -- Lock org row (serializes per-org concurrency)
-  SELECT subscription_credits, payg_credits, subscription_credits_expires_at,
-         refund_debt_credits
-    INTO _sub_avail, _payg_avail, _sub_expires, _refund_debt
+  SELECT subscription_credits, payg_credits, subscription_credits_expires_at
+    INTO _sub_avail, _payg_avail, _sub_expires
   FROM organizations
   WHERE id = _org_id
   FOR UPDATE;
@@ -284,24 +281,6 @@ BEGIN
     idempotent   := TRUE;
     RETURN NEXT;
     RETURN;
-  END IF;
-
-  -- Existing receipts remain replayable even while the org is blocked. New
-  -- non-BYOK settlement is rejected under the same org lock that serializes
-  -- claim creation and refund settlement.
-  IF _refund_debt > 0 OR EXISTS (
-    SELECT 1
-    FROM payments
-    WHERE topup_org_id = _org_id
-      AND refund_claim_id IS NOT NULL
-      AND refund_claim_kopecks IS NOT NULL
-      AND refund_claimed_at IS NOT NULL
-      AND refund_provider_key IS NOT NULL
-      AND refund_method_route IS NOT NULL
-      AND refund_method_source IS NOT NULL
-      AND refund_receipt_mode IS NOT NULL
-  ) THEN
-    RAISE EXCEPTION 'REFUND_BLOCKED' USING ERRCODE = 'P0005';
   END IF;
 
   -- Expired sub credits treated as zero

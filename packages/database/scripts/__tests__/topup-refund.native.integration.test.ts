@@ -324,6 +324,7 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
       paidKopecks: 3,
       grantCredits: 10,
       paygCredits: 2,
+      subscriptionCredits: 1,
     });
     const claim = await refunds.claimTopupRefund(
       fixture.paymentId,
@@ -384,8 +385,8 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
     let debtBlockedError: unknown;
     try {
       await client.query({
-        text: "SELECT * FROM aiag_settle_charge_credits($1, $2, $3, $4::jsonb)",
-        values: [fixture.orgId, `debt-${randomUUID()}`, 1, "{}"],
+        text: "SELECT aiag_assert_refund_admission_allowed($1::uuid)",
+        values: [fixture.orgId],
       });
     } catch (error) {
       debtBlockedError = error;
@@ -393,6 +394,18 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
     expect(debtBlockedError).toMatchObject({
       code: "P0005",
       message: "REFUND_BLOCKED",
+    });
+
+    const legacySettlement = await client.query<{
+      sub_portion: string;
+      idempotent: boolean;
+    }>({
+      text: "SELECT * FROM aiag_settle_charge_credits($1, $2, $3, $4::jsonb)",
+      values: [fixture.orgId, `legacy-${randomUUID()}`, 1, "{}"],
+    });
+    expect(legacySettlement.rows[0]).toMatchObject({
+      sub_portion: "1",
+      idempotent: false,
     });
 
     const receipt = await client.query<{
@@ -495,23 +508,23 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
     });
   });
 
-  it("serializes spend before claim and blocks new spend while preserving stored replay", async () => {
+  it("serializes admission guard before claim and blocks later admission", async () => {
     const fixture = await createFixture({
       paygCredits: 1_000,
       subscriptionCredits: 1_000,
     });
     const blocker = await openGuardedClient();
-    const requestId = `spend-${randomUUID()}`;
     try {
       await blocker.client.query({ text: "BEGIN", values: [] });
       const pid = await blocker.client.query<{ pid: number }>({
         text: "SELECT pg_backend_pid() AS pid",
         values: [],
       });
-      await blocker.client.query({
-        text: "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
+      const admitted = await blocker.client.query<{ allowed: string }>({
+        text: "SELECT aiag_assert_refund_admission_allowed($1::uuid) AS allowed",
         values: [fixture.orgId],
       });
+      expect(admitted.rows).toHaveLength(1);
 
       const claimPromise = refunds.claimTopupRefund(
         fixture.paymentId,
@@ -524,37 +537,15 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
         "topup_refund_claim_org_lock",
       );
 
-      const spent = await blocker.client.query<{
-        sub_portion: string;
-        idempotent: boolean;
-      }>({
-        text: "SELECT * FROM aiag_settle_charge_credits($1, $2, $3, $4::jsonb)",
-        values: [fixture.orgId, requestId, 500, "{}"],
-      });
-      expect(spent.rows[0]).toMatchObject({
-        sub_portion: "500",
-        idempotent: false,
-      });
       await blocker.client.query({ text: "COMMIT", values: [] });
 
       await expect(claimPromise).resolves.toMatchObject({ kind: "claimed" });
-      const replay = await client.query<{
-        sub_portion: string;
-        idempotent: boolean;
-      }>({
-        text: "SELECT * FROM aiag_settle_charge_credits($1, $2, $3, $4::jsonb)",
-        values: [fixture.orgId, requestId, 500, "{}"],
-      });
-      expect(replay.rows[0]).toMatchObject({
-        sub_portion: "500",
-        idempotent: true,
-      });
 
       let blockedError: unknown;
       try {
         await client.query({
-          text: "SELECT * FROM aiag_settle_charge_credits($1, $2, $3, $4::jsonb)",
-          values: [fixture.orgId, `new-${randomUUID()}`, 1, "{}"],
+          text: "SELECT aiag_assert_refund_admission_allowed($1::uuid)",
+          values: [fixture.orgId],
         });
       } catch (error) {
         blockedError = error;
@@ -576,7 +567,7 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
         values: [fixture.orgId],
       });
       expect(balance.rows[0]).toEqual({
-        subscription_credits: "500",
+        subscription_credits: "1000",
         payg_credits: "1000",
       });
     } finally {

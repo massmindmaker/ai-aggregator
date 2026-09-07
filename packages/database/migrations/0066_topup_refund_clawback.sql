@@ -99,37 +99,15 @@ CREATE UNIQUE INDEX gateway_transactions_refund_uniq
   ON gateway_transactions (request_id, source)
   WHERE type = 'refund';
 
-CREATE OR REPLACE FUNCTION aiag_settle_charge_credits(
-  _org_id        UUID,
-  _request_id    VARCHAR,
-  _cost_credits  BIGINT,
-  _metadata      JSONB DEFAULT '{}'::jsonb
-) RETURNS TABLE(
-  sub_portion  BIGINT,
-  payg_portion BIGINT,
-  new_sub      BIGINT,
-  new_payg     BIGINT,
-  idempotent   BOOLEAN
-)
+CREATE OR REPLACE FUNCTION aiag_assert_refund_admission_allowed(
+  _org_id UUID
+) RETURNS VOID
 LANGUAGE plpgsql AS $$
 DECLARE
-  _sub_avail     BIGINT;
-  _payg_avail    BIGINT;
-  _sub_expires   TIMESTAMPTZ;
-  _refund_debt   BIGINT;
-  _sub_portion   BIGINT := 0;
-  _payg_portion  BIGINT := 0;
-  _existing_sub  BIGINT;
-  _existing_payg BIGINT;
+  _refund_debt BIGINT;
 BEGIN
-  IF _cost_credits <= 0 THEN
-    RAISE EXCEPTION 'INVALID_AMOUNT' USING ERRCODE = 'P0001';
-  END IF;
-
-  -- Lock org row (serializes per-org concurrency)
-  SELECT subscription_credits, payg_credits, subscription_credits_expires_at,
-         refund_debt_credits
-    INTO _sub_avail, _payg_avail, _sub_expires, _refund_debt
+  SELECT refund_debt_credits
+    INTO _refund_debt
   FROM organizations
   WHERE id = _org_id
   FOR UPDATE;
@@ -138,86 +116,14 @@ BEGIN
     RAISE EXCEPTION 'ORG_NOT_FOUND' USING ERRCODE = 'P0002';
   END IF;
 
-  -- Idempotency check INSIDE lock (same pattern as aiag_settle_charge).
-  -- Reuses gateway_transactions (api_usage rows). If rows exist — return
-  -- existing values, no UPDATE.
-  SELECT
-    COALESCE(SUM(CASE WHEN source = 'subscription' THEN ABS(delta) END), 0),
-    COALESCE(SUM(CASE WHEN source = 'payg'         THEN ABS(delta) END), 0)
-    INTO _existing_sub, _existing_payg
-  FROM gateway_transactions
-  WHERE request_id = _request_id
-    AND type = 'api_usage'
-    AND source IN ('subscription', 'payg');
-
-  IF _existing_sub > 0 OR _existing_payg > 0 THEN
-    sub_portion  := _existing_sub;
-    payg_portion := _existing_payg;
-    new_sub      := _sub_avail;
-    new_payg     := _payg_avail;
-    idempotent   := TRUE;
-    RETURN NEXT;
-    RETURN;
-  END IF;
-
-  -- Existing receipts remain replayable even while the org is blocked. New
-  -- non-BYOK settlement is rejected under the same org lock that serializes
-  -- claim creation and refund settlement.
   IF _refund_debt > 0 OR EXISTS (
     SELECT 1
     FROM payments
     WHERE topup_org_id = _org_id
       AND refund_claim_id IS NOT NULL
-      AND refund_claim_kopecks IS NOT NULL
-      AND refund_claimed_at IS NOT NULL
-      AND refund_provider_key IS NOT NULL
-      AND refund_method_route IS NOT NULL
-      AND refund_method_source IS NOT NULL
-      AND refund_receipt_mode IS NOT NULL
   ) THEN
     RAISE EXCEPTION 'REFUND_BLOCKED' USING ERRCODE = 'P0005';
   END IF;
-
-  -- Expired sub credits treated as zero
-  IF _sub_expires IS NOT NULL AND _sub_expires < NOW() THEN
-    _sub_avail := 0;
-  END IF;
-
-  _sub_portion  := LEAST(_cost_credits, _sub_avail);
-  _payg_portion := _cost_credits - _sub_portion;
-
-  IF _payg_portion > _payg_avail THEN
-    RAISE EXCEPTION 'INSUFFICIENT_FUNDS: need % payg, have %', _payg_portion, _payg_avail
-      USING ERRCODE = 'P0003';
-  END IF;
-
-  UPDATE organizations
-     SET subscription_credits = subscription_credits - _sub_portion,
-         payg_credits         = payg_credits - _payg_portion,
-         updated_at           = NOW()
-   WHERE id = _org_id
-     AND subscription_credits >= _sub_portion
-     AND payg_credits         >= _payg_portion
-  RETURNING subscription_credits, payg_credits INTO new_sub, new_payg;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'CONCURRENT_MODIFICATION' USING ERRCODE = 'P0004';
-  END IF;
-
-  IF _sub_portion > 0 THEN
-    INSERT INTO gateway_transactions (org_id, request_id, type, source, delta, metadata, created_at)
-    VALUES (_org_id, _request_id, 'api_usage', 'subscription', -_sub_portion, COALESCE(_metadata, '{}'::jsonb), NOW());
-  END IF;
-
-  IF _payg_portion > 0 THEN
-    INSERT INTO gateway_transactions (org_id, request_id, type, source, delta, metadata, created_at)
-    VALUES (_org_id, _request_id, 'api_usage', 'payg', -_payg_portion, COALESCE(_metadata, '{}'::jsonb), NOW());
-  END IF;
-
-  sub_portion  := _sub_portion;
-  payg_portion := _payg_portion;
-  idempotent   := FALSE;
-  RETURN NEXT;
 END;
 $$;
 

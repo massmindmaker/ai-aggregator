@@ -123,7 +123,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(Number(result.rows[0].table_count)).toBeGreaterThan(50);
   });
 
-  it("contains the guarded top-up refund schema and settlement function", async () => {
+  it("contains the additive refund admission guard without changing legacy settlement", async () => {
     const result = await client.query<{
       refund_debt_credits: string;
       refund_claim_id: string;
@@ -131,6 +131,8 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       refund_dispatched_at: string;
       active_claim_index: string | null;
       refund_receipt_index: string | null;
+      admission_guard: string | null;
+      admission_guard_definition: string;
       settlement_definition: string;
     }>({
       text: `
@@ -157,6 +159,12 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
               AND column_name = 'refund_dispatched_at') AS refund_dispatched_at,
           to_regclass('public.payments_active_topup_refund_claim_idx')::text AS active_claim_index,
           to_regclass('public.gateway_transactions_refund_uniq')::text AS refund_receipt_index,
+          to_regprocedure(
+            'public.aiag_assert_refund_admission_allowed(uuid)'
+          )::text AS admission_guard,
+          pg_get_functiondef(
+            'public.aiag_assert_refund_admission_allowed(uuid)'::regprocedure
+          ) AS admission_guard_definition,
           pg_get_functiondef(
             'public.aiag_settle_charge_credits(uuid,character varying,bigint,jsonb)'::regprocedure
           ) AS settlement_definition
@@ -171,8 +179,13 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       refund_dispatched_at: "timestamp with time zone",
       active_claim_index: "payments_active_topup_refund_claim_idx",
       refund_receipt_index: "gateway_transactions_refund_uniq",
+      admission_guard: "aiag_assert_refund_admission_allowed(uuid)",
     });
-    expect(result.rows[0].settlement_definition).toContain("REFUND_BLOCKED");
+    expect(result.rows[0].admission_guard_definition).toContain("REFUND_BLOCKED");
+    expect(result.rows[0].settlement_definition).not.toContain("REFUND_BLOCKED");
+    expect(result.rows[0].settlement_definition).not.toContain(
+      "refund_debt_credits",
+    );
   });
 
   it("keeps both legacy actor_id and compatible actor_email audit indexes", async () => {
