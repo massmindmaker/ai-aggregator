@@ -211,6 +211,59 @@ The admitted response returns a minimal validated OpenAI-shaped public DTO plus 
 - [x] **Step4: Run focused changed tests and gateway source/test typechecks under flock.** No full build/native baseline; route cutover later proves new wrapper+driver+emitted transport as one lifecycle.
 - [x] **Step5: Scoped commit and private report, mandatory TypeScript financial/spec review.** No React diff. Unused mechanics is not a released capability, and plain text success is not a working Agents Market tool loop.
 
+### Task 5: One-attempt stored plaintext executor, without route activation (2B.2b-3)
+
+**Status:** ready for implementation after Task4 acceptance at `3cc5b271`. This step is an unused module, not a public billing cutover. Accepted wrapper/DB/quote contracts are reused unchanged.
+
+**Goal:** one frozen server-owned request admits a hold, obtains one dispatch grant, emits at most one outbound paid POST, validates complete usage, records one exact outcome and settles it. Unknown outcomes remain funded and require reconciliation.
+
+**Files:** Create `packages/api-gateway/src/billing/stored-chat-attempt-contract.ts`, `billing/stored-chat-attempt.ts`, and `src/__tests__/stored-chat-attempt-contract.test.ts`, `stored-chat-attempt.test.ts`, `stored-chat-attempt-transport.test.ts`. Minimally modify `upstreams/fetch-upstream.ts` and `upstreams/openrouter.ts`; extend `openrouter-admitted-chat.test.ts` only for the new transport option. No routes, registry, resolver, config, existing admission wrapper, shared safe-fetch, DB/migration, worker, UI or tariff changes.
+
+**Factory contract:** `createStoredChatAttempt(args, deps?)` accepts trusted server orgId/apiKeyId/clientRequestId, ResolvedModel, mode/policy, unknown body, defaultMaxOutputTokens, canonical exact cachingDiscount string, preDispatchDeadlineAt and optional AbortSignal. It returns a typed invalid/unavailable result or an opaque ready handle with server-generated billingRequestId and `run(): Promise<StoredChatAttemptResult>`. Generate distinct billing and attempt UUIDs once using crypto.randomUUID; injected deterministic UUIDs are a test-only dependency, never client fields. Invalid/duplicate generated UUIDs fail before DB. Memoize the run promise synchronously so concurrent or repeated calls return the same promise/result and never create a new admission or paid retry. No arbitrary existing admission, resume, client billing UUID, BYOK key or mutable execute callback is accepted.
+
+**Pre-admission contracts:** strict detached plain-text body with exact resolved model slug; nonempty system/user/assistant messages, stream absent/false and optional positive safe max_tokens. Reject unsupported tools/function calling/media/unknown generation parameters. This only defines the new unused contract; mounted legacy requests keep existing behavior. Validate server identity, trace, deadline and exact decimal discount before DB; do not recover a tariff through String(config.CACHING_DISCOUNT). Preserve accepted whole-cost cache factor and exact arithmetic. Body/messages and all financial facts are detached/frozen before the first await; no prompt or secret enters persisted snapshots.
+
+**Mechanics binding:** local adapter lookup cache captures the admitted mechanics object, exact contract and original bound execute function on first lookup. Pass a frozen facade of these captured mechanics into accepted `prepareStoredChatQuote`, then use the same captured function for the frozen winner at candidates[0]. Never re-read the registry or original mutable adapter after await and never call legacy chat. Cache unavailable lookup as unavailable. Retain accepted maximum across ALL eligible frozen candidates; actual usage uses only the chosen candidate's exact prices and actual cap. No fallback in this task.
+
+**Actual HTTP boundary:** existing shared safeFetch follows redirects by default, including POST-preserving307/308. Add optional `maxRedirects?: number` to FetchUpstreamInit and pass `maxRedirects:0` only from admitted OpenRouter. Existing rest forwarding already reaches safeFetch. Do not change shared redirect behavior or legacy adapter calls. A redirect response is a post-dispatch unknown; it must never trigger a second HTTP call or a zero-charge outcome. Test the real admitted adapter→fetchUpstream→safeFetch chain with stubbed transport, not merely execute call count. No real network/DNS/provider invocation.
+
+**Snapshots:** admission `{version:1, tokenQuote, actualChargePolicy:{formulaVersion,cachingDiscount}}`; selected pricing stores exact tuple/row/profile revision/policy/context/cap/prices/chosenMax and the same formula/cache policy. Fixed routeKind=`chat`, billingMode=`stored`. Safe outcome stores version, usage contract, billing/attempt/provider/routing identity, profile revision, sanitized completion id/reported model, original counts and formula version. Reported model metadata does not choose a tariff. Never persist keys, proxy credentials, messages, response body or raw errors. Candidate raw egress remains the existing transport input; do not claim snapshot attests mutable fleet credential/egress configuration.
+
+**Usage:** revalidate finite safe nonnegative prompt/completion/total/cached counts, safe sum=total, cached<=prompt, completion<=chosen actual cap, total<=chosen reviewed context and public response usage equality with internal counts. Do not duplicate the entire adapter DTO schema; it remains responsible for public response shape. Detach usage/response evidence synchronously before outcome await. Calculate exact actual from the chosen prices and captured discount; enforce `0 <= actual <= chosenMax <= authorizedMax`. Missing/inconsistent/over-limit evidence is unknown, never clamped, estimated, converted to zero, or charged at the maximum. Valid actual0 is a successful completion, not invented verified_no_charge evidence.
+
+**Decision table and results:** return safe tagged results `settled_success`, `cancelled_no_charge`, `not_started`, `replay`, `reconciliation_required`, or a neutral typed rejection where no ambiguous mutation is inferred. Financial numbers remain bigint internally/string in persisted JSON. Reconciliation includes original billing UUID, stage and nullable **lastConfirmedState**, never a claim about the current DB after lost acknowledgement.
+
+| Event | Allowed transition / result |
+|---|---|
+| Invalid contract/quote/cache/identity | Reject before DB and provider |
+| Signal already aborted before admit | not_started, no DB/provider |
+| Admit returns fresh held with didTransition=true | May proceed to mark; provider still forbidden |
+| Admit replay, any state | replay; no mark, cancel, takeover or execute |
+| Admit exception with possible DB effect | reconciliation/admit; no new UUID/provider |
+| Abort after fresh held, before mark starts | cancel once; no_charge only after confirmed cancellation; lost ack remains reconciliation/cancel |
+| mark returns dispatch_granted and fresh dispatched | Sole permission to invoke captured execute once |
+| mark replay or conflict/unknown acknowledgement | No execute/fallback/retry/cancel assumption; replay or reconciliation/dispatch |
+| Explicit reviewed dispatch deadline rejection | Attempt cancel of held via existing DB CAS; only confirmed cancel means no_charge |
+| Crash after dispatch commit before execute | Funded unknown; no restart resubmission |
+| Provider throw/HTTP error/redirect/timeout/malformed data | reconciliation/provider; no outcome0 or release |
+| Completion with invalid/beyond-cap usage | reconciliation/usage; no outcome or settlement |
+| Valid bounded completion | Record success outcome once, including actual0 |
+| Outcome acknowledged outcome_recorded | Settle once |
+| Outcome acknowledged already settled with matching evidence | Use confirmed settlement; no redundant provider |
+| Outcome or settle unknown ack | reconciliation at that stage; no second paid call, cancel or rollback claim |
+| Confirmed settled with matching evidence | settled_success and safe completion response |
+| Abort after mark invocation | Does not cancel financial work; a later valid completion still records and settles |
+
+Existing wrapper errors include transport/parser/identity failures whose SQL may already have committed. Never map them to rollback/no-charge or retry. No generic verified_no_charge classifier exists because the adapter does not provide such proof. UUID/reconcile_after persistence does not implement a recovery worker. The closed freshly granted anchor is the only outcome writer here; generic competing resume/reconcile writers need a separate DB fencing review.
+
+- [ ] **Step1: Observed RED before implementation.** Strict body/identity/discount tests; mutate input and adapter after preparation; invalid/omitted/explicit/capped max_tokens; one bound mechanics instance. Orchestration with deferred barriers for every table row, same-promise concurrent run and all replay/unknown acknowledgements. Record exact failing commands before source edits.
+- [ ] **Step2: Contract and executor.** Implement the minimal factory/closed handle and exact snapshot/result types. Preserve actual-charge cache formula; tests include exact high precision and >2^53 amounts, actual0, cheap winner under more expensive eligible maximum, usage bounds and response/count agreement. No public caller or migration.
+- [ ] **Step3: Real transport chain.** Add admitted-only redirect suppression. Tests prove pinned model/cap/policy POST after grant,307/308/302 Location exactly one fetch, and a valid completion through the real adapter/transport to outcome+settle. Stub external transport only; do not replace the whole adapter with a success mock in this gate.
+- [ ] **Step4: Focused verification.** Run the three new suites plus openrouter-admitted-chat and billing-admission, gateway source/test typechecks and active package lint sequentially under shared flock. Use the installed Node/shebang Vitest CLI through the local helper; do not invoke the previously failing Bun-native Vitest loader. Accepted unchanged native SQL tests need no repeat in this task; mocked races are not new native concurrency proof.
+- [ ] **Step5: Scoped commit and independent TypeScript financial/spec+quality review.** Private report has BASE, final SHA, exact files and RED/GREEN. No React review unless scope changes to React; such expansion is not planned. Only unused executor acceptance may be recorded.
+
+**Follow-on gates remain binding:** durable key/org/session quota reservation (with the recorded versioned owner/units ruling), authenticated trusted composition with exact config source, API request idempotency beyond a process-local handle, scanner/reconciliation/response recovery, BYOK funded fee, tool loop, all mounted routes/SSE/media/batches, refunds, RUB/TON rails and production acceptance. Do not mount this module or call it production-ready when focused tests pass.
+
 ## Subsequent execution increments
 
 These remain required work; each gets its concrete task brief after its predecessor's reviewed interfaces are known.
