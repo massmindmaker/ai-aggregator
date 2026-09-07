@@ -311,12 +311,12 @@ export async function runCleanRehearsal(
           const empty = await target.query<{ user_objects: string }>({
             text: `SELECT (
           (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-            WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema') +
+            WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema') +
           (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-            WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema') +
+            WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema') +
           (SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace
-            WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema') +
-          (SELECT count(*) FROM pg_namespace WHERE nspname NOT LIKE 'pg_%'
+            WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema') +
+          (SELECT count(*) FROM pg_namespace WHERE nspname !~ '^pg_'
             AND nspname NOT IN ('public', 'information_schema'))
         )::text AS user_objects`,
             values: [],

@@ -3,6 +3,7 @@ import * as migrator from "../native-migrate";
 import { runCleanRehearsal } from "../native-clean-rehearsal";
 import {
   TEST_DATABASE_MARKER,
+  withGuardedTestDatabase,
   type QueryConfig,
   type TestDatabaseClient,
 } from "../test-db-guard";
@@ -27,6 +28,7 @@ class RecordingClient implements TestDatabaseClient {
   exists = false;
   rights = true;
   nonempty = false;
+  scanProbe?: (q: QueryConfig) => Promise<string>;
   wrongIdentity = false;
   port = 15432;
   host = "127.0.0.1";
@@ -77,7 +79,15 @@ class RecordingClient implements TestDatabaseClient {
     else if (q.text.startsWith("CREATE DATABASE")) this.exists = true;
     else if (q.text.startsWith("DROP DATABASE")) this.exists = false;
     else if (q.text.includes("AS user_objects"))
-      rows = [{ user_objects: this.nonempty ? "1" : "0" }];
+      rows = [
+        {
+          user_objects: this.scanProbe
+            ? await this.scanProbe(q)
+            : this.nonempty
+              ? "1"
+              : "0",
+        },
+      ];
     else if (q.text.includes("INSERT INTO public._aiag_test_database_marker"))
       this.marker = String(q.values?.[0]);
     else if (q.text.includes("AS object_name"))
@@ -410,5 +420,82 @@ describe("clean69 ownership protocol (recording clients, not native migration pr
       });
       noMutation(s.canonical);
     },
+  );
+  // The runner's exact scanner SELECT runs on native PostgreSQL against CTE
+  // VALUES catalogs. No schema, table or database is created by this probe.
+  it.skipIf(process.env.RUN_NATIVE_CLEAN69_SCANNER_PROBE !== "1").each([
+    ["pgwork", "4"],
+    ["pgx", "4"],
+    ["pg_catalog", "0"],
+    ["public", "3"],
+  ])(
+    "native scanner counts objects in %s and enforces empty bootstrap",
+    async (namespace, expected) => {
+      const { Client } = await import("pg");
+      const { parseIntoClientConfig } = await import("pg-connection-string");
+      await withGuardedTestDatabase(
+        process.env,
+        {
+          clientFactory: async (url) => {
+            const parsed = parseIntoClientConfig(url);
+            const client = new Client({
+              host: parsed.host,
+              port: parsed.port,
+              database: parsed.database,
+              user: parsed.user,
+              password: parsed.password,
+              ssl: false,
+              connectionTimeoutMillis: 5000,
+              statement_timeout: 5000,
+              query_timeout: 6000,
+            });
+            client.on("error", () => {});
+            return {
+              connect: () => client.connect(),
+              end: () => client.end(),
+              query: async (q) => {
+                const result = await client.query(q.text, [
+                  ...(q.values ?? []),
+                ]);
+                return { rows: result.rows, rowCount: result.rowCount };
+              },
+            };
+          },
+        },
+        async (native) => {
+          const s = setup();
+          let detected: string | undefined;
+          s.target.scanProbe = async (q) => {
+            const result = await native.query<{ user_objects: string }>({
+              text: `WITH pg_namespace(oid, nspname) AS (VALUES (1, $1::text)),
+            pg_class(relnamespace) AS (VALUES (1)),
+            pg_proc(pronamespace) AS (VALUES (1)),
+            pg_type(typnamespace) AS (VALUES (1)) ${q.text}`,
+              values: [namespace],
+            });
+            detected = result.rows[0]?.user_objects;
+            if (detected === undefined)
+              throw new Error("scanner_probe_missing_result");
+            return detected;
+          };
+          const result = await s.run();
+          // Four counts prove every namespace filter, not just one surviving clause.
+          expect(detected).toBe(expected);
+          if (expected !== "0") {
+            expect(result).toMatchObject({
+              ok: false,
+              error: "empty_target_failed",
+              cleanup: "cleanup_unverified",
+            });
+            expect(s.migrate).not.toHaveBeenCalled();
+            noMutation(s.target);
+            noDrop(s.canonical);
+          } else {
+            expect(result).toMatchObject({ ok: true, cleanup: "dropped" });
+          }
+        },
+      );
+    },
+    15000,
   );
 });
