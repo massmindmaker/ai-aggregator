@@ -34,7 +34,9 @@ const nextConfig = {
       },
     ],
   },
-  serverExternalPackages: ['@neondatabase/serverless'],
+  experimental: {
+    serverComponentsExternalPackages: ['@neondatabase/serverless'],
+  },
   poweredByHeader: false,
   compress: true,
   async redirects() {

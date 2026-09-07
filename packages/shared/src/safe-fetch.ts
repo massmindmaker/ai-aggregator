@@ -37,6 +37,7 @@
 import { lookup as dnsLookup } from 'node:dns';
 import { promisify } from 'node:util';
 import { isIP } from 'node:net';
+import { Agent } from 'undici';
 
 const dnsLookupAll = promisify(dnsLookup);
 
@@ -295,28 +296,17 @@ async function vetUrl(
 async function buildPinnedDispatcher(
   pinnedIp: string,
   family: number,
-): Promise<unknown | undefined> {
-  try {
-    // Non-literal specifier + dynamic import keeps undici fully optional and
-    // Bun-safe, and avoids a build-time type dependency on the 'undici' module.
-    const mod = 'undici';
-    const undici = (await import(/* @vite-ignore */ mod)) as unknown as {
-      Agent?: new (opts: unknown) => unknown;
-    };
-    if (!undici.Agent) return undefined;
-    return new undici.Agent({
-      connect: {
-        // undici passes (hostname) but we force the vetted IP for every lookup.
-        lookup: (
-          _hostname: string,
-          _opts: unknown,
-          cb: (err: Error | null, address: string, family: number) => void,
-        ) => cb(null, pinnedIp, family === 6 ? 6 : 4),
-      },
-    });
-  } catch {
-    return undefined; // undici not resolvable in this runtime
-  }
+): Promise<Agent> {
+  return new Agent({
+    connect: {
+      // undici passes (hostname) but we force the vetted IP for every lookup.
+      lookup: (
+        _hostname: string,
+        _opts: unknown,
+        cb: (err: Error | null, address: string, family: number) => void,
+      ) => cb(null, pinnedIp, family === 6 ? 6 : 4),
+    },
+  });
 }
 
 /* ------------------------------- safeFetch ------------------------------- */

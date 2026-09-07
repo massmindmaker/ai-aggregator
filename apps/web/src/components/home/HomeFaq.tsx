@@ -60,8 +60,8 @@ export default function HomeFaq() {
               </span>
             </button>
             <div
-              className="overflow-hidden transition-[max-height] duration-[400ms]"
-              style={{ maxHeight: open ? 400 : 0 }}
+              className="overflow-hidden transition-[max-height]"
+              style={{ maxHeight: open ? 400 : 0, transitionDuration: '400ms' }}
             >
               <div
                 className="px-[22px] pb-5 text-[14px] leading-[1.65]"

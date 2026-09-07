@@ -5,16 +5,13 @@ import { authMiddleware, type AuthMiddlewareOptions } from './middleware/auth';
 import { rateLimitMiddleware, type RateLimitOptions } from './middleware/rate-limit';
 import { loggingMiddleware, timingMiddleware, type LoggingOptions } from './middleware/logging';
 import { proxyRequest, buildUpstreamUrl, prepareUpstreamHeaders } from './proxy';
-import { fetchViaProxy } from './proxy/index';
-import { registerEgressExecutor } from '@aiag/shared/server';
+import { registerGatewayEgressExecutor } from './egress-executor';
 import type { GatewayEnv, GatewayConfig, EndpointData, SubscriptionData, GatewayContext } from './types';
 
 // Wire the egress tunnel executor so safeFetch({egressProxyUrl}) works in
 // every process that loads this package. No-op until an upstream actually
 // configures a proxy (resolver wiring lands in T2).
-registerEgressExecutor((url, init, proxyUrl, connectAddr) =>
-  fetchViaProxy(url, init, proxyUrl, { connectAddr }),
-);
+registerGatewayEgressExecutor();
 
 export interface CreateGatewayOptions {
   config: Partial<GatewayConfig>;

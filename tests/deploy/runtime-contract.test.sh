@@ -30,11 +30,18 @@ const { spawnSync } = require('node:child_process');
 const { assertSupportedNode } = require(`${process.env.REPO_ROOT}/ops/runtime-env.cjs`);
 
 assertSupportedNode('20.12.0');
+assertSupportedNode('21.7.0', () => ({}));
 try {
   assertSupportedNode('20.11.1');
   throw new Error('unsupported Node version passed the deployment preflight');
 } catch (error) {
   if (!error.message.includes('requires Node.js >= 20.12.0')) throw error;
+}
+try {
+  assertSupportedNode('21.6.0', null);
+  throw new Error('runtime without util.parseEnv passed the deployment preflight');
+} catch (error) {
+  if (!error.message.includes('node:util.parseEnv')) throw error;
 }
 
 const config = require(`${process.env.REPO_ROOT}/ops/ecosystem.config.cjs`);

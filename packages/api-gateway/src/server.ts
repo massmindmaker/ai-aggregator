@@ -25,6 +25,11 @@ import { audio } from './routes/v1/audio';
 import { batches } from './routes/v1/batches';
 import { adminProxy } from './routes/admin/proxyTest';
 import { adminCatalog } from './routes/admin/catalog';
+import { registerGatewayEgressExecutor } from './egress-executor';
+
+// server-node.ts imports this module directly in production, so startup wiring
+// must live on this path rather than relying on the package barrel (index.ts).
+registerGatewayEgressExecutor();
 
 const bootTime = Date.now();
 
