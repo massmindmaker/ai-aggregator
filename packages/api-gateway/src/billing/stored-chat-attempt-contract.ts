@@ -1,3 +1,4 @@
+import { captureDeclaredSessionId } from './admission-internal';
 import { z } from 'zod';
 import {
   normalizeAdmissionTimestamp,
@@ -59,10 +60,12 @@ export function validateStoredChatIdentity(
     orgId: string;
     apiKeyId: string;
     clientRequestId: string | null;
+    declaredSessionId: string | null;
     preDispatchDeadlineAt: string;
     cachingDiscount: string;
   }>,
 ) {
+  const declaredSessionId = captureDeclaredSessionId(args.declaredSessionId);
   const orgId = normalizeAdmissionUuid(args.orgId);
   const apiKeyId = normalizeAdmissionUuid(args.apiKeyId);
   const clientRequestId = args.clientRequestId;
@@ -88,6 +91,7 @@ export function validateStoredChatIdentity(
     orgId,
     apiKeyId,
     clientRequestId,
+    declaredSessionId,
     preDispatchDeadlineAt,
     cachingDiscount,
   });

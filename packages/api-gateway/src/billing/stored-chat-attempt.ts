@@ -1,12 +1,14 @@
+import {
+  admitGatewayChargeV2,
+  recordGatewayChargeOutcomeV2,
+  type AdmitGatewayChargeV2Args,
+} from './quota-admission';
 import { randomUUID } from 'node:crypto';
 import {
-  admitGatewayCharge,
   markGatewayChargeDispatched,
-  recordGatewayChargeOutcome,
   settleAdmittedGatewayCharge,
   cancelUndispatchedGatewayCharge,
   AdmissionDeadlineExpiredError,
-  type AdmitGatewayChargeArgs,
 } from './admission';
 import {
   admissionJsonObjectsEqual,
@@ -39,6 +41,7 @@ export type StoredChatAttemptArgs = {
   orgId: string;
   apiKeyId: string;
   clientRequestId: string | null;
+  declaredSessionId: string | null;
   model: ResolvedModel;
   requestedMode: Mode;
   policy: Readonly<ApiKeyPolicies>;
@@ -52,9 +55,9 @@ export type StoredChatAttemptArgs = {
 export type StoredChatAttemptDependencies = {
   getAdapter: (key: string) => UpstreamAdapter;
   newUuid: () => string;
-  admitGatewayCharge: typeof admitGatewayCharge;
+  admitGatewayChargeV2: typeof admitGatewayChargeV2;
   markGatewayChargeDispatched: typeof markGatewayChargeDispatched;
-  recordGatewayChargeOutcome: typeof recordGatewayChargeOutcome;
+  recordGatewayChargeOutcomeV2: typeof recordGatewayChargeOutcomeV2;
   settleAdmittedGatewayCharge: typeof settleAdmittedGatewayCharge;
   cancelUndispatchedGatewayCharge: typeof cancelUndispatchedGatewayCharge;
 };
@@ -89,9 +92,9 @@ export function createStoredChatAttempt(
   const deps = Object.freeze({
     getAdapter: getUpstream,
     newUuid: randomUUID,
-    admitGatewayCharge,
+    admitGatewayChargeV2,
+    recordGatewayChargeOutcomeV2,
     markGatewayChargeDispatched,
-    recordGatewayChargeOutcome,
     settleAdmittedGatewayCharge,
     cancelUndispatchedGatewayCharge,
     ...dependencies,
@@ -158,10 +161,16 @@ export function createStoredChatAttempt(
     formulaVersion: STORED_CHAT_FORMULA,
     cachingDiscount: identity.cachingDiscount,
   });
-  const admissionArgs: AdmitGatewayChargeArgs = Object.freeze({
+  const admissionArgs: AdmitGatewayChargeV2Args = Object.freeze({
     orgId: identity.orgId,
     apiKeyId: identity.apiKeyId,
     clientRequestId: identity.clientRequestId,
+    declaredSessionId: identity.declaredSessionId,
+    supplierQuoteSnapshot: parseAdmissionJsonObject({
+      version: 2,
+      formulaVersion: 'catalog-input-output-cents-per-1k-usd-micro-v2',
+      tokenQuote: quote.quoteSnapshot,
+    }),
     preDispatchDeadlineAt: identity.preDispatchDeadlineAt,
     billingRequestId,
     routeKind: 'chat',
@@ -238,7 +247,7 @@ export function createStoredChatAttempt(
       return Object.freeze({ kind: 'not_started', billingRequestId });
     let admission: GatewayChargeAdmissionResult;
     try {
-      admission = confirmed(await deps.admitGatewayCharge(admissionArgs));
+      admission = confirmed(await deps.admitGatewayChargeV2(admissionArgs));
     } catch (error) {
       if (error instanceof AdmissionDeadlineExpiredError)
         return Object.freeze({
@@ -317,7 +326,7 @@ export function createStoredChatAttempt(
       admissionJsonObjectsEqual(a.usageSnapshot, evidence.usageSnapshot);
     try {
       const outcome = confirmed(
-        await deps.recordGatewayChargeOutcome({
+        await deps.recordGatewayChargeOutcomeV2({
           admission,
           actualCostCredits: evidence.actualCostCredits,
           usageSnapshot: evidence.usageSnapshot,

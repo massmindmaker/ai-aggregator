@@ -28,15 +28,15 @@ function fixture() {
   const deps = {
     newUuid: () => id(n++),
     getAdapter: () => openRouterUpstream,
-    admitGatewayCharge: vi.fn<
-      Parameters<StoredChatAttemptDependencies['admitGatewayCharge']>,
-      ReturnType<StoredChatAttemptDependencies['admitGatewayCharge']>
+    admitGatewayChargeV2: vi.fn<
+      Parameters<StoredChatAttemptDependencies['admitGatewayChargeV2']>,
+      ReturnType<StoredChatAttemptDependencies['admitGatewayChargeV2']>
     >(async (a) =>
       Object.freeze({
         ...a,
         state: 'held',
         didTransition: true,
-      } as GatewayChargeAdmissionResult),
+      } as unknown as GatewayChargeAdmissionResult),
     ),
     markGatewayChargeDispatched: vi.fn<
       Parameters<StoredChatAttemptDependencies['markGatewayChargeDispatched']>,
@@ -52,9 +52,9 @@ function fixture() {
         didTransition: true,
       }),
     })),
-    recordGatewayChargeOutcome: vi.fn<
-      Parameters<StoredChatAttemptDependencies['recordGatewayChargeOutcome']>,
-      ReturnType<StoredChatAttemptDependencies['recordGatewayChargeOutcome']>
+    recordGatewayChargeOutcomeV2: vi.fn<
+      Parameters<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>,
+      ReturnType<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>
     >(async (a) =>
       Object.freeze({
         ...a.admission,
@@ -84,6 +84,7 @@ function fixture() {
       orgId: id(1),
       apiKeyId: id(2),
       clientRequestId: null,
+      declaredSessionId: null,
       preDispatchDeadlineAt: '2026-09-08T00:00:00Z',
       cachingDiscount: '0.5',
       model: {
@@ -175,7 +176,7 @@ describe('real admitted adapter -> fetchUpstream -> safeFetch', () => {
         require_parameters: true,
       },
     });
-    expect(f.deps.recordGatewayChargeOutcome).toHaveBeenCalledTimes(1);
+    expect(f.deps.recordGatewayChargeOutcomeV2).toHaveBeenCalledTimes(1);
     expect(f.deps.settleAdmittedGatewayCharge).toHaveBeenCalledTimes(1);
   });
   it.each([302, 307, 308])(
@@ -196,7 +197,7 @@ describe('real admitted adapter -> fetchUpstream -> safeFetch', () => {
         lastConfirmedState: 'dispatched',
       });
       expect(fetchStub).toHaveBeenCalledTimes(1);
-      expect(f.deps.recordGatewayChargeOutcome).not.toHaveBeenCalled();
+      expect(f.deps.recordGatewayChargeOutcomeV2).not.toHaveBeenCalled();
       expect(f.deps.settleAdmittedGatewayCharge).not.toHaveBeenCalled();
       expect(f.deps.cancelUndispatchedGatewayCharge).not.toHaveBeenCalled();
     },

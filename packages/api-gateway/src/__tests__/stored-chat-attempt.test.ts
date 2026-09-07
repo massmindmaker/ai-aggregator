@@ -23,6 +23,7 @@ function args(): StoredChatAttemptArgs {
     orgId: uuid(1),
     apiKeyId: uuid(2),
     clientRequestId: 'trace',
+    declaredSessionId: 'Original.SID',
     preDispatchDeadlineAt: time,
     cachingDiscount: '0.5',
     model: {
@@ -103,9 +104,9 @@ function fixture() {
   const deps = {
     newUuid: vi.fn(() => uuid(id++)),
     getAdapter: vi.fn(() => adapter),
-    admitGatewayCharge: vi.fn<
-      Parameters<StoredChatAttemptDependencies['admitGatewayCharge']>,
-      ReturnType<StoredChatAttemptDependencies['admitGatewayCharge']>
+    admitGatewayChargeV2: vi.fn<
+      Parameters<StoredChatAttemptDependencies['admitGatewayChargeV2']>,
+      ReturnType<StoredChatAttemptDependencies['admitGatewayChargeV2']>
     >(async (a) => {
       order.push('admit');
       return Object.freeze({
@@ -151,9 +152,9 @@ function fixture() {
         }),
       };
     }),
-    recordGatewayChargeOutcome: vi.fn<
-      Parameters<StoredChatAttemptDependencies['recordGatewayChargeOutcome']>,
-      ReturnType<StoredChatAttemptDependencies['recordGatewayChargeOutcome']>
+    recordGatewayChargeOutcomeV2: vi.fn<
+      Parameters<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>,
+      ReturnType<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>
     >(async (a) => {
       order.push('outcome');
       return Object.freeze({
@@ -228,9 +229,9 @@ describe('one funded stored attempt', () => {
     const f = fixture();
     const gates: Array<() => void> = [];
     for (const key of [
-      'admitGatewayCharge',
+      'admitGatewayChargeV2',
       'markGatewayChargeDispatched',
-      'recordGatewayChargeOutcome',
+      'recordGatewayChargeOutcomeV2',
       'settleAdmittedGatewayCharge',
     ] as const) {
       const original = f.deps[key].getMockImplementation()!;
@@ -258,10 +259,10 @@ describe('one funded stored attempt', () => {
     expect(f.execute).not.toHaveBeenCalled();
     gates[1]!();
     await vi.waitFor(() => expect(f.execute).toHaveBeenCalledTimes(1));
-    expect(f.deps.recordGatewayChargeOutcome).not.toHaveBeenCalled();
+    expect(f.deps.recordGatewayChargeOutcomeV2).not.toHaveBeenCalled();
     provider.resolve();
     await vi.waitFor(() =>
-      expect(f.deps.recordGatewayChargeOutcome).toHaveBeenCalledTimes(1),
+      expect(f.deps.recordGatewayChargeOutcomeV2).toHaveBeenCalledTimes(1),
     );
     expect(f.deps.settleAdmittedGatewayCharge).not.toHaveBeenCalled();
     gates[2]!();
@@ -288,6 +289,7 @@ describe('one funded stored attempt', () => {
     (f.input.body as { messages: { content: string }[] }).messages[0]!.content =
       'changed';
     f.input.cachingDiscount = '1';
+    f.input.declaredSessionId = 'mutated';
     (f.mechanics as { execute: unknown }).execute = vi.fn(() => {
       throw Error('mutated');
     });
@@ -306,7 +308,28 @@ describe('one funded stored attempt', () => {
       modelId: 'openai/gpt-4o-mini',
       maxTokens: 4096,
     });
-    const admission = f.deps.admitGatewayCharge.mock.calls[0]![0];
+    const admission = f.deps.admitGatewayChargeV2.mock.calls[0]![0];
+    expect(admission.declaredSessionId).toBe('Original.SID');
+    expect(admission.supplierQuoteSnapshot).toEqual({
+      version: 2,
+      formulaVersion: 'catalog-input-output-cents-per-1k-usd-micro-v2',
+      tokenQuote: admission.quoteSnapshot.tokenQuote,
+    });
+    expect(Object.isFrozen(admission.supplierQuoteSnapshot)).toBe(true);
+    expect(Object.isFrozen(admission.supplierQuoteSnapshot.tokenQuote)).toBe(
+      true,
+    );
+    expect(Object.keys(admission.quoteSnapshot).sort()).toEqual([
+      'actualChargePolicy',
+      'tokenQuote',
+      'version',
+    ]);
+    expect(JSON.stringify(f.execute.mock.calls[0]?.[0])).not.toContain(
+      'Original.SID',
+    );
+    expect(JSON.stringify(admission.quoteSnapshot)).not.toContain(
+      'Original.SID',
+    );
     expect(admission.quoteSnapshot).toMatchObject({
       version: 1,
       actualChargePolicy: { cachingDiscount: '0.5' },
@@ -341,7 +364,7 @@ describe('one funded stored attempt', () => {
       actualCostCredits: 21n,
     });
     expect(
-      f.deps.admitGatewayCharge.mock.calls[0]![0].authorizedMaxCredits,
+      f.deps.admitGatewayChargeV2.mock.calls[0]![0].authorizedMaxCredits,
     ).toBe(264192n);
     expect(
       f.deps.markGatewayChargeDispatched.mock.calls[0]![0].pricingSnapshot,
@@ -358,8 +381,8 @@ describe('one funded stored attempt', () => {
     'admission replay %s never marks, cancels or executes',
     async (state) => {
       const f = fixture();
-      const original = f.deps.admitGatewayCharge.getMockImplementation()!;
-      f.deps.admitGatewayCharge.mockImplementation(async (a) => ({
+      const original = f.deps.admitGatewayChargeV2.getMockImplementation()!;
+      f.deps.admitGatewayChargeV2.mockImplementation(async (a) => ({
         ...(await original(a)),
         state,
         didTransition: false,
@@ -394,9 +417,9 @@ describe('one funded stored attempt', () => {
     },
   );
   it.each([
-    ['admitGatewayCharge', 'admit', null],
+    ['admitGatewayChargeV2', 'admit', null],
     ['markGatewayChargeDispatched', 'dispatch', 'held'],
-    ['recordGatewayChargeOutcome', 'outcome', 'dispatched'],
+    ['recordGatewayChargeOutcomeV2', 'outcome', 'dispatched'],
     ['settleAdmittedGatewayCharge', 'settle', 'outcome_recorded'],
   ] as const)(
     'lost acknowledgement %s is funded unknown',
@@ -413,7 +436,7 @@ describe('one funded stored attempt', () => {
       });
       expect(await handle.run()).toBe(result);
       expect(f.execute.mock.calls.length).toBe(
-        key === 'admitGatewayCharge' || key === 'markGatewayChargeDispatched'
+        key === 'admitGatewayChargeV2' || key === 'markGatewayChargeDispatched'
           ? 0
           : 1,
       );
@@ -421,9 +444,9 @@ describe('one funded stored attempt', () => {
     },
   );
   it.each([
-    'admitGatewayCharge',
+    'admitGatewayChargeV2',
     'markGatewayChargeDispatched',
-    'recordGatewayChargeOutcome',
+    'recordGatewayChargeOutcomeV2',
     'settleAdmittedGatewayCharge',
   ] as const)('malformed acknowledgement %s is unknown', async (key) => {
     const f = fixture();
@@ -446,7 +469,7 @@ describe('one funded stored attempt', () => {
     'confirmed admission rejection is neutral',
     async (error) => {
       const f = fixture();
-      f.deps.admitGatewayCharge.mockRejectedValue(error);
+      f.deps.admitGatewayChargeV2.mockRejectedValue(error);
       expect((await f.ready().run()).kind).toBe('rejected');
       expect(f.execute).not.toHaveBeenCalled();
     },
@@ -455,7 +478,7 @@ describe('one funded stored attempt', () => {
     const f = fixture();
     f.input.signal = AbortSignal.abort();
     expect((await f.ready().run()).kind).toBe('not_started');
-    expect(f.deps.admitGatewayCharge).not.toHaveBeenCalled();
+    expect(f.deps.admitGatewayChargeV2).not.toHaveBeenCalled();
   });
   it.each([false, true])(
     'abort before mark cancels only on confirmed ack (lost=%s)',
@@ -463,8 +486,8 @@ describe('one funded stored attempt', () => {
       const f = fixture();
       const controller = new AbortController();
       f.input.signal = controller.signal;
-      const original = f.deps.admitGatewayCharge.getMockImplementation()!;
-      f.deps.admitGatewayCharge.mockImplementation(async (a) => {
+      const original = f.deps.admitGatewayChargeV2.getMockImplementation()!;
+      f.deps.admitGatewayChargeV2.mockImplementation(async (a) => {
         const held = await original(a);
         controller.abort();
         return held;
@@ -536,7 +559,7 @@ describe('one funded stored attempt', () => {
       lastConfirmedState: 'dispatched',
     });
     expect(JSON.stringify(result)).not.toContain('secret');
-    expect(f.deps.recordGatewayChargeOutcome).not.toHaveBeenCalled();
+    expect(f.deps.recordGatewayChargeOutcomeV2).not.toHaveBeenCalled();
     expect(f.deps.cancelUndispatchedGatewayCharge).not.toHaveBeenCalled();
   });
   it('invalid usage never records or settles', async () => {
@@ -546,7 +569,7 @@ describe('one funded stored attempt', () => {
       kind: 'reconciliation_required',
       stage: 'usage',
     });
-    expect(f.deps.recordGatewayChargeOutcome).not.toHaveBeenCalled();
+    expect(f.deps.recordGatewayChargeOutcomeV2).not.toHaveBeenCalled();
     expect(f.deps.settleAdmittedGatewayCharge).not.toHaveBeenCalled();
   });
   it('zero actual records success and settles', async () => {
@@ -558,13 +581,14 @@ describe('one funded stored attempt', () => {
       actualCostCredits: 0n,
     });
     expect(
-      f.deps.recordGatewayChargeOutcome.mock.calls[0]![0].outcomeKind,
+      f.deps.recordGatewayChargeOutcomeV2.mock.calls[0]![0].outcomeKind,
     ).toBe('success');
   });
   it('already settled matching outcome skips redundant settlement', async () => {
     const f = fixture();
-    const original = f.deps.recordGatewayChargeOutcome.getMockImplementation()!;
-    f.deps.recordGatewayChargeOutcome.mockImplementation(async (a) => ({
+    const original =
+      f.deps.recordGatewayChargeOutcomeV2.getMockImplementation()!;
+    f.deps.recordGatewayChargeOutcomeV2.mockImplementation(async (a) => ({
       ...(await original(a)),
       state: 'settled',
       didTransition: false,
@@ -575,8 +599,9 @@ describe('one funded stored attempt', () => {
   });
   it('detaches outcome evidence before the record await', async () => {
     const f = fixture();
-    const original = f.deps.recordGatewayChargeOutcome.getMockImplementation()!;
-    f.deps.recordGatewayChargeOutcome.mockImplementation(async (a) => {
+    const original =
+      f.deps.recordGatewayChargeOutcomeV2.getMockImplementation()!;
+    f.deps.recordGatewayChargeOutcomeV2.mockImplementation(async (a) => {
       f.output.usage.totalTokens = 0;
       f.output.response.usage.total_tokens = 0;
       return original(a);
@@ -587,7 +612,7 @@ describe('one funded stored attempt', () => {
       response: { usage: { total_tokens: 120 } },
     });
     expect(
-      f.deps.recordGatewayChargeOutcome.mock.calls[0]![0].usageSnapshot,
+      f.deps.recordGatewayChargeOutcomeV2.mock.calls[0]![0].usageSnapshot,
     ).toMatchObject({ usage: { totalTokens: 120 } });
   });
   it.each(['bad', uuid(10)])(
@@ -598,7 +623,7 @@ describe('one funded stored attempt', () => {
       expect(createStoredChatAttempt(f.input, f.deps).status).toBe(
         'unavailable',
       );
-      expect(f.deps.admitGatewayCharge).not.toHaveBeenCalled();
+      expect(f.deps.admitGatewayChargeV2).not.toHaveBeenCalled();
     },
   );
   it('captures unavailable lookup once across duplicate candidate keys', () => {
@@ -645,8 +670,8 @@ describe('one funded stored attempt', () => {
       blocked_providers: [] as string[],
     };
     f.input.policy = policy;
-    const original = f.deps.admitGatewayCharge.getMockImplementation()!;
-    f.deps.admitGatewayCharge.mockImplementation(async (a) => {
+    const original = f.deps.admitGatewayChargeV2.getMockImplementation()!;
+    f.deps.admitGatewayChargeV2.mockImplementation(async (a) => {
       policy.allowed_providers.length = 0;
       policy.blocked_providers.push('openai');
       candidate.billing = {
@@ -668,7 +693,7 @@ describe('one funded stored attempt', () => {
     expect(f.execute.mock.calls[0]![0].egressProxyUrl).toBe(
       'http://test-only-user:test-only-pass@proxy:3128',
     );
-    const admission = f.deps.admitGatewayCharge.mock.calls[0]![0];
+    const admission = f.deps.admitGatewayChargeV2.mock.calls[0]![0];
     const pricing =
       f.deps.markGatewayChargeDispatched.mock.calls[0]![0].pricingSnapshot;
     expect(JSON.stringify([admission.quoteSnapshot, pricing])).not.toMatch(
@@ -676,7 +701,7 @@ describe('one funded stored attempt', () => {
     );
   });
   it.each([
-    'recordGatewayChargeOutcome',
+    'recordGatewayChargeOutcomeV2',
     'settleAdmittedGatewayCharge',
   ] as const)(
     'mismatched confirmed evidence at %s remains unknown',
@@ -718,8 +743,8 @@ describe('one funded stored attempt', () => {
     const f = fixture();
     const controller = new AbortController();
     f.input.signal = controller.signal;
-    const original = f.deps.admitGatewayCharge.getMockImplementation()!;
-    f.deps.admitGatewayCharge.mockImplementation(async (a) => {
+    const original = f.deps.admitGatewayChargeV2.getMockImplementation()!;
+    f.deps.admitGatewayChargeV2.mockImplementation(async (a) => {
       controller.abort();
       return original(a);
     });
@@ -743,8 +768,24 @@ describe('one funded stored attempt', () => {
     const f = fixture();
     Object.assign(f.input, patch);
     expect(createStoredChatAttempt(f.input, f.deps).status).toBe('bad_request');
-    expect(f.deps.admitGatewayCharge).not.toHaveBeenCalled();
+    expect(f.deps.admitGatewayChargeV2).not.toHaveBeenCalled();
     expect(f.execute).not.toHaveBeenCalled();
     expect(f.deps.newUuid).not.toHaveBeenCalled();
   });
+});
+
+describe('stored attempt v2 SID boundary', () => {
+  it.each(['', 'a'.repeat(129), 'A\n', ' A', 'А', undefined])(
+    'rejects invalid SID before dependencies %s',
+    (sid) => {
+      const f = fixture();
+      f.input.declaredSessionId = sid as string;
+      expect(createStoredChatAttempt(f.input, f.deps).status).toBe(
+        'bad_request',
+      );
+      expect(f.deps.getAdapter).not.toHaveBeenCalled();
+      expect(f.deps.admitGatewayChargeV2).not.toHaveBeenCalled();
+      expect(f.execute).not.toHaveBeenCalled();
+    },
+  );
 });

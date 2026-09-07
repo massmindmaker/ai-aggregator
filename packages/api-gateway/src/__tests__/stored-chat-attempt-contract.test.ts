@@ -15,6 +15,7 @@ const identity = () => ({
   orgId: '00000000-0000-4000-8000-000000000001',
   apiKeyId: '00000000-0000-4000-8000-000000000002',
   clientRequestId: 'trace',
+  declaredSessionId: null,
   preDispatchDeadlineAt: '2026-09-08T00:00:00Z',
   cachingDiscount: '0.123456789012345678',
 });
