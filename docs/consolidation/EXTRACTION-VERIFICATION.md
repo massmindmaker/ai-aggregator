@@ -86,6 +86,17 @@ Task3 принят TypeScript/spec и React review на `8ddb2fe7c23ac5690fa2dd3
 
 Снимок выдачи кредитов, DB claim/clawback/debt и подключение routes ещё выполняются. Межзадачная проверка выявила отсутствие долговечной авторизации AI-вызова до upstream: один лишь запрет последующего списания при возврате оставлял бы уже выданный ответ без оплаты. Поэтому перед включением возвратов добавлен обязательный этап durable gateway admission и восстанавливаемого settlement. Task2 добавляет отдельную проверку допуска, сохраняя legacy settlement до совместного переключения. Этот транспортный этап не доказывает сквозной возврат или готовность денежного контура.
 
+## Aggregator: принятые DB-примитивы возврата
+
+Этап принят TypeScript/SQL spec+quality и React/Next review на `e5ca6dde2481245096ce773f94fc01ec183f1cea`; критичных, важных и мелких замечаний нет. Миграция0066 добавляет неизменяемый top-up snapshot, claim/cumulative refund, долг организации и уникальную квитанцию возврата. Claim/finalize/full reconciliation соблюдают порядок organization → payment, повтор не меняет деньги, нулевое округление также сохраняет receipt.
+
+- Guarded fresh rehearsal:66 applied/0 skipped; повтор:0 applied/66 skipped. В обоих случаях обязательные native tests27/27, БД96tables.
+- Exact-bigint mapping/helper tests5/5; Database и Web typecheck прошли. Реальные PostgreSQL lock barriers проверяют конкурентность, audit conflict — rollback всей финансовой транзакции.
+- Legacy settlement сохранён побайтно. Отдельный guard разрешено использовать только внутри будущей транзакции долговечного admission. Сам по себе он не закрывает гонку между preflight и provider.
+- Действительное начисление snapshot при CONFIRMED, погашение долга новым пополнением, admin/webhook/UI и gateway cutover ещё не приняты.
+
+Следующий обязательный этап описан в [плане резервирования запросов](../superpowers/plans/2026-09-07-gateway-charge-admission.md). Он резервирует максимальную стоимость до provider, сохраняет неопределённые операции для сверки и возвращает неиспользованный PAYG сначала в погашение refund debt. Полный возврат и готовность денежных сценариев пока не заявляются.
+
 ## AI Arena
 
 Foundation `692bc12` и review fix `d742077` прошли TypeScript/spec и React review. Удалены 3276 отслеживаемых generated-файлов; исходники и package manifests сохранены. Native PostgreSQL разрешён только в явном тестовом режиме с проверкой адреса и DB marker; production driver остаётся Neon.
