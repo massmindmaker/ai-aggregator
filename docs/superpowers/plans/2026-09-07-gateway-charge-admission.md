@@ -92,6 +92,10 @@ Cancel releases all eligible hold using the same debt/expiry arithmetic, only if
 - [ ] **Step 4: Verify new suite plus mandatory native baseline, database types and mirror equality.** Expected new migration total67 (prior66) and two new tables (prior96); derive assertions from manifest where existing harness does so. First apply67th and repeat no-op; if development checksum changes, use only the existing explicitly guarded disposable DB rehearsal and record refusal/fresh/no-op evidence. Do not modify historical hashes or weaken safety guards. Add meaningful exact-bigint schema assertion beyond Number.MAX_SAFE_INTEGER.
 - [ ] **Step 5: Self-review and commit exact owned files.** Report commands/results, SQL interfaces, transition return shape and remaining gateway dependency in private SDD report. No force-add private files. Mandatory TypeScript/SQL spec+quality review follows.
 
+### Evidence for token bounds
+
+Checked2026-09-07: [OpenRouter parameters](https://openrouter.ai/docs/api_reference/parameters) and [Groq Chat API](https://console.groq.com/docs/api-reference) document an output-token cap within total context. This supports the conditional mathematical bound below; it does not certify every routed model or additional reasoning/tool tariffs. Admission needs an explicit reviewed adapter/model capability and trusted context metadata. A provider name or a successful usage parser alone is not that evidence. No live inference was performed.
+
 ### Task 2: Exact bounded token quote arithmetic (2B.2a)
 
 **Files:** Create `packages/api-gateway/src/billing/token-quote.ts` and `packages/api-gateway/src/__tests__/billing-token-quote.test.ts`. No route, resolver, config, DB or legacy pricing changes in this pure increment.
