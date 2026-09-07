@@ -125,6 +125,7 @@ CREATE TABLE gateway_charge_admissions (
     CHECK (
       pre_dispatch_deadline_at >= created_at
       AND (dispatched_at IS NULL OR dispatched_at >= created_at)
+      AND (dispatched_at IS NULL OR dispatched_at < pre_dispatch_deadline_at)
       AND (outcome_recorded_at IS NULL OR outcome_recorded_at >= dispatched_at)
       AND (settled_at IS NULL OR settled_at >= outcome_recorded_at)
       AND (cancelled_at IS NULL OR cancelled_at >= created_at)
@@ -377,6 +378,8 @@ CREATE OR REPLACE FUNCTION aiag_mark_gateway_charge_dispatched(
 LANGUAGE plpgsql AS $$
 DECLARE
   _existing gateway_charge_admissions%ROWTYPE;
+  _dispatch_at TIMESTAMPTZ;
+  _updated_billing_request_id UUID;
 BEGIN
   IF _org_id IS NULL OR _billing_request_id IS NULL OR _attempt_id IS NULL
     OR _upstream_id IS NULL OR btrim(_upstream_id) = '' OR length(_upstream_id) > 64
@@ -414,16 +417,20 @@ BEGIN
   IF _existing.state <> 'held' THEN
     RAISE EXCEPTION 'DISPATCH_STATE_CONFLICT' USING ERRCODE = 'P0005';
   END IF;
-  IF _existing.pre_dispatch_deadline_at <= clock_timestamp() THEN
+  _dispatch_at := clock_timestamp();
+  IF _existing.pre_dispatch_deadline_at <= _dispatch_at THEN
     RAISE EXCEPTION 'ADMISSION_DEADLINE_EXPIRED' USING ERRCODE = 'P0005';
   END IF;
 
   UPDATE gateway_charge_admissions a
   SET state = 'dispatched', attempt_id = _attempt_id,
       upstream_id = _upstream_id, pricing_snapshot = _pricing_snapshot,
-      dispatched_at = clock_timestamp(),
-      reconcile_after = clock_timestamp() + INTERVAL '15 minutes'
-  WHERE a.billing_request_id = _billing_request_id AND a.state = 'held';
+      dispatched_at = _dispatch_at,
+      reconcile_after = _dispatch_at + INTERVAL '15 minutes'
+  WHERE a.billing_request_id = _billing_request_id
+    AND a.state = 'held'
+    AND a.pre_dispatch_deadline_at > _dispatch_at
+  RETURNING a.billing_request_id INTO _updated_billing_request_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'DISPATCH_STATE_CONFLICT' USING ERRCODE = 'P0005';
   END IF;
@@ -520,6 +527,9 @@ DECLARE
   _debt_repaid BIGINT;
   _expired_subscription BIGINT := 0;
   _receipt_id VARCHAR;
+  _post_subscription BIGINT;
+  _post_payg BIGINT;
+  _post_refund_debt BIGINT;
 BEGIN
   SELECT o.subscription_credits_expires_at, o.refund_debt_credits
     INTO _current_expiry, _refund_debt
@@ -568,7 +578,9 @@ BEGIN
       payg_credits = o.payg_credits + _released_payg,
       refund_debt_credits = o.refund_debt_credits - _debt_repaid,
       updated_at = clock_timestamp()
-  WHERE o.id = _org_id AND o.refund_debt_credits >= _debt_repaid;
+  WHERE o.id = _org_id AND o.refund_debt_credits >= _debt_repaid
+  RETURNING o.subscription_credits, o.payg_credits, o.refund_debt_credits
+    INTO _post_subscription, _post_payg, _post_refund_debt;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'CONCURRENT_MODIFICATION' USING ERRCODE = 'P0004';
   END IF;
@@ -643,6 +655,9 @@ DECLARE
   _released_payg BIGINT;
   _debt_repaid BIGINT;
   _expired_subscription BIGINT := 0;
+  _post_subscription BIGINT;
+  _post_payg BIGINT;
+  _post_refund_debt BIGINT;
 BEGIN
   SELECT o.subscription_credits_expires_at, o.refund_debt_credits
     INTO _current_expiry, _refund_debt
@@ -684,7 +699,9 @@ BEGIN
       payg_credits = o.payg_credits + _released_payg,
       refund_debt_credits = o.refund_debt_credits - _debt_repaid,
       updated_at = clock_timestamp()
-  WHERE o.id = _org_id AND o.refund_debt_credits >= _debt_repaid;
+  WHERE o.id = _org_id AND o.refund_debt_credits >= _debt_repaid
+  RETURNING o.subscription_credits, o.payg_credits, o.refund_debt_credits
+    INTO _post_subscription, _post_payg, _post_refund_debt;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'CONCURRENT_MODIFICATION' USING ERRCODE = 'P0004';
   END IF;

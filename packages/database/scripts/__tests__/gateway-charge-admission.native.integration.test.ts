@@ -34,6 +34,8 @@ interface AdmissionRow {
   held_payg_credits: string;
   actual_cost_credits: string | null;
   state: string;
+  pre_dispatch_deadline_at: Date | string;
+  dispatched_at: Date | string | null;
   did_transition: boolean;
   released_subscription_credits: string;
   released_payg_credits: string;
@@ -676,6 +678,65 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway charge admission", () => {
       { source: "subscription", delta: "-20" },
     ]);
     expect(await balances(fixture)).toMatchObject({ payg_credits: "15" });
+  });
+
+  it("never records a successful dispatch timestamp at or after its deadline", async () => {
+    const fixture = await createFixture({ paygCredits: 10n });
+    const billingRequestId = randomUUID();
+    const deadline = new Date(Date.now() + 500);
+    await admit(fixture, { billingRequestId, max: 10n, deadline });
+    await client.query({
+      text: `
+        CREATE FUNCTION aiag_test_delay_dispatch_statement()
+        RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          PERFORM pg_sleep(1);
+          RETURN NULL;
+        END;
+        $$;
+        CREATE TRIGGER aiag_test_delay_dispatch_statement
+        BEFORE UPDATE ON gateway_charge_admissions
+        FOR EACH STATEMENT EXECUTE FUNCTION aiag_test_delay_dispatch_statement()
+      `,
+      values: [],
+    });
+    try {
+      const result = await dispatch(fixture, billingRequestId);
+      expect(result.rows[0]).toMatchObject({
+        state: "dispatched",
+        did_transition: true,
+      });
+      expect(result.rows[0].dispatched_at).not.toBeNull();
+      const dispatchedAt =
+        result.rows[0].dispatched_at instanceof Date
+          ? result.rows[0].dispatched_at
+          : new Date(result.rows[0].dispatched_at!);
+      const storedDeadline =
+        result.rows[0].pre_dispatch_deadline_at instanceof Date
+          ? result.rows[0].pre_dispatch_deadline_at
+          : new Date(result.rows[0].pre_dispatch_deadline_at);
+      expect(dispatchedAt.getTime()).toBeLessThan(storedDeadline.getTime());
+      await expectSqlState(
+        client.query({
+          text: `
+            UPDATE gateway_charge_admissions
+            SET dispatched_at = pre_dispatch_deadline_at
+            WHERE billing_request_id = $1
+          `,
+          values: [billingRequestId],
+        }),
+        "23514",
+      );
+    } finally {
+      await client.query({
+        text: `
+          DROP TRIGGER IF EXISTS aiag_test_delay_dispatch_statement
+            ON gateway_charge_admissions;
+          DROP FUNCTION IF EXISTS aiag_test_delay_dispatch_statement()
+        `,
+        values: [],
+      });
+    }
   });
 
   it("accepts immutable zero outcome and exact lifecycle replays after terminal state", async () => {
