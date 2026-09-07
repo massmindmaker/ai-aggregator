@@ -29,6 +29,7 @@ class RecordingClient implements TestDatabaseClient {
   nonempty = false;
   wrongIdentity = false;
   port = 15432;
+  host = "127.0.0.1";
   missingHttpObject = false;
   closed = false;
   ledger: Ledger = [];
@@ -55,7 +56,9 @@ class RecordingClient implements TestDatabaseClient {
               ? "ai_aggregator_clean69_test"
               : "ai_aggregator_test",
           oid: this.target ? this.oid : "100",
-          host: "127.0.0.1",
+          host: q.text.includes("host(inet_server_addr())")
+            ? this.host.split("/")[0]
+            : this.host,
           port: this.port,
         },
       ];
@@ -384,6 +387,28 @@ describe("clean69 ownership protocol (recording clients, not native migration pr
         ok: false,
         canonicalUnchanged: false,
       });
+    },
+  );
+  it("accepts PostgreSQL inet loopback rendered with a /32 mask", async () => {
+    const s = setup();
+    s.canonical.host = "127.0.0.1/32";
+    s.target.host = "127.0.0.1/32";
+    expect(await s.run()).toMatchObject({
+      ok: true,
+      cleanup: "dropped",
+      canonicalUnchanged: true,
+    });
+  });
+  it.each(["127.0.0.2/32", "10.0.0.1/32"])(
+    "refuses unapproved server address %s before CREATE",
+    async (host) => {
+      const s = setup();
+      s.canonical.host = host;
+      expect(await s.run()).toMatchObject({
+        ok: false,
+        cleanup: "not_created",
+      });
+      noMutation(s.canonical);
     },
   );
 });

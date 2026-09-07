@@ -101,7 +101,7 @@ async function identity(
   const result = await client.query<Identity>({
     text: `SELECT current_database() AS database_name,
     (SELECT oid::text FROM pg_database WHERE datname = current_database()) AS oid,
-    inet_server_addr()::text AS host, inet_server_port() AS port`,
+    host(inet_server_addr()) AS host, inet_server_port() AS port`,
     values: [],
   });
   const row = result.rows[0];
