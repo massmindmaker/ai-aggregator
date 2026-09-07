@@ -38,6 +38,8 @@ Quote snapshot (server-derived maximum and limits) is immutable at admission; ac
 
 ### Task 1: Durable database hold and exact admitted settlement (2B.1)
 
+Status: accepted at `9493d1`; native45/45, database types, TypeScript/SQL and React review passed.
+
 **Files:**
 - Create `packages/database/migrations/0067_gateway_charge_admissions.sql` after verifying next number.
 - Create `packages/database/src/functions/gateway-charge-admission.sql` as exact function-body mirror.
@@ -62,7 +64,7 @@ aiag_cancel_undispatched_gateway_charge(_org_id uuid, _billing_request_id uuid)
 
 Table `gateway_charge_admissions` includes UUID/org/key/trace/route/model/mode identity; maximum and original held sub/PAYG; captured expiry; quote and dispatch pricing snapshots; attempt/upstream; actual/usage/outcome; constrained state and timestamps created/deadline/dispatched/outcome/settled/cancelled/reconcile_after. Add database CHECKs for valid mode/state, positive max, exact nonnegative hold sum, actual within max, lifecycle all-or-none facts. Add retry index and org/state index. Append-only `gateway_charge_admission_events` stores admission identity, event kind, exact bucket/debt movement amounts and safe metadata with unique event identity; prefer exact numeric audit columns over untyped amount JSON. Expose exact bigint schema types.
 
-- [ ] **Step 1: Add guarded RED native tests using real functions, not copied test SQL.** Reuse native harness fixtures and pg_blocking_pids barriers. Representative assertions:
+- [x] **Step 1: Add guarded RED native tests using real functions, not copied test SQL.** Reuse native harness fixtures and pg_blocking_pids barriers. Representative assertions:
 
 ```ts
 expect(afterConcurrentAdmissions.openHoldTotal).toBeLessThanOrEqual(100n);
@@ -75,8 +77,8 @@ expect(zeroOutcome.apiUsageRows).toBe(0);
 
 Cover two concurrent holds, real claim-first/admit-first waits, exact replay/conflicting org/key/mode/quote/amount, refund/debt block only for stored, funded BYOK, actual over max rollback, duplicate outcome/settle/cancel, expiry before dispatch and no cancellation after dispatch, zero cost, expired/changed subscription expiry, injected audit uniqueness conflict rolling back every balance/state mutation. Validate wrong key org and null/invalid snapshots. Exact replay works after settlement and new refund block; dispatch replay returns durable state but must never authorize a second provider call (consumer must observe one-shot transition flag).
 
-- [ ] **Step 2: Run new native tests and record the missing table/function RED.** Use the established guarded runner, no ungated DB client. Existing migrations should remain intact.
-- [ ] **Step 3: Implement additive schema/functions.** Lock org first; revalidate all immutable identity under locks. On a fresh admission verify key ownership and positive max, reject insufficient funds, then debit held parts with UPDATE guards/RETURNING, insert admission and hold audit in the same transaction. Dispatch is one-shot CAS before deadline; exact replay must expose whether the transition was performed now. Outcome is immutable, only dispatched can first record. Settlement uses the following arithmetic inside one locked transaction:
+- [x] **Step 2: Run new native tests and record the missing table/function RED.** Use the established guarded runner, no ungated DB client. Existing migrations should remain intact.
+- [x] **Step 3: Implement additive schema/functions.** Lock org first; revalidate all immutable identity under locks. On a fresh admission verify key ownership and positive max, reject insufficient funds, then debit held parts with UPDATE guards/RETURNING, insert admission and hold audit in the same transaction. Dispatch is one-shot CAS before deadline; exact replay must expose whether the transition was performed now. Outcome is immutable, only dispatched can first record. Settlement uses the following arithmetic inside one locked transaction:
 
 ```sql
 used_sub := LEAST(actual_cost, held_sub);
@@ -89,14 +91,16 @@ returned_payg := unused_payg - debt_repaid;
 ```
 
 Cancel releases all eligible hold using the same debt/expiry arithmetic, only if never dispatched. No external API, no SECURITY DEFINER, no automatic dispatched expiry release. Typed conflicts use stable SQLSTATE/messages; preserve existing P0002/P0003/P0005 meanings. Native fixtures and tests must exercise real public functions.
-- [ ] **Step 4: Verify new suite plus mandatory native baseline, database types and mirror equality.** Expected new migration total67 (prior66) and two new tables (prior96); derive assertions from manifest where existing harness does so. First apply67th and repeat no-op; if development checksum changes, use only the existing explicitly guarded disposable DB rehearsal and record refusal/fresh/no-op evidence. Do not modify historical hashes or weaken safety guards. Add meaningful exact-bigint schema assertion beyond Number.MAX_SAFE_INTEGER.
-- [ ] **Step 5: Self-review and commit exact owned files.** Report commands/results, SQL interfaces, transition return shape and remaining gateway dependency in private SDD report. No force-add private files. Mandatory TypeScript/SQL spec+quality review follows.
+- [x] **Step 4: Verify new suite plus mandatory native baseline, database types and mirror equality.** Expected new migration total67 (prior66) and two new tables (prior96); derive assertions from manifest where existing harness does so. First apply67th and repeat no-op; if development checksum changes, use only the existing explicitly guarded disposable DB rehearsal and record refusal/fresh/no-op evidence. Do not modify historical hashes or weaken safety guards. Add meaningful exact-bigint schema assertion beyond Number.MAX_SAFE_INTEGER.
+- [x] **Step 5: Self-review and commit exact owned files.** Report commands/results, SQL interfaces, transition return shape and remaining gateway dependency in private SDD report. No force-add private files. Mandatory TypeScript/SQL spec+quality review follows.
 
 ### Evidence for token bounds
 
 Checked2026-09-07: [OpenRouter parameters](https://openrouter.ai/docs/api_reference/parameters) and [Groq Chat API](https://console.groq.com/docs/api-reference) document an output-token cap within total context. This supports the conditional mathematical bound below; it does not certify every routed model or additional reasoning/tool tariffs. Admission needs an explicit reviewed adapter/model capability and trusted context metadata. A provider name or a successful usage parser alone is not that evidence. No live inference was performed.
 
 ### Task 2: Exact bounded token quote arithmetic (2B.2a)
+
+Status: accepted at `b44bab1`; focused21/21, gateway source/test types and TypeScript review passed.
 
 **Files:** Create `packages/api-gateway/src/billing/token-quote.ts` and `packages/api-gateway/src/__tests__/billing-token-quote.test.ts`. No route, resolver, config, DB or legacy pricing changes in this pure increment.
 
@@ -123,7 +127,7 @@ export function calculateByokFee(feeCredits: string): bigint;
 export function microCreditsToUsdMicroString(amount: bigint): string;
 ```
 
-- [ ] **Step1: Write focused RED tests against real exported functions.** Representative exact assertions:
+- [x] **Step1: Write focused RED tests against real exported functions.** Representative exact assertions:
 
 ```ts
 const p = { inputCentsPer1k: '0.015', outputCentsPer1k: '0.06', markup: '1.3' };
@@ -135,8 +139,8 @@ expect(microCreditsToUsdMicroString(9007199254740993n)).toBe('90071992547409930'
 ```
 
 Also test output<input branch, embedding array count factor, existing whole-cost cached-fraction discount once (prompt100/output50, Pin1/Pout2, cached50, discount0.5 =>150micro), nearest half rounds up, zero actual from valid tiny tariff, exact zero tariff/fee remains zero (caller must handle unsupported free lifecycle explicitly), huge intermediate rational arithmetic with valid final amount, overflow rejection, invalid/noncanonical decimal (sign/exponent/whitespace/empty/NaN), invalid markup<=0, discount outside[0,1], invalid/unsafe/negative token counts, cached>prompt, cap>context, inputCount0, and input immutability.
-- [ ] **Step2: Run the new file from root Vitest and record RED.** Command: `flock /tmp/ai-ecosystem-build.lock /tmp/ai-ecosystem-run aggregator bunx vitest run packages/api-gateway/src/__tests__/billing-token-quote.test.ts` (no DB use in these tests).
-- [ ] **Step3: Implement rational bigint arithmetic.** Decimal parser yields numerator/10^scale. Apply multiplication/addition exactly and round only once at final result; use ceiling for maximum and nonnegative nearest-half-up for actual, preserving legacy business formula.
+- [x] **Step2: Run the new file from root Vitest and record RED.** Command: `flock /tmp/ai-ecosystem-build.lock /tmp/ai-ecosystem-run aggregator bunx vitest run packages/api-gateway/src/__tests__/billing-token-quote.test.ts` (no DB use in these tests).
+- [x] **Step3: Implement rational bigint arithmetic.** Decimal parser yields numerator/10^scale. Apply multiplication/addition exactly and round only once at final result; use ceiling for maximum and nonnegative nearest-half-up for actual, preserving legacy business formula.
 
 ```text
 chatMaximum = ceil((C*Pin + cap*max(0,Pout-Pin))*markup)
@@ -148,8 +152,8 @@ chargedUsdMicro = actualMicroCredits*10
 ```
 
 Compatibility ruling: existing `lib/pricing.ts` applies the cached-input fraction factor to the whole input+output cost. Preserve this exact legacy formula in this increment, even though its comment can be read as input-only discount. Switching to input-only discount would increase charges for cached requests with output; any such tariff correction needs a separate versioned policy and acceptance. These functions do not attest a model/provider or validate provider evidence. The bound applies only when the later reviewed capability enforces prompt+completion<=C and completion<=cap. They never estimate tokens from bytes, silently clamp monetary values, fabricate a minimum charge, expose floating monetary results or consult mutable configuration.
-- [ ] **Step4: Verify focused tests, gateway source/test type checks and diff hygiene.** No broad unit/build or DB suite repetition for this isolated pure module. Demonstrate at least one input beyond Number.MAX_SAFE_INTEGER monetary precision and adversarial decimal boundary in tests.
-- [ ] **Step5: Self-review, commit both owned files and report privately.** Mandatory TypeScript spec+quality review; no React diff. Then proceed to lifecycle/route integration with its own capability/quote snapshot plan.
+- [x] **Step4: Verify focused tests, gateway source/test type checks and diff hygiene.** No broad unit/build or DB suite repetition for this isolated pure module. Demonstrate at least one input beyond Number.MAX_SAFE_INTEGER monetary precision and adversarial decimal boundary in tests.
+- [x] **Step5: Self-review, commit both owned files and report privately.** Mandatory TypeScript spec+quality review; no React diff. Then proceed to lifecycle/route integration with its own capability/quote snapshot plan.
 
 ### Task 3: Exact gateway wrapper for the reviewed admission functions (2B.2b-1)
 
