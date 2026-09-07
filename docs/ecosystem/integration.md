@@ -97,6 +97,12 @@ Web и TMA не хранят provider service key в браузере. Backend �
 
 Agents Market сохраняет фактическую цену каждого вызова Aggregator как свою себестоимость. Сбой одной квитанции не заменяет остальные подтверждённые суммы оценкой всего run. Собственная цена услуги агента, инструментов и runtime хранится отдельно. Provider base cost Aggregator не является себестоимостью Agents Market и не входит в целевой межпродуктовый контракт. Переход с существующих billing headers требует согласованного изменения обоих потребителей и проверок совместимости.
 
+### Вызовы инструментов агента
+
+Путь Agents Market → Aggregator должен сохранять описания client-function tools, tool_choice, assistant.tool_calls и следующие tool-result messages с их идентификаторами. Исполнение функции остаётся у Agents Market; provider-hosted поиск/код с отдельной оплатой требует другого capability и тарифа. Проверка включает полный model→tool→model цикл, точные квитанции каждого вызова, ошибки и повтор доставки результата.
+
+Локальная сверка07.09 выявила разрыв: worker отправляет tools/tool_choice, а legacy gateway chat их не передаёт адаптеру. Исправление ещё требуется. Первый подготавливаемый plain-text admission contract не означает совместимость с агентным циклом; неподдерживаемые параметры должны явно отклоняться до provider call, а не исчезать из запроса.
+
 ## Публикация из Arena
 
 `draft submission → accepted version → evaluation → eligible for publication → author consent → marketplace draft → moderation → live version`.
