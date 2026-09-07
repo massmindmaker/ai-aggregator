@@ -1,6 +1,6 @@
 # AI Aggregator: начать разработку здесь
 
-**Продолжение 08.09 — последняя принятая волна:** DB HTTP storage `a6c0513` принят независимым TS/financial review: baseline203, schema9, strict types/lint PASS. HTTP key сохраняет один billing UUID, sanitized result атомарен с quota outcome; clean69 UNVERIFIED. [Следующий B1](superpowers/plans/2026-09-08-http-storage-gateway-bridge.md) реализует typed wrappers и sole outcome seam. Ранее quota bridge `20187ecd` принят (focused230/native7); публичный route пока не активирован.
+**Продолжение 08.09 — последняя принятая волна:** DB HTTP storage `a6c0513` принят независимым TS/financial review: baseline203, schema9, strict types/lint PASS. HTTP key сохраняет один billing UUID, sanitized result атомарен с quota outcome; clean69 UNVERIFIED. [B1](superpowers/plans/2026-09-08-http-storage-gateway-bridge.md) принят в77f0148: typed wrappers и sole outcome seam,219unit/15native/types/lint и independent Approved. Следующий шаг — canonical HTTP identity, затем trusted composition/cutover. Ранее quota bridge `20187ecd` принят (focused230/native7); публичный route пока не активирован.
 
 **Чекпойнт разработки 08.09:** [принятые изменения, проверки и следующий этап](/home/bob/Projects/ai-aggregator/docs/consolidation/2026-09-08-development-checkpoint.md).
 
