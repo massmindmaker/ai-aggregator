@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Canonical repository `/home/bob/Projects/ai-aggregator`; no source-archive changes, external provider calls, production DB access, push or deployment.
-- One implementation worker and one heavy build/test under `flock /tmp/ai-ecosystem-build.lock` at a time.
+- Independent implementation workers may run in parallel across repositories, as explicitly requested by the user on 2026-09-07. Keep one owner per module and exactly one heavy build/test/index under `flock /tmp/ai-ecosystem-build.lock` at a time.
 - SQL values use prepared bindings. Financial mutations are atomic and guarded with RETURNING. New monetary BIGINT fields use exact bigint, never Drizzle number mode.
 - Historical migrations 0000–0066 and both legacy settlement functions remain unchanged. New migration number must be verified before creation.
 - Database tests use the existing dual-URL/loopback/marker guard before production imports or mutations. New suite belongs in mandatory `test:database-baseline`.
