@@ -6,11 +6,13 @@ import {
   varchar,
   jsonb,
   numeric,
+  bigint,
   index,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
 import { subscriptions } from './subscriptions';
+import { organizations } from './organizations';
 import { paymentStatusEnum } from './enums';
 
 export const payments = pgTable(
@@ -66,6 +68,35 @@ export const payments = pgTable(
     refundedAmount: numeric('refunded_amount', { precision: 12, scale: 2 }),
     refundedAt: timestamp('refunded_at', { mode: 'date' }),
     refundReason: text('refund_reason'),
+
+    // Immutable top-up grant snapshot and cumulative clawback state.
+    topupOrgId: uuid('topup_org_id').references(() => organizations.id, {
+      onDelete: 'restrict',
+    }),
+    topupPaidKopecks: bigint('topup_paid_kopecks', { mode: 'bigint' }),
+    topupGrantCredits: bigint('topup_grant_credits', { mode: 'bigint' }),
+    topupRefundedKopecks: bigint('topup_refunded_kopecks', { mode: 'bigint' })
+      .default(0n)
+      .notNull(),
+    topupClawedCredits: bigint('topup_clawed_credits', { mode: 'bigint' })
+      .default(0n)
+      .notNull(),
+
+    // One immutable provider refund request may be active per top-up.
+    refundClaimId: uuid('refund_claim_id'),
+    refundClaimKopecks: bigint('refund_claim_kopecks', { mode: 'bigint' }),
+    refundClaimedAt: timestamp('refund_claimed_at', {
+      mode: 'date',
+      withTimezone: true,
+    }),
+    refundProviderKey: varchar('refund_provider_key', { length: 255 }),
+    refundMethodRoute: varchar('refund_method_route', { length: 32 }),
+    refundMethodSource: varchar('refund_method_source', { length: 32 }),
+    refundReceiptMode: varchar('refund_receipt_mode', { length: 40 }),
+    refundDispatchedAt: timestamp('refund_dispatched_at', {
+      mode: 'date',
+      withTimezone: true,
+    }),
 
     // Timestamps
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),

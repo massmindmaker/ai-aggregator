@@ -191,6 +191,12 @@ Both active claim and debt block non-BYOK stored settlement under org lock, incl
 
 Native tests must exercise concurrent claim vs settlement, duplicate finalize, A receipt with B active, partial followed by full webhook/late finalize, full-before-dispatch, remaining cumulative amount/rounding/debt repayment and transaction rollback after audit failure. SQL tests prove locking, not only mock calls. Fresh migration application + repeat status; do not reset unrelated schemas.
 
+### Required stage 2B: durable admission before gateway/refund activation
+
+A cross-task review on 2026-09-07 established that existing preflight is a plain SELECT, provider work/SSE precedes settlement and no durable admission exists. Therefore an unconditional claim/debt guard in legacy settlement can reject already-incurred usage. The Task2 instruction above to replace legacy settlement is superseded: Task2 keeps aiag_settle_charge_credits unchanged and adds a separate org-locked non-BYOK admission guard for future atomic admission transactions. Its standalone call is not authorization and the refund routes must remain unactivated until this stage passes.
+
+Before Tasks3–5 activate the flow, implement durable server-owned billing admission separate from client X-Request-Id, org-locked pre-upstream checks, admission-aware idempotent settlement, exact shortfall debt for both refund-first and settle-first ordering, durable retry after SSE/abort and explicit no-charge/queued-media lifecycle. Current BYOK code charges a platform fee; the earlier assumption that BYOK is free is superseded. Preserve actual pricing with server-trusted billing mode and an explicit fee-admission path. Gateway/admission/refund integration shares one reviewed release boundary; no standalone deployment of a post-upstream guard. A detailed bounded implementation plan is required before dispatching this stage.
+
 ### Task 3: Confirmation snapshots and monotonic payment transitions
 
 Wire atomic grant/snapshot/debt repayment into actual Tinkoff CONFIRMED path. Only pending|authorized predecessors with no snapshot may grant; persisted amount and bank integer kopecks must agree. Duplicate and late CONFIRMED after refunded/partial_refunded must not grant or downgrade. Other nonterminal notifications use explicit predecessor policy rather than status != confirmed. Keep subscription behavior with regression tests.

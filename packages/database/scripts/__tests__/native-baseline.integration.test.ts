@@ -15,9 +15,7 @@ import {
   type TestDatabaseClient,
 } from "../test-db-guard";
 
-const RUN_INTEGRATION =
-  process.env.AIAG_TEST_DATABASE === "1" &&
-  process.env.RUN_NATIVE_DB_INTEGRATION === "1";
+const RUN_INTEGRATION = process.env.RUN_NATIVE_DB_INTEGRATION === "1";
 
 if (RUN_INTEGRATION) {
   assertTestDatabaseEnvironment(process.env);
@@ -48,11 +46,17 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
           `,
           values: [],
         });
-        expect(before.rows).toHaveLength(65);
+        expect(before.rows).toHaveLength(migrations.length);
+        expect(
+          before.rows.some(
+            ({ version }) =>
+              version === "migrations/0066_topup_refund_clawback.sql",
+          ),
+        ).toBe(true);
 
         const rerun = await runNativeMigrations(guardedClient, migrations);
         expect(rerun.applied).toEqual([]);
-        expect(rerun.skipped).toHaveLength(65);
+        expect(rerun.skipped).toHaveLength(migrations.length);
 
         const after = await guardedClient.query<{
           version: string;
@@ -117,6 +121,58 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       "aiag_settle_charge_credits",
     );
     expect(Number(result.rows[0].table_count)).toBeGreaterThan(50);
+  });
+
+  it("contains the guarded top-up refund schema and settlement function", async () => {
+    const result = await client.query<{
+      refund_debt_credits: string;
+      refund_claim_id: string;
+      refund_provider_key: string;
+      refund_dispatched_at: string;
+      active_claim_index: string | null;
+      refund_receipt_index: string | null;
+      settlement_definition: string;
+    }>({
+      text: `
+        SELECT
+          (SELECT data_type
+             FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'organizations'
+              AND column_name = 'refund_debt_credits') AS refund_debt_credits,
+          (SELECT data_type
+             FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'payments'
+              AND column_name = 'refund_claim_id') AS refund_claim_id,
+          (SELECT data_type
+             FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'payments'
+              AND column_name = 'refund_provider_key') AS refund_provider_key,
+          (SELECT data_type
+             FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'payments'
+              AND column_name = 'refund_dispatched_at') AS refund_dispatched_at,
+          to_regclass('public.payments_active_topup_refund_claim_idx')::text AS active_claim_index,
+          to_regclass('public.gateway_transactions_refund_uniq')::text AS refund_receipt_index,
+          pg_get_functiondef(
+            'public.aiag_settle_charge_credits(uuid,character varying,bigint,jsonb)'::regprocedure
+          ) AS settlement_definition
+      `,
+      values: [],
+    });
+
+    expect(result.rows[0]).toMatchObject({
+      refund_debt_credits: "bigint",
+      refund_claim_id: "uuid",
+      refund_provider_key: "character varying",
+      refund_dispatched_at: "timestamp with time zone",
+      active_claim_index: "payments_active_topup_refund_claim_idx",
+      refund_receipt_index: "gateway_transactions_refund_uniq",
+    });
+    expect(result.rows[0].settlement_definition).toContain("REFUND_BLOCKED");
   });
 
   it("keeps both legacy actor_id and compatible actor_email audit indexes", async () => {
