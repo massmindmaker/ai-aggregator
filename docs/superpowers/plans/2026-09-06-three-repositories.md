@@ -42,4 +42,6 @@ Produces: 14 integration scenarios, 108 checks per product, separate Web/TMA acc
 
 ## Чекпойнт 07.09 перед паузой
 
+Последний исследовательский scope: [18пакетов по продукту, Hermes/Codex, UX, архитектуре и выпуску](../../research/2026-09-07-research-program.md). Три production continuation plans ссылаются на нужные R-IDs; результаты должны менять decision/contract/acceptance, а не оставаться отдельными обзорами. Документ не означает выполнение всех исследований.
+
 [Проверенные результаты, открытые reviews и точка продолжения](../../consolidation/2026-09-07-pause-checkpoint.md), [функциональная оценка](../../ecosystem/2026-09-07-functional-checkpoint.md). Последнее уточнение AM: UI/UX research полной Web-версии TMA без мокапов, затем реализация согласованных сценариев; исследование начато. Ничего из этого не закрывает выпуск всех трёх продуктов.

@@ -1,5 +1,7 @@
 # AI Aggregator: начать разработку здесь
 
+Исследовательский вход перед новой функциональной волной: [программа из18пакетов](research/2026-09-07-research-program.md). Последний запрос пользователя добавил полный Hermes/product/competitor/UX/architecture research и обязательную связь выводов с реализацией. Реестр не заменяет текущий кодовый checkpoint и не блокирует уже определённые узкие исправления.
+
 Канонический root: `/home/bob/Projects/ai-aggregator`; ветка `feat/three-projects-completion`. Сначала [AGENTS.md](../AGENTS.md), [рабочая карта](consolidation/DEVELOPMENT-WORKFLOW.md) и [границы продуктов](consolidation/ACTIVE-PROJECTS.md).
 
 ## Текущий этап — 7 сентября
