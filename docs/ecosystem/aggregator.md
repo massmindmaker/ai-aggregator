@@ -2,6 +2,15 @@
 
 Дата: 06.09.2026. Статус: план, текущая готовность по новой шкале не аттестована.
 
+
+## Актуализация 07.09: бизнес-цикл и платежи
+
+Рабочая очередь до выпуска: [AG-P1…P5](../superpowers/plans/2026-09-07-production-continuation.md). Она сохраняет AG-W1…W6 и принятый [charge admission plan](../superpowers/plans/2026-09-07-gateway-charge-admission.md), затем закрывает остальные billable routes, rich `/v1/catalog`, авторский API/earnings, TON alongside RUB и эксплуатацию. Сначала полезный вызов конкретной версии с понятной ценой, разрешениями и квитанцией; API adapters выбираются по сценарию.
+
+[TON-план](../superpowers/plans/2026-09-07-ton-payments.md) добавляет native/allowlisted stablecoin в сети TON, exact quotes/invoices/finality/reconcile/refunds. Старые банковские payments и единицы учёта сохраняются. x402 не обязательный checkout core, agent wallet не merchant treasury. Полная [карта HUB-01…07 и evidence passport](payment-and-evidence-design.md) связывает AG с Arena/AM без общей БД.
+
+AG-03/04 дополнительно требуют RUB regression и TON payment gates; AG-01/05/06/12 — достоверные публичные claims и versioned evidence; AG-11 — existing VPS release parity, backup/reconcile. Нельзя объявить108/108, игнорируя новые обязательные crypto gates.
+
 ## Граница продукта
 
 Маркетплейс моделей и исполняемых алгоритмов, включая опубликованные API решений агентов/RAG. Владеет реестром коммерческих версий, вызовами, ценами, денежным журналом и авторскими начислениями. Долгоживущие агентские сессии принадлежат Agents Market, конкурсные рейтинги — Arena.

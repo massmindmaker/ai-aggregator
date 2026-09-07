@@ -140,3 +140,19 @@ Agents Market сохраняет фактическую цену каждого 
 - Контракты: небольшой версионированный пакет схем и примеров, подключаемый потребителями. Сервисные данные и секреты в общий пакет не входят.
 
 Репозитории разделены с сохранением источников и истории; production не менялся. Следующие границы — версионированный HTTP-каталог, квитанции вызовов, собственная schema Agents Market и экспорт evidence Arena. Общие схемы получают явную версию и fixtures; относительные импорты исходников из соседнего репозитория запрещены.
+
+## Дополнительные gates 07.09: деньги и evidence
+
+Исходные INT-01…14 не перенумеровывать. Следующие обязательные сценарии ведутся отдельными evidence записями в `docs/product/acceptance/integration-payments.md`; из факта добавления этого списка не следует PASS.
+
+| ID | Сценарий | Required evidence |
+|---|---|---|
+| PAY-INT-01 | AG RUB и TON invoices независимо дают доступный gateway credit | Один event→одна проводка; old RUB regression; exact amounts |
+| PAY-INT-02 | AM Web TON→AM run→AG inference purchase | Два merchant ledgers, связанный request/receipt без общей DB |
+| PAY-INT-03 | TMA digital checkout Stars, wallet flow TON Connect отдельно | Подменённый channel/old route не обходят policy; duplicate successful_payment один grant |
+| PAY-INT-04 | Старые pending TON, поздняя и неверная оплата | Ни потерянных средств, ни автоматической выдачи; operator review/refund |
+| PAY-INT-05 | Arena funding→prize obligation→payout/refund | Coverage до publication; immutable split; unknown broadcast не resend |
+| PAY-INT-06 | Restart во время chain/provider success и DB commit | Reconciliation по сохранённой identity; один effect; cursor overlap безопасен |
+| EVD-INT-01 | Arena version→AG/AM draft→run receipt→новый evaluation dataset | digest/rights/consent/redaction, stale evidence не наследуется новой версией |
+
+[Спецификация, asset identity и finality](payment-and-evidence-design.md). Fixtures/native testnet/production evidence различаются; ни один новый payment rail не может быть выпущен по старым14тестам без этой проверки.

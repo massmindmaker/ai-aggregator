@@ -2,6 +2,21 @@
 
 Дата: 6 сентября 2026. Статус: проект программы разработки, основанный на локальном коде и документах. Это не акт приёмки production.
 
+
+## Обновление программы 07.09.2026
+
+Продолжаются **все три** канонических репозитория; Agents Market имеет отдельные Web и TMA. Исследования пересмотрены в [публичном синтезе](../research/2026-09-07-ai-hub-reviewed-synthesis.md), проектные контракты — [payment/evidence design](payment-and-evidence-design.md). Новая последовательность имеет приоритет над календарными оценками первоначального аудита; принятые granular tasks сохраняются.
+
+| Продукт | Следующая программа до production | Оплата |
+|---|---|---|
+| Aggregator | [Продолжение](../superpowers/plans/2026-09-07-production-continuation.md) | Сохранить RUB, добавить [TON native/allowlisted stablecoin](../superpowers/plans/2026-09-07-ton-payments.md) |
+| Arena | [Продолжение](/home/bob/Projects/aiarena/docs/superpowers/plans/2026-09-07-production-continuation.md) | [TON funding/prize/refund](/home/bob/Projects/aiarena/docs/superpowers/plans/2026-09-07-ton-prize-ledger.md) |
+| Agents Market Web + TMA | [Продолжение](/home/bob/Projects/agents-market/docs/superpowers/plans/2026-09-07-production-continuation.md) | [TON Web + Stars TMA](/home/bob/Projects/agents-market/docs/superpowers/plans/2026-09-07-ton-and-stars-payments.md), blockchain wallet flows отдельно |
+
+Допущение: «TON crypto» означает сеть TON с native активом и allowlisted stablecoin, не удаление RUB или обход обязательных Stars для цифровых покупок внутри Telegram. Самостоятельный домен AG конфигурируется в том же repo/на существующем VPS; AM сохраняет существующий deployment. Успешный HTTP ответ старого deployment не доказывает release parity после split. Публичные тарифы, SLA, author share и сроки модерации требуют подтверждения действующей политикой/реализацией перед выпуском.
+
+Обязательные пользовательские пути HUB-01…07 и дополнительные денежные gates заданы в design; исходные108-матрицы и14интеграций сохраняют IDs. Новая crypto/Stars приёмка учитывается дополнительно, не подменяется старой суммой. Текущие статусы/commits остаются в [рабочем входе](../DEVELOPMENT-ENTRYPOINT.md), этот документ не аттестует PASS.
+
 ## Решение
 
 Три самостоятельных продукта образуют общий цикл: **разработка → доказательство качества → продажа → применение → новая оценка**.
@@ -116,3 +131,7 @@ O нельзя засчитать без I и T. Частичный интерф
 | Релиз | Все обязательные I/T/O и INT PASS; фиксированы версии, миграции, feature flags, возврат к предыдущему релизу и ответственный за поддержку |
 
 Нагрузочные данные создавать на отдельной БД и контролируемых adapters; боевые платные upstream проверки выполняются только в согласованном бюджете. Метрики релиза не подменяют продуктовую цель: marketplace обязан довести независимого автора до продажи и дохода, Arena — до достоверной оценки, Agents Market — до полезного результата и понятной стоимости.
+
+## Последнее уточнение хостинга AM — 07.09
+
+[Рекомендация и gate готовности AM Web к preview](/home/bob/Projects/agents-market/docs/product/hosting-decision.md): существующие TMA/API/worker/DB/Redis на VPS; отдельный `apps/web` — кандидат Vercel после versioned API/native Web auth/preview isolation. Текущий этап готовит проверяемый вариант локально, не создаёт project/deploy и не переносит работающий сервис. Эта рекомендация уточняет предыдущую формулировку сохранения deployment; окончательный внешний выпуск требует явного решения владельца.
