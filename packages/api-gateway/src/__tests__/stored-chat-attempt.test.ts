@@ -789,3 +789,116 @@ describe('stored attempt v2 SID boundary', () => {
     },
   );
 });
+
+describe('trusted HTTP outcome seam', () => {
+  it('captures the sole custom writer and passes detached response after evidence', async () => {
+    const f = fixture();
+    const persistOutcome = vi.fn(
+      async (
+        a: Parameters<
+          StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']
+        >[0],
+      ) =>
+        Object.freeze({
+          ...a.admission,
+          state: 'outcome_recorded' as const,
+          didTransition: true,
+          actualCostCredits: a.actualCostCredits,
+          usageSnapshot: a.usageSnapshot,
+          outcomeKind: a.outcomeKind,
+          outcomeRecordedAt: time,
+        }),
+    );
+    const deps = { ...f.deps, persistOutcome };
+    const handle = createStoredChatAttempt(f.input, deps);
+    if (handle.status !== 'ready') throw Error(handle.status);
+    const first = handle.run();
+    expect(handle.run()).toBe(first);
+    expect(await first).toMatchObject({ kind: 'settled_success' });
+    expect(persistOutcome).toHaveBeenCalledTimes(1);
+    expect(persistOutcome.mock.calls[0]![0]).toMatchObject({
+      response: f.output.response,
+      outcomeKind: 'success',
+    });
+    expect(f.deps.recordGatewayChargeOutcomeV2).not.toHaveBeenCalled();
+    expect(f.execute).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('custom persistence reconciliation', () => {
+  it.each(['throw', 'wrong-cost', 'wrong-attempt', 'wrong-usage'] as const)(
+    'never falls back or settles after %s',
+    async (reason) => {
+      const f = fixture();
+      const persistOutcome: NonNullable<
+        StoredChatAttemptDependencies['persistOutcome']
+      > = vi.fn(async (a) => {
+        if (reason === 'throw') throw Error('lost acknowledgement');
+        return Object.freeze({
+          ...a.admission,
+          state: 'outcome_recorded',
+          didTransition: true,
+          actualCostCredits:
+            reason === 'wrong-cost' ? 999n : a.actualCostCredits,
+          attemptId:
+            reason === 'wrong-attempt' ? uuid(999) : a.admission.attemptId,
+          usageSnapshot: reason === 'wrong-usage' ? {} : a.usageSnapshot,
+          outcomeKind: a.outcomeKind,
+        });
+      });
+      const handle = createStoredChatAttempt(f.input, {
+        ...f.deps,
+        persistOutcome,
+      });
+      if (handle.status !== 'ready') throw Error(handle.status);
+      expect(await handle.run()).toMatchObject({
+        kind: 'reconciliation_required',
+        stage: 'outcome',
+        lastConfirmedState: 'dispatched',
+      });
+      expect(persistOutcome).toHaveBeenCalledTimes(1);
+      expect(f.execute).toHaveBeenCalledTimes(1);
+      expect(f.deps.recordGatewayChargeOutcomeV2).not.toHaveBeenCalled();
+      expect(f.deps.settleAdmittedGatewayCharge).not.toHaveBeenCalled();
+    },
+  );
+  it('captures writer before awaits and persists frozen response after post-dispatch abort', async () => {
+    const f = fixture(),
+      controller = new AbortController();
+    f.input.signal = controller.signal;
+    f.execute.mockImplementation(async () => {
+      controller.abort();
+      return f.output;
+    });
+    const persistOutcome = vi.fn<
+      Parameters<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>,
+      ReturnType<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>
+    >(async (a) => {
+      expect(Object.isFrozen(a)).toBe(true);
+      expect(Object.isFrozen(a.response.choices[0]!.message)).toBe(true);
+      expect(a.response).not.toBe(f.output.response);
+      expect(Object.isFrozen(a.usageSnapshot)).toBe(true);
+      return Object.freeze({
+        ...a.admission,
+        state: 'outcome_recorded',
+        didTransition: true,
+        actualCostCredits: a.actualCostCredits,
+        usageSnapshot: a.usageSnapshot,
+        outcomeKind: a.outcomeKind,
+      });
+    });
+    const deps = { ...f.deps, persistOutcome };
+    const handle = createStoredChatAttempt(f.input, deps);
+    if (handle.status !== 'ready') throw Error(handle.status);
+    deps.persistOutcome = vi.fn<
+      Parameters<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>,
+      ReturnType<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>
+    >(async () => {
+      throw Error('replacement');
+    });
+    expect(await handle.run()).toMatchObject({ kind: 'settled_success' });
+    expect(persistOutcome).toHaveBeenCalledTimes(1);
+    expect(deps.persistOutcome).not.toHaveBeenCalled();
+    expect(f.deps.recordGatewayChargeOutcomeV2).not.toHaveBeenCalled();
+  });
+});

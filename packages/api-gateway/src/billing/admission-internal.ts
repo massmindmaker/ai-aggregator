@@ -387,11 +387,7 @@ export async function admitGatewayChargeInternal(
   return result;
 }
 
-export async function recordGatewayChargeOutcomeInternal(
-  args: RecordGatewayChargeOutcomeArgs,
-  client: SqlClient,
-  quota = false,
-): Promise<GatewayChargeAdmissionResult> {
+export function captureGatewayOutcome(args: RecordGatewayChargeOutcomeArgs) {
   if (!args || typeof args !== "object") unavailable();
   const before = requireParsedAnchor(args.admission);
   if (!["dispatched", "outcome_recorded", "settled"].includes(before.state))
@@ -415,6 +411,43 @@ export async function recordGatewayChargeOutcomeInternal(
   )
     unavailable();
 
+  return Object.freeze({
+    before,
+    actualCostCredits,
+    usageSnapshot,
+    outcomeKind,
+  });
+}
+
+export function assertGatewayOutcome(
+  captured: ReturnType<typeof captureGatewayOutcome>,
+  result: GatewayChargeAdmissionResult,
+): void {
+  const { before, actualCostCredits, usageSnapshot, outcomeKind } = captured;
+  assertPriorFacts(before, result);
+  if (
+    result.actualCostCredits !== actualCostCredits ||
+    result.outcomeKind !== outcomeKind ||
+    result.usageSnapshot === null ||
+    !admissionJsonObjectsEqual(result.usageSnapshot, usageSnapshot)
+  )
+    unavailable();
+  if (
+    result.didTransition
+      ? before.state !== "dispatched" || result.state !== "outcome_recorded"
+      : !["outcome_recorded", "settled"].includes(result.state)
+  )
+    unavailable();
+}
+
+export async function recordGatewayChargeOutcomeInternal(
+  args: RecordGatewayChargeOutcomeArgs,
+  client: SqlClient,
+  quota = false,
+): Promise<GatewayChargeAdmissionResult> {
+  const captured = captureGatewayOutcome(args);
+  const { before, actualCostCredits, usageSnapshot, outcomeKind } = captured;
+
   const functionCall = quota
     ? client<postgres.Row[]>`
     SELECT * FROM aiag_record_gateway_charge_outcome_v2(
@@ -435,20 +468,7 @@ export async function recordGatewayChargeOutcomeInternal(
     )
   `;
   const result = await queryAdmission(client, "outcome", functionCall);
-  assertPriorFacts(before, result);
-  if (
-    result.actualCostCredits !== actualCostCredits ||
-    result.outcomeKind !== outcomeKind ||
-    result.usageSnapshot === null ||
-    !admissionJsonObjectsEqual(result.usageSnapshot, usageSnapshot)
-  )
-    unavailable();
-  if (
-    result.didTransition
-      ? before.state !== "dispatched" || result.state !== "outcome_recorded"
-      : !["outcome_recorded", "settled"].includes(result.state)
-  )
-    unavailable();
+  assertGatewayOutcome(captured, result);
   return result;
 }
 

@@ -1,4 +1,8 @@
 import {
+  parseStoredHttpChatResponse,
+  type StoredHttpChatResponse,
+} from './http-storage-result';
+import {
   admitGatewayChargeV2,
   recordGatewayChargeOutcomeV2,
   type AdmitGatewayChargeV2Args,
@@ -58,6 +62,16 @@ export type StoredChatAttemptDependencies = {
   admitGatewayChargeV2: typeof admitGatewayChargeV2;
   markGatewayChargeDispatched: typeof markGatewayChargeDispatched;
   recordGatewayChargeOutcomeV2: typeof recordGatewayChargeOutcomeV2;
+  /** Sole trusted writer when supplied; never from request body, never falls back. */
+  persistOutcome?: (
+    args: Readonly<{
+      admission: GatewayChargeAdmissionResult;
+      actualCostCredits: bigint;
+      usageSnapshot: import('./admission-result').JsonObject;
+      outcomeKind: 'success';
+      response: StoredHttpChatResponse;
+    }>,
+  ) => Promise<GatewayChargeAdmissionResult>;
   settleAdmittedGatewayCharge: typeof settleAdmittedGatewayCharge;
   cancelUndispatchedGatewayCharge: typeof cancelUndispatchedGatewayCharge;
 };
@@ -99,6 +113,7 @@ export function createStoredChatAttempt(
     cancelUndispatchedGatewayCharge,
     ...dependencies,
   });
+  const persistOutcome = deps.persistOutcome;
   const signal = args.signal;
   const mechanics = new Map<string, UpstreamAdapter | null>();
   // The quote sees only a frozen facade, bound to the original mechanics receiver/function.
@@ -326,12 +341,22 @@ export function createStoredChatAttempt(
       admissionJsonObjectsEqual(a.usageSnapshot, evidence.usageSnapshot);
     try {
       const outcome = confirmed(
-        await deps.recordGatewayChargeOutcomeV2({
-          admission,
-          actualCostCredits: evidence.actualCostCredits,
-          usageSnapshot: evidence.usageSnapshot,
-          outcomeKind: 'success',
-        }),
+        await (persistOutcome
+          ? persistOutcome(
+              Object.freeze({
+                admission,
+                actualCostCredits: evidence.actualCostCredits,
+                usageSnapshot: evidence.usageSnapshot,
+                outcomeKind: 'success',
+                response: parseStoredHttpChatResponse(evidence.response),
+              }),
+            )
+          : deps.recordGatewayChargeOutcomeV2({
+              admission,
+              actualCostCredits: evidence.actualCostCredits,
+              usageSnapshot: evidence.usageSnapshot,
+              outcomeKind: 'success',
+            })),
       );
       if (
         !['outcome_recorded', 'settled'].includes(outcome.state) ||
