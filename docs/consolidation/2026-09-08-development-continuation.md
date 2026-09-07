@@ -4,13 +4,13 @@
 
 | Проект | Принято локально | Проверки | Дальше |
 |---|---|---|---|
-| AI Aggregator | Quota/executor bridge20187ec, включая исправление JSONB binding реального postgres.js | focused230, native7, strict types/lint; независимое TS/financial Approved | HTTP mapping/result storage gate A реализуется; B1 wrappers/seam проектируется; public route и recovery открыты |
+| AI Aggregator | Quota/executor bridge20187ec, включая исправление JSONB binding реального postgres.js | focused230, native7, strict types/lint; независимое TS/financial Approved | HTTP storage gate A a6c0513 принят (203native/9schema/types/lint, independent Approved); B1 wrappers/seam реализуется; public route и recovery открыты |
 | AI Arena | Immutable participation policy1de43e7 и review fixes636866f | full12 native и52unit на первом коде; послеfix свежий PP01–PP06+types/lint; независимое повторное Approved | Private immutable versions, затем sandboxed evaluator; не подменять срок сдачи сроком регистрации |
 | Agents Market | Run terminal CAS9e24aff и lint setupff466d0: failed/completed не перезаписываются, payer из persisted run | native37, worker47, types/lint; независимое TS/financial Approved | Authoritative receipt, reservation/recovery; полноценный useful-run Web/TMA |
 
 ## Границы приёмки
 
-Публичный Aggregator ещё не переведён на новый admission. Новая версия хранилища требует отдельного code review; clean69 не подтверждён: существующий guarded helper поддерживает лишь одну фиксированную populated test DB и не имеет reset/rehearsal команды. Rerun не считается чистой установкой. Arena policy не реализует submissions/evaluator/prizes. AM CAS не является резервированием средств или восстановлением неизвестного выполнения.
+Публичный Aggregator ещё не переведён на новый admission. Code review нового хранилища завершён; clean69 не подтверждён: существующий guarded helper поддерживает лишь одну фиксированную populated test DB и не имеет reset/rehearsal команды. Rerun не считается чистой установкой. Arena policy не реализует submissions/evaluator/prizes. AM CAS не является резервированием средств или восстановлением неизвестного выполнения.
 
 Прежние F-срезы43/22/39 из108 не пересчитывались. Выпускные I/T/O, RUB/TON, mainnet, публичные маршруты, восстановление и сквозная пользовательская приёмка остаются самостоятельными критериями. Production migrations/deploy/push/платные провайдеры не выполнялись.
 

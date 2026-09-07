@@ -1,6 +1,6 @@
 # AI Aggregator: начать разработку здесь
 
-**Продолжение 08.09 — последняя принятая волна:** Bridge к quota v2 принят: `20187ecd`, independent TS/financial review Approved, focused230/native7, types/lint PASS. Исправлена двойная JSON-сериализация actual postgres.js binding. Typed wrapper и unused Task5 теперь связаны; следующий gate — durable HTTP idempotency/result persistence и публичный route. Реальной публичной активации ещё нет.
+**Продолжение 08.09 — последняя принятая волна:** DB HTTP storage `a6c0513` принят независимым TS/financial review: baseline203, schema9, strict types/lint PASS. HTTP key сохраняет один billing UUID, sanitized result атомарен с quota outcome; clean69 UNVERIFIED. [Следующий B1](superpowers/plans/2026-09-08-http-storage-gateway-bridge.md) реализует typed wrappers и sole outcome seam. Ранее quota bridge `20187ecd` принят (focused230/native7); публичный route пока не активирован.
 
 **Чекпойнт разработки 08.09:** [принятые изменения, проверки и следующий этап](/home/bob/Projects/ai-aggregator/docs/consolidation/2026-09-08-development-checkpoint.md).
 
