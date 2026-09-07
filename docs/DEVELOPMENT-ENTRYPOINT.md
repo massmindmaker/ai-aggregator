@@ -4,7 +4,7 @@
 
 ## Текущий этап — 7 сентября
 
-Последний принятый gateway code — admission wrapper `1c25d0f`: 65 focused tests, source/test types и review. Wrapper ещё не активирован в routes/executor. Сейчас отдельный исполнитель делает Task4 [gateway admission plan](superpowers/plans/2026-09-07-gateway-charge-admission.md): проверенный provider profile, точный resolver, immutable quote и неактивный admitted transport. Квоты, usage receipts/reconciliation, tool calling и полный route/refund cutover остаются впереди.
+Последний принятый gateway code — admission wrapper `1c25d0f`: 65 focused tests, source/test types и review. Wrapper ещё не активирован в routes/executor. Task4 [gateway admission plan](superpowers/plans/2026-09-07-gateway-charge-admission.md) реализована в `97146797`: проверенный provider profile, точный resolver, immutable quote и неактивный admitted transport. 93 сценария проверены в основном и исправленном focused прогонах; source/test types PASS. Независимое финансовое review ещё не выполнено: его обязательный ESLint остановился из-за отсутствующей package configuration, которую исправляет отдельный tooling worker. Квоты, usage receipts/reconciliation, tool calling и полный route/refund cutover остаются впереди.
 
 ## Продуктовая программа
 
