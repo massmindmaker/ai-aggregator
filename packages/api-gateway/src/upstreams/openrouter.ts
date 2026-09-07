@@ -13,8 +13,12 @@ import type {
   ChatResponse,
   EmbeddingsRequest,
   EmbeddingsResponse,
+  AdmittedChatMechanics,
+  AdmittedChatRequest,
 } from './interface';
 import { fetchUpstream } from './fetch-upstream';
+import { z } from 'zod';
+import { findReviewedChatProfile } from '../billing/reviewed-token-profiles';
 import { logger } from '../lib/logger';
 import { upstreamHttpError } from '../lib/client-errors';
 
@@ -26,7 +30,79 @@ function selectKey(byok?: string): string | undefined {
   return byok || process.env.OPENROUTER_API_KEY;
 }
 
+export class AdmittedChatError extends Error {
+  constructor(readonly code: 'INVALID_ADMITTED_REQUEST' | 'INVALID_ADMITTED_RESPONSE') {
+    super(code === 'INVALID_ADMITTED_REQUEST' ? 'Invalid admitted chat request' : 'Invalid admitted chat response');
+    this.name = 'AdmittedChatError';
+  }
+}
+const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const admittedRequest = z.object({
+  modelId: z.literal('openai/gpt-4o-mini'),
+  messages: z.array(z.object({ role: z.enum(['system', 'user', 'assistant']), content: z.string() }).strict()).min(1),
+  maxTokens: count.positive().max(16384),
+  endpointPolicy: z.object({ only: z.tuple([z.literal('openai')]), allowFallbacks: z.literal(false), requireParameters: z.literal(true) }).strict(),
+  byokKey: z.string().optional(),
+  egressProxyUrl: z.string().optional(),
+}).strict();
+const admittedResponse = z.object({
+  id: z.string().min(1).max(256).regex(/^[A-Za-z0-9_-]+$/),
+  object: z.literal('chat.completion'),
+  created: count,
+  model: z.string().min(1).max(256).regex(/^[A-Za-z0-9_./:@+-]+$/),
+  choices: z.array(z.object({
+    index: z.literal(0),
+    message: z.object({ role: z.literal('assistant'), content: z.string().nullable(), tool_calls: z.array(z.never()).length(0).nullable().optional(), function_call: z.null().optional() }),
+    finish_reason: z.enum(['stop', 'length', 'content_filter']),
+  })).length(1),
+  usage: z.object({
+    prompt_tokens: count, completion_tokens: count, total_tokens: count,
+    prompt_tokens_details: z.object({ cached_tokens: count.optional() }).optional(),
+  }).refine(u => Number.isSafeInteger(u.prompt_tokens + u.completion_tokens)
+    && u.total_tokens === u.prompt_tokens + u.completion_tokens
+    && (u.prompt_tokens_details?.cached_tokens ?? 0) <= u.prompt_tokens),
+});
+
+const admittedChat: AdmittedChatMechanics = Object.freeze({
+  contract: 'openrouter-pinned-provider-chat-v1',
+  async execute(input: AdmittedChatRequest) {
+    // Parse a detached body before the first await. Caller mutation cannot change dispatch.
+    const parsed = admittedRequest.safeParse(input);
+    if (!parsed.success) throw new AdmittedChatError('INVALID_ADMITTED_REQUEST');
+    const req = parsed.data;
+    const profile = findReviewedChatProfile({ modelSlug: req.modelId, modelType: 'chat', upstreamId: 'openrouter', upstreamModelId: req.modelId, adapterKey: 'openrouter' });
+    if (!profile || profile.adapterContract !== 'openrouter-pinned-provider-chat-v1' || req.maxTokens > Math.min(profile.contextWindowTokens, profile.maxOutputTokens)) {
+      throw new AdmittedChatError('INVALID_ADMITTED_REQUEST');
+    }
+    const apiKey = selectKey(req.byokKey);
+    if (!apiKey) throw new Error('model provider not configured');
+    const headers: Record<string, string> = { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' };
+    if (process.env.OPENROUTER_APP_URL) headers['http-referer'] = process.env.OPENROUTER_APP_URL;
+    if (process.env.OPENROUTER_APP_NAME) headers['x-title'] = process.env.OPENROUTER_APP_NAME;
+    const res = await fetchUpstream(`${OPENROUTER_BASE}/chat/completions`, {
+      method: 'POST', headers, allowlist: OPENROUTER_ALLOWLIST,
+      body: JSON.stringify({ model: profile.upstreamModelId, messages: req.messages, stream: false, max_tokens: req.maxTokens,
+        provider: { only: profile.endpointPolicy.only, allow_fallbacks: profile.endpointPolicy.allowFallbacks, require_parameters: profile.endpointPolicy.requireParameters } }),
+    }, req.egressProxyUrl);
+    if (!res.ok) throw upstreamHttpError(res.status);
+    let raw: unknown;
+    try { raw = await res.json(); } catch { throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE'); }
+    const validated = admittedResponse.safeParse(raw);
+    if (!validated.success) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+    const data = validated.data;
+    const usage = Object.freeze({ promptTokens: data.usage.prompt_tokens, completionTokens: data.usage.completion_tokens,
+      totalTokens: data.usage.total_tokens, cachedInputTokens: data.usage.prompt_tokens_details?.cached_tokens ?? 0 });
+    // Construct a positive allowlist DTO; no provider metadata, costs or reasoning escape.
+    return { response: {
+      id: data.id, object: data.object, created: data.created, model: data.model,
+      choices: data.choices.map(c => ({ index: c.index, message: { role: c.message.role, content: c.message.content }, finish_reason: c.finish_reason })),
+      usage: { prompt_tokens: usage.promptTokens, completion_tokens: usage.completionTokens, total_tokens: usage.totalTokens },
+    }, usage };
+  },
+});
+
 export const openRouterUpstream: UpstreamAdapter = {
+  admittedChat,
   async chat(req: ChatRequest): Promise<ChatResponse> {
     const apiKey = selectKey(req.byokKey);
     if (!apiKey) {

@@ -14,6 +14,8 @@ const schema = z.object({
   CBR_URL: z.string().default('https://www.cbr.ru/scripts/XML_daily.asp'),
   CBR_FALLBACK_URL: z.string().optional(),
   CBR_RATE_SPREAD_PCT: z.coerce.number().default(2),
+  // Applied only when the client omits max_tokens.
+  GATEWAY_DEFAULT_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).default(4096),
   // Pricing
   DEFAULT_MARKUP: z.coerce.number().default(1.25),
   BATCH_DISCOUNT: z.coerce.number().default(0.5),

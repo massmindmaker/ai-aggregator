@@ -10,6 +10,8 @@
  *   allowed_providers / blocked_providers filter upfront
  */
 import { errors } from '../lib/errors';
+import { quoteChatMaximum, type TokenPrices } from '../billing/token-quote';
+import type { ReviewedChatProfile } from '../billing/reviewed-token-profiles';
 
 export type Upstream = {
   id: string;
@@ -22,8 +24,23 @@ export type Upstream = {
   ru_residency: boolean;
 };
 
+export type CandidateBillingFacts = Readonly<{ modelUpstreamId: string; prices: TokenPrices }>;
+
+/** Validate exact DB text without passing monetary authority through Number. */
+export function parseCandidateBillingFacts(value: unknown): CandidateBillingFacts | null {
+  if (!value || typeof value !== 'object') return null;
+  const { modelUpstreamId, prices } = value as Partial<CandidateBillingFacts>;
+  if (typeof modelUpstreamId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(modelUpstreamId) || !prices || typeof prices !== 'object') return null;
+  try {
+    quoteChatMaximum(prices, 1, 1);
+    return Object.freeze({ modelUpstreamId, prices: Object.freeze({ inputCentsPer1k: prices.inputCentsPer1k, outputCentsPer1k: prices.outputCentsPer1k, markup: prices.markup }) });
+  } catch { return null; }
+}
+
 // FIX H7: type used throughout gateway — enriches Upstream with resolver data.
 export type UpstreamCandidate = Upstream & {
+  billing?: CandidateBillingFacts;
+  reviewedChatProfile?: ReviewedChatProfile;
   upstream_id: string;
   upstream_model_id: string;
   markup: number;

@@ -1,3 +1,5 @@
+import type { ReviewedChatProfile } from '../billing/reviewed-token-profiles';
+
 /**
  * Upstream adapter interface (abstract). Plan 05 implements concrete
  * adapters (OpenRouter, Yandex, Fal, Together, etc.).
@@ -99,7 +101,32 @@ export type MediaJob = {
   error?: string;
 };
 
+/** Separate public DTO permits legitimate null text without weakening legacy responses. */
+export type AdmittedChatResponse = Omit<ChatResponse, 'choices'> & {
+  choices: Array<{
+    index: number;
+    message: { role: 'assistant'; content: string | null };
+    finish_reason: 'stop' | 'length' | 'content_filter';
+  }>;
+};
+export type AdmittedChatUsage = Readonly<{
+  promptTokens: number; completionTokens: number; totalTokens: number; cachedInputTokens: number;
+}>;
+export type AdmittedChatRequest = Readonly<{
+  modelId: string;
+  messages: readonly Readonly<{ role: string; content: unknown }>[];
+  maxTokens: number;
+  endpointPolicy: ReviewedChatProfile['endpointPolicy'];
+  byokKey?: string | undefined;
+  egressProxyUrl?: string | undefined;
+}>;
+export type AdmittedChatMechanics = Readonly<{
+  contract: ReviewedChatProfile['adapterContract'];
+  execute(req: AdmittedChatRequest): Promise<Readonly<{ response: AdmittedChatResponse; usage: AdmittedChatUsage }>>;
+}>;
+
 export interface UpstreamAdapter {
+  readonly admittedChat?: AdmittedChatMechanics;
   chat(req: ChatRequest): Promise<ChatResponse>;
   chatStream?(req: ChatRequest): AsyncIterable<unknown>;
   embeddings?(req: EmbeddingsRequest): Promise<EmbeddingsResponse>;
