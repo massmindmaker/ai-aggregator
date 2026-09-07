@@ -1,5 +1,7 @@
 # Quota v2 → stored plaintext executor
 
+Статус: принято локально `20187ecd`, independent TS/financial/spec Approved. Focused230/230, native postgres.js7/7, source/test types и scoped lint PASS. Public route ещё не включён.
+
 Цель: подключить принятый quota DB lifecycle к существующему unused Task5 без изменения публичных routes. Это следующий AG-P1 gate, не108/108 и не production cutover.
 
 Research inputs: D03/D11, принятые gateway admission и durable quotas планы. Решение: сохранить существующие quote/usage DTO, использовать SQL как authority supplier valuation. Deferred: public route/HTTP idempotency, enrollment, recovery worker, BYOK execution, SSE/media.
