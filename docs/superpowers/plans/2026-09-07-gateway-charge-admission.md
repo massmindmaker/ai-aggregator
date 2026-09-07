@@ -134,19 +134,20 @@ expect(microCreditsToUsdMicroString(123n)).toBe('1230');
 expect(microCreditsToUsdMicroString(9007199254740993n)).toBe('90071992547409930');
 ```
 
-Also test output<input branch, embedding array count factor, cached input discount once, nearest half rounds up, zero actual from valid tiny tariff, exact zero tariff/fee remains zero (caller must handle unsupported free lifecycle explicitly), huge intermediate rational arithmetic with valid final amount, overflow rejection, invalid/noncanonical decimal (sign/exponent/whitespace/empty/NaN), invalid markup<=0, discount outside[0,1], invalid/unsafe/negative token counts, cached>prompt, cap>context, inputCount0, and input immutability.
+Also test output<input branch, embedding array count factor, existing whole-cost cached-fraction discount once (prompt100/output50, Pin1/Pout2, cached50, discount0.5 =>150micro), nearest half rounds up, zero actual from valid tiny tariff, exact zero tariff/fee remains zero (caller must handle unsupported free lifecycle explicitly), huge intermediate rational arithmetic with valid final amount, overflow rejection, invalid/noncanonical decimal (sign/exponent/whitespace/empty/NaN), invalid markup<=0, discount outside[0,1], invalid/unsafe/negative token counts, cached>prompt, cap>context, inputCount0, and input immutability.
 - [ ] **Step2: Run the new file from root Vitest and record RED.** Command: `flock /tmp/ai-ecosystem-build.lock /tmp/ai-ecosystem-run aggregator bunx vitest run packages/api-gateway/src/__tests__/billing-token-quote.test.ts` (no DB use in these tests).
 - [ ] **Step3: Implement rational bigint arithmetic.** Decimal parser yields numerator/10^scale. Apply multiplication/addition exactly and round only once at final result; use ceiling for maximum and nonnegative nearest-half-up for actual, preserving legacy business formula.
 
 ```text
 chatMaximum = ceil((C*Pin + cap*max(0,Pout-Pin))*markup)
 embeddingMaximum = ceil(N*C*Pin*markup)
-actual = round(((prompt-cached)*Pin + cached*Pin*discount + completion*Pout)*markup)
+cacheFactor = prompt > 0 ? (prompt-cached+cached*discount)/prompt : 1
+actual = round((prompt*Pin + completion*Pout)*markup*cacheFactor)
 byokFee = round(feeCredits*1000)
 chargedUsdMicro = actualMicroCredits*10
 ```
 
-These functions do not attest a model/provider or validate provider evidence. The bound applies only when the later reviewed capability enforces prompt+completion<=C and completion<=cap. They never estimate tokens from bytes, silently clamp monetary values, fabricate a minimum charge, expose floating monetary results or consult mutable configuration.
+Compatibility ruling: existing `lib/pricing.ts` applies the cached-input fraction factor to the whole input+output cost. Preserve this exact legacy formula in this increment, even though its comment can be read as input-only discount. Switching to input-only discount would increase charges for cached requests with output; any such tariff correction needs a separate versioned policy and acceptance. These functions do not attest a model/provider or validate provider evidence. The bound applies only when the later reviewed capability enforces prompt+completion<=C and completion<=cap. They never estimate tokens from bytes, silently clamp monetary values, fabricate a minimum charge, expose floating monetary results or consult mutable configuration.
 - [ ] **Step4: Verify focused tests, gateway source/test type checks and diff hygiene.** No broad unit/build or DB suite repetition for this isolated pure module. Demonstrate at least one input beyond Number.MAX_SAFE_INTEGER monetary precision and adversarial decimal boundary in tests.
 - [ ] **Step5: Self-review, commit both owned files and report privately.** Mandatory TypeScript spec+quality review; no React diff. Then proceed to lifecycle/route integration with its own capability/quote snapshot plan.
 
