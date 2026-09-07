@@ -1,38 +1,21 @@
 # AI Aggregator: начать разработку здесь
 
-## Возобновление 7 сентября
+Канонический root: `/home/bob/Projects/ai-aggregator`; ветка `feat/three-projects-completion`. Сначала [AGENTS.md](../AGENTS.md), [рабочая карта](consolidation/DEVELOPMENT-WORKFLOW.md) и [границы продуктов](consolidation/ACTIVE-PROJECTS.md).
 
-[Актуальная программа](superpowers/plans/2026-09-07-production-continuation.md), [TON alongside RUB](superpowers/plans/2026-09-07-ton-payments.md), [проверенный research](research/2026-09-07-ai-hub-reviewed-synthesis.md). Владелец подтвердил локальную реализацию TON, отдельного нового одобрения дизайна не требуется. Stars исключены из реализации. Последний принятый gateway code остаётся `1c25d0f`; последующие функции не активированы.
+## Текущий этап — 7 сентября
 
-[Проверка VPS и точки остановки](consolidation/2026-09-07-resume-audit.md): страницы AG/TMA доступны, но два process managers запускают дубликаты Web/worker. Боевые процессы не менялись. Отчёт отделяет развернутые releases от нового canonical code. [Память](consolidation/MEMORY-STATUS.md) проверяется отдельным владельцем, не считать её полностью подключённой до успешного readback.
+Последний принятый gateway code — admission wrapper `1c25d0f`: 65 focused tests, source/test types и review. Wrapper ещё не активирован в routes/executor. Сейчас отдельный исполнитель делает Task4 [gateway admission plan](superpowers/plans/2026-09-07-gateway-charge-admission.md): проверенный provider profile, точный resolver, immutable quote и неактивный admitted transport. Квоты, usage receipts/reconciliation, tool calling и полный route/refund cutover остаются впереди.
 
-Ускорение по просьбе пользователя: независимые implementation workers могут работать по разным репозиториям; один владелец на модуль и одна тяжёлая сборка/тест под общим flock. Каждый продуктовый diff проходит собственную приёмку.
+## Продуктовая программа
 
----
+[Production continuation](superpowers/plans/2026-09-07-production-continuation.md), [TON alongside RUB](superpowers/plans/2026-09-07-ton-payments.md), [проверенное исследование](research/2026-09-07-ai-hub-reviewed-synthesis.md), [payment/evidence contract](ecosystem/payment-and-evidence-design.md). Пользователь подтвердил локальную реализацию TON и сохранение RUB; Stars исключены из текущего scope. Реальные funds/production migration/deploy не запускаются на основании одного локального PASS.
 
+Aggregator владеет Web, gateway, model catalog, consumer/author money и своим worker. Отдельный crypto origin настраивается в этом же repo; четвёртый продукт не создаётся. AM Web/TMA и Arena остаются в своих roots.
 
-Канонический root: `/home/bob/Projects/ai-aggregator`. Прочитайте `AGENTS.md`, затем [общую рабочую карту](./consolidation/DEVELOPMENT-WORKFLOW.md), [границы активных проектов](./consolidation/ACTIVE-PROJECTS.md) и [журнал проверок](./consolidation/EXTRACTION-VERIFICATION.md).
+## Размещение и память
 
-## Текущее состояние
+Существующий VPS приоритетен. [Проверка восстановления](consolidation/2026-09-07-resume-audit.md) отделяет доступные старые releases от canonical code; выявлены дубликаты Web/worker в двух PM2 managers. Боевые процессы не менялись.
 
-- Branch: `feat/three-projects-completion`; документ проверен на исходном HEAD `ed50ede`.
-- Последний принятый кодовый этап: exact admission wrapper `1c25d0f` — 65 focused tests, source/test types и formatting прошли после review fix.
-- Wrapper ещё не подключён к route/executor. Native driver integration, durable quota reservation, provider capability contract, authoritative usage receipt и reconciliation остаются обязательными до активации.
-- Следующий продуктовый gate: заново проверить бизнес-процесс, user stories, UX и конкурентов. Текущие competitor/TON/protocol материалы — research и предложения, не одобренная реализация.
+[Memory status](consolidation/MEMORY-STATUS.md): Serena/LSP и Graphify — производный кодовый контекст; LightRAG — принятые общие знания; Brain — человеческая навигация; Codex ad-hoc — собственные рабочие заметки. Старые Serena memories не отменяют текущие code/plans. Успех внешней синхронизации требует readback.
 
-## Владение и следующий шаг
-
-Aggregator владеет каталогом моделей, OpenAI-compatible gateway, consumer/author money и своим worker. Arena и Agents Market имеют отдельные корни; их активный код сюда не добавляется. Crypto-вариант Aggregator проектируется здесь и может использовать отдельный домен без четвёртого repository.
-
-После утверждения продуктового направления следующий code increment должен иметь узкий Superpowers plan/brief, exact owner, tests и обязательный review. Не активировать admission, crypto/mainnet, production migration, paid provider или deploy на основании одного плана.
-
-Размещение Aggregator приоритетно сохраняет существующий VPS. Vercel preview для текущей работы отменён до запуска; новых preview/deploy не создавалось.
-
-## Память разработки
-
-- Канонический handoff: этот файл, `docs/consolidation/*`, релевантный `docs/superpowers/plan` и приватный controller ledger `.superpowers/sdd/2026-09-06-three-repositories/progress.md`.
-- Общая семантика: только принятые документы через LightRAG upload/sync. Приватный ledger, prompts, секреты и личные входные данные туда не загружаются.
-- Код: Serena LSP index и локальный Graphify AST index. Они производные и не заменяют repo docs.
-- Человеческая навигация: `/home/bob/brain/Projects/AI-Hub/README.md`.
-
-Простой routing/операционную рутину отдавать лёгкой модели; серьёзный research, архитектуру и планирование — Astra с повышенным reasoning. Полная приёмка остаётся в scorecard и сквозных integration checks; текущий статус не равен `108/108`.
+Приватный controller ledger `.superpowers/sdd/2026-09-06-three-repositories/progress.md` восстанавливает точные task/commit/review states; не загружать его в общую память. Пользователь разрешил независимых implementation workers по репозиториям; один владелец на модуль, один heavy run под `flock /tmp/ai-ecosystem-build.lock`. Серьёзные архитектурные/финансовые задачи — Astra с повышенным reasoning; рутина — лёгкие модели. Scorecards и сквозная приёмка остаются источником готовности, не число коммитов.
