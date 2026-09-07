@@ -1,5 +1,16 @@
 # AI Aggregator: начать разработку здесь
 
+## Возобновление 7 сентября
+
+[Актуальная программа](superpowers/plans/2026-09-07-production-continuation.md), [TON alongside RUB](superpowers/plans/2026-09-07-ton-payments.md), [проверенный research](research/2026-09-07-ai-hub-reviewed-synthesis.md). Владелец подтвердил локальную реализацию TON, отдельного нового одобрения дизайна не требуется. Stars исключены из реализации. Последний принятый gateway code остаётся `1c25d0f`; последующие функции не активированы.
+
+[Проверка VPS и точки остановки](consolidation/2026-09-07-resume-audit.md): страницы AG/TMA доступны, но два process managers запускают дубликаты Web/worker. Боевые процессы не менялись. Отчёт отделяет развернутые releases от нового canonical code. [Память](consolidation/MEMORY-STATUS.md) проверяется отдельным владельцем, не считать её полностью подключённой до успешного readback.
+
+Ускорение по просьбе пользователя: независимые implementation workers могут работать по разным репозиториям; один владелец на модуль и одна тяжёлая сборка/тест под общим flock. Каждый продуктовый diff проходит собственную приёмку.
+
+---
+
+
 Канонический root: `/home/bob/Projects/ai-aggregator`. Прочитайте `AGENTS.md`, затем [общую рабочую карту](./consolidation/DEVELOPMENT-WORKFLOW.md), [границы активных проектов](./consolidation/ACTIVE-PROJECTS.md) и [журнал проверок](./consolidation/EXTRACTION-VERIFICATION.md).
 
 ## Текущее состояние
