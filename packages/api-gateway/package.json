@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "lint": "../../node_modules/.bin/eslint . --ext .ts,.tsx,.js,.jsx",
     "start": "bun dist/server.js",
     "type-check": "bun run type-check:src && bun run type-check:test",
     "type-check:src": "tsc --noEmit",
