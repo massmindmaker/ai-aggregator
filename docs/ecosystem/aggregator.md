@@ -8,7 +8,7 @@
 
 ## Где вести работу
 
-Кандидат: `/home/bob/Projects/aiag-web/repo`; модули `apps/web`, `packages/api-gateway`, `packages/database`, `apps/worker`. При E0 сопоставить с `/home/bob/Projects/aggregator/core`. Текущая архивная папка — место подготовки плана, не подтверждённый источник релиза.
+Канонический независимый репозиторий: `/home/bob/Projects/ai-aggregator`; модули `apps/web`, `packages/api-gateway`, `packages/database`, `apps/worker`. Источники сверены и сохранены в `/home/bob/Projects/archive/ai-ecosystem-sources-20260906`; организационный cutover принят. Native DB и unit/type/lint/runtime baseline прошли review, денежный refund-контур и продуктовые сценарии ещё выполняются.
 
 ## Исходное состояние
 
