@@ -38,7 +38,14 @@ describe('billing/token-quote', () => {
     expect(calculateByokFee('0')).toBe(0n);
   });
 
+  it('scales fractional BYOK fees and rounds their micro-credit half boundary', () => {
+    expect(calculateByokFee('1.2345')).toBe(1235n);
+    expect(calculateByokFee('0.0004')).toBe(0n);
+    expect(calculateByokFee('0.0005')).toBe(1n);
+  });
+
   it('performs header conversion exactly beyond Number.MAX_SAFE_INTEGER', () => {
+    expect(microCreditsToUsdMicroString(0n)).toBe('0');
     expect(microCreditsToUsdMicroString(123n)).toBe('1230');
     expect(microCreditsToUsdMicroString(9007199254740993n)).toBe('90071992547409930');
   });

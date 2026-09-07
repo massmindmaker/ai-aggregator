@@ -158,5 +158,5 @@ export function calculateByokFee(feeCredits: string): bigint {
 
 /** Serializes an exact nonnegative micro-credit amount to the USD-micro header unit. */
 export function microCreditsToUsdMicroString(amount: bigint): string {
-  return checkedMoney(amount).toString().concat('0');
+  return (checkedMoney(amount) * 10n).toString();
 }
