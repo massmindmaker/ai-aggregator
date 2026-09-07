@@ -26,12 +26,16 @@
 | Продукт | Проверенное | Следующий gate |
 |---|---|---|
 | Aggregator | Последний принятый кодовый этап — admission wrapper `1c25d0f`; `ed50ede` добавляет только документацию. Wrapper ещё не активирован в route/executor. | Сначала повторно проверить бизнес-процесс, user stories, UX и конкурентов; затем оформлять следующий узкий implementation contract. Durable quota/reservation, capability profile, usage receipt и reconciliation остаются обязательными до активации. |
-| Arena | `d4174fb` прошёл focused unit/type/scenario, но не принят: React review блокирует stale `IntersectionObserver` callback; TypeScript review и подтверждённый полный integration exit отсутствуют. | Исправить lifecycle race с регрессией, завершить review и один доказуемый полный прогон. Новые продуктовые волны начинать после повторной бизнес/UX сверки. |
+| Arena | Код заморожен; repair RevealOnScroll прошёл общий suite. Полный suite завершился `exit 1` только на новом Wave 4 Task 2: input не виден до scroll. Это не acceptance всего этапа. | Выполнить уже подготовленную узкую Task 2 и повторить доказуемый полный прогон; новые продуктовые волны начинать после повторной бизнес/UX сверки. |
 | Agents Market | `47ef96d` — документационный план собственной БД. Web сейчас публичная витрина list/detail; TMA — отдельное приложение. Исполняемая AM-owned схема ещё не реализована. | После бизнес/UX сверки выполнять Task 1 собственного DB-плана; затем реальные worker и TMA/Web проверки. Cross-catalog HTTP и private Web identity остаются отдельными задачами. |
 
 Исследования про конкурентов, протокольный горизонт и Telegram/TON дают варианты и риски, а не разрешение на реализацию. Crypto-направление Aggregator остаётся в его репозитории и может получить отдельный домен без четвёртого code repository. Mainnet, платные вызовы, production migrations и удаление текущего fiat-кода этой картой не разрешены.
 
 Текущая граница размещения: Aggregator приоритетно остаётся на существующем VPS; Agents Market уже развёрнут, и новый deploy для этой задачи не нужен. Vercel preview был отменён до запуска, новых preview/deploy не создавалось. Исторический адрес TMA `https://app.ai-aggregator.ru/tg` требует отдельной live-проверки и до неё не считается подтверждённым текущим endpoint.
+
+## Runtime identity probe
+
+Для проверки exact loopback identity в PostgreSQL native 16.14 использовать `host(inet_server_addr())` и строго сравнивать результат с `127.0.0.1`. Само `inet_server_addr()::text` на этой среде возвращает `127.0.0.1/32`, поэтому не годится для строгого строкового guard. Это проверенный безопасный отказ до DDL; правило меняет query probe, а не ослабляет guard.
 
 ## Память и индексирование
 
@@ -55,14 +59,14 @@
 
 | Слой | Доступность в текущем сеансе | Проверенный результат |
 |---|---|---|
-| Graphify | CLI `0.9.55` доступен; отдельного tool-call нет | Локальный AST readback: Aggregator 8847 nodes/13204 edges; Arena 1641/2164; Agents Market 1381/2062. SQL неполон: без `tree_sitter_sql` пропущены 72/9/33 файла соответственно. |
-| Serena | CLI `1.7.1.dev0` и TypeScript/HTML LSP доступны; Serena MCP/tool-call отсутствует | Штатный `serena project index` сохранил project-local cache: Aggregator 651 TypeScript; Arena 140 TypeScript + 15 HTML; Agents Market 138 TypeScript. Существующие memory-файлы 24/7/0 сохранены. Пользовательский Serena config не менялся. |
-| LightRAG | Server настроен в Hermes; callable tool-call отсутствует, но bounded direct client query выполнен | Semantic readback не получен: сервер вернул `403 Invalid API Key`. Upload и `insert_text` не выполнялись. |
-| Memory Graph | Hermes config указывает на существующий `/home/bob/pinglass-data/memory.jsonl`; tool-call отсутствует | Локальный read-only JSONL parser прочитал 9 валидных строк без AI Hub matches. Запись пропущена: нет проверенного concurrency-safe write/readback contract и дублировать продуктовые факты нельзя. |
+| Graphify | CLI `0.9.55` доступен; SQL extra `tree-sitter-sql 0.3.11` установлен только в его изолированном tool env | Arena refreshed: 1693 nodes/2227 links, 21 SQL nodes/9 files. Aggregator refreshed before Task 4 gate: 9080/13456, 177/72; считать potentially mixed/unaccepted. AM remains 1381/2062 while DB work is active. |
+| Serena | CLI `1.7.1.dev0` и direct local MCP read доступны; новый Codex MCP пока только enabled for a fresh session | Arena CLI refresh сохранил 141 TypeScript + 15 HTML symbol entries in project-local cache. MCP `activate_project` and `list_memories` read its 7 existing memories. AG/AM refresh deferred. |
+| LightRAG | Existing client/service proved live with `X-API-Key`; current harness still has no newly injected tool-call | Accepted public synthesis and payment-design docs uploaded by stable filename. Readback: both are `processed` (3 chunks each). No private SDD was uploaded. |
+| Memory Graph | Target JSONL and supported server package inspected; current harness tool-call absent | Read-only parser found 9 valid rows without AI Hub matches. The writer has atomic replacement but no interprocess lock, so no write was attempted. |
 | Brain | `/home/bob/brain` доступен | Создан человекочитаемый индекс `/home/bob/brain/Projects/AI-Hub/README.md`; ссылки проверяются на существование. |
 | Codex auto-memory | Явно разрешён один ad-hoc note | Записан только workflow/model preference в `~/.codex/memories/extensions/ad_hoc/notes/`; основной `MEMORY.md` не изменялся. |
 
-`configured` не означает `callable`, наличие файла не означает свежий индекс, а успешная локальная запись не означает sync во внешний слой.
+`enabled` в `codex mcp list` означает только зарегистрированную конфигурацию: текущий уже запущенный harness не получает эти новые tools до fresh session. Наличие файла не означает свежий индекс, а успешный local client readback не равен tool-call в этом сеансе.
 
 ## Выбор модели
 
