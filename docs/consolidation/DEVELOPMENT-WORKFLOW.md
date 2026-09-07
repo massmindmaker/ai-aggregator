@@ -54,7 +54,7 @@
 | Слой | Доступность в текущем сеансе | Проверенный результат |
 |---|---|---|
 | Graphify | CLI `0.9.55` доступен; отдельного tool-call нет | Локальный AST readback: Aggregator 8847 nodes/13204 edges; Arena 1641/2164; Agents Market 1381/2062. SQL неполон: без `tree_sitter_sql` пропущены 72/9/33 файла соответственно. |
-| Serena | CLI `1.7.1.dev0` и TypeScript/HTML LSP доступны; Serena MCP/tool-call отсутствует | Штатный `serena project index` сохранил project-local cache: Aggregator 651 TypeScript; Arena 140 TypeScript + 15 HTML; Agents Market 138 TypeScript. Существующие memories 24/6/0 сохранены. Пользовательский Serena config не менялся. |
+| Serena | CLI `1.7.1.dev0` и TypeScript/HTML LSP доступны; Serena MCP/tool-call отсутствует | Штатный `serena project index` сохранил project-local cache: Aggregator 651 TypeScript; Arena 140 TypeScript + 15 HTML; Agents Market 138 TypeScript. Существующие memory-файлы 24/7/0 сохранены. Пользовательский Serena config не менялся. |
 | LightRAG | Server настроен в Hermes, но tool-call в этом сеансе отсутствует | Upload и semantic readback не выполнялись; слой остаётся pending, без blind endpoint-вызова или `insert_text`. |
 | Memory Graph | Hermes config указывает на существующий `/home/bob/pinglass-data/memory.jsonl`; tool-call отсутствует | Формат entity JSONL прочитан только по ключам. Запись пропущена: текущий сеанс не даёт проверенного concurrency-safe write/readback contract, а дублировать продуктовые факты нельзя. |
 | Brain | `/home/bob/brain` доступен | Создан человекочитаемый индекс `/home/bob/brain/Projects/AI-Hub/README.md`; ссылки проверяются на существование. |
