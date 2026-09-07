@@ -80,7 +80,7 @@ const admittedChat: AdmittedChatMechanics = Object.freeze({
     if (process.env.OPENROUTER_APP_URL) headers['http-referer'] = process.env.OPENROUTER_APP_URL;
     if (process.env.OPENROUTER_APP_NAME) headers['x-title'] = process.env.OPENROUTER_APP_NAME;
     const res = await fetchUpstream(`${OPENROUTER_BASE}/chat/completions`, {
-      method: 'POST', headers, allowlist: OPENROUTER_ALLOWLIST,
+      method: 'POST', headers, allowlist: OPENROUTER_ALLOWLIST, maxRedirects: 0,
       body: JSON.stringify({ model: profile.upstreamModelId, messages: req.messages, stream: false, max_tokens: req.maxTokens,
         provider: { only: profile.endpointPolicy.only, allow_fallbacks: profile.endpointPolicy.allowFallbacks, require_parameters: profile.endpointPolicy.requireParameters } }),
     }, req.egressProxyUrl);

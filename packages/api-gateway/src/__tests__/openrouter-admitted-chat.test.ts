@@ -15,6 +15,7 @@ describe('admitted OpenRouter non-stream mechanics', () => {
     const [url, init, proxy] = transport.mock.calls[0]!;
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
     expect(JSON.parse(init.body)).toEqual({ model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: 'hello' }], stream: false, max_tokens: 10000, provider: { only: ['openai'], allow_fallbacks: false, require_parameters: true } });
+    expect(init.maxRedirects).toBe(0);
     expect(init.headers.authorization).toBe('Bearer test-key'); expect(init.allowlist).toEqual(['openrouter.ai']); expect(proxy).toBe('http://test-proxy:3128');
   });
   it('returns only a validated public DTO and strict original usage', async () => {
