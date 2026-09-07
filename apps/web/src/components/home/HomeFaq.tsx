@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 const faqs = [
   {
@@ -27,11 +27,14 @@ const faqs = [
 
 export default function HomeFaq() {
   const [openIdx, setOpenIdx] = useState<number | null>(0);
+  const disclosureId = useId();
 
   return (
     <div className="max-w-[820px] mx-auto">
       {faqs.map((item, i) => {
         const open = openIdx === i;
+        const buttonId = `${disclosureId}-button-${i}`;
+        const panelId = `${disclosureId}-panel-${i}`;
         return (
           <div
             key={i}
@@ -42,12 +45,16 @@ export default function HomeFaq() {
             }}
           >
             <button
+              id={buttonId}
               type="button"
+              aria-expanded={open}
+              aria-controls={panelId}
               onClick={() => setOpenIdx(open ? null : i)}
               className="flex items-center justify-between w-full text-left px-[22px] py-[18px] text-[15px] font-medium"
             >
               <span>{item.q}</span>
               <span
+                aria-hidden="true"
                 className="grid place-items-center transition-transform duration-300"
                 style={{
                   width: 20,
@@ -60,6 +67,10 @@ export default function HomeFaq() {
               </span>
             </button>
             <div
+              id={panelId}
+              role="region"
+              aria-labelledby={buttonId}
+              aria-hidden={!open}
               className="overflow-hidden transition-[max-height]"
               style={{ maxHeight: open ? 400 : 0, transitionDuration: '400ms' }}
             >
