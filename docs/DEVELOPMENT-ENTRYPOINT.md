@@ -1,5 +1,7 @@
 # AI Aggregator: начать разработку здесь
 
+**Карта функционала:** [сценарии, текущее состояние и оставшиеся работы](product/functional-map.md). Срез 08.09.2026; карта не заменяет приёмку.
+
 **Кооперативная стратегия и порядок работ:** [стратегия](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-07-cooperative-strategy.md) и [roadmap](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-07-cooperative-roadmap.md). Главный поток: Aggregator → Arena → Agents Market; общий фонд и подключение будущих сервисов описаны отдельно от product-owned БД/обязательств. Управленческие параметры — предложения, не действующий устав. При завершении сессии локальные previews и test PostgreSQL/Redis остановлены; перед проверками восстановить только нужный guarded стенд.
 
 **Исследовательская волна 1 завершена:** [решения и влияние на планы](/home/bob/Projects/ai-aggregator/docs/research/2026-09-07-research-impact-and-decisions.md). В production continuation добавлены D-задачи и критерии приёмки, включая дополнительный TON login во всех трёх продуктах. Кодовый следующий шаг остаётся quota v2 → public route composition → recovery/refund. Это documentary checkpoint; баллы готовности и deployed code не изменены.
