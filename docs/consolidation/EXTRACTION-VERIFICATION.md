@@ -40,7 +40,7 @@
 
 Широкий исторический snapshot до финальных discovery исправлений:104 файла,810 тестов;94 файла /796 тестов PASS,10 файлов /14 тестов FAIL. Это не финальное количество оставшихся ошибок. Обнаружены: отсутствующая реализация sync-models-dev, пустая users schema, устаревшие mocks/ожидания payment cancellation/playground/catalog/ModelCard, Next router resolution, legacy contest runner timing. Отдельные Web/gateway test-program typechecks также требуют ремонта.
 
-Остались предупреждения Next14 config/runtime, Browserslist, Tailwind и shared dynamic import. Нет неинтерактивного ESLint/hooks конфига. Minor ревью: диапазон Node>=20.12 формально допускает21.0–21.6 без parseEnv; следующая baseline задача добавляет проверку возможности API.
+На extraction-этапе оставались предупреждения Next14 config/runtime, Browserslist, Tailwind и shared dynamic import, отсутствовал неинтерактивный ESLint/hooks конфиг. Последующие принятые этапы ниже закрывают эти пункты, кроме Browserslist и отдельно отмеченного шума логов.
 
 ## Aggregator: принятая native DB baseline
 
@@ -52,7 +52,7 @@
 - Покрывающий набор: 5 файлов, 45/45 тестов. В него входят 8 real PostgreSQL integration tests, 3 import-boundary tests и 2 real registration tests. Отдельная команда baseline, подключённая в CI, прошла локально 13/13; это пересекающиеся наборы, а не дополнительные 13 тестов.
 - Реальная БД подтверждает rollback DDL/ledger, идемпотентность миграций, subscription-first/PAYG списание, replay, insufficient-funds rollback и сохранение согласий регистрации. Focused TypeScript checks прошли.
 
-Это локальная проверка. Запуск GitHub CI не заявляется, production schema не изменялась. Общий unit/lint/type baseline, refund clawback и canonical gateway startup остаются следующими задачами.
+Это локальная проверка. Запуск GitHub CI не заявляется, production schema не изменялась. Последующие unit/lint/type и runtime этапы описаны ниже; refund clawback ещё выполняется.
 
 ## Aggregator: принятый unit/type/lint baseline
 
@@ -64,6 +64,17 @@ Task2 принят TypeScript/spec и React review на `04bf3eea8b3097fae7d463e
 - Полный unit после этого узкого fix не повторялся; production build Task2 не запускал. Оба общих прогона запланированы в следующем runtime-этапе, который меняет shared executor registration и конфигурацию сборки.
 
 Minor ревью: unit output сохраняет Vite CJS/Node localStorage warnings и диагностические сообщения негативных тестов. Это не функциональные ошибки; очистка шума остаётся отдельной задачей. Полный продуктовый выпуск и 108-балльная приёмка не заявляются.
+
+## Aggregator: принятый runtime baseline
+
+Task3 принят TypeScript/spec и React review на `8ddb2fe7c23ac5690fa2dd36d3126d87f755b20f`. Исправлены проверка доступности parseEnv, настройка Next14, литеральные exports health-route, загрузка server-only undici и регистрация vetted egress executor в настоящем пути server-node → server. FAQ сохранил анимацию400ms и получил доступные состояния раскрытия/скрытия для скринридеров.
+
+- На `c169f89`: focused72/72 и два shell contracts, deploy contract, root lint7/7 и typecheck16/16 прошли.
+- Там же полный unit:109 passed /2 gated files,893 passed /10 gated tests; root production build:9/9. Четыре целевых предупреждения исчезли, прежний Browserslist warning остался.
+- После узкого FAQ fix на финальном `8ddb2fe`: DOM regression1/1, Next lint и Web typecheck прошли; весь build/unit повторно не запускался.
+- Controlled startup test импортирует канонический server entry, наблюдает vetted connectAddr в transport options и отказ SSRF до транспорта. Реальный PM2, внешний DNS и платные provider requests этим тестом не проверяются.
+
+Следующий P0 — snapshot выдачи кредитов и clawback при возврате top-up. Уточнён контракт T-Bank: сохранённый ExternalRequestId, строгое доказательство before/after amounts, монотонные статусы и блокировка расходов при неопределённом возврате. Эти изменения пока не считаются реализованными или проверенными сквозным сценарием.
 
 ## AI Arena
 
@@ -79,7 +90,7 @@ Foundation `692bc12` и review fix `d742077` прошли TypeScript/spec и Rea
 
 ## Следующая проверяемая последовательность
 
-1. Aggregator: применяемая native test schema, исправление полного baseline и P0 money/runtime; затем versioned model metadata API.
+1. Aggregator: native DB, unit/type/lint и runtime baseline приняты; далее P0 refund/credit consistency, затем versioned model metadata API.
 2. Arena: оставшиеся lifecycle/team/security задачи и сохранение submission/evaluation результата; отдельное закрытие Wave3 UI baseline.
 3. Agents Market: собственная schema, безопасные terminal settlement/claim, native Web identity + dual-proof Telegram linking, полный Web/TMA product flow.
 4. Сквозные сценарии: Arena artifact→публикация Aggregator→модель для Agents Market; реальные контракты и evidence в соответствующих108матрицах.
