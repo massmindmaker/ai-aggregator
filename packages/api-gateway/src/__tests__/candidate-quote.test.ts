@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { prepareStoredChatQuote } from '../billing/candidate-quote';
 import type { UpstreamCandidate } from '../routing/engine';
 import type { UpstreamAdapter } from '../upstreams/interface';
@@ -65,4 +65,12 @@ describe('frozen eligible stored chat quote', () => {
     const c = candidate(); c.billing = { ...c.billing!, prices: { inputCentsPer1k: '0', outputCentsPer1k: '0', markup: '1' } };
     expect(prepareStoredChatQuote(args([c])).status).toBe('unavailable');
   });
+});
+
+it('does not admit video even when every other reviewed chat identity field matches', () => {
+  const input = args();
+  const lookup = vi.fn(input.getAdapter);
+  const result = prepareStoredChatQuote({ ...input, model: { ...input.model, type: 'video' }, getAdapter: lookup });
+  expect(result).toEqual({ status: 'unavailable', code: 'STORED_CHAT_UNAVAILABLE' });
+  expect(lookup).not.toHaveBeenCalled();
 });

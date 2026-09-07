@@ -10,10 +10,12 @@ import { findReviewedChatProfile } from '../billing/reviewed-token-profiles';
 import { z } from 'zod';
 
 const TTL_SEC = 600;
+// Legacy registry types are broader than the separately reviewed chat capability.
+const modelTypes = ['chat', 'embedding', 'image', 'audio', 'completion', 'video'] as const;
 
 export type ResolvedModel = {
   slug: string;
-  type: 'chat' | 'embedding' | 'image' | 'audio' | 'completion';
+  type: (typeof modelTypes)[number];
   candidates: UpstreamCandidate[];
 };
 
@@ -40,7 +42,7 @@ type DbRow = {
 
 const finite = z.number().finite();
 const cachedModel = z.object({
-  slug: z.string().min(1), type: z.enum(['chat', 'embedding', 'image', 'audio', 'completion']),
+  slug: z.string().min(1), type: z.enum(modelTypes),
   candidates: z.array(z.object({
     id: z.string().min(1), upstream_id: z.string().min(1), upstream_model_id: z.string().min(1), provider: z.string().min(1),
     price_per_1k_input: finite.nonnegative(), price_per_1k_output: finite.nonnegative(), price_per_image: finite.nonnegative().optional(),

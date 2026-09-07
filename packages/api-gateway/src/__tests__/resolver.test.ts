@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { get, setex, query } = vi.hoisted(() => ({ get: vi.fn(), setex: vi.fn(), query: vi.fn() }));
 vi.mock('../lib/redis', () => ({ makeRedis: () => ({ get, setex }) }));
 vi.mock('../lib/db', () => ({ sql: query }));
-import { resolveModel, parseResolvedModelCache } from '../routing/resolver';
+import { resolveModel, parseResolvedModelCache, resolveModelWithOverride, setResolveModelOverride, type ResolvedModel } from '../routing/resolver';
 const slug = 'openai/gpt-4o-mini';
 const row = () => ({ slug, type: 'chat', upstream_id: 'openrouter', upstream_model_id: slug, provider: 'openrouter', ru_residency: false, latency_p50_ms: 50, uptime: '0.99', price_per_1k_input: '0.123456789012345678', price_per_1k_output: '0.5', markup: '1.25', price_per_image: null, priority: 1, egress_proxy: null, model_upstream_id: 'f0000000-0000-4000-8000-000000000001', billing_input_cents_per_1k: '0.123456789012345678', billing_output_cents_per_1k: '0.5', billing_markup: '1.25' });
+afterEach(() => { setResolveModelOverride(null); });
 beforeEach(() => { get.mockReset().mockResolvedValue(null); setex.mockReset(); query.mockReset().mockResolvedValue([row()]); });
 describe('exact resolver and versioned cache', () => {
   it('selects UUID and decimal text explicitly through prepared SQL, retaining exact digits', async () => {
@@ -44,4 +45,57 @@ describe('exact resolver and versioned cache', () => {
     await expect(resolveModel(slug)).rejects.toThrow('Invalid model routing facts');
     expect(setex).not.toHaveBeenCalled();
   });
+});
+
+it('resolves an existing video model through fresh DB facts', async () => {
+  const videoRow = {
+    ...row(), slug: 'kling-3-0-kie', type: 'video', upstream_id: 'kie',
+    upstream_model_id: 'kling-3.0', provider: 'kie',
+    price_per_1k_input: '0.0000000000', price_per_1k_output: '0.0000000000',
+    billing_input_cents_per_1k: '0.0000000000', billing_output_cents_per_1k: '0.0000000000',
+    markup: '1.8000', billing_markup: '1.8000', price_per_image: '50.0000000000', uptime: '0.9900',
+  };
+  query.mockResolvedValueOnce([videoRow]);
+  const model = await resolveModel(videoRow.slug);
+  expect(model.type).toBe('video');
+  expect(model.candidates[0]!.price_per_image).toBe(50);
+  expect(model.candidates[0]!.billing?.prices).toEqual({
+    inputCentsPer1k: '0.0000000000', outputCentsPer1k: '0.0000000000', markup: '1.8000',
+  });
+  expect(model.candidates[0]!.egress_proxy).toBeNull();
+  expect(model.candidates[0]!.reviewedChatProfile).toBeUndefined();
+});
+
+const legacyTypes = ['chat', 'completion', 'embedding', 'image', 'audio', 'video'] as const;
+it.each(legacyTypes)('round trips legitimate legacy %s through DB and v2 cache', async type => {
+  const legacySlug = `legacy-${type}`;
+  query.mockResolvedValueOnce([{ ...row(), slug: legacySlug, type }]);
+  const fresh = await resolveModel(legacySlug);
+  expect(fresh.type).toBe(type);
+  expect(fresh.candidates[0]!.reviewedChatProfile).toBeUndefined();
+  expect(setex.mock.calls[0]![0]).toBe(`model:v2:${legacySlug}`);
+  const cached = setex.mock.calls[0]![2];
+  expect(JSON.parse(cached).type).toBe(type);
+  get.mockResolvedValueOnce(cached); query.mockClear(); setex.mockClear();
+  const hydrated = await resolveModelWithOverride(legacySlug);
+  expect(hydrated).toEqual(fresh);
+  expect(query).not.toHaveBeenCalled();
+  expect(setex).not.toHaveBeenCalled();
+});
+it.each(legacyTypes)('preserves legacy %s overrides without requiring new billing facts', async type => {
+  const model: ResolvedModel = { slug: `override-${type}`, type, candidates: [{
+    id: 'legacy', upstream_id: 'legacy', upstream_model_id: 'legacy-model', provider: 'legacy',
+    price_per_1k_input: 0, price_per_1k_output: 0, markup: 1, latency_p50_ms: 50, uptime: 0.99, ru_residency: false,
+  }] };
+  const override = vi.fn(async () => model);
+  setResolveModelOverride(override);
+  expect(await resolveModelWithOverride(model.slug)).toBe(model);
+  expect(override).toHaveBeenCalledWith(model.slug);
+  expect(get).not.toHaveBeenCalled();
+  expect(query).not.toHaveBeenCalled();
+});
+it.each(['unknown', 'music', 'upscale'])('does not treat %s as a legacy model type', async type => {
+  query.mockResolvedValueOnce([{ ...row(), type }]);
+  await expect(resolveModel(slug)).rejects.toThrow('Invalid model routing facts');
+  expect(setex).not.toHaveBeenCalled();
 });
