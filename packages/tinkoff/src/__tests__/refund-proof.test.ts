@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   TinkoffAcquiring,
   inspectRefundMethodContext,
+  type TinkoffConfig,
   type TinkoffFetch,
   type TinkoffRefundMethodContext,
 } from '../index';
@@ -18,26 +19,16 @@ function response(body: unknown, status = 200) {
   };
 }
 
-function supportedMethod(
+function untrustedMethod(
   overrides: Partial<TinkoffRefundMethodContext> = {}
 ): TinkoffRefundMethodContext {
-  const inspection = inspectRefundMethodContext(
-    {
-      Success: true,
-      ErrorCode: '0',
-      PaymentId: 'payment-42',
-      OrderId: 'order-42',
-      Params: [
-        { Key: 'Route', Value: 'ACQ' },
-        { Key: 'Source', Value: 'cards' },
-      ],
-    },
-    { paymentId: 'payment-42', orderId: 'order-42' }
-  );
-  if (inspection.kind !== 'supported') {
-    throw new Error('invalid test fixture');
-  }
-  return { ...inspection.context, ...overrides };
+  return {
+    paymentId: 'payment-42',
+    orderId: 'order-42',
+    route: 'ACQ',
+    source: 'cards',
+    ...overrides,
+  } as TinkoffRefundMethodContext;
 }
 
 function claim(overrides: Record<string, unknown> = {}) {
@@ -48,7 +39,7 @@ function claim(overrides: Record<string, unknown> = {}) {
     paidKopecks: 10_000,
     refundedKopecks: 2_000,
     requestedKopecks: 3_000,
-    methodContext: supportedMethod(),
+    methodContext: untrustedMethod(),
     receiptContext: { kind: 'trusted_no_receipt_required' as const },
     ...overrides,
   };
@@ -67,6 +58,44 @@ function successfulCancel(overrides: Record<string, unknown> = {}) {
     NewAmount: 5_000,
     ...overrides,
   };
+}
+
+function successfulGetState(overrides: Record<string, unknown> = {}) {
+  return {
+    Success: true,
+    ErrorCode: '0',
+    TerminalKey: 'terminal',
+    Status: 'CONFIRMED',
+    PaymentId: 'payment-42',
+    OrderId: 'order-42',
+    Amount: 10_000,
+    Params: [
+      { Key: 'Route', Value: 'ACQ' },
+      { Key: 'Source', Value: 'cards' },
+    ],
+    ...overrides,
+  };
+}
+
+function refundClient(
+  cancelFetch: TinkoffFetch,
+  config: Partial<TinkoffConfig> = {}
+): TinkoffAcquiring {
+  const fetchImpl: TinkoffFetch = async (url, init) =>
+    url.endsWith('/GetState') ? response(successfulGetState()) : cancelFetch(url, init);
+  return new TinkoffAcquiring(
+    { terminalKey: 'terminal', secretKey: 'secret', ...config },
+    fetchImpl
+  );
+}
+
+async function claimFor(client: TinkoffAcquiring, overrides: Record<string, unknown> = {}) {
+  const authorization = await client.getRefundMethodContext({
+    paymentId: 'payment-42',
+    orderId: 'order-42',
+  });
+  if (authorization.kind !== 'supported') throw new Error('invalid test authorization');
+  return claim({ methodContext: authorization.context, ...overrides });
 }
 
 describe('inspectRefundMethodContext', () => {
@@ -90,7 +119,15 @@ describe('inspectRefundMethodContext', () => {
         paymentId: 'payment-42',
         orderId: 'order-42',
       })
-    ).toEqual({ kind: 'supported', context: supportedMethod() });
+    ).toEqual({
+      kind: 'supported',
+      facts: {
+        paymentId: 'payment-42',
+        orderId: 'order-42',
+        route: 'ACQ',
+        source: 'cards',
+      },
+    });
   });
 
   it.each([
@@ -144,6 +181,118 @@ describe('inspectRefundMethodContext', () => {
   });
 });
 
+describe('client-owned refund method capability', () => {
+  it('performs bounded GetState and returns an immutable same-client context', async () => {
+    const fetchImpl: TinkoffFetch = vi.fn(async () => response(successfulGetState()));
+    const client = new TinkoffAcquiring(
+      { terminalKey: 'terminal', secretKey: 'secret' },
+      fetchImpl
+    );
+
+    const result = await client.getRefundMethodContext({
+      paymentId: 'payment-42',
+      orderId: 'order-42',
+    });
+
+    expect(result).toMatchObject({
+      kind: 'supported',
+      context: {
+        paymentId: 'payment-42',
+        orderId: 'order-42',
+        route: 'ACQ',
+        source: 'cards',
+      },
+    });
+    if (result.kind !== 'supported') throw new Error('expected supported context');
+    expect(Object.isFrozen(result.context)).toBe(true);
+    expect(Reflect.ownKeys(client)).not.toContain('refundMethodContexts');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(fetchImpl).mock.calls[0][0])).toBe(
+      'https://securepay.tinkoff.ru/v2/GetState'
+    );
+  });
+
+  it('aborts an unbounded GetState at the configured deadline', async () => {
+    const fetchImpl: TinkoffFetch = vi.fn(
+      async (_url, init) =>
+        new Promise((_, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError'))
+          );
+        })
+    );
+    const client = new TinkoffAcquiring(
+      { terminalKey: 'terminal', secretKey: 'secret', refundRequestTimeoutMs: 5 },
+      fetchImpl
+    );
+
+    await expect(
+      client.getRefundMethodContext({ paymentId: 'payment-42', orderId: 'order-42' })
+    ).resolves.toEqual({ kind: 'indeterminate', code: 'NETWORK_ERROR' });
+  });
+
+  it('rejects parser output, spread and reflected copies, mutation proxies, and another issuer', async () => {
+    const cancelFetch = vi.fn(async (url: string) =>
+      response(url.endsWith('/GetState') ? successfulGetState() : successfulCancel())
+    );
+    const otherFetch = vi.fn(async (url: string) =>
+      response(url.endsWith('/GetState') ? successfulGetState() : successfulCancel())
+    );
+    const client = new TinkoffAcquiring(
+      { terminalKey: 'terminal', secretKey: 'secret' },
+      cancelFetch as TinkoffFetch
+    );
+    const otherClient = new TinkoffAcquiring(
+      { terminalKey: 'terminal', secretKey: 'secret' },
+      otherFetch as TinkoffFetch
+    );
+    const issued = await client.getRefundMethodContext({
+      paymentId: 'payment-42',
+      orderId: 'order-42',
+    });
+    if (issued.kind !== 'supported') throw new Error('expected supported context');
+    expect(Reflect.set(issued.context, 'paymentId', 'other-payment')).toBe(false);
+    expect(issued.context.paymentId).toBe('payment-42');
+    const parsed = inspectRefundMethodContext(successfulGetState(), {
+      paymentId: 'payment-42',
+      orderId: 'order-42',
+    });
+    if (parsed.kind !== 'supported') throw new Error('expected supported facts');
+    const reflectedCopy = Object.fromEntries(
+      Reflect.ownKeys(issued.context).map((key) => [key, Reflect.get(issued.context, key)])
+    );
+    const mutationProxy = new Proxy(issued.context, {
+      get(target, key, receiver) {
+        if (key === 'paymentId') return 'other-payment';
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const candidates = [
+      JSON.parse(JSON.stringify(parsed.facts)),
+      { ...issued.context },
+      reflectedCopy,
+      mutationProxy,
+    ];
+
+    for (const methodContext of candidates) {
+      const result = await client.cancelClaimBoundRefund(
+        claim({ methodContext: methodContext as TinkoffRefundMethodContext })
+      );
+      expect(result).toEqual({ kind: 'not_dispatched', code: 'UNSUPPORTED_METHOD' });
+    }
+    const crossClient = await otherClient.cancelClaimBoundRefund(
+      claim({ methodContext: issued.context })
+    );
+    expect(crossClient).toEqual({ kind: 'not_dispatched', code: 'UNSUPPORTED_METHOD' });
+    expect(cancelFetch.mock.calls.filter(([url]) => String(url).endsWith('/Cancel'))).toHaveLength(
+      0
+    );
+    expect(otherFetch.mock.calls.filter(([url]) => String(url).endsWith('/Cancel'))).toHaveLength(
+      0
+    );
+  });
+});
+
 describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
   it('sends unchanged persisted key and integer amount with the exact token', async () => {
     const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
@@ -151,16 +300,9 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
       calls.push({ url, body: JSON.parse(init?.body ?? '{}') });
       return response(successfulCancel());
     });
-    const client = new TinkoffAcquiring(
-      {
-        terminalKey: 'terminal',
-        secretKey: 'secret',
-        apiUrl: 'https://bank.test/v2',
-      },
-      fetchImpl
-    );
+    const client = refundClient(fetchImpl, { apiUrl: 'https://bank.test/v2' });
 
-    const result = await client.cancelClaimBoundRefund(claim());
+    const result = await client.cancelClaimBoundRefund(await claimFor(client));
 
     const expectedToken = createHash('sha256')
       .update(`3000${providerKey}secretpayment-42terminal`)
@@ -196,13 +338,11 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
       bodies.push(JSON.parse(init?.body ?? '{}'));
       return response(successfulCancel());
     });
-    const client = new TinkoffAcquiring(
-      { terminalKey: 'terminal', secretKey: 'secret' },
-      fetchImpl
-    );
+    const client = refundClient(fetchImpl);
+    const request = await claimFor(client);
 
-    await client.cancelClaimBoundRefund(claim());
-    await client.cancelClaimBoundRefund(claim());
+    await client.cancelClaimBoundRefund(request);
+    await client.cancelClaimBoundRefund(request);
 
     expect(bodies.map((body) => body.ExternalRequestId)).toEqual([providerKey, providerKey]);
   });
@@ -214,12 +354,11 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
       sentBody = JSON.parse(init?.body ?? '{}');
       return response(successfulCancel({ ExternalRequestId: maxKey }));
     });
-    const client = new TinkoffAcquiring(
-      { terminalKey: 'terminal', secretKey: 'secret' },
-      fetchImpl
-    );
+    const client = refundClient(fetchImpl);
 
-    const result = await client.cancelClaimBoundRefund(claim({ providerKey: maxKey }));
+    const result = await client.cancelClaimBoundRefund(
+      await claimFor(client, { providerKey: maxKey })
+    );
 
     expect(sentBody.ExternalRequestId).toBe(maxKey);
     expect(result).toMatchObject({
@@ -240,13 +379,10 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
         })
       );
     });
-    const client = new TinkoffAcquiring(
-      { terminalKey: 'terminal', secretKey: 'secret' },
-      fetchImpl
-    );
+    const client = refundClient(fetchImpl);
 
     const result = await client.cancelClaimBoundRefund(
-      claim({
+      await claimFor(client, {
         requestedKopecks: 8_000,
         receiptContext: {
           kind: 'verified_receipt',
@@ -273,8 +409,7 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
     });
   });
 
-  it('passes a verified receipt for a partial cancellation', async () => {
-    let sentBody: Record<string, unknown> = {};
+  it('does not dispatch a plausible verified receipt for a partial cancellation', async () => {
     const receipt = {
       Taxation: 'usn_income' as const,
       Items: [
@@ -287,20 +422,41 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
         },
       ],
     };
-    const fetchImpl: TinkoffFetch = vi.fn(async (_url, init) => {
-      sentBody = JSON.parse(init?.body ?? '{}');
-      return response(successfulCancel());
+    const fetchImpl: TinkoffFetch = vi.fn();
+    const client = refundClient(fetchImpl);
+
+    const result = await client.cancelClaimBoundRefund(
+      await claimFor(client, { receiptContext: { kind: 'verified_receipt', receipt } })
+    );
+
+    expect(result).toEqual({
+      kind: 'not_dispatched',
+      code: 'PARTIAL_RECEIPT_UNSUPPORTED',
     });
-    const client = new TinkoffAcquiring(
-      { terminalKey: 'terminal', secretKey: 'secret' },
-      fetchImpl
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch a verified receipt whose item total differs from the requested refund', async () => {
+    const fetchImpl: TinkoffFetch = vi.fn();
+    const client = refundClient(fetchImpl);
+
+    const result = await client.cancelClaimBoundRefund(
+      await claimFor(client, {
+        receiptContext: {
+          kind: 'verified_receipt',
+          receipt: {
+            Taxation: 'usn_income',
+            Items: [{ Name: 'Wrong total', Price: 1, Quantity: 1, Amount: 1, Tax: 'none' }],
+          },
+        },
+      })
     );
 
-    await client.cancelClaimBoundRefund(
-      claim({ receiptContext: { kind: 'verified_receipt', receipt } })
-    );
-
-    expect(sentBody.Receipt).toEqual(receipt);
+    expect(result).toEqual({
+      kind: 'not_dispatched',
+      code: 'PARTIAL_RECEIPT_UNSUPPORTED',
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -315,10 +471,10 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
     ['zero requested amount', { requestedKopecks: 0 }],
     ['string requested amount', { requestedKopecks: '3000' }],
     ['request above remaining amount', { requestedKopecks: 8_001 }],
-    ['method payment mismatch', { methodContext: supportedMethod({ paymentId: 'other' }) }],
-    ['method order mismatch', { methodContext: supportedMethod({ orderId: 'other' }) }],
-    ['unsupported route', { methodContext: supportedMethod({ route: 'BNPL' as 'ACQ' }) }],
-    ['unsupported source', { methodContext: supportedMethod({ source: 'qrsbp' as 'cards' }) }],
+    ['method payment mismatch', { methodContext: untrustedMethod({ paymentId: 'other' }) }],
+    ['method order mismatch', { methodContext: untrustedMethod({ orderId: 'other' }) }],
+    ['unsupported route', { methodContext: untrustedMethod({ route: 'BNPL' as 'ACQ' }) }],
+    ['unsupported source', { methodContext: untrustedMethod({ source: 'qrsbp' as 'cards' }) }],
     [
       'unproven structural method context',
       {
@@ -353,12 +509,9 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
     ],
   ])('returns not_dispatched for %s and never calls Cancel', async (_name, overrides) => {
     const fetchImpl: TinkoffFetch = vi.fn();
-    const client = new TinkoffAcquiring(
-      { terminalKey: 'terminal', secretKey: 'secret' },
-      fetchImpl
-    );
+    const client = refundClient(fetchImpl);
 
-    const result = await client.cancelClaimBoundRefund(claim(overrides));
+    const result = await client.cancelClaimBoundRefund(await claimFor(client, overrides));
 
     expect(result).toMatchObject({ kind: 'not_dispatched' });
     expect(fetchImpl).not.toHaveBeenCalled();
@@ -386,12 +539,9 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
       successfulCancel({ Status: 'PARTIAL_REFUNDED', NewAmount: 0 }),
     ],
   ])('keeps %s indeterminate', async (_name, body) => {
-    const client = new TinkoffAcquiring(
-      { terminalKey: 'terminal', secretKey: 'secret' },
-      vi.fn(async () => response(body))
-    );
+    const client = refundClient(vi.fn(async () => response(body)));
 
-    await expect(client.cancelClaimBoundRefund(claim())).resolves.toMatchObject({
+    await expect(client.cancelClaimBoundRefund(await claimFor(client))).resolves.toMatchObject({
       kind: 'indeterminate',
     });
   });
@@ -416,12 +566,9 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
       'MALFORMED_RESPONSE',
     ],
   ])('maps %s to a safe indeterminate result', async (_name, fetchImpl, code) => {
-    const client = new TinkoffAcquiring(
-      { terminalKey: 'terminal', secretKey: 'secret' },
-      fetchImpl as TinkoffFetch
-    );
+    const client = refundClient(fetchImpl as TinkoffFetch);
 
-    const result = await client.cancelClaimBoundRefund(claim());
+    const result = await client.cancelClaimBoundRefund(await claimFor(client));
 
     expect(result).toEqual({ kind: 'indeterminate', code });
     expect(JSON.stringify(result)).not.toContain('secret');
@@ -437,16 +584,9 @@ describe('TinkoffAcquiring.cancelClaimBoundRefund', () => {
           );
         })
     );
-    const client = new TinkoffAcquiring(
-      {
-        terminalKey: 'terminal',
-        secretKey: 'secret',
-        refundRequestTimeoutMs: 5,
-      },
-      fetchImpl
-    );
+    const client = refundClient(fetchImpl, { refundRequestTimeoutMs: 5 });
 
-    await expect(client.cancelClaimBoundRefund(claim())).resolves.toEqual({
+    await expect(client.cancelClaimBoundRefund(await claimFor(client))).resolves.toEqual({
       kind: 'indeterminate',
       code: 'NETWORK_ERROR',
     });

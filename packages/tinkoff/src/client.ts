@@ -13,8 +13,18 @@ import type {
   PaymentResult,
   WebhookNotification,
 } from './types';
-import type { ClaimBoundRefundRequest, ClaimBoundRefundResult } from './refund-proof';
-import { validateCancelProof, validateClaimBoundRefundRequest } from './refund-proof';
+import type {
+  ClaimBoundRefundRequest,
+  ClaimBoundRefundResult,
+  TinkoffRefundMethodAuthorizationResult,
+  TinkoffRefundMethodContext,
+  TinkoffRefundMethodFacts,
+} from './refund-proof';
+import {
+  inspectRefundMethodContext,
+  validateCancelProof,
+  validateClaimBoundRefundRequest,
+} from './refund-proof';
 import { generateToken, verifyWebhookToken, rublesToKopecks, kopecksToRubles } from './utils';
 
 const DEFAULT_API_URL = 'https://securepay.tinkoff.ru/v2';
@@ -44,6 +54,7 @@ export class TinkoffAcquiring {
   private readonly apiUrl: string;
   private readonly fetchImpl: TinkoffFetch;
   private readonly refundRequestTimeoutMs: number;
+  readonly #refundMethodContexts = new WeakMap<object, TinkoffRefundMethodFacts>();
 
   constructor(config: TinkoffConfig, fetchImpl: TinkoffFetch = fetch as unknown as TinkoffFetch) {
     this.terminalKey = config.terminalKey;
@@ -85,6 +96,52 @@ export class TinkoffAcquiring {
     return response.json() as Promise<T>;
   }
 
+  private async requestWithRefundDeadline(
+    endpoint: string,
+    data: Record<string, unknown>
+  ): Promise<
+    | { kind: 'response'; body: unknown }
+    | {
+        kind: 'indeterminate';
+        code: 'NETWORK_ERROR' | 'HTTP_ERROR' | 'MALFORMED_RESPONSE';
+      }
+  > {
+    const abortController = new AbortController();
+    let deadlineTimer: ReturnType<typeof setTimeout>;
+    const deadline = new Promise<never>((_, reject) => {
+      deadlineTimer = setTimeout(() => {
+        abortController.abort();
+        reject(new Error('refund request deadline exceeded'));
+      }, this.refundRequestTimeoutMs);
+    });
+
+    try {
+      const response = await Promise.race([
+        this.post(endpoint, data, abortController.signal),
+        deadline,
+      ]);
+
+      if (!response.ok) {
+        return { kind: 'indeterminate', code: 'HTTP_ERROR' };
+      }
+
+      try {
+        return {
+          kind: 'response',
+          body: await Promise.race([response.json(), deadline]),
+        };
+      } catch {
+        return abortController.signal.aborted
+          ? { kind: 'indeterminate', code: 'NETWORK_ERROR' }
+          : { kind: 'indeterminate', code: 'MALFORMED_RESPONSE' };
+      }
+    } catch {
+      return { kind: 'indeterminate', code: 'NETWORK_ERROR' };
+    } finally {
+      clearTimeout(deadlineTimer!);
+    }
+  }
+
   /**
    * Initialize payment (low-level)
    */
@@ -103,6 +160,41 @@ export class TinkoffAcquiring {
       TerminalKey: this.terminalKey,
       PaymentId: paymentId,
     });
+  }
+
+  /**
+   * Verify the payment method through T-Bank and mint a capability owned by
+   * this client instance. Pure parsers and serialized data cannot mint it.
+   */
+  async getRefundMethodContext(expected: {
+    paymentId: string;
+    orderId: string;
+  }): Promise<TinkoffRefundMethodAuthorizationResult> {
+    if (
+      typeof expected.paymentId !== 'string' ||
+      expected.paymentId.trim().length === 0 ||
+      typeof expected.orderId !== 'string' ||
+      expected.orderId.trim().length === 0
+    ) {
+      return { kind: 'unsupported', code: 'GET_STATE_UNVERIFIED' };
+    }
+
+    const state = await this.requestWithRefundDeadline('GetState', {
+      TerminalKey: this.terminalKey,
+      PaymentId: expected.paymentId,
+    });
+    if (state.kind === 'indeterminate') {
+      return state;
+    }
+
+    const inspection = inspectRefundMethodContext(state.body, expected);
+    if (inspection.kind === 'unsupported') {
+      return inspection;
+    }
+
+    const context = Object.freeze({ ...inspection.facts }) as TinkoffRefundMethodContext;
+    this.#refundMethodContexts.set(context, inspection.facts);
+    return { kind: 'supported', context };
   }
 
   /**
@@ -130,55 +222,27 @@ export class TinkoffAcquiring {
    * Ambiguous provider outcomes deliberately remain indeterminate.
    */
   async cancelClaimBoundRefund(params: ClaimBoundRefundRequest): Promise<ClaimBoundRefundResult> {
-    const validation = validateClaimBoundRefundRequest(params);
+    const methodContext = params?.methodContext;
+    const methodFacts =
+      typeof methodContext === 'object' && methodContext !== null
+        ? this.#refundMethodContexts.get(methodContext)
+        : undefined;
+    const validation = validateClaimBoundRefundRequest(params, methodFacts);
     if (validation.kind === 'not_dispatched') {
       return validation;
     }
 
-    const abortController = new AbortController();
-    let deadlineTimer: ReturnType<typeof setTimeout>;
-    const deadline = new Promise<never>((_, reject) => {
-      deadlineTimer = setTimeout(() => {
-        abortController.abort();
-        reject(new Error('refund request deadline exceeded'));
-      }, this.refundRequestTimeoutMs);
+    const response = await this.requestWithRefundDeadline('Cancel', {
+      TerminalKey: this.terminalKey,
+      PaymentId: params.paymentId,
+      Amount: params.requestedKopecks,
+      ExternalRequestId: params.providerKey,
     });
-
-    try {
-      const response = await Promise.race([
-        this.post(
-          'Cancel',
-          {
-            TerminalKey: this.terminalKey,
-            PaymentId: params.paymentId,
-            Amount: params.requestedKopecks,
-            ExternalRequestId: params.providerKey,
-            Receipt: validation.receipt,
-          },
-          abortController.signal
-        ),
-        deadline,
-      ]);
-
-      if (!response.ok) {
-        return { kind: 'indeterminate', code: 'HTTP_ERROR' };
-      }
-
-      let body: unknown;
-      try {
-        body = await Promise.race([response.json(), deadline]);
-      } catch {
-        return abortController.signal.aborted
-          ? { kind: 'indeterminate', code: 'NETWORK_ERROR' }
-          : { kind: 'indeterminate', code: 'MALFORMED_RESPONSE' };
-      }
-
-      return validateCancelProof(body, params, validation.remainingKopecks);
-    } catch {
-      return { kind: 'indeterminate', code: 'NETWORK_ERROR' };
-    } finally {
-      clearTimeout(deadlineTimer!);
+    if (response.kind === 'indeterminate') {
+      return response;
     }
+
+    return validateCancelProof(response.body, params, validation.remainingKopecks);
   }
 
   /**

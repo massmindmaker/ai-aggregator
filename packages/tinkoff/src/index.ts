@@ -2,15 +2,13 @@
 export { TinkoffAcquiring, createTinkoffClient } from './client';
 export type { TinkoffFetch } from './client';
 
-export {
-  inspectRefundMethodContext,
-  validateCancelProof,
-  validateClaimBoundRefundRequest,
-} from './refund-proof';
+export { inspectRefundMethodContext } from './refund-proof';
 export type {
   ClaimBoundRefundRequest,
   ClaimBoundRefundResult,
+  TinkoffRefundMethodAuthorizationResult,
   TinkoffRefundMethodContext,
+  TinkoffRefundMethodFacts,
   TinkoffRefundMethodInspection,
   TinkoffRefundProof,
   TinkoffRefundReceiptContext,

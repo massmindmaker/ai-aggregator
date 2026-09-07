@@ -10,32 +10,32 @@ const DOCUMENTED_PARAM_KEYS = new Set([
   'ParticipantWalletId',
 ]);
 
-const TAXATION_TYPES = new Set([
-  'osn',
-  'usn_income',
-  'usn_income_outcome',
-  'envd',
-  'esn',
-  'patent',
-]);
+declare const REFUND_METHOD_PROOF: unique symbol;
 
-const VAT_CODES = new Set(['none', 'vat0', 'vat10', 'vat20', 'vat110', 'vat120']);
+export interface TinkoffRefundMethodFacts {
+  readonly paymentId: string;
+  readonly orderId: string;
+  readonly route: 'ACQ';
+  readonly source: 'cards';
+}
 
-const REFUND_METHOD_PROOF: unique symbol = Symbol('tinkoff-refund-method-proof');
-
-export interface TinkoffRefundMethodContext {
-  readonly [REFUND_METHOD_PROOF]: true;
-  paymentId: string;
-  orderId: string;
-  route: 'ACQ';
-  source: 'cards';
+export interface TinkoffRefundMethodContext extends TinkoffRefundMethodFacts {
+  readonly [REFUND_METHOD_PROOF]: never;
 }
 
 export type TinkoffRefundMethodInspection =
-  | { kind: 'supported'; context: TinkoffRefundMethodContext }
+  | { kind: 'supported'; facts: TinkoffRefundMethodFacts }
   | {
       kind: 'unsupported';
       code: 'GET_STATE_UNVERIFIED' | 'METHOD_PARAMS_UNSUPPORTED';
+    };
+
+export type TinkoffRefundMethodAuthorizationResult =
+  | { kind: 'supported'; context: TinkoffRefundMethodContext }
+  | Extract<TinkoffRefundMethodInspection, { kind: 'unsupported' }>
+  | {
+      kind: 'indeterminate';
+      code: 'NETWORK_ERROR' | 'HTTP_ERROR' | 'MALFORMED_RESPONSE';
     };
 
 export type TinkoffRefundReceiptContext =
@@ -66,7 +66,11 @@ export type ClaimBoundRefundResult =
   | { kind: 'settled'; proof: TinkoffRefundProof }
   | {
       kind: 'not_dispatched';
-      code: 'INVALID_REQUEST' | 'UNSUPPORTED_METHOD' | 'PARTIAL_RECEIPT_CONTEXT_REQUIRED';
+      code:
+        | 'INVALID_REQUEST'
+        | 'UNSUPPORTED_METHOD'
+        | 'PARTIAL_RECEIPT_CONTEXT_REQUIRED'
+        | 'PARTIAL_RECEIPT_UNSUPPORTED';
     }
   | {
       kind: 'indeterminate';
@@ -133,45 +137,20 @@ export function inspectRefundMethodContext(
 
   return {
     kind: 'supported',
-    context: {
+    facts: Object.freeze({
       paymentId: expected.paymentId,
       orderId: expected.orderId,
       route: 'ACQ',
       source: 'cards',
-      [REFUND_METHOD_PROOF]: true,
-    },
+    }),
   };
 }
 
-function isReceipt(value: unknown): value is Receipt {
-  if (
-    !isRecord(value) ||
-    typeof value.Taxation !== 'string' ||
-    !TAXATION_TYPES.has(value.Taxation) ||
-    !Array.isArray(value.Items) ||
-    value.Items.length === 0
-  ) {
-    return false;
-  }
-
-  return value.Items.every(
-    (item) =>
-      isRecord(item) &&
-      isNonemptyString(item.Name) &&
-      isNonnegativeSafeInteger(item.Price) &&
-      typeof item.Quantity === 'number' &&
-      Number.isFinite(item.Quantity) &&
-      item.Quantity > 0 &&
-      isNonnegativeSafeInteger(item.Amount) &&
-      typeof item.Tax === 'string' &&
-      VAT_CODES.has(item.Tax)
-  );
-}
-
 export function validateClaimBoundRefundRequest(
-  request: ClaimBoundRefundRequest
+  request: ClaimBoundRefundRequest,
+  methodFacts?: TinkoffRefundMethodFacts
 ):
-  | { kind: 'valid'; remainingKopecks: number; receipt?: Receipt }
+  | { kind: 'valid'; remainingKopecks: number }
   | Extract<ClaimBoundRefundResult, { kind: 'not_dispatched' }> {
   if (
     !isNonemptyString(request.providerKey, 255) ||
@@ -193,12 +172,11 @@ export function validateClaimBoundRefundRequest(
   }
 
   if (
-    !isRecord(request.methodContext) ||
-    request.methodContext.paymentId !== request.paymentId ||
-    request.methodContext.orderId !== request.orderId ||
-    request.methodContext.route !== 'ACQ' ||
-    request.methodContext.source !== 'cards' ||
-    request.methodContext[REFUND_METHOD_PROOF] !== true
+    !methodFacts ||
+    methodFacts.paymentId !== request.paymentId ||
+    methodFacts.orderId !== request.orderId ||
+    methodFacts.route !== 'ACQ' ||
+    methodFacts.source !== 'cards'
   ) {
     return { kind: 'not_dispatched', code: 'UNSUPPORTED_METHOD' };
   }
@@ -207,20 +185,13 @@ export function validateClaimBoundRefundRequest(
     if (request.receiptContext?.kind === 'trusted_no_receipt_required') {
       return { kind: 'valid', remainingKopecks };
     }
-    if (
-      request.receiptContext?.kind !== 'verified_receipt' ||
-      !isReceipt(request.receiptContext.receipt)
-    ) {
+    if (request.receiptContext?.kind === 'verified_receipt') {
       return {
         kind: 'not_dispatched',
-        code: 'PARTIAL_RECEIPT_CONTEXT_REQUIRED',
+        code: 'PARTIAL_RECEIPT_UNSUPPORTED',
       };
     }
-    return {
-      kind: 'valid',
-      remainingKopecks,
-      receipt: request.receiptContext.receipt,
-    };
+    return { kind: 'not_dispatched', code: 'PARTIAL_RECEIPT_CONTEXT_REQUIRED' };
   }
 
   return { kind: 'valid', remainingKopecks };
