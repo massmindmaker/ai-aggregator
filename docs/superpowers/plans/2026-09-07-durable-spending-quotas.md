@@ -1,6 +1,8 @@
 # Task6 — durable spending quotas в AI Aggregator
 
-Дата решения: 2026-09-07. **Статус: дизайн принят; реализация, native tests и independent review ещё не выполнены.**
+Дата решения: 2026-09-07. **Статус: принято локально 2026-09-08 — реализация `fdd8f22`, test-only follow-up `2aa3a7f`; независимые financial/spec и TypeScript review Approved.**
+
+Проверки: clean replay68, baseline127/127; после уточнения application ACK-loss итоговый quota run85/85 и строгие TypeScript checks PASS. Production/public routes не активированы. Остались неблокирующие follow-ups: regression на retail half-up boundary с частичным cache, разделение растущего native test harness при расширении, старое предупреждение Vite CJS.
 
 **Goal:** атомарно учитывать settled+reserved расход месячного ключа, дневной организации и объявленной сессии вместе с существующим admission lifecycle.
 

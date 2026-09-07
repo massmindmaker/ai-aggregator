@@ -1,8 +1,10 @@
 # AI Aggregator: начать разработку здесь
 
+**Чекпойнт разработки 08.09:** [принятые изменения, проверки и следующий этап](/home/bob/Projects/ai-aggregator/docs/consolidation/2026-09-08-development-checkpoint.md).
+
 **Карта функционала:** [сценарии, текущее состояние и оставшиеся работы](product/functional-map.md). Срез 08.09.2026; карта не заменяет приёмку.
 
-**Кооперативная стратегия и порядок работ:** [стратегия](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-07-cooperative-strategy.md) и [roadmap](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-07-cooperative-roadmap.md). Главный поток: Aggregator → Arena → Agents Market; общий фонд и подключение будущих сервисов описаны отдельно от product-owned БД/обязательств. Управленческие параметры — предложения, не действующий устав. При завершении сессии локальные previews и test PostgreSQL/Redis остановлены; перед проверками восстановить только нужный guarded стенд.
+**Кооперативная стратегия и порядок работ:** [стратегия](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-07-cooperative-strategy.md) и [roadmap](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-07-cooperative-roadmap.md). Главный поток: Aggregator → Arena → Agents Market; общий фонд и подключение будущих сервисов описаны отдельно от product-owned БД/обязательств. Управленческие параметры — предложения, не действующий устав. На паузе 7 сентября локальные previews и test PostgreSQL/Redis были остановлены. При продолжении 8 сентября восстановлен только guarded test PostgreSQL/Redis; production не менялся.
 
 **Исследовательская волна 1 завершена:** [решения и влияние на планы](/home/bob/Projects/ai-aggregator/docs/research/2026-09-07-research-impact-and-decisions.md). В production continuation добавлены D-задачи и критерии приёмки, включая дополнительный TON login во всех трёх продуктах. Кодовый следующий шаг остаётся quota v2 → public route composition → recovery/refund. Это documentary checkpoint; баллы готовности и deployed code не изменены.
 
@@ -10,11 +12,15 @@
 
 Канонический root: `/home/bob/Projects/ai-aggregator`; ветка `feat/three-projects-completion`. Сначала [AGENTS.md](../AGENTS.md), [рабочая карта](consolidation/DEVELOPMENT-WORKFLOW.md) и [границы продуктов](consolidation/ACTIVE-PROJECTS.md).
 
-## Текущий этап — 7 сентября
+## Принятый этап — 8 сентября
+
+Task6 durable quotas принят локально: `fdd8f22` + test-only `2aa3a7f`. Независимые финансовое/spec и TypeScript review — Approved; 68 миграций с нуля, baseline127/127, итоговые quota85/85, строгие проверки типов прошли. Три измерения settled+reserved: ключ/месяц, организация/день, ключ/SID за всё время. Проверены конкурентные транзакции, rollback, original periods и simulated application ACK loss. Публичные маршруты и Task5 ещё не используют v2; следующий шаг — typed v2 wrapper, затем trusted route composition и HTTP idempotency/recovery. Production не активирован.
+
+## Предыдущий этап — 7 сентября
 
 Последний принятый gateway code — Task5 `b6266cb7`: исполнитель одной stored plaintext/nonstream попытки объединяет hold→dispatch→provider→usage→outcome→settle. Независимое финансовое/spec review — APPROVE,156/156 focused tests, source/test types и lint PASS. Реальная цепочка adapter→HTTP transport проверена с подставленным сетевым ответом: redirects не создают второй POST. Живая платная модель этим тестом не вызывалась.
 
-Исполнитель пока не подключён к маршрутам. Он использует принятые wrapper `1c25d0f` и candidate/quote `3cc5b271`; полный контракт в [gateway admission plan](superpowers/plans/2026-09-07-gateway-charge-admission.md). Принят [дизайн durable key/org/session quotas](superpowers/plans/2026-09-07-durable-spending-quotas.md): v2 DB entrypoints, lifetime session, точная supplier valuation и проверяемые opening balances при cutover. Реализация/native review ещё не выполнены. После них — trusted route composition/HTTP idempotency, recovery/reconciliation, tool calling, SSE/media/BYOK и полный route/refund cutover. Process-local memoization не заменяет восстановление запросов после рестарта.
+Исполнитель пока не подключён к маршрутам. Он использует принятые wrapper `1c25d0f` и candidate/quote `3cc5b271`; полный контракт в [gateway admission plan](superpowers/plans/2026-09-07-gateway-charge-admission.md). Принят [дизайн durable key/org/session quotas](superpowers/plans/2026-09-07-durable-spending-quotas.md): v2 DB entrypoints, lifetime session, точная supplier valuation и проверяемые opening balances при cutover. Реализация и native review приняты 8 сентября; детали выше. После них — trusted route composition/HTTP idempotency, recovery/reconciliation, tool calling, SSE/media/BYOK и полный route/refund cutover. Process-local memoization не заменяет восстановление запросов после рестарта.
 
 ## Продуктовая программа
 
