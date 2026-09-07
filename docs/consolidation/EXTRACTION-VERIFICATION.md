@@ -97,6 +97,18 @@ Task3 принят TypeScript/spec и React review на `8ddb2fe7c23ac5690fa2dd3
 
 Следующий обязательный этап описан в [плане резервирования запросов](../superpowers/plans/2026-09-07-gateway-charge-admission.md). Он резервирует максимальную стоимость до provider, сохраняет неопределённые операции для сверки и возвращает неиспользованный PAYG сначала в погашение refund debt. Полный возврат и готовность денежных сценариев пока не заявляются.
 
+## Aggregator: принятые резервы вызовов на уровне БД
+
+Этап2B.1 принят финансовым TypeScript/SQL review и проверкой React/Next-совместимости на `9493d1afb27fde25ebed8b97d93cffa35957bf5b`. Миграция0067 добавляет admission и отдельный аудит резерва: максимальная сумма изымается из доступных buckets, итоговое списание использует этот резерв, остаток PAYG сначала погашает refund debt. Подтверждённый нулевой итог отличается от неизвестного исхода.
+
+- Финальный mandatory native baseline:45/45,5files; Database typecheck прошёл. Guarded fresh67/0, повтор0/67; БД67migrations/98tables.
+- Проверены конкурирующие резервы, claim/admission lock barriers, порядок refund/settlement, повтор и конфликт identity, отзыв ключа, нулевая сумма, expiry и полный rollback при конфликте аудита.
+- Ревью исправило два дефекта: разное время проверки/сохранения dispatch у дедлайна и отсутствие обязательного RETURNING в двух денежных UPDATE. Детерминированный PostgreSQL trigger воспроизвёл поздний timestamp, затем regression и persisted CHECK подтвердили исправление.
+- `did_transition` разрешает ровно один переход dispatch. Его обязан проверить будущий gateway consumer до provider call. BIGINT остаётся серверным; HTTP DTO должен передавать точные decimal strings.
+- Minor для финального review: при крайне коротком deadline свежего admission возможен сырой23514 вместо стабильной ошибки срока из-за отдельного created_at. Финансовый rollback сохраняется; это замечание не потеряно.
+
+Подключение token routes, SSE, reconciliation и refund routes ещё не выполнено. Эти DB-тесты не доказывают законченный пользовательский сценарий и не увеличивают108-балльную оценку автоматически.
+
 ## AI Arena
 
 Foundation `692bc12` и review fix `d742077` прошли TypeScript/spec и React review. Удалены 3276 отслеживаемых generated-файлов; исходники и package manifests сохранены. Native PostgreSQL разрешён только в явном тестовом режиме с проверкой адреса и DB marker; production driver остаётся Neon.
