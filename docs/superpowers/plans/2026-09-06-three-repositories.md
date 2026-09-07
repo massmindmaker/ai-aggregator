@@ -39,3 +39,7 @@ Execute ordered AG-W, AM-W (including WEB/TMA), AR-W queues from product plans. 
 
 Consumes: functional artifact/usage/evidence contracts.
 Produces: 14 integration scenarios, 108 checks per product, separate Web/TMA acceptance, operator recovery/runbooks. No release-readiness claim before fresh execution evidence.
+
+## Чекпойнт 07.09 перед паузой
+
+[Проверенные результаты, открытые reviews и точка продолжения](../../consolidation/2026-09-07-pause-checkpoint.md), [функциональная оценка](../../ecosystem/2026-09-07-functional-checkpoint.md). Последнее уточнение AM: UI/UX research полной Web-версии TMA без мокапов, затем реализация согласованных сценариев; исследование начато. Ничего из этого не закрывает выпуск всех трёх продуктов.

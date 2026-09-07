@@ -21,3 +21,7 @@ Aggregator владеет Web, gateway, model catalog, consumer/author money и 
 [Memory status](consolidation/MEMORY-STATUS.md): Serena/LSP и Graphify — производный кодовый контекст; LightRAG — принятые общие знания; Brain — человеческая навигация; Codex ad-hoc — собственные рабочие заметки. Старые Serena memories не отменяют текущие code/plans. Успех внешней синхронизации требует readback.
 
 Приватный controller ledger `.superpowers/sdd/2026-09-06-three-repositories/progress.md` восстанавливает точные task/commit/review states; не загружать его в общую память. Пользователь разрешил независимых implementation workers по репозиториям; один владелец на модуль, один heavy run под `flock /tmp/ai-ecosystem-build.lock`. Серьёзные архитектурные/финансовые задачи — Astra с повышенным reasoning; рутина — лёгкие модели. Scorecards и сквозная приёмка остаются источником готовности, не число коммитов.
+
+## Чекпойнт перед паузой — 07.09
+
+[Состояние трёх проектов](consolidation/2026-09-07-pause-checkpoint.md), [функциональный F-срез108](ecosystem/2026-09-07-functional-checkpoint.md). Исходная формальная I/T/O приёмка не подменяется аналитическим F. Следующий AG этап — quota v2, public route composition затем recovery/refund cutover; новый executor пока не подключён.
