@@ -24,6 +24,22 @@
 ---
 
 
+## Принятые входы research wave 1 — 07.09
+
+[Карта решений D01–D12](/home/bob/Projects/ai-aggregator/docs/research/2026-09-07-research-impact-and-decisions.md) и [архитектура / TON](/home/bob/Projects/ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md) уточняют следующие задачи. Обзор исходников и первичных источников завершён; интервью, реальные pilot runs и runtime compatibility остаются открыты. F/I/T/O не повышаются за документы.
+
+- **AG-P1, D03/D11:** первым продаваемым сквозным сценарием остаётся контролируемый plaintext API с сохранённым результатом, авторитетным usage receipt и объяснимым расходом. Quota v2 → trusted route composition → recovery/refund выполняются в этом порядке; новый framework не заменяет эти задачи.
+- **AG-P2, D05/D06:** DTO передаёт model/deployment identity, capabilities, поддерживаемые параметры, availability и price revision. Отдельный AM consumer проверяет ограничения и бюджет до dispatch; отсутствие capability не маскируется платным fallback.
+- **AG-P3, D04/D12:** listing, immutable runtime version, право доступа и evidence имеют отдельный lifecycle. Обновление автора не меняет купленную версию молча; attach оценки требует совпадения version/digest и consent. Цена/доля принимаются после измерения unit economics выбранного сценария.
+- **AG-P4, D01/D11:** вход TON и платёж TON — разные focused briefs. Общий verifier contract, свои challenges/accounts/sessions/ledger; RUB и native login сохраняются. Общий кошелёк не объединяет три баланса и не создаёт автоматический SSO.
+- **AG-P5, D09/D10:** интерфейс показывает доступность, конкретную версию, ограничения и итоговый receipt; общие semantic DESIGN roles применяются после API-state inventory. Визуальное обновление само по себе не закрывает release.
+
+### Новые проверяемые задачи по исследованиям
+
+- [ ] **D01:** описать и реализовать wallet sign-in/link/recovery отдельным brief: server nonce с атомарным consume, domain/purpose/network, key ownership, canonical address, dual-proof linking и конфликт аккаунтов. RED: replay, wrong domain/network, истёкший challenge, чужой link и доступ к чужой истории. Выбор wallet SDK сверить с lockfile перед coding.
+- [ ] **D03/D05:** пройти AG→AM настоящий локальный HTTP путь catalog→admission→run→usage receipt без AG SQL у AM; unknown outcome остаётся reconciliation. Платный upstream требует отдельного пилота.
+- [ ] **D11/D12:** закрепить владельца chain-event dedupe: для v1 отдельные merchant recipients; общий recipient допустим только с одним authoritative inbox. Проверить невозможность зачесть одно событие в двух продуктовых ledgers; разделить external costs и внутренний оборот AG→AM.
+
 ## Карта этапов и артефактов
 
 | Порядок | Пакеты исходной roadmap | Вход → выход | Gate |

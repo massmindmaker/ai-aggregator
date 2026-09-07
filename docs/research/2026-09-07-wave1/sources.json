@@ -1,0 +1,1307 @@
+{
+  "schema_version": 1,
+  "title": "AI Hub research wave 1 source register",
+  "registered_on": "2026-09-07",
+  "scope": "Primary-source and local-code desk research; no customer interviews, paid operations or compatibility pilots",
+  "provenance_rules": [
+    "This file indexes citations in the four reports; it is not a raw web retrieval log.",
+    "Registration date is not a publication date or evidence of re-fetching every source. Unknown publication dates are null.",
+    "Multiple pages by the same supplier are one authority group, not independent demand evidence.",
+    "Hypotheses, pilot sizes and thresholds belong to the reports and are not results from these sources.",
+    "Private reviews, credentials, raw sessions and memory records are excluded."
+  ],
+  "discovery": [
+    {
+      "tool": "Context7",
+      "library": "/nousresearch/hermes-agent",
+      "use": "programmatic integration discovery; pinned local source takes precedence"
+    },
+    {
+      "tool": "Context7",
+      "library": "/ton-blockchain/ton-connect",
+      "use": "proof integration discovery; primary server lifecycle and wire specification take precedence"
+    }
+  ],
+  "sources": [
+    {
+      "id": "W1-S001",
+      "url": "https://openrouter.ai/docs/guides/routing/provider-selection",
+      "title_labels": [
+        "provider routing",
+        "OpenRouter routing"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 13
+        },
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 41
+        }
+      ],
+      "provider_group": "OpenRouter",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "same-day earlier verified source reused; fresh product-wave fetch failed; not counted as a fresh successful fetch",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S002",
+      "url": "https://replicate.com/docs/topics/predictions/create-a-prediction",
+      "title_labels": [
+        "predictions"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 14
+        }
+      ],
+      "provider_group": "Replicate",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S003",
+      "url": "https://huggingface.co/docs/inference-providers/index",
+      "title_labels": [
+        "Inference Providers"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 15
+        }
+      ],
+      "provider_group": "huggingface.co",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S004",
+      "url": "https://docs.apify.com/actors/publishing/monetize",
+      "title_labels": [
+        "monetization"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 16
+        }
+      ],
+      "provider_group": "Apify",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S005",
+      "url": "https://docs.apify.com/actors/publishing/monetize/rental",
+      "title_labels": [
+        "rental sunset"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 16
+        }
+      ],
+      "provider_group": "Apify",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S006",
+      "url": "https://relevanceai.com/docs/get-started/marketplace/introduction",
+      "title_labels": [
+        "Marketplace"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 17
+        }
+      ],
+      "provider_group": "relevanceai.com",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S007",
+      "url": "https://relevanceai.com/docs/get-started/marketplace/relevance-builders/submit-agents",
+      "title_labels": [
+        "submission"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 17
+        }
+      ],
+      "provider_group": "relevanceai.com",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S008",
+      "url": "https://docs.dify.ai/en/cloud/use-dify/build/version-control",
+      "title_labels": [
+        "версии"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 18
+        }
+      ],
+      "provider_group": "Dify",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S009",
+      "url": "https://docs.dify.ai/en/cloud/use-dify/publish/publish-to-marketplace",
+      "title_labels": [
+        "Marketplace"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 18
+        }
+      ],
+      "provider_group": "Dify",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S010",
+      "url": "https://docs.lindy.ai/integrations/overview",
+      "title_labels": [
+        "текущие integrations"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 19
+        }
+      ],
+      "provider_group": "Lindy",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S011",
+      "url": "https://docs.lindy.ai/",
+      "title_labels": [
+        "главная docs"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 19
+        }
+      ],
+      "provider_group": "Lindy",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S012",
+      "url": "https://arena.ai/company/leaderboard-changelog",
+      "title_labels": [
+        "methodology changelog",
+        "Arena.ai changelog"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 20
+        },
+        {
+          "report": "aiarena/docs/research/2026-09-07-evaluation-and-contest-findings.md",
+          "line": 20
+        }
+      ],
+      "provider_group": "arena.ai",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S013",
+      "url": "https://docs.langchain.com/langsmith/evaluation",
+      "title_labels": [
+        "evaluation",
+        "LangSmith evaluation"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 21
+        },
+        {
+          "report": "aiarena/docs/research/2026-09-07-evaluation-and-contest-findings.md",
+          "line": 26
+        }
+      ],
+      "provider_group": "docs.langchain.com",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S014",
+      "url": "https://docs.dify.ai/en/cloud/use-dify/publish/webapp/workflow-webapp",
+      "title_labels": [
+        "Workflow Web Apps"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 23
+        }
+      ],
+      "provider_group": "Dify",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S015",
+      "url": "https://docs.dify.ai/en/cloud/use-dify/nodes/human-input",
+      "title_labels": [
+        "Human Input"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 23
+        }
+      ],
+      "provider_group": "Dify",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S016",
+      "url": "https://www.lindy.ai/changelog",
+      "title_labels": [
+        "changelog"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 25
+        }
+      ],
+      "provider_group": "Lindy",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S017",
+      "url": "https://www.w3.org/WAI/WCAG22/quickref/",
+      "title_labels": [
+        "WCAG 2.2"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-product-market-ux-findings.md",
+          "line": 80
+        }
+      ],
+      "provider_group": "www.w3.org",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S018",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/hermes_cli/providers.py",
+      "title_labels": [
+        "providers.py"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 68
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S019",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/hermes_cli/runtime_provider.py",
+      "title_labels": [
+        "runtime_provider.py"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 68
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S020",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/website/docs/reference/toolsets-reference.md",
+      "title_labels": [
+        "toolsets reference"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 69
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S021",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/tools/registry.py",
+      "title_labels": [
+        "registry.py"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 69
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S022",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/tools/mcp_tool.py",
+      "title_labels": [
+        "mcp_tool.py"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 70
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S023",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/hermes_cli/plugin_capabilities.py",
+      "title_labels": [
+        "plugin capabilities"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 71
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S024",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/hermes_cli/agent_plugins.py",
+      "title_labels": [
+        "portable adapter"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 71
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S025",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/website/docs/user-guide/features/skills.md",
+      "title_labels": [
+        "skills"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 72
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S026",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/hermes_state.py",
+      "title_labels": [
+        "hermes_state.py"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 73
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S027",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/agent/context_compressor.py",
+      "title_labels": [
+        "context_compressor.py"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 73
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S028",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/website/docs/user-guide/features/memory-providers.md",
+      "title_labels": [
+        "memory providers"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 74
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S029",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/agent/memory_provider.py",
+      "title_labels": [
+        "MemoryProvider"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 74
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S030",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/website/docs/user-guide/features/deliverable-mode.md",
+      "title_labels": [
+        "deliverable mode"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 75
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S031",
+      "url": "https://github.com/NousResearch/hermes-agent/tree/63279301bcbdc185c1b07b98a9312eb0c862f26d/tools/environments",
+      "title_labels": [
+        "environment backends"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 76
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S032",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/website/docs/user-guide/features/delegation.md",
+      "title_labels": [
+        "delegation"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 77
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S033",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/hermes_cli/goals.py",
+      "title_labels": [
+        "goals"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 77
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S034",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/website/docs/developer-guide/cron-internals.md",
+      "title_labels": [
+        "cron internals"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 78
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S035",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/website/docs/user-guide/features/heartbeat.md",
+      "title_labels": [
+        "heartbeat"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 78
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S036",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/gateway/platforms/webhook.py",
+      "title_labels": [
+        "webhook.py"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 79
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S037",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/agent/secret_scope.py",
+      "title_labels": [
+        "secret_scope.py"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 80
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S038",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/docs/design/multiplexing-gateway.md",
+      "title_labels": [
+        "multiplex design"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 81
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S039",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/website/docs/developer-guide/programmatic-integration.md",
+      "title_labels": [
+        "programmatic integration"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 82
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S040",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/gateway/platforms/api_server_runs.py",
+      "title_labels": [
+        "api_server_runs.py"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 82
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S041",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/docs/observability/README.md",
+      "title_labels": [
+        "observer contracts"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 83
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S042",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/gateway/delivery_ledger.py",
+      "title_labels": [
+        "delivery ledger"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 83
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S043",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/hermes_cli/profile_distribution.py",
+      "title_labels": [
+        "profile distribution"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 84
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S044",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/website/docs/getting-started/updating.md",
+      "title_labels": [
+        "updates"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 84
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S045",
+      "url": "https://github.com/NousResearch/hermes-agent/blob/63279301bcbdc185c1b07b98a9312eb0c862f26d/website/docs/user-guide/features/overview.md",
+      "title_labels": [
+        "feature navigation"
+      ],
+      "cited_by": [
+        {
+          "report": "agents-market/docs/research/2026-09-07-hermes-capability-matrix.md",
+          "line": 85
+        }
+      ],
+      "provider_group": "NousResearch/hermes-agent",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "pinned local source/doc inspection by Hermes researcher; GitHub permalink provides provenance",
+      "runtime_verified": false,
+      "revision": "63279301bcbdc185c1b07b98a9312eb0c862f26d",
+      "version": "0.21.0"
+    },
+    {
+      "id": "W1-S046",
+      "url": "https://arxiv.org/abs/2403.04132",
+      "title_labels": [
+        "Chatbot Arena, 07.03.2024"
+      ],
+      "cited_by": [
+        {
+          "report": "aiarena/docs/research/2026-09-07-evaluation-and-contest-findings.md",
+          "line": 19
+        }
+      ],
+      "provider_group": "paper:/abs/2403.04132",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "primary research paper reviewed by Arena researcher; report retains version/date qualifications; no reproduced benchmark",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S047",
+      "url": "https://arxiv.org/abs/2306.05685",
+      "title_labels": [
+        "MT-Bench / LLM-as-a-Judge, v4 24.12.2023"
+      ],
+      "cited_by": [
+        {
+          "report": "aiarena/docs/research/2026-09-07-evaluation-and-contest-findings.md",
+          "line": 21
+        }
+      ],
+      "provider_group": "paper:/abs/2306.05685",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "primary research paper reviewed by Arena researcher; report retains version/date qualifications; no reproduced benchmark",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S048",
+      "url": "https://arxiv.org/abs/2406.12045",
+      "title_labels": [
+        "τ-bench, 17.06.2024"
+      ],
+      "cited_by": [
+        {
+          "report": "aiarena/docs/research/2026-09-07-evaluation-and-contest-findings.md",
+          "line": 22
+        }
+      ],
+      "provider_group": "paper:/abs/2406.12045",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "primary research paper reviewed by Arena researcher; report retains version/date qualifications; no reproduced benchmark",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S049",
+      "url": "https://aclanthology.org/2024.eacl-demo.16/",
+      "title_labels": [
+        "RAGAs, EACL март 2024"
+      ],
+      "cited_by": [
+        {
+          "report": "aiarena/docs/research/2026-09-07-evaluation-and-contest-findings.md",
+          "line": 23
+        }
+      ],
+      "provider_group": "paper:/2024.eacl-demo.16/",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "primary research paper reviewed by Arena researcher; report retains version/date qualifications; no reproduced benchmark",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S050",
+      "url": "https://arxiv.org/abs/2406.19314",
+      "title_labels": [
+        "LiveBench, v2 18.04.2025"
+      ],
+      "cited_by": [
+        {
+          "report": "aiarena/docs/research/2026-09-07-evaluation-and-contest-findings.md",
+          "line": 24
+        }
+      ],
+      "provider_group": "paper:/abs/2406.19314",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "primary research paper reviewed by Arena researcher; report retains version/date qualifications; no reproduced benchmark",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S051",
+      "url": "https://www.kaggle.com/docs/competitions-setup",
+      "title_labels": [
+        "Kaggle competition setup"
+      ],
+      "cited_by": [
+        {
+          "report": "aiarena/docs/research/2026-09-07-evaluation-and-contest-findings.md",
+          "line": 25
+        }
+      ],
+      "provider_group": "Kaggle",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "primary official page text from search index used by Arena researcher; direct render returned empty; bounded claims only",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S052",
+      "url": "https://inspect.aisi.org.uk/eval-logs.html",
+      "title_labels": [
+        "Inspect logs"
+      ],
+      "cited_by": [
+        {
+          "report": "aiarena/docs/research/2026-09-07-evaluation-and-contest-findings.md",
+          "line": 27
+        }
+      ],
+      "provider_group": "inspect.aisi.org.uk",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S053",
+      "url": "https://inspect.aisi.org.uk/sandboxing.html",
+      "title_labels": [
+        "sandboxing"
+      ],
+      "cited_by": [
+        {
+          "report": "aiarena/docs/research/2026-09-07-evaluation-and-contest-findings.md",
+          "line": 27
+        }
+      ],
+      "provider_group": "inspect.aisi.org.uk",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S054",
+      "url": "https://docs.ton.org/applications/ton-connect/how-to/ton-proof",
+      "title_labels": [
+        "TON proof documentation"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 15
+        }
+      ],
+      "provider_group": "TON",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "official documentation/specification checked against Context7 and source findings; wallet/payment flows not executed",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S055",
+      "url": "https://github.com/ton-blockchain/ton-connect/blob/main/spec/connect.md",
+      "title_labels": [
+        "Спецификация TON Connect"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 15
+        }
+      ],
+      "provider_group": "TON",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "official documentation/specification checked against Context7 and source findings; wallet/payment flows not executed",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S056",
+      "url": "https://replicate.com/docs/topics/predictions/lifecycle/",
+      "title_labels": [
+        "Replicate prediction lifecycle"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 41
+        }
+      ],
+      "provider_group": "Replicate",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S057",
+      "url": "https://docs.bullmq.io/guide/workers/stalled-jobs",
+      "title_labels": [
+        "BullMQ stalled jobs"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 45
+        }
+      ],
+      "provider_group": "docs.bullmq.io",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S058",
+      "url": "https://docs.bullmq.io/patterns/idempotent-jobs",
+      "title_labels": [
+        "Idempotent jobs"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 45
+        }
+      ],
+      "provider_group": "docs.bullmq.io",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S059",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization",
+      "title_labels": [
+        "MCP authorization"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 51
+        }
+      ],
+      "provider_group": "Model Context Protocol",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "same-day primary documentation review reused; installed SDK compatibility not tested",
+      "runtime_verified": false,
+      "revision": "2026-07-28"
+    },
+    {
+      "id": "W1-S060",
+      "url": "https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices",
+      "title_labels": [
+        "безопасность"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 51
+        }
+      ],
+      "provider_group": "Model Context Protocol",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "same-day primary documentation review reused; installed SDK compatibility not tested",
+      "runtime_verified": false,
+      "revision": "2025-11-25"
+    },
+    {
+      "id": "W1-S061",
+      "url": "https://docs.bullmq.io/guide/going-to-production",
+      "title_labels": [
+        "BullMQ production guidance"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 73
+        }
+      ],
+      "provider_group": "docs.bullmq.io",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S062",
+      "url": "https://opentelemetry.io/docs/specs/semconv/http/http-spans/",
+      "title_labels": [
+        "OpenTelemetry HTTP conventions"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 73
+        }
+      ],
+      "provider_group": "opentelemetry.io",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S063",
+      "url": "https://opentelemetry.io/docs/specs/semconv/",
+      "title_labels": [
+        "Текущий индекс OpenTelemetry conventions"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 73
+        }
+      ],
+      "provider_group": "opentelemetry.io",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "cited in completed first-wave research report; see report for claim and limits",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S064",
+      "url": "https://docs.ton.org/onboarding/ai/wallets",
+      "title_labels": [
+        "Текущие contracts"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 84
+        }
+      ],
+      "provider_group": "TON",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "official documentation/specification checked against Context7 and source findings; wallet/payment flows not executed",
+      "runtime_verified": false
+    },
+    {
+      "id": "W1-S065",
+      "url": "https://a2a-protocol.org/latest/specification/",
+      "title_labels": [
+        "protocol"
+      ],
+      "cited_by": [
+        {
+          "report": "ai-aggregator/docs/research/2026-09-07-architecture-ton-and-delivery-findings.md",
+          "line": 85
+        }
+      ],
+      "provider_group": "A2A",
+      "publication_date": null,
+      "registered_on": "2026-09-07",
+      "access_evidence": "same-day protocol research reused for future adapter boundary; installed compatibility and agent interaction not tested",
+      "runtime_verified": false
+    }
+  ],
+  "local_source_evidence": [
+    {
+      "path": "/home/bob/Projects/agents-market/apps/tma/app/api/tma/wallet/proof-payload/route.ts",
+      "sha256": "53532b2a579b1d100b37f4a4fb6b668c5727d75fd91050bb81feee9b86f842a8",
+      "evidence": "source inspection only; no runtime or exploit test"
+    },
+    {
+      "path": "/home/bob/Projects/agents-market/apps/tma/app/api/tma/wallet/link/route.ts",
+      "sha256": "2ab6cb8d946d245ca1cf1164a38a35f690cc67e6e62581301c40f4d2065e8d6e",
+      "evidence": "source inspection only; no runtime or exploit test"
+    },
+    {
+      "path": "/home/bob/Projects/agents-market/apps/tma/src/lib/ton-proof.ts",
+      "sha256": "663de7b1bda9a24084ae53cec2b6acd20d41e29fbda25aac694d8f59608b9473",
+      "evidence": "source inspection only; no runtime or exploit test"
+    },
+    {
+      "path": "/home/bob/Projects/agents-market/packages/database/migrations/0001_identity.sql",
+      "sha256": "2b76567909760dbd6a8a6f67118ffbf136b3a3642dfacd4edd01fab35201ca11",
+      "evidence": "source inspection only; no runtime or exploit test"
+    },
+    {
+      "path": "/home/bob/Projects/agents-market/packages/database/migrations/0006_wallet_and_ledger.sql",
+      "sha256": "183dba7850bba83cf9d3148ac954f9560cfbaaaa060b03512b6e6d09300a3ce0",
+      "evidence": "source inspection only; no runtime or exploit test"
+    },
+    {
+      "path": "/home/bob/Projects/ai-aggregator/apps/web/src/auth.ts",
+      "sha256": "9b02c7eb6232db411883f94b54b95bac77eba2e07dda0ee00f9dc6ce20141fc4",
+      "evidence": "source inspection only; no runtime or exploit test"
+    },
+    {
+      "path": "/home/bob/Projects/aiarena/aiarena-app/src/auth.ts",
+      "sha256": "04983addce8fbe1e834816437063b4633cdc344ff5332a1159454eaa57406bc4",
+      "evidence": "source inspection only; no runtime or exploit test"
+    }
+  ]
+}

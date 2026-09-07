@@ -1,5 +1,7 @@
 # AI Aggregator: начать разработку здесь
 
+**Исследовательская волна 1 завершена:** [решения и влияние на планы](/home/bob/Projects/ai-aggregator/docs/research/2026-09-07-research-impact-and-decisions.md). В production continuation добавлены D-задачи и критерии приёмки, включая дополнительный TON login во всех трёх продуктах. Кодовый следующий шаг остаётся quota v2 → public route composition → recovery/refund. Это documentary checkpoint; баллы готовности и deployed code не изменены.
+
 Исследовательский вход перед новой функциональной волной: [программа из18пакетов](research/2026-09-07-research-program.md). Последний запрос пользователя добавил полный Hermes/product/competitor/UX/architecture research и обязательную связь выводов с реализацией. Реестр не заменяет текущий кодовый checkpoint и не блокирует уже определённые узкие исправления.
 
 Канонический root: `/home/bob/Projects/ai-aggregator`; ветка `feat/three-projects-completion`. Сначала [AGENTS.md](../AGENTS.md), [рабочая карта](consolidation/DEVELOPMENT-WORKFLOW.md) и [границы продуктов](consolidation/ACTIVE-PROJECTS.md).
