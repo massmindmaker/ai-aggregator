@@ -4,7 +4,9 @@
 
 ## Текущий этап — 7 сентября
 
-Task4 [gateway admission plan](superpowers/plans/2026-09-07-gateway-charge-admission.md) принята на `3cc5b271`: точный resolver, проверенный provider profile, immutable quote и отдельный admitted transport. Независимое финансовое review — APPROVE; обнаруженная регрессия legacy video исправлена. Финальные 50 focused tests, source/test types и lint PASS. Ранее принятый admission wrapper `1c25d0f` сохраняется. Эти модули ещё не включены в маршруты: следующий этап связывает reserve→dispatch→outcome→settle в одном исполнении. Durable quotas, usage receipts/reconciliation, tool calling и полный route/refund cutover остаются обязательными.
+Последний принятый gateway code — Task5 `b6266cb7`: исполнитель одной stored plaintext/nonstream попытки объединяет hold→dispatch→provider→usage→outcome→settle. Независимое финансовое/spec review — APPROVE,156/156 focused tests, source/test types и lint PASS. Реальная цепочка adapter→HTTP transport проверена с подставленным сетевым ответом: redirects не создают второй POST. Живая платная модель этим тестом не вызывалась.
+
+Исполнитель пока не подключён к маршрутам. Он использует принятые wrapper `1c25d0f` и candidate/quote `3cc5b271`; полный контракт в [gateway admission plan](superpowers/plans/2026-09-07-gateway-charge-admission.md). Следующие gates: durable key/org/session quotas, trusted route composition/HTTP idempotency, recovery/reconciliation, tool calling, SSE/media/BYOK и полный route/refund cutover. Process-local memoization не заменяет восстановление запросов после рестарта.
 
 ## Продуктовая программа
 
