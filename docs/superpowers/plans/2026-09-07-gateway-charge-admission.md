@@ -92,6 +92,60 @@ Cancel releases all eligible hold using the same debt/expiry arithmetic, only if
 - [ ] **Step 4: Verify new suite plus mandatory native baseline, database types and mirror equality.** Expected new migration total67 (prior66) and two new tables (prior96); derive assertions from manifest where existing harness does so. First apply67th and repeat no-op; if development checksum changes, use only the existing explicitly guarded disposable DB rehearsal and record refusal/fresh/no-op evidence. Do not modify historical hashes or weaken safety guards. Add meaningful exact-bigint schema assertion beyond Number.MAX_SAFE_INTEGER.
 - [ ] **Step 5: Self-review and commit exact owned files.** Report commands/results, SQL interfaces, transition return shape and remaining gateway dependency in private SDD report. No force-add private files. Mandatory TypeScript/SQL spec+quality review follows.
 
+### Task 2: Exact bounded token quote arithmetic (2B.2a)
+
+**Files:** Create `packages/api-gateway/src/billing/token-quote.ts` and `packages/api-gateway/src/__tests__/billing-token-quote.test.ts`. No route, resolver, config, DB or legacy pricing changes in this pure increment.
+
+**Interfaces:** The next gateway lifecycle task consumes these pure contracts. Prices are USD cents per1000tokens; markup/discount are exact decimal strings. Runtime parsers enforce plain canonical nonnegative decimal syntax, at most18 fractional digits and38 total digits before BigInt allocation; monetary results must be within PostgreSQL signed BIGINT. Token counts/context/cap are positive safe integers where required, never coerced from string. Use immutable input objects or readonly types; do not mutate inputs.
+
+```ts
+export type TokenPrices = Readonly<{
+  inputCentsPer1k: string;
+  outputCentsPer1k: string;
+  markup: string;
+}>;
+export type TokenUsage = Readonly<{
+  promptTokens: number;
+  completionTokens: number;
+  cachedInputTokens: number;
+}>;
+export function quoteChatMaximum(prices: TokenPrices,
+  contextWindowTokens: number, maxOutputTokens: number): bigint;
+export function quoteEmbeddingMaximum(prices: TokenPrices,
+  contextWindowTokens: number, inputCount: number): bigint;
+export function calculateTokenCharge(prices: TokenPrices,
+  usage: TokenUsage, cachingDiscount: string): bigint;
+export function calculateByokFee(feeCredits: string): bigint;
+export function microCreditsToUsdMicroString(amount: bigint): string;
+```
+
+- [ ] **Step1: Write focused RED tests against real exported functions.** Representative exact assertions:
+
+```ts
+const p = { inputCentsPer1k: '0.015', outputCentsPer1k: '0.06', markup: '1.3' };
+expect(quoteChatMaximum(p, 128000, 4096)).toBe(2736n);
+expect(calculateTokenCharge(p,
+  { promptTokens: 100, completionTokens: 20, cachedInputTokens: 0 }, '1')).toBe(4n);
+expect(microCreditsToUsdMicroString(123n)).toBe('1230');
+expect(microCreditsToUsdMicroString(9007199254740993n)).toBe('90071992547409930');
+```
+
+Also test output<input branch, embedding array count factor, cached input discount once, nearest half rounds up, zero actual from valid tiny tariff, exact zero tariff/fee remains zero (caller must handle unsupported free lifecycle explicitly), huge intermediate rational arithmetic with valid final amount, overflow rejection, invalid/noncanonical decimal (sign/exponent/whitespace/empty/NaN), invalid markup<=0, discount outside[0,1], invalid/unsafe/negative token counts, cached>prompt, cap>context, inputCount0, and input immutability.
+- [ ] **Step2: Run the new file from root Vitest and record RED.** Command: `flock /tmp/ai-ecosystem-build.lock /tmp/ai-ecosystem-run aggregator bunx vitest run packages/api-gateway/src/__tests__/billing-token-quote.test.ts` (no DB use in these tests).
+- [ ] **Step3: Implement rational bigint arithmetic.** Decimal parser yields numerator/10^scale. Apply multiplication/addition exactly and round only once at final result; use ceiling for maximum and nonnegative nearest-half-up for actual, preserving legacy business formula.
+
+```text
+chatMaximum = ceil((C*Pin + cap*max(0,Pout-Pin))*markup)
+embeddingMaximum = ceil(N*C*Pin*markup)
+actual = round(((prompt-cached)*Pin + cached*Pin*discount + completion*Pout)*markup)
+byokFee = round(feeCredits*1000)
+chargedUsdMicro = actualMicroCredits*10
+```
+
+These functions do not attest a model/provider or validate provider evidence. The bound applies only when the later reviewed capability enforces prompt+completion<=C and completion<=cap. They never estimate tokens from bytes, silently clamp monetary values, fabricate a minimum charge, expose floating monetary results or consult mutable configuration.
+- [ ] **Step4: Verify focused tests, gateway source/test type checks and diff hygiene.** No broad unit/build or DB suite repetition for this isolated pure module. Demonstrate at least one input beyond Number.MAX_SAFE_INTEGER monetary precision and adversarial decimal boundary in tests.
+- [ ] **Step5: Self-review, commit both owned files and report privately.** Mandatory TypeScript spec+quality review; no React diff. Then proceed to lifecycle/route integration with its own capability/quote snapshot plan.
+
 ## Subsequent execution increments
 
 These remain required work; each gets its concrete task brief after its predecessor's reviewed interfaces are known.
