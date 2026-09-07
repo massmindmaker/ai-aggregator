@@ -16,7 +16,7 @@
 
 ## Принятый этап — 8 сентября
 
-Task6 durable quotas принят локально: `fdd8f22` + test-only `2aa3a7f`. Независимые финансовое/spec и TypeScript review — Approved; 68 миграций с нуля, baseline127/127, итоговые quota85/85, строгие проверки типов прошли. Три измерения settled+reserved: ключ/месяц, организация/день, ключ/SID за всё время. Проверены конкурентные транзакции, rollback, original periods и simulated application ACK loss. Публичные маршруты и Task5 ещё не используют v2; следующий шаг — typed v2 wrapper, затем trusted route composition и HTTP idempotency/recovery. Production не активирован.
+Task6 durable quotas принят локально: `fdd8f22` + test-only `2aa3a7f`. Независимые финансовое/spec и TypeScript review — Approved; 68 миграций с нуля, baseline127/127, итоговые quota85/85, строгие проверки типов прошли. Три измерения settled+reserved: ключ/месяц, организация/день, ключ/SID за всё время. Проверены конкурентные транзакции, rollback, original periods и simulated application ACK loss. Task5 подключён к v2 в отдельной принятой bridge-волне выше. Публичные маршруты ещё не переведены; далее trusted route composition и HTTP idempotency/recovery. Production не активирован.
 
 ## Предыдущий этап — 7 сентября
 
