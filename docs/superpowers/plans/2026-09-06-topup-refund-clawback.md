@@ -1,6 +1,6 @@
 # P0: clawback org-кредитов при возврате top-up
 
-Репозиторий: `/home/bob/Projects/ai-aggregator`, ветка `feat/three-projects-completion`, база `2252c95`. Задача намеренно ограничена Tinkoff top-up. Не объединять все payment providers и не менять subscription-refund семантику.
+Репозиторий: `/home/bob/Projects/ai-aggregator`, ветка `feat/three-projects-completion`, исходная база `2252c95`; выполнять поверх текущей проверенной ветки. Протокольные уточнения от 2026-09-07 в разделе «Binding execution amendments» ниже имеют приоритет над первоначальным текстом. Задача намеренно ограничена Tinkoff top-up. Не объединять все payment providers и не менять subscription-refund семантику.
 
 ## Наблюдаемая проблема
 
@@ -153,3 +153,56 @@ T-Bank документирует, что partial/full refund переводят
 - Backfill старых confirmed top-ups без snapshot.
 - Изменение legacy `users.balance` и `balance_transactions`.
 - Chargebacks/disputes и автоматическое снятие блокировки после ручной сверки unsupported webhook.
+
+
+## Binding execution amendments — 2026-09-07
+
+Это последовательные части основной Task 3 плана трёх репозиториев. Они заменяют противоречащие строки первоначального плана: blanket запрет менять adapters, release по любому Success=false, подтверждение partial по webhook, объединение REVERSED с REFUNDED. Старые строки выше сохраняют историю исходного предложения, но не являются контрактом реализации.
+
+Официальный источник — [OpenAPI T-Bank](https://developer.tbank.ru/schemas/eacq/openapi.yaml), проверен 2026-09-07, SHA256 e7686a38723144e739d9268bffb8a6df40d53d98caac18722f92f7043a749ecd. CancelRequest.ExternalRequestId — непустой merchant idempotency key; CancelResponse.OriginalAmount/NewAmount — суммы до/после операции. ExternalRequestId в ответе optional по схеме: отсутствие не является достаточным доказательством для локального settlement. Уведомления не содержат доказанного идентификатора refund operation. GetState.Amount не считается cumulative refunded amount.
+
+Один implementation worker; private brief/report в SDD основной задачи. Все SQL prepared. Все native DB проверки используют принятую схему guard: оба DATABASE_URL/TEST_DATABASE_URL, точный 127.0.0.1:15432/ai_aggregator_test, запрет connection identity overrides, marker/readback до импорта production DB и до любых mutations. Один тяжёлый запуск под flock /tmp/ai-ecosystem-build.lock. Никаких запросов к банку, provider credentials, deployment или изменения других products. Изолированные mocked HTTP fixtures допустимы. Каждый этап проходит review до следующего.
+
+### Task 1: Preserve and validate claim-bound T-Bank refund proof
+
+Ownership: packages/tinkoff/src/types.ts, client.ts, index.ts, новый узкий refund-proof модуль и его тесты; apps/web/src/lib/payments/providers.ts только для добавления отдельной typed Tinkoff top-up capability, если это требуется существующим устройством factory. Существующий PaymentProvider.refund и subscription cancellation сохраняют контракт. Никаких routes, migrations, ledger mutations или включения новых возвратов на этом этапе.
+
+1. Добавить официальные optional ExternalRequestId в Cancel request/response и документированные Params GetState. Сохранить точные копейки и исходный ответ в новом пути; не превращать PaymentId в refund-operation-id. Legacy refundPayment остаётся совместимым.
+2. Новый claim-bound вызов принимает сохранённый provider key, PaymentId, OrderId, paid/cumulative/requested integer kopecks и доказанный method context. Key создаётся/сохраняется будущим DB слоем, никогда самим транспортом на retry. До fetch проверять safe integers, 0 < requested <= paid - refunded, nonempty identifiers, method/key restrictions. Не принимать клиентский body как method proof.
+3. Pure result union: settled с минимальным валидированным proof; indeterminate с безопасной reason/code; not_dispatched для локальной валидации. Success=false, timeout, non-2xx, malformed JSON и незавершённые статусы не означают no-effect и не дают release. Allowlist доказанных no-effect bank codes первоначально пуст. Никаких сырых body/секретов в ошибках.
+4. settled требует Success===true, ErrorCode==='0', exact PaymentId/OrderId/ExternalRequestId, safe nonnegative integer OriginalAmount/NewAmount, OriginalAmount===paid-refunded, OriginalAmount-NewAmount===requested, NewAmount>=0, status REFUNDED только при NewAmount===0, PARTIAL_REFUNDED только при NewAmount>0. Другой status, пропущенная echo, неверный тип, delta или identity => indeterminate. Возвращать только поля доказательства, не доверять TS cast сетевого JSON.
+5. Method context: GetState должен совпадать по PaymentId/OrderId и успешному ответу; разобрать документированные Params Key/Value без guessing. При отсутствии/дубликатах/противоречиях Route/Source — unsupported. На первом этапе автоматический Cancel поддерживает только явно доказанный Route=ACQ + Source=cards; остальные комбинации возвращают not_dispatched. Это ограничение возможности автоматического возврата, а не классификация provider=tinkoff как cards. UUIDv4 key допустим для этой ветки, общая длина <=255. Специальные BNPL/installment/AlfaPay операции не включать без их request/receipt контрактов.
+6. Partial receipt policy должна быть явной: partial не отправлять без доказанного receipt context. К текущему топапу receipt snapshot не прикреплён, поэтому integration этап должен fail closed для неизвестной кассы/чека. Pure transport может принимать проверенный Receipt либо явный trusted context no-receipt-required; это не client body и не дефолт. Full cancellation Receipt не отправляет. Не придумывать фискальные позиции.
+7. RED→GREEN: exact request body/token includes unchanged persisted key and integer Amount; duplicate invocation keeps key; one wrong identity/amount/type/key/method causes zero Cancel fetch; timeout/non2xx/JSON failure remains indeterminate; strict proof valid partial/full and all mismatches; unknown/duplicate Params rejected; legacy refund and init behavior retained. Mock all network; focused types and relevant payment compatibility tests. No full build unless source boundary changes justify it.
+
+Report must name actual base/head, commands/results and any unsupported automatic method/receipt capability; don't label end-to-end refund fixed after only this task.
+
+### Task 2: Atomic snapshot, claims, debt and settlement database primitives
+
+Recheck next migration number (0066 currently free), preserve historical checksums. Extend original snapshot/cumulative fields with persisted refund_provider_key, method context, refund_dispatched_at and consistent all-or-none constraints. A claim key is stable through timeout/retry; no automatically expiring claim. Add partial index on active top-up claims by org. Use ledger request_id refund:claim:<uuid> (fits 64), independent full event refund:full:<payment UUID>. Audit receipt retains claim key, requested/cumulative amounts and proof after clearing active columns; replay A must not consume active B.
+
+Implement primitive claim, dispatch CAS, strict proof finalize, full cumulative reconciliation and proven-no-effect release (no public/general release-on-false). Choose a single org→payment lock order for operations requiring both. Lookup org id first, acquire org row then payment row, revalidate snapshot immutable identity under lock; claim creation must take org lock before making claim visible so gateway's org-locked active-claim check serializes spending. SQL settlement locks org then checks EXISTS active claim without locking payment. No provider call while DB locks held. Confirmation grant also observes compatible ordering or splits its first-time transition safely within one transaction. Review lock graph before coding.
+
+Cumulative SQL numeric rounding and debt arithmetic follow original plan, including full target exactly grant. A full REFUNDED event closes the entire remaining snapshot even if partial claim exists, persists receipt resolving that claim as full reconciliation, and makes late admin finalize a no-op. Dispatch CAS must reject a claim already closed by full webhook. Already in-flight external request uses same idempotency key; reconciliation cannot invent its provider result. Avoid zero-delta duplicate ledger rows and allow legitimate zero-rounded partial audit rows consistently.
+
+Both active claim and debt block non-BYOK stored settlement under org lock, including subscription credits. Debt stays >=0 and payg stays >=0. New top-up repayment keeps whole grant in its snapshot. Original legacy balance remains unchanged in scope.
+
+Native tests must exercise concurrent claim vs settlement, duplicate finalize, A receipt with B active, partial followed by full webhook/late finalize, full-before-dispatch, remaining cumulative amount/rounding/debt repayment and transaction rollback after audit failure. SQL tests prove locking, not only mock calls. Fresh migration application + repeat status; do not reset unrelated schemas.
+
+### Task 3: Confirmation snapshots and monotonic payment transitions
+
+Wire atomic grant/snapshot/debt repayment into actual Tinkoff CONFIRMED path. Only pending|authorized predecessors with no snapshot may grant; persisted amount and bank integer kopecks must agree. Duplicate and late CONFIRMED after refunded/partial_refunded must not grant or downgrade. Other nonterminal notifications use explicit predecessor policy rather than status != confirmed. Keep subscription behavior with regression tests.
+
+Never-granted REVERSED can transition eligible pending|authorized payment to canceled with zero grant; PARTIAL_REVERSED cannot be treated as full cancellation and cannot create credits, so unsupported/reconciliation error. REVERSED against a granted snapshot is contradictory and fail-closed. Missing legacy snapshot never guessed/backfilled. Wrong payment identity must fail before money changes. Tests include reordered authorized/confirmed/refund deliveries and failure rollback of all money fields.
+
+### Task 4: Admin claim dispatch and reconciliation
+
+Maintain requireAdmin + step-up. Read provider/payment ids from DB; reject contradictory body values. Inspect read-only GetState for supported method proof before claim/provider Cancel, using Task1 strict identity parser. Unknown method and unknown partial receipt context fail before Cancel. Claim once, dispatch CAS, network outside transaction, then strict Task1 proof settlement. Indeterminate keeps claim and exposes reconciliation state; no arbitrary new key or success response. Reusing a saved key is permitted only by a specific authenticated reconciliation operation using saved immutable context; never bypass claim ceiling or accept fresh client key. Other providers with possible org grant are unsupported, subscription refund path preserved.
+
+Tests cover concurrent admin, timeout/retry same key, no-effect policy empty, full webhook before/after dispatch, late A response while B active, unsupported receipt/method zero Cancel, step-up and body tampering. Do not contact a real bank. Unsupported automation is explicit response, never fake success.
+
+### Task 5: Refund webhooks, gateway preflight and truthful balance UI
+
+Full signed REFUNDED for a valid snapshot calls cumulative full reconciliation. Partial webhook never settles a claim, even if a local claim exists: delayed event A is indistinguishable from B. Persist high-severity processing/reconciliation error and return non-OK; don't advance cumulative fields from generic Amount. Duplicate full deliveries are idempotent. Successful processed notification returns HTTP200 with exact plain text OK, not JSON; invalid/unsupported events remain non-OK. Subscription semantics unchanged except protocol-correct acknowledgement, with tests.
+
+Gateway preflight and billing summary match stored active-claim/debt block. Include refundDebtCredits and refundPending in summary, spendable zero while either blocks; preserve BYOK path. UI should explain pending reconciliation versus debt without exposing provider errors. Test actual route responses and provider-not-called 402, native race checks, React component behavior if touched. Then run relevant integration/payment/native suites, root types/lint and one final production build covering all refund tasks. No launch/108 claims until the whole user acceptance chain passes.
