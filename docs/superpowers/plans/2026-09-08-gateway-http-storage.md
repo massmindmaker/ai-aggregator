@@ -1,6 +1,6 @@
 # AG gate A: durable HTTP mapping и resultbox
 
-Статус: проектирование следующего локального DB gate, независимое financial/spec plan review Approved 08.09; реализация ещё впереди. Это один Task, без public route activation. Принятый вход: quota `fdd8f22` + `2aa3a7f`, bridge `20187ecd`; source tip при проектировании `acb2793`. Текущие HTTP idempotency mapping и result storage отсутствуют. Номер `0069` свободен при проверке 08.09; worker повторно проверяет до создания файла.
+Статус: код a6c0513 принят локально после независимого TypeScript/financial/spec review Approved 08.09; clean69 остаётся UNVERIFIED. Это один Task, без public route activation. Принятый вход: quota `fdd8f22` + `2aa3a7f`, bridge `20187ecd`; source tip при проектировании `acb2793`. Текущие HTTP idempotency mapping и result storage отсутствуют. Номер `0069` свободен при проверке 08.09; worker повторно проверяет до создания файла.
 
 **Goal:** PostgreSQL навсегда закрепляет scoped HTTP key за одним server billing UUID до admission и атомарно сохраняет проверенный sanitized completion вместе с quota v2 outcome. Повтор возвращает состояние/сохранённый ответ; никакой повтор не выдаёт разрешение на новый provider call.
 
@@ -212,3 +212,7 @@ flock /tmp/ai-ecosystem-build.lock /tmp/ai-ecosystem-run aggregator node node_mo
 ```
 
 Не считать production source types доказательством test types. Не менять scripts инфраструктуры ради проверки. Не запускать DB tests без guard, не подставлять production env. Конкретные blocker этого Task: недоступный guarded local PG, занятый migration number/ownership, несовместимость принятого immutable financial API с atomic wrapper. Gateway mount, production cutover, paid pilot и cleanup scheduler не blockers DB gate и не засчитываются как сделанные.
+
+## Accepted source result
+
+Commit a6c05135ee8206b875549d1e0d41f18ca3eca989. Independent typescript-reviewer/Astra high APPROVED, Critical/Important0. Baseline203/203 (HTTP64), schema9/9, source/native strict types и scoped lint PASS. Полный baseline выполняется --no-file-parallelism из-за общей БД и fault triggers; real connection races внутри tests сохранены.0067/0068 unchanged, exact mirror checked. Применение0069 поверх68 и69rerun доказаны; clean install69 не проверен, existing guarded fixed DB не имеет clean workflow. Это explicit migration/release gap, не отказ от будущей проверки. Публичный маршрут/executor не изменён. Следующий [B1](2026-09-08-http-storage-gateway-bridge.md) подключает typed transport и закрытый outcome seam.
