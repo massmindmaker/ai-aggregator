@@ -42,6 +42,8 @@ VPS read-only аудит и действующие release пути: [resume aud
 
 Перед продолжением: читать [ACTIVE-PROJECTS](ACTIVE-PROJECTS.md), entrypoint владельца, этот checkpoint и narrow plan; сверить HEAD/diff и живые процессы. Один тяжёлый build/test/index под `/tmp/ai-ecosystem-build.lock`; не менять seven historical untracked Arena docs, чужие edits, production env или PM2 менеджеры. User authorizes autonomous local work and subagents; serious architecture/research — Astra high, routine — model-router. Платёжная цель сохраняет RUB + TON в AG, TON Web в AM и TON funding/prizes в Arena; Stars не реализуются.
 
-## Локальный просмотр во время паузы
+## Локальный стенд после завершения сессии
 
-Текущая Web-витрина оставлена на [127.0.0.1:3200](http://127.0.0.1:3200/) с явно синтетическими данными, только loopback. Это прежний UI, не новый дизайн и не production. Процессы/fixture ownership и команда штатной остановки сохранены в private `am-preview-checkpoint.json`; перед AM catalogue tests нужно остановить этот preview и проверить cleanup, иначе его fixtures влияют на empty-state проверки. При закрытии сессии/перезапуске хоста адрес может стать недоступен; стартовать только через guarded catalog:stack после сверки текущих процессов.
+По указанию пользователя Web/TMA previews штатно остановлены; fixture сообщил clean. Остановлены два остаточных тестовых sentinel процесса и локальные test PostgreSQL/Redis. Проверка портов 3100/3200/15432/16379: слушателей нет; зарегистрированные PID отсутствуют. Данные стенда сохранены. Связанные с Codex серверы Serena/LightRAG и службы ОС не являются незавершёнными задачами этой сессии и оставлены работающими. VPS/production не менялись.
+
+Следующий вход: [стратегия кооператива](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-07-cooperative-strategy.md) → [roadmap](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-07-cooperative-roadmap.md) → entrypoint продукта → узкий Superpowers plan. Для запуска preview сначала восстановить собственные test DB/Redis через существующий runtime workflow, сверить guard и ownership; синтетические fixtures создаёт catalog:stack. Предыдущие локальные URL сейчас недоступны.

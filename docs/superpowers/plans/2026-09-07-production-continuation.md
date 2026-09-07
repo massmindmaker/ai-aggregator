@@ -1,5 +1,7 @@
 # AI Aggregator: продолжение до production Implementation Plan
 
+**Порядок исполнения:** [дорожная карта кооператива](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-07-cooperative-roadmap.md) задаёт AG → Arena → AM. Этот план сохраняет техническую приёмку своего продукта; кооперативная стратегия не переносит IP, private data или денежные обязательства автоматически.
+
 **Research inputs (07.09):** [программа исследований](../../research/2026-09-07-research-program.md). AG-P1 использует R09/R13/R18; AG-P2 — R03/R06/R09; AG-P3 — R02/R03/R14; AG-P4 — R13; AG-P5 — R07/R14/R15/R16. Перед новой функциональной волной фиксировать `Research inputs → Decision/ADR → Acceptance → Deferred` в узком brief. Принятый quota design и известные исправления не ждут завершения всей программы; новые provider/author/UX решения учитывают соответствующие выводы.
 
 > **Для исполнителей:** REQUIRED SUB-SKILL: использовать Superpowers executing-plans либо уже разрешённый контроллером subagent-driven-development; выполнять по одной проверяемой задаче. Текущий статус выполнения ведётся в рабочем входе, не выводится из этого плана.
