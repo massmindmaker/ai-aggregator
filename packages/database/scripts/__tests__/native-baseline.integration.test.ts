@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -53,6 +55,12 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
               version === "migrations/0066_topup_refund_clawback.sql",
           ),
         ).toBe(true);
+        expect(
+          before.rows.some(
+            ({ version }) =>
+              version === "migrations/0067_gateway_charge_admissions.sql",
+          ),
+        ).toBe(true);
 
         const rerun = await runNativeMigrations(guardedClient, migrations);
         expect(rerun.applied).toEqual([]);
@@ -90,7 +98,11 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       users: string | null;
       organizations: string | null;
       transactions: string | null;
+      admissions: string | null;
+      admission_events: string | null;
       settle_function: string | null;
+      admit_function: string | null;
+      dispatch_function: string | null;
       table_count: string;
     }>({
       text: `
@@ -99,6 +111,10 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
           to_regclass($2)::text AS organizations,
           to_regclass($3)::text AS transactions,
           to_regprocedure($4)::text AS settle_function,
+          to_regclass($5)::text AS admissions,
+          to_regclass($6)::text AS admission_events,
+          to_regprocedure($7)::text AS admit_function,
+          to_regprocedure($8)::text AS dispatch_function,
           (SELECT COUNT(*)::text
              FROM information_schema.tables
             WHERE table_schema = 'public'
@@ -109,6 +125,10 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
         "public.organizations",
         "public.gateway_transactions",
         "public.aiag_settle_charge_credits(uuid,character varying,bigint,jsonb)",
+        "public.gateway_charge_admissions",
+        "public.gateway_charge_admission_events",
+        "public.aiag_admit_gateway_charge(uuid,uuid,uuid,character varying,character varying,character varying,character varying,bigint,jsonb,timestamp with time zone)",
+        "public.aiag_mark_gateway_charge_dispatched(uuid,uuid,uuid,character varying,jsonb)",
       ],
     });
 
@@ -116,11 +136,33 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       users: "users",
       organizations: "organizations",
       transactions: "gateway_transactions",
+      admissions: "gateway_charge_admissions",
+      admission_events: "gateway_charge_admission_events",
     });
     expect(result.rows[0].settle_function).toContain(
       "aiag_settle_charge_credits",
     );
-    expect(Number(result.rows[0].table_count)).toBeGreaterThan(50);
+    expect(result.rows[0].admit_function).toContain(
+      "aiag_admit_gateway_charge",
+    );
+    expect(result.rows[0].dispatch_function).toContain(
+      "aiag_mark_gateway_charge_dispatched",
+    );
+    expect(Number(result.rows[0].table_count)).toBe(98);
+  });
+
+  it("keeps the gateway admission function mirror exact", async () => {
+    const migration = await readFile(
+      resolve(
+        "packages/database/migrations/0067_gateway_charge_admissions.sql",
+      ),
+      "utf8",
+    );
+    const mirror = await readFile(
+      resolve("packages/database/src/functions/gateway-charge-admission.sql"),
+      "utf8",
+    );
+    expect(migration).toContain(mirror.trim());
   });
 
   it("contains the additive refund admission guard without changing legacy settlement", async () => {
@@ -181,8 +223,12 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       refund_receipt_index: "gateway_transactions_refund_uniq",
       admission_guard: "aiag_assert_refund_admission_allowed(uuid)",
     });
-    expect(result.rows[0].admission_guard_definition).toContain("REFUND_BLOCKED");
-    expect(result.rows[0].settlement_definition).not.toContain("REFUND_BLOCKED");
+    expect(result.rows[0].admission_guard_definition).toContain(
+      "REFUND_BLOCKED",
+    );
+    expect(result.rows[0].settlement_definition).not.toContain(
+      "REFUND_BLOCKED",
+    );
     expect(result.rows[0].settlement_definition).not.toContain(
       "refund_debt_credits",
     );
@@ -311,16 +357,14 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     const migrationClient: TestDatabaseClient = {
       async connect() {},
       async end() {},
-      async query<Row extends Record<string, unknown> = Record<string, unknown>>(
-        config: QueryConfig,
-      ) {
+      async query<
+        Row extends Record<string, unknown> = Record<string, unknown>,
+      >(config: QueryConfig) {
         migratorQueries.push(config);
         // Present 0005 as pending so the real migrator exercises the adapter;
         // every SQL statement and the surrounding rollback still hit PostgreSQL.
         if (
-          config.text.includes(
-            "SELECT version, checksum, effective_checksum",
-          )
+          config.text.includes("SELECT version, checksum, effective_checksum")
         ) {
           return { rows: [] as Row[], rowCount: 0 };
         }

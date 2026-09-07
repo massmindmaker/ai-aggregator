@@ -264,6 +264,126 @@ export const gatewayTransactions = pgTable(
 );
 
 // -----------------------------------------------------------------------------
+// gateway_charge_admissions — durable financial authority for provider dispatch
+// -----------------------------------------------------------------------------
+export type GatewayChargeAdmissionSnapshot = Record<string, unknown>;
+
+export const gatewayChargeAdmissions = pgTable(
+  'gateway_charge_admissions',
+  {
+    billingRequestId: uuid('billing_request_id').primaryKey(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    // Retained without an API-key FK so the financial audit survives key deletion.
+    apiKeyId: uuid('api_key_id').notNull(),
+    clientRequestId: varchar('client_request_id', { length: 255 }),
+    routeKind: varchar('route_kind', { length: 32 }).notNull(),
+    billingMode: varchar('billing_mode', { length: 16 }).notNull(),
+    modelSlug: varchar('model_slug', { length: 128 }).notNull(),
+    authorizedMaxCredits: bigint('authorized_max_credits', { mode: 'bigint' }).notNull(),
+    heldSubscriptionCredits: bigint('held_subscription_credits', { mode: 'bigint' }).notNull(),
+    heldPaygCredits: bigint('held_payg_credits', { mode: 'bigint' }).notNull(),
+    capturedSubscriptionExpiresAt: timestamp('captured_subscription_expires_at', {
+      withTimezone: true,
+    }),
+    quoteSnapshot: jsonb('quote_snapshot')
+      .$type<GatewayChargeAdmissionSnapshot>()
+      .notNull(),
+    attemptId: uuid('attempt_id'),
+    upstreamId: varchar('upstream_id', { length: 64 }),
+    pricingSnapshot: jsonb('pricing_snapshot').$type<GatewayChargeAdmissionSnapshot>(),
+    actualCostCredits: bigint('actual_cost_credits', { mode: 'bigint' }),
+    usageSnapshot: jsonb('usage_snapshot').$type<GatewayChargeAdmissionSnapshot>(),
+    outcomeKind: varchar('outcome_kind', { length: 32 }),
+    state: varchar('state', { length: 24 }).notNull().default('held'),
+    preDispatchDeadlineAt: timestamp('pre_dispatch_deadline_at', {
+      withTimezone: true,
+    }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    dispatchedAt: timestamp('dispatched_at', { withTimezone: true }),
+    outcomeRecordedAt: timestamp('outcome_recorded_at', { withTimezone: true }),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    reconcileAfter: timestamp('reconcile_after', { withTimezone: true }),
+    releasedSubscriptionCredits: bigint('released_subscription_credits', {
+      mode: 'bigint',
+    }).notNull().default(0n),
+    releasedPaygCredits: bigint('released_payg_credits', { mode: 'bigint' })
+      .notNull()
+      .default(0n),
+    debtRepaidCredits: bigint('debt_repaid_credits', { mode: 'bigint' })
+      .notNull()
+      .default(0n),
+    expiredSubscriptionCredits: bigint('expired_subscription_credits', {
+      mode: 'bigint',
+    }).notNull().default(0n),
+  },
+  (t) => ({
+    orgStateIdx: index('gateway_charge_admissions_org_state_idx').on(
+      t.orgId,
+      t.state,
+      t.createdAt
+    ),
+    // Partial retry index is defined in the raw migration SQL.
+  })
+);
+
+export const gatewayChargeAdmissionEvents = pgTable(
+  'gateway_charge_admission_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    admissionId: uuid('admission_id')
+      .notNull()
+      .references(() => gatewayChargeAdmissions.billingRequestId, { onDelete: 'cascade' }),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    eventKey: varchar('event_key', { length: 32 }).notNull(),
+    eventKind: varchar('event_kind', { length: 32 }).notNull(),
+    heldSubscriptionCredits: bigint('held_subscription_credits', { mode: 'bigint' })
+      .notNull()
+      .default(0n),
+    heldPaygCredits: bigint('held_payg_credits', { mode: 'bigint' })
+      .notNull()
+      .default(0n),
+    usedSubscriptionCredits: bigint('used_subscription_credits', { mode: 'bigint' })
+      .notNull()
+      .default(0n),
+    usedPaygCredits: bigint('used_payg_credits', { mode: 'bigint' })
+      .notNull()
+      .default(0n),
+    releasedSubscriptionCredits: bigint('released_subscription_credits', {
+      mode: 'bigint',
+    }).notNull().default(0n),
+    releasedPaygCredits: bigint('released_payg_credits', { mode: 'bigint' })
+      .notNull()
+      .default(0n),
+    debtRepaidCredits: bigint('debt_repaid_credits', { mode: 'bigint' })
+      .notNull()
+      .default(0n),
+    expiredSubscriptionCredits: bigint('expired_subscription_credits', {
+      mode: 'bigint',
+    }).notNull().default(0n),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    identityUniq: uniqueIndex('gateway_charge_admission_events_identity_uniq').on(
+      t.admissionId,
+      t.eventKey
+    ),
+    orgCreatedIdx: index('gateway_charge_admission_events_org_created_idx').on(
+      t.orgId,
+      t.createdAt
+    ),
+  })
+);
+
+// -----------------------------------------------------------------------------
 // pii_detections
 // -----------------------------------------------------------------------------
 export const piiDetections = pgTable(
@@ -400,6 +520,8 @@ export type UsageEvent = typeof usageEvents.$inferSelect;
 export type GatewayRequest = typeof gatewayRequests.$inferSelect;
 export type Response_ = typeof responses.$inferSelect;
 export type GatewayTransaction = typeof gatewayTransactions.$inferSelect;
+export type GatewayChargeAdmission = typeof gatewayChargeAdmissions.$inferSelect;
+export type GatewayChargeAdmissionEvent = typeof gatewayChargeAdmissionEvents.$inferSelect;
 export type PiiDetection = typeof piiDetections.$inferSelect;
 export type PredictionJob = typeof predictionJobs.$inferSelect;
 export type Batch = typeof batches.$inferSelect;
