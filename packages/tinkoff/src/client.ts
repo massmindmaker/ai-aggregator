@@ -13,9 +13,27 @@ import type {
   PaymentResult,
   WebhookNotification,
 } from './types';
+import type { ClaimBoundRefundRequest, ClaimBoundRefundResult } from './refund-proof';
+import { validateCancelProof, validateClaimBoundRefundRequest } from './refund-proof';
 import { generateToken, verifyWebhookToken, rublesToKopecks, kopecksToRubles } from './utils';
 
 const DEFAULT_API_URL = 'https://securepay.tinkoff.ru/v2';
+const DEFAULT_REFUND_REQUEST_TIMEOUT_MS = 10_000;
+
+export type TinkoffFetch = (
+  input: string,
+  init?: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+    signal?: AbortSignal;
+  }
+) => Promise<{
+  ok: boolean;
+  status: number;
+  statusText: string;
+  json: () => Promise<unknown>;
+}>;
 
 /**
  * Tinkoff Acquiring API Client
@@ -24,28 +42,41 @@ export class TinkoffAcquiring {
   private readonly terminalKey: string;
   private readonly secretKey: string;
   private readonly apiUrl: string;
+  private readonly fetchImpl: TinkoffFetch;
+  private readonly refundRequestTimeoutMs: number;
 
-  constructor(config: TinkoffConfig) {
+  constructor(config: TinkoffConfig, fetchImpl: TinkoffFetch = fetch as unknown as TinkoffFetch) {
     this.terminalKey = config.terminalKey;
     this.secretKey = config.secretKey;
     this.apiUrl = config.apiUrl || DEFAULT_API_URL;
+    this.fetchImpl = fetchImpl;
+    this.refundRequestTimeoutMs =
+      Number.isSafeInteger(config.refundRequestTimeoutMs) &&
+      (config.refundRequestTimeoutMs as number) > 0
+        ? (config.refundRequestTimeoutMs as number)
+        : DEFAULT_REFUND_REQUEST_TIMEOUT_MS;
+  }
+
+  private async post(endpoint: string, data: Record<string, unknown>, signal?: AbortSignal) {
+    const url = `${this.apiUrl}/${endpoint}`;
+    const token = generateToken(data, this.secretKey);
+    const body = { ...data, Token: token };
+
+    return this.fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
   }
 
   /**
    * Make API request
    */
   private async request<T>(endpoint: string, data: Record<string, unknown>): Promise<T> {
-    const url = `${this.apiUrl}/${endpoint}`;
-    const token = generateToken(data, this.secretKey);
-    const body = { ...data, Token: token };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    const response = await this.post(endpoint, data);
 
     if (!response.ok) {
       throw new Error(`Tinkoff API error: ${response.status} ${response.statusText}`);
@@ -92,6 +123,62 @@ export class TinkoffAcquiring {
       TerminalKey: this.terminalKey,
       ...params,
     });
+  }
+
+  /**
+   * Dispatch a refund tied to a persisted claim key and validate the bank proof.
+   * Ambiguous provider outcomes deliberately remain indeterminate.
+   */
+  async cancelClaimBoundRefund(params: ClaimBoundRefundRequest): Promise<ClaimBoundRefundResult> {
+    const validation = validateClaimBoundRefundRequest(params);
+    if (validation.kind === 'not_dispatched') {
+      return validation;
+    }
+
+    const abortController = new AbortController();
+    let deadlineTimer: ReturnType<typeof setTimeout>;
+    const deadline = new Promise<never>((_, reject) => {
+      deadlineTimer = setTimeout(() => {
+        abortController.abort();
+        reject(new Error('refund request deadline exceeded'));
+      }, this.refundRequestTimeoutMs);
+    });
+
+    try {
+      const response = await Promise.race([
+        this.post(
+          'Cancel',
+          {
+            TerminalKey: this.terminalKey,
+            PaymentId: params.paymentId,
+            Amount: params.requestedKopecks,
+            ExternalRequestId: params.providerKey,
+            Receipt: validation.receipt,
+          },
+          abortController.signal
+        ),
+        deadline,
+      ]);
+
+      if (!response.ok) {
+        return { kind: 'indeterminate', code: 'HTTP_ERROR' };
+      }
+
+      let body: unknown;
+      try {
+        body = await Promise.race([response.json(), deadline]);
+      } catch {
+        return abortController.signal.aborted
+          ? { kind: 'indeterminate', code: 'NETWORK_ERROR' }
+          : { kind: 'indeterminate', code: 'MALFORMED_RESPONSE' };
+      }
+
+      return validateCancelProof(body, params, validation.remainingKopecks);
+    } catch {
+      return { kind: 'indeterminate', code: 'NETWORK_ERROR' };
+    } finally {
+      clearTimeout(deadlineTimer!);
+    }
   }
 
   /**
@@ -276,6 +363,9 @@ export class TinkoffAcquiring {
 /**
  * Create Tinkoff Acquiring client
  */
-export function createTinkoffClient(config: TinkoffConfig): TinkoffAcquiring {
-  return new TinkoffAcquiring(config);
+export function createTinkoffClient(
+  config: TinkoffConfig,
+  fetchImpl?: TinkoffFetch
+): TinkoffAcquiring {
+  return new TinkoffAcquiring(config, fetchImpl);
 }

@@ -1,5 +1,20 @@
 // Client
 export { TinkoffAcquiring, createTinkoffClient } from './client';
+export type { TinkoffFetch } from './client';
+
+export {
+  inspectRefundMethodContext,
+  validateCancelProof,
+  validateClaimBoundRefundRequest,
+} from './refund-proof';
+export type {
+  ClaimBoundRefundRequest,
+  ClaimBoundRefundResult,
+  TinkoffRefundMethodContext,
+  TinkoffRefundMethodInspection,
+  TinkoffRefundProof,
+  TinkoffRefundReceiptContext,
+} from './refund-proof';
 
 // Types
 export type {
@@ -15,6 +30,8 @@ export type {
   InitPaymentResponse,
   GetStateRequest,
   GetStateResponse,
+  GetStateParam,
+  GetStateParamKey,
   ConfirmRequest,
   ConfirmResponse,
   CancelRequest,

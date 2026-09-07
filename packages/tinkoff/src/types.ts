@@ -103,8 +103,24 @@ export interface GetStateResponse {
   PaymentId: string;
   OrderId: string;
   Amount: number;
+  RebillId?: string;
+  Params?: GetStateParam[];
   Message?: string;
   Details?: string;
+}
+
+export type GetStateParamKey =
+  | 'Route'
+  | 'Source'
+  | 'CreditAmount'
+  | 'EndCoolingPeriod'
+  | 'DrPaymentId'
+  | 'DrPaymentSettlementDate'
+  | 'ParticipantWalletId';
+
+export interface GetStateParam {
+  Key: GetStateParamKey;
+  Value: string;
 }
 
 // Confirm request (for two-stage payments)
@@ -135,6 +151,7 @@ export interface CancelRequest {
   PaymentId: string;
   Amount?: number; // In kopecks, partial refund if specified
   Receipt?: Receipt;
+  ExternalRequestId?: string;
   Token?: string;
 }
 
@@ -148,6 +165,7 @@ export interface CancelResponse {
   OrderId: string;
   OriginalAmount: number;
   NewAmount: number;
+  ExternalRequestId?: string;
   Message?: string;
   Details?: string;
 }
@@ -195,6 +213,7 @@ export interface TinkoffConfig {
   terminalKey: string;
   secretKey: string;
   apiUrl?: string;
+  refundRequestTimeoutMs?: number;
 }
 
 // Payment parameters for high-level API
