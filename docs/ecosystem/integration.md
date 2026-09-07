@@ -149,7 +149,7 @@ Agents Market сохраняет фактическую цену каждого 
 |---|---|---|
 | PAY-INT-01 | AG RUB и TON invoices независимо дают доступный gateway credit | Один event→одна проводка; old RUB regression; exact amounts |
 | PAY-INT-02 | AM Web TON→AM run→AG inference purchase | Два merchant ledgers, связанный request/receipt без общей DB |
-| PAY-INT-03 | TMA digital checkout Stars, wallet flow TON Connect отдельно | Подменённый channel/old route не обходят policy; duplicate successful_payment один grant |
+| PAY-INT-03 | TMA owned run/status и закрытый новый digital checkout; wallet flow отдельно | Подменённый channel/old route не обходят policy; нет нового invoice/grant и обходной внешней ссылки |
 | PAY-INT-04 | Старые pending TON, поздняя и неверная оплата | Ни потерянных средств, ни автоматической выдачи; operator review/refund |
 | PAY-INT-05 | Arena funding→prize obligation→payout/refund | Coverage до publication; immutable split; unknown broadcast не resend |
 | PAY-INT-06 | Restart во время chain/provider success и DB commit | Reconciliation по сохранённой identity; один effect; cursor overlap безопасен |

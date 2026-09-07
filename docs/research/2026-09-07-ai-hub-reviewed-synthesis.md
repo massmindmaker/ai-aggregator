@@ -58,3 +58,7 @@
 ## Последнее уточнение хостинга AM — 07.09
 
 [Рекомендация и gate готовности AM Web к preview](/home/bob/Projects/agents-market/docs/product/hosting-decision.md): существующие TMA/API/worker/DB/Redis на VPS; отдельный `apps/web` — кандидат Vercel после versioned API/native Web auth/preview isolation. Текущий этап готовит проверяемый вариант локально, не создаёт project/deploy и не переносит работающий сервис. Эта рекомендация уточняет предыдущую формулировку сохранения deployment; окончательный внешний выпуск требует явного решения владельца.
+
+## Текущий scope после указания «Забей на старс»
+
+Реализация Stars исключена из текущих задач и обязательных implementation gates. Factual правило Telegram выше остаётся: отказ от разработки Stars не разрешает TON вместо них. Продолжаются AG RUB+TON, AM самостоятельный Web TON, Arena TON; TMA — свои агенты/run/result/budget/status и разрешённые wallet flows без нового цифрового checkout или обходной внешней ссылки. Существующие pending TON средства сохраняют reconciliation/refund. Коммерческий TMA checkout остаётся открытым release boundary; остальная автономная разработка продолжается.

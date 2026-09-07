@@ -11,11 +11,11 @@
 |---|---|---|
 | Aggregator | [Продолжение](../superpowers/plans/2026-09-07-production-continuation.md) | Сохранить RUB, добавить [TON native/allowlisted stablecoin](../superpowers/plans/2026-09-07-ton-payments.md) |
 | Arena | [Продолжение](/home/bob/Projects/aiarena/docs/superpowers/plans/2026-09-07-production-continuation.md) | [TON funding/prize/refund](/home/bob/Projects/aiarena/docs/superpowers/plans/2026-09-07-ton-prize-ledger.md) |
-| Agents Market Web + TMA | [Продолжение](/home/bob/Projects/agents-market/docs/superpowers/plans/2026-09-07-production-continuation.md) | [TON Web + Stars TMA](/home/bob/Projects/agents-market/docs/superpowers/plans/2026-09-07-ton-and-stars-payments.md), blockchain wallet flows отдельно |
+| Agents Market Web + TMA | [Продолжение](/home/bob/Projects/agents-market/docs/superpowers/plans/2026-09-07-production-continuation.md) | [TON Web + TMA без нового checkout](/home/bob/Projects/agents-market/docs/superpowers/plans/2026-09-07-ton-payments.md), blockchain wallet flows отдельно |
 
 Допущение: «TON crypto» означает сеть TON с native активом и allowlisted stablecoin, не удаление RUB или обход обязательных Stars для цифровых покупок внутри Telegram. Самостоятельный домен AG конфигурируется в том же repo/на существующем VPS; AM сохраняет существующий deployment. Успешный HTTP ответ старого deployment не доказывает release parity после split. Публичные тарифы, SLA, author share и сроки модерации требуют подтверждения действующей политикой/реализацией перед выпуском.
 
-Обязательные пользовательские пути HUB-01…07 и дополнительные денежные gates заданы в design; исходные108-матрицы и14интеграций сохраняют IDs. Новая crypto/Stars приёмка учитывается дополнительно, не подменяется старой суммой. Текущие статусы/commits остаются в [рабочем входе](../DEVELOPMENT-ENTRYPOINT.md), этот документ не аттестует PASS.
+Обязательные пользовательские пути HUB-01…07 и дополнительные денежные gates заданы в design; исходные108-матрицы и14интеграций сохраняют IDs. Новая crypto/payment-policy приёмка учитывается дополнительно, не подменяется старой суммой. Текущие статусы/commits остаются в [рабочем входе](../DEVELOPMENT-ENTRYPOINT.md), этот документ не аттестует PASS.
 
 ## Решение
 
