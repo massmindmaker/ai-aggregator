@@ -1,5 +1,7 @@
 # AI Aggregator: начать разработку здесь
 
+**Продолжение 08.09 — последняя принятая волна:** Bridge к quota v2 принят: `20187ecd`, independent TS/financial review Approved, focused230/native7, types/lint PASS. Исправлена двойная JSON-сериализация actual postgres.js binding. Typed wrapper и unused Task5 теперь связаны; следующий gate — durable HTTP idempotency/result persistence и публичный route. Реальной публичной активации ещё нет.
+
 **Чекпойнт разработки 08.09:** [принятые изменения, проверки и следующий этап](/home/bob/Projects/ai-aggregator/docs/consolidation/2026-09-08-development-checkpoint.md).
 
 **Карта функционала:** [сценарии, текущее состояние и оставшиеся работы](product/functional-map.md). Срез 08.09.2026; карта не заменяет приёмку.
