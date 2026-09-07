@@ -1,0 +1,271 @@
+BEGIN;
+-- HTTP request identity is durable before admission; result ownership joins both later.
+CREATE UNIQUE INDEX IF NOT EXISTS gateway_api_keys_org_id_id_uniq ON gateway_api_keys(org_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS gateway_charge_admissions_owner_id_uniq ON gateway_charge_admissions(org_id,api_key_id,billing_request_id);
+CREATE TABLE IF NOT EXISTS gateway_http_requests (
+ billing_request_id UUID PRIMARY KEY,
+ org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+ api_key_id UUID NOT NULL,
+ route_kind VARCHAR(32) NOT NULL CHECK(route_kind='chat'),
+ billing_mode VARCHAR(16) NOT NULL CHECK(billing_mode='stored'),
+ contract_version SMALLINT NOT NULL CHECK(contract_version=1),
+ idempotency_key_digest TEXT COLLATE "C" NOT NULL CHECK(length(idempotency_key_digest)=64 AND idempotency_key_digest ~ '^[0-9a-f]{64}$'),
+ request_fingerprint TEXT COLLATE "C" NOT NULL CHECK(length(request_fingerprint)=64 AND request_fingerprint ~ '^[0-9a-f]{64}$'),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp() CHECK(isfinite(created_at)),
+ CONSTRAINT gateway_http_requests_key_owner_fk FOREIGN KEY(org_id,api_key_id) REFERENCES gateway_api_keys(org_id,id) ON DELETE RESTRICT,
+ CONSTRAINT gateway_http_requests_scope_uniq UNIQUE(org_id,api_key_id,route_kind,billing_mode,idempotency_key_digest),
+ CONSTRAINT gateway_http_requests_owner_id_uniq UNIQUE(org_id,api_key_id,billing_request_id)
+);
+CREATE TABLE IF NOT EXISTS gateway_http_results (
+ billing_request_id UUID PRIMARY KEY,
+ org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+ api_key_id UUID NOT NULL,
+ contract_version SMALLINT NOT NULL CHECK(contract_version=1),
+ http_status SMALLINT NOT NULL CHECK(http_status=200),
+ content_type TEXT NOT NULL CHECK(content_type='application/json'),
+ response_body JSONB,
+ response_digest TEXT COLLATE "C" NOT NULL CHECK(length(response_digest)=64 AND response_digest ~ '^[0-9a-f]{64}$'),
+ stored_at TIMESTAMPTZ NOT NULL CHECK(isfinite(stored_at)),
+ expires_at TIMESTAMPTZ NOT NULL CHECK(isfinite(expires_at) AND expires_at=stored_at+INTERVAL '168 hours'),
+ payload_expired_at TIMESTAMPTZ,
+ CONSTRAINT gateway_http_results_key_owner_fk FOREIGN KEY(org_id,api_key_id) REFERENCES gateway_api_keys(org_id,id) ON DELETE RESTRICT,
+ CONSTRAINT gateway_http_results_request_owner_fk FOREIGN KEY(org_id,api_key_id,billing_request_id) REFERENCES gateway_http_requests(org_id,api_key_id,billing_request_id) ON DELETE RESTRICT,
+ CONSTRAINT gateway_http_results_admission_owner_fk FOREIGN KEY(org_id,api_key_id,billing_request_id) REFERENCES gateway_charge_admissions(org_id,api_key_id,billing_request_id) ON DELETE RESTRICT,
+ CONSTRAINT gateway_http_results_payload_check CHECK(
+  (payload_expired_at IS NULL AND response_body IS NOT NULL AND jsonb_typeof(response_body)='object' AND octet_length(convert_to(response_body::text,'UTF8'))<=1048576)
+  OR (payload_expired_at IS NOT NULL AND isfinite(payload_expired_at) AND payload_expired_at>=expires_at AND response_body IS NULL))
+);
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_type WHERE typname='gateway_http_claim_result_v1' AND typnamespace='public'::regnamespace) THEN
+  CREATE TYPE gateway_http_claim_result_v1 AS (contract_version SMALLINT,org_id UUID,api_key_id UUID,billing_request_id UUID,route_kind VARCHAR,billing_mode VARCHAR,idempotency_key_digest TEXT,request_fingerprint TEXT,created_at TIMESTAMPTZ,did_claim BOOLEAN);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_type WHERE typname='gateway_http_read_result_v1' AND typnamespace='public'::regnamespace) THEN
+  CREATE TYPE gateway_http_read_result_v1 AS (contract_version SMALLINT,status TEXT,billing_request_id UUID,http_status SMALLINT,content_type TEXT,response_body JSONB,actual_cost_credits BIGINT,stored_at TIMESTAMPTZ,expires_at TIMESTAMPTZ);
+ END IF;
+END $$;
+-- Server-only persistence composition. No execution permission is granted by replay.
+CREATE OR REPLACE FUNCTION aiag_http_validate_identity(_org UUID,_key UUID,_route VARCHAR,_mode VARCHAR,_digest TEXT,_fingerprint TEXT,_version SMALLINT)
+RETURNS VOID LANGUAGE plpgsql IMMUTABLE AS $$
+BEGIN
+ IF _org IS NULL OR _key IS NULL OR _route IS DISTINCT FROM 'chat' OR _mode IS DISTINCT FROM 'stored'
+ OR _version IS DISTINCT FROM 1 OR _digest IS NULL OR length(_digest)<>64 OR _digest COLLATE "C" !~ '^[0-9a-f]{64}$'
+ OR _fingerprint IS NULL OR length(_fingerprint)<>64 OR _fingerprint COLLATE "C" !~ '^[0-9a-f]{64}$'
+ THEN RAISE EXCEPTION 'INVALID_HTTP_REQUEST' USING ERRCODE='P0001'; END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION aiag_http_require_key(_org UUID,_key UUID,_active BOOLEAN)
+RETURNS VOID LANGUAGE plpgsql VOLATILE AS $$
+DECLARE _k gateway_api_keys%ROWTYPE;
+BEGIN
+ SELECT * INTO _k FROM gateway_api_keys WHERE org_id=_org AND id=_key FOR SHARE;
+ IF NOT FOUND OR (_active AND (_k.revoked_at IS NOT NULL OR _k.disabled_at IS NOT NULL)) THEN
+  RAISE EXCEPTION 'HTTP_ACCESS_DENIED' USING ERRCODE='P0005';
+ END IF;
+END $$;
+
+-- Exact public DTO, never a sanitizer for an arbitrary provider blob.
+CREATE OR REPLACE FUNCTION aiag_http_validate_response(_body JSONB,_usage JSONB)
+RETURNS TEXT LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE _choice JSONB; _u JSONB; _p NUMERIC; _c NUMERIC; _t NUMERIC; _cached NUMERIC;
+BEGIN
+ IF NOT aiag_quota_keys(_body,ARRAY['id','object','created','model','choices','usage']) THEN
+  RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+ IF octet_length(convert_to(_body::text,'UTF8'))>1048576 THEN
+  RAISE EXCEPTION 'HTTP_RESULT_TOO_LARGE' USING ERRCODE='P0001'; END IF;
+ IF jsonb_typeof(_body->'id') IS DISTINCT FROM 'string' OR length(_body->>'id') NOT BETWEEN 1 AND 256
+ OR (_body->>'id') COLLATE "C" !~ '^[A-Za-z0-9_-]+$'
+ OR _body->'object' IS DISTINCT FROM '"chat.completion"'::jsonb
+ OR jsonb_typeof(_body->'model') IS DISTINCT FROM 'string' OR length(_body->>'model') NOT BETWEEN 1 AND 256
+ OR (_body->>'model') COLLATE "C" !~ '^[A-Za-z0-9_./:@+-]+$'
+ OR jsonb_typeof(_body->'choices') IS DISTINCT FROM 'array'
+ OR jsonb_typeof(_usage) IS DISTINCT FROM 'object' THEN
+  RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+ IF jsonb_array_length(_body->'choices')<>1 THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+ _choice:=_body->'choices'->0;
+ IF NOT aiag_quota_keys(_choice,ARRAY['index','message','finish_reason'])
+ OR NOT aiag_quota_keys(_choice->'message',ARRAY['role','content'])
+ OR _choice->'message'->'role' IS DISTINCT FROM '"assistant"'::jsonb
+ OR jsonb_typeof(_choice->'message'->'content') NOT IN('string','null')
+ OR jsonb_typeof(_choice->'finish_reason') IS DISTINCT FROM 'string'
+ OR (_choice->>'finish_reason') NOT IN('stop','length','content_filter') THEN
+  RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+ _u:=_body->'usage';
+ IF NOT (aiag_quota_keys(_u,ARRAY['prompt_tokens','completion_tokens','total_tokens'])
+ OR aiag_quota_keys(_u,ARRAY['prompt_tokens','completion_tokens','total_tokens','cached_input_tokens'])) THEN
+  RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+ -- Translate only pure count-parser validation failures; financial errors are not caught here.
+ BEGIN
+  PERFORM aiag_quota_count(_body->'created');
+  IF aiag_quota_count(_choice->'index')<>0 THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT'; END IF;
+  _p:=aiag_quota_count(_u->'prompt_tokens'); _c:=aiag_quota_count(_u->'completion_tokens'); _t:=aiag_quota_count(_u->'total_tokens');
+  IF _u ? 'cached_input_tokens' THEN _cached:=aiag_quota_count(_u->'cached_input_tokens'); END IF;
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001';
+ END;
+ IF _t<>_p+_c OR (_cached IS NOT NULL AND _cached>_p) THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+ IF _body->'id' IS DISTINCT FROM _usage->'completionId' OR _body->'model' IS DISTINCT FROM _usage->'reportedModel'
+ OR _u->'prompt_tokens' IS DISTINCT FROM _usage->'usage'->'promptTokens'
+ OR _u->'completion_tokens' IS DISTINCT FROM _usage->'usage'->'completionTokens'
+ OR _u->'total_tokens' IS DISTINCT FROM _usage->'usage'->'totalTokens'
+ OR (_u ? 'cached_input_tokens' AND _u->'cached_input_tokens' IS DISTINCT FROM _usage->'usage'->'cachedInputTokens') THEN
+  RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
+ RETURN encode(sha256(convert_to(_body::text,'UTF8')),'hex');
+END $$;
+
+CREATE OR REPLACE FUNCTION aiag_http_immutable_request()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW IS DISTINCT FROM OLD THEN RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
+ RETURN NEW;
+END $$;
+CREATE OR REPLACE FUNCTION aiag_http_immutable_result()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW IS NOT DISTINCT FROM OLD THEN RETURN NEW; END IF;
+ IF (to_jsonb(NEW)-ARRAY['response_body','payload_expired_at']) IS DISTINCT FROM (to_jsonb(OLD)-ARRAY['response_body','payload_expired_at'])
+ OR OLD.response_body IS NULL OR OLD.payload_expired_at IS NOT NULL OR NEW.response_body IS NOT NULL
+ OR NEW.payload_expired_at IS NULL OR NEW.payload_expired_at<OLD.expires_at OR OLD.expires_at>clock_timestamp()
+ OR NEW.payload_expired_at>clock_timestamp() THEN
+  RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS gateway_http_request_immutable ON gateway_http_requests;
+CREATE TRIGGER gateway_http_request_immutable BEFORE UPDATE ON gateway_http_requests FOR EACH ROW EXECUTE FUNCTION aiag_http_immutable_request();
+DROP TRIGGER IF EXISTS gateway_http_result_immutable ON gateway_http_results;
+CREATE TRIGGER gateway_http_result_immutable BEFORE UPDATE ON gateway_http_results FOR EACH ROW EXECUTE FUNCTION aiag_http_immutable_result();
+
+CREATE OR REPLACE FUNCTION aiag_claim_gateway_http_request_v1(
+ _org_id UUID,_api_key_id UUID,_billing_request_id UUID,_route_kind VARCHAR,_billing_mode VARCHAR,
+ _idempotency_key_digest TEXT,_request_fingerprint TEXT,_contract_version SMALLINT
+) RETURNS SETOF gateway_http_claim_result_v1 LANGUAGE plpgsql VOLATILE AS $$
+DECLARE _id UUID; _r gateway_http_requests%ROWTYPE; _fresh BOOLEAN:=FALSE;
+BEGIN
+ PERFORM aiag_http_validate_identity(_org_id,_api_key_id,_route_kind,_billing_mode,_idempotency_key_digest,_request_fingerprint,_contract_version);
+ IF _billing_request_id IS NULL THEN RAISE EXCEPTION 'INVALID_HTTP_REQUEST' USING ERRCODE='P0001'; END IF;
+ PERFORM 1 FROM organizations WHERE id=_org_id FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'HTTP_ACCESS_DENIED' USING ERRCODE='P0005'; END IF;
+ SELECT billing_request_id INTO _id FROM gateway_http_requests WHERE org_id=_org_id AND api_key_id=_api_key_id
+ AND route_kind=_route_kind AND billing_mode=_billing_mode AND idempotency_key_digest=_idempotency_key_digest;
+ _id:=coalesce(_id,_billing_request_id);
+ PERFORM pg_advisory_xact_lock(hashtextextended(_id::text,0));
+ PERFORM 1 FROM gateway_charge_admissions WHERE billing_request_id=_id FOR UPDATE;
+ PERFORM aiag_http_require_key(_org_id,_api_key_id,TRUE);
+ SELECT * INTO _r FROM gateway_http_requests WHERE org_id=_org_id AND api_key_id=_api_key_id
+ AND route_kind=_route_kind AND billing_mode=_billing_mode AND idempotency_key_digest=_idempotency_key_digest FOR UPDATE;
+ IF FOUND THEN
+  IF _r.request_fingerprint IS DISTINCT FROM _request_fingerprint OR _r.contract_version<>_contract_version THEN
+   RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
+ ELSE
+  IF EXISTS(SELECT 1 FROM gateway_charge_admissions WHERE billing_request_id=_id)
+  OR EXISTS(SELECT 1 FROM gateway_http_requests WHERE billing_request_id=_id)
+  OR EXISTS(SELECT 1 FROM gateway_transactions WHERE request_id=_id::text) THEN
+   RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
+  INSERT INTO gateway_http_requests(billing_request_id,org_id,api_key_id,route_kind,billing_mode,contract_version,idempotency_key_digest,request_fingerprint)
+  VALUES(_id,_org_id,_api_key_id,_route_kind,_billing_mode,_contract_version,_idempotency_key_digest,_request_fingerprint) RETURNING * INTO _r;
+  _fresh:=TRUE;
+ END IF;
+ RETURN QUERY SELECT _r.contract_version,_r.org_id,_r.api_key_id,_r.billing_request_id,_r.route_kind,_r.billing_mode,
+ _r.idempotency_key_digest,_r.request_fingerprint,_r.created_at,_fresh;
+END $$;
+
+CREATE OR REPLACE FUNCTION aiag_record_gateway_http_outcome_v1(
+ _org_id UUID,_api_key_id UUID,_billing_request_id UUID,_idempotency_key_digest TEXT,_request_fingerprint TEXT,
+ _actual_cost_credits BIGINT,_usage_snapshot JSONB,_outcome_kind VARCHAR,_response_body JSONB,_contract_version SMALLINT
+) RETURNS SETOF gateway_charge_admission_result LANGUAGE plpgsql VOLATILE AS $$
+DECLARE _a gateway_charge_admissions%ROWTYPE; _r gateway_http_requests%ROWTYPE; _result gateway_http_results%ROWTYPE;
+ _digest TEXT; _at TIMESTAMPTZ; _transition gateway_charge_admission_result; _has_result BOOLEAN;
+BEGIN
+ PERFORM aiag_http_validate_identity(_org_id,_api_key_id,'chat','stored',_idempotency_key_digest,_request_fingerprint,_contract_version);
+ IF _billing_request_id IS NULL THEN RAISE EXCEPTION 'INVALID_HTTP_REQUEST' USING ERRCODE='P0001'; END IF;
+ IF _outcome_kind IS DISTINCT FROM 'success' THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+ PERFORM 1 FROM organizations WHERE id=_org_id FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'HTTP_ACCESS_DENIED' USING ERRCODE='P0005'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(_billing_request_id::text,0));
+ SELECT * INTO _a FROM gateway_charge_admissions WHERE billing_request_id=_billing_request_id FOR UPDATE;
+ PERFORM aiag_http_require_key(_org_id,_api_key_id,FALSE);
+ IF _a.org_id IS DISTINCT FROM _org_id OR _a.api_key_id IS DISTINCT FROM _api_key_id THEN
+  RAISE EXCEPTION 'HTTP_ACCESS_DENIED' USING ERRCODE='P0005'; END IF;
+ SELECT * INTO _r FROM gateway_http_requests WHERE billing_request_id=_billing_request_id AND org_id=_org_id AND api_key_id=_api_key_id FOR UPDATE;
+ IF NOT FOUND OR _r.idempotency_key_digest IS DISTINCT FROM _idempotency_key_digest OR _r.request_fingerprint IS DISTINCT FROM _request_fingerprint
+ OR _r.contract_version<>_contract_version OR _r.route_kind<>'chat' OR _r.billing_mode<>'stored' THEN
+  RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
+ IF _a.route_kind<>'chat' OR _a.billing_mode<>'stored' OR NOT EXISTS(SELECT 1 FROM gateway_charge_quota_contexts
+ WHERE billing_request_id=_billing_request_id AND org_id=_org_id AND api_key_id=_api_key_id AND quota_version=2) THEN
+  RAISE EXCEPTION 'HTTP_RESULT_STATE_CONFLICT' USING ERRCODE='P0005'; END IF;
+ SELECT * INTO _result FROM gateway_http_results WHERE billing_request_id=_billing_request_id FOR UPDATE;
+ _has_result:=FOUND;
+ IF (_has_result AND _a.state NOT IN('outcome_recorded','settled')) OR (NOT _has_result AND _a.state<>'dispatched') THEN
+  RAISE EXCEPTION 'HTTP_RESULT_STATE_CONFLICT' USING ERRCODE='P0005'; END IF;
+ _digest:=aiag_http_validate_response(_response_body,_usage_snapshot);
+ IF _has_result AND (_result.response_digest IS DISTINCT FROM _digest
+ OR (_result.response_body IS NOT NULL AND _result.response_body IS DISTINCT FROM _response_body)) THEN
+  RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
+ -- All established locks are already held. No second financial algorithm.
+ SELECT * INTO STRICT _transition FROM aiag_record_gateway_charge_outcome_v2(_org_id,_billing_request_id,_actual_cost_credits,_usage_snapshot,_outcome_kind);
+ IF NOT _has_result THEN
+  _at:=clock_timestamp();
+  INSERT INTO gateway_http_results(billing_request_id,org_id,api_key_id,contract_version,http_status,content_type,response_body,response_digest,stored_at,expires_at)
+  VALUES(_billing_request_id,_org_id,_api_key_id,1,200,'application/json',_response_body,_digest,_at,_at+INTERVAL '168 hours');
+ END IF;
+ RETURN NEXT _transition;
+END $$;
+
+CREATE OR REPLACE FUNCTION aiag_read_gateway_http_result_v1(
+ _org_id UUID,_api_key_id UUID,_route_kind VARCHAR,_billing_mode VARCHAR,
+ _idempotency_key_digest TEXT,_request_fingerprint TEXT,_contract_version SMALLINT
+) RETURNS SETOF gateway_http_read_result_v1 LANGUAGE plpgsql VOLATILE AS $$
+DECLARE _id UUID; _r gateway_http_requests%ROWTYPE; _a gateway_charge_admissions%ROWTYPE; _result gateway_http_results%ROWTYPE;
+ _out gateway_http_read_result_v1; _has_result BOOLEAN;
+BEGIN
+ PERFORM aiag_http_validate_identity(_org_id,_api_key_id,_route_kind,_billing_mode,_idempotency_key_digest,_request_fingerprint,_contract_version);
+ _out.contract_version:=1;
+ PERFORM 1 FROM organizations WHERE id=_org_id FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'HTTP_ACCESS_DENIED' USING ERRCODE='P0005'; END IF;
+ SELECT billing_request_id INTO _id FROM gateway_http_requests WHERE org_id=_org_id AND api_key_id=_api_key_id
+ AND route_kind=_route_kind AND billing_mode=_billing_mode AND idempotency_key_digest=_idempotency_key_digest;
+ IF _id IS NOT NULL THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended(_id::text,0));
+  SELECT * INTO _a FROM gateway_charge_admissions WHERE billing_request_id=_id FOR UPDATE;
+ END IF;
+ PERFORM aiag_http_require_key(_org_id,_api_key_id,TRUE);
+ IF _id IS NULL THEN _out.status:='not_found'; RETURN NEXT _out; RETURN; END IF;
+ SELECT * INTO _r FROM gateway_http_requests WHERE billing_request_id=_id FOR UPDATE;
+ IF _r.org_id IS DISTINCT FROM _org_id OR _r.api_key_id IS DISTINCT FROM _api_key_id
+ OR _r.request_fingerprint IS DISTINCT FROM _request_fingerprint OR _r.contract_version<>_contract_version THEN
+  RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
+ _out.billing_request_id:=_id;
+ SELECT * INTO _result FROM gateway_http_results WHERE billing_request_id=_id FOR UPDATE;
+ _has_result:=FOUND;
+ IF _has_result AND (_result.expires_at<=clock_timestamp() OR _result.payload_expired_at IS NOT NULL) THEN
+  _out.status:='expired'; _out.stored_at:=_result.stored_at; _out.expires_at:=_result.expires_at;
+ ELSIF _a.state IS NULL OR _a.state IN('held','dispatched','outcome_recorded') THEN _out.status:='pending';
+ ELSIF _a.state='cancelled' OR NOT _has_result THEN _out.status:='unavailable';
+ ELSIF _a.state='settled' THEN
+  IF _a.org_id IS DISTINCT FROM _org_id OR _a.api_key_id IS DISTINCT FROM _api_key_id OR _a.route_kind<>'chat' OR _a.billing_mode<>'stored'
+  OR _result.org_id IS DISTINCT FROM _org_id OR _result.api_key_id IS DISTINCT FROM _api_key_id
+  OR _result.response_digest IS DISTINCT FROM aiag_http_validate_response(_result.response_body,_a.usage_snapshot)
+  THEN RAISE EXCEPTION 'HTTP_RESULT_STATE_CONFLICT' USING ERRCODE='P0005'; END IF;
+  _out.status:='ready'; _out.http_status:=_result.http_status; _out.content_type:=_result.content_type;
+  _out.response_body:=_result.response_body; _out.actual_cost_credits:=_a.actual_cost_credits;
+  _out.stored_at:=_result.stored_at; _out.expires_at:=_result.expires_at;
+ ELSE _out.status:='unavailable'; END IF;
+ RETURN NEXT _out;
+END $$;
+
+CREATE OR REPLACE FUNCTION aiag_expire_gateway_http_result_v1(_org_id UUID,_billing_request_id UUID)
+RETURNS BOOLEAN LANGUAGE plpgsql VOLATILE AS $$
+DECLARE _changed UUID;
+BEGIN
+ IF _org_id IS NULL OR _billing_request_id IS NULL THEN RAISE EXCEPTION 'INVALID_HTTP_REQUEST' USING ERRCODE='P0001'; END IF;
+ PERFORM 1 FROM organizations WHERE id=_org_id FOR UPDATE;
+ IF NOT FOUND THEN RETURN FALSE; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(_billing_request_id::text,0));
+ PERFORM 1 FROM gateway_charge_admissions WHERE billing_request_id=_billing_request_id FOR UPDATE;
+ PERFORM 1 FROM gateway_http_requests WHERE billing_request_id=_billing_request_id AND org_id=_org_id FOR UPDATE;
+ IF NOT FOUND THEN RETURN FALSE; END IF;
+ UPDATE gateway_http_results SET response_body=NULL,payload_expired_at=clock_timestamp()
+ WHERE billing_request_id=_billing_request_id AND org_id=_org_id AND response_body IS NOT NULL
+ AND payload_expired_at IS NULL AND expires_at<=clock_timestamp() RETURNING billing_request_id INTO _changed;
+ RETURN _changed IS NOT NULL;
+END $$;
+
+COMMIT;

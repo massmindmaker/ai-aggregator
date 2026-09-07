@@ -58,7 +58,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
         expect(
           before.rows.some(
             ({ version }) =>
-              version === "migrations/0068_gateway_durable_spending_quotas.sql",
+              version === "migrations/0069_gateway_http_storage.sql",
           ),
         ).toBe(true);
 
@@ -148,7 +148,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(result.rows[0].dispatch_function).toContain(
       "aiag_mark_gateway_charge_dispatched",
     );
-    expect(Number(result.rows[0].table_count)).toBe(104);
+    expect(Number(result.rows[0].table_count)).toBe(106);
   });
 
   it("keeps the gateway admission function mirror exact", async () => {
@@ -170,6 +170,26 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       "utf8",
     );
     expect(migration).toContain(quotaMirror.trim());
+  });
+
+  it("keeps HTTP storage mirror, immutable 0068, explicit new projections and all 69 migrations", async () => {
+    const migration = await readFile(resolve("packages/database/migrations/0069_gateway_http_storage.sql"), "utf8");
+    const mirror = await readFile(resolve("packages/database/src/functions/gateway-http-storage.sql"), "utf8");
+    expect(migration).toContain(mirror.trim());
+    const previous = await readFile(resolve("packages/database/migrations/0068_gateway_durable_spending_quotas.sql"));
+    expect(createHash("sha256").update(previous).digest("hex")).toBe("b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6");
+    expect(await discoverNativeMigrations()).toHaveLength(69);
+    const types = await client.query<{ name: string; fields: string[] }>({ text: `
+      SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
+      JOIN pg_attribute a ON a.attrelid=t.typrelid AND a.attnum>0 AND NOT a.attisdropped
+      WHERE t.typname=ANY($1::text[]) GROUP BY t.typname ORDER BY t.typname`,
+      values: [["gateway_http_claim_result_v1", "gateway_http_read_result_v1"]] });
+    expect(types.rows).toEqual([
+      { name: "gateway_http_claim_result_v1", fields: ["contract_version","org_id","api_key_id","billing_request_id","route_kind","billing_mode","idempotency_key_digest","request_fingerprint","created_at","did_claim"] },
+      { name: "gateway_http_read_result_v1", fields: ["contract_version","status","billing_request_id","http_status","content_type","response_body","actual_cost_credits","stored_at","expires_at"] }
+    ]);
+    const tables = await client.query({ text: "SELECT to_regclass($1)::text AS requests,to_regclass($2)::text AS results", values: ["gateway_http_requests", "gateway_http_results"] });
+    expect(tables.rows[0]).toEqual({ requests: "gateway_http_requests", results: "gateway_http_results" });
   });
 
   it("keeps immutable 0067 checksum, v2 signatures and six durable quota tables", async () => {

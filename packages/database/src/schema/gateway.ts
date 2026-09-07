@@ -19,6 +19,7 @@ import {
   index,
   uniqueIndex,
   bigserial,
+  foreignKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { organizations } from './organizations';
@@ -136,6 +137,7 @@ export const gatewayApiKeys = pgTable(
   },
   (t) => ({
     orgIdx: index('gateway_api_keys_org_idx').on(t.orgId),
+    ownerIdUniq: uniqueIndex('gateway_api_keys_org_id_id_uniq').on(t.orgId, t.id),
     prefixIdx: index('gateway_api_keys_prefix_idx').on(t.keyPrefix),
   })
 );
@@ -329,6 +331,7 @@ export const gatewayChargeAdmissions = pgTable(
       t.createdAt
     ),
     // Partial retry index is defined in the raw migration SQL.
+    ownerIdUniq: uniqueIndex('gateway_charge_admissions_owner_id_uniq').on(t.orgId, t.apiKeyId, t.billingRequestId),
   })
 );
 
@@ -600,3 +603,49 @@ export const gatewayChargeQuotaEvents = pgTable('gateway_charge_quota_events', {
   releasedAmount: bigint('released_amount', { mode: 'bigint' }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 }, t => ({ pk: primaryKey({ columns: [t.billingRequestId,t.kind,t.eventKind] }) }));
+
+// HTTP identity persists before admission; strict CHECK/COLLATE/immutability rules live in 0069.
+export const gatewayHttpRequests = pgTable('gateway_http_requests', {
+  billingRequestId: uuid('billing_request_id').primaryKey(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  apiKeyId: uuid('api_key_id').notNull(),
+  routeKind: varchar('route_kind', { length: 32 }).$type<'chat'>().notNull(),
+  billingMode: varchar('billing_mode', { length: 16 }).$type<'stored'>().notNull(),
+  contractVersion: smallint('contract_version').$type<1>().notNull(),
+  idempotencyKeyDigest: text('idempotency_key_digest').notNull(),
+  requestFingerprint: text('request_fingerprint').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+}, t => ({
+  keyOwner: foreignKey({ name: 'gateway_http_requests_key_owner_fk', columns: [t.orgId, t.apiKeyId], foreignColumns: [gatewayApiKeys.orgId, gatewayApiKeys.id] }).onDelete('restrict'),
+  scope: uniqueIndex('gateway_http_requests_scope_uniq').on(t.orgId, t.apiKeyId, t.routeKind, t.billingMode, t.idempotencyKeyDigest),
+  ownerId: uniqueIndex('gateway_http_requests_owner_id_uniq').on(t.orgId, t.apiKeyId, t.billingRequestId),
+}));
+
+/** Sanitized plaintext DTO only. Request bodies and financial snapshots never belong here. */
+export type GatewayHttpCompletionBody = {
+  id: string;
+  object: 'chat.completion';
+  created: number;
+  model: string;
+  choices: [{ index: 0; message: { role: 'assistant'; content: string | null }; finish_reason: 'stop' | 'length' | 'content_filter' }];
+  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number; cached_input_tokens?: number };
+};
+export const gatewayHttpResults = pgTable('gateway_http_results', {
+  billingRequestId: uuid('billing_request_id').primaryKey(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  apiKeyId: uuid('api_key_id').notNull(),
+  contractVersion: smallint('contract_version').$type<1>().notNull(),
+  httpStatus: smallint('http_status').$type<200>().notNull(),
+  contentType: text('content_type').$type<'application/json'>().notNull(),
+  responseBody: jsonb('response_body').$type<GatewayHttpCompletionBody>(),
+  responseDigest: text('response_digest').notNull(),
+  storedAt: timestamp('stored_at', { withTimezone: true }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  payloadExpiredAt: timestamp('payload_expired_at', { withTimezone: true }),
+}, t => ({
+  keyOwner: foreignKey({ name: 'gateway_http_results_key_owner_fk', columns: [t.orgId, t.apiKeyId], foreignColumns: [gatewayApiKeys.orgId, gatewayApiKeys.id] }).onDelete('restrict'),
+  requestOwner: foreignKey({ name: 'gateway_http_results_request_owner_fk', columns: [t.orgId, t.apiKeyId, t.billingRequestId], foreignColumns: [gatewayHttpRequests.orgId, gatewayHttpRequests.apiKeyId, gatewayHttpRequests.billingRequestId] }).onDelete('restrict'),
+  admissionOwner: foreignKey({ name: 'gateway_http_results_admission_owner_fk', columns: [t.orgId, t.apiKeyId, t.billingRequestId], foreignColumns: [gatewayChargeAdmissions.orgId, gatewayChargeAdmissions.apiKeyId, gatewayChargeAdmissions.billingRequestId] }).onDelete('restrict'),
+}));
+export type GatewayHttpRequest = typeof gatewayHttpRequests.$inferSelect;
+export type GatewayHttpResult = typeof gatewayHttpResults.$inferSelect;
