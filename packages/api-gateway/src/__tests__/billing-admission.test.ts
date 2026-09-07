@@ -340,6 +340,69 @@ describe("gateway admission SQL wrappers", () => {
     }
   });
 
+  it("rejects true transitions against anchors that already contain the transition", async () => {
+    const dispatched = await dispatchedAnchor();
+    const repeatedDispatch = createSqlStub();
+    repeatedDispatch.returnRows([dispatchedRow({ did_transition: true })]);
+    await expect(
+      markGatewayChargeDispatched(
+        {
+          admission: dispatched,
+          attemptId: ids.attempt,
+          upstreamId: "openrouter",
+          pricingSnapshot: { input: "1", output: "2" },
+        },
+        repeatedDispatch.client,
+      ),
+    ).rejects.toBeInstanceOf(AdmissionUnavailableError);
+
+    const recorded = await outcomeAnchor();
+    const repeatedOutcome = createSqlStub();
+    repeatedOutcome.returnRows([outcomeRow({ did_transition: true })]);
+    await expect(
+      recordGatewayChargeOutcome(
+        {
+          admission: recorded,
+          actualCostCredits: 41n,
+          usageSnapshot: { prompt_tokens: 10, completion_tokens: 2 },
+          outcomeKind: "success",
+        },
+        repeatedOutcome.client,
+      ),
+    ).rejects.toBeInstanceOf(AdmissionUnavailableError);
+
+    const settledDb = createSqlStub();
+    settledDb.returnRows([settledRow()]);
+    const settled = await settleAdmittedGatewayCharge(
+      { admission: recorded },
+      settledDb.client,
+    );
+    const repeatedSettle = createSqlStub();
+    repeatedSettle.returnRows([settledRow({ did_transition: true })]);
+    await expect(
+      settleAdmittedGatewayCharge(
+        { admission: settled },
+        repeatedSettle.client,
+      ),
+    ).rejects.toBeInstanceOf(AdmissionUnavailableError);
+
+    const held = await heldAnchor();
+    const cancelledDb = createSqlStub();
+    cancelledDb.returnRows([cancelledRow()]);
+    const cancelled = await cancelUndispatchedGatewayCharge(
+      { admission: held },
+      cancelledDb.client,
+    );
+    const repeatedCancel = createSqlStub();
+    repeatedCancel.returnRows([cancelledRow({ did_transition: true })]);
+    await expect(
+      cancelUndispatchedGatewayCharge(
+        { admission: cancelled },
+        repeatedCancel.client,
+      ),
+    ).rejects.toBeInstanceOf(AdmissionUnavailableError);
+  });
+
   it("records fresh and replayed outcomes, binding actual bigint exactly", async () => {
     const before = await (async () => {
       const source = createSqlStub();
@@ -676,6 +739,30 @@ describe("gateway admission SQL wrappers", () => {
     await expect(
       admitGatewayCharge(admitArgs, wrongMessage.client),
     ).rejects.toBeInstanceOf(AdmissionUnavailableError);
+  });
+
+  it("neutralizes an arbitrary AiagError thrown by SQL transport", async () => {
+    db.throwError(
+      new AiagError("RAW_DB", 500, "password=secret", {
+        query: "SELECT provider_secret",
+      }),
+    );
+
+    let thrown: unknown;
+    try {
+      await admitGatewayCharge(admitArgs, db.client);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(AdmissionUnavailableError);
+    expect(thrown).toMatchObject({
+      code: "ADMISSION_UNAVAILABLE",
+      status: 503,
+      details: undefined,
+    });
+    expect(JSON.stringify((thrown as AiagError).toResponseBody())).not.toMatch(
+      /password|secret|provider/i,
+    );
   });
 
   async function heldAnchor() {

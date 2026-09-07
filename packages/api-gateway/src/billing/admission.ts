@@ -133,11 +133,10 @@ function timestamp(value: unknown): string {
   }
 }
 
-function mapAdmissionError(
+function mapTransportError(
   error: unknown,
   operation: AdmissionOperation,
 ): AiagError {
-  if (error instanceof AiagError) return error;
   const code =
     typeof error === "object" &&
     error !== null &&
@@ -199,16 +198,21 @@ async function queryAdmission(
   operation: AdmissionOperation,
   functionCall: SqlFragment,
 ): Promise<GatewayChargeAdmissionResult> {
+  let rows: readonly Record<string, unknown>[];
   try {
-    const rows = await client<Record<string, unknown>[]>`
+    rows = await client<Record<string, unknown>[]>`
       WITH admission AS (${functionCall})
       SELECT ${admissionProjection(client)}
       FROM admission
     `;
-    if (rows.length !== 1) unavailable();
-    return parseGatewayChargeAdmissionResult(rows[0]);
   } catch (error) {
-    throw mapAdmissionError(error, operation);
+    throw mapTransportError(error, operation);
+  }
+  if (rows.length !== 1) unavailable();
+  try {
+    return parseGatewayChargeAdmissionResult(rows[0]);
+  } catch {
+    unavailable();
   }
 }
 
@@ -401,7 +405,7 @@ export async function markGatewayChargeDispatched(
   )
     unavailable();
   if (result.didTransition) {
-    if (result.state !== "dispatched") unavailable();
+    if (before.state !== "held" || result.state !== "dispatched") unavailable();
     return Object.freeze({ kind: "dispatch_granted", admission: result });
   }
   if (!["dispatched", "outcome_recorded", "settled"].includes(result.state))
@@ -456,7 +460,7 @@ export async function recordGatewayChargeOutcome(
     unavailable();
   if (
     result.didTransition
-      ? result.state !== "outcome_recorded"
+      ? before.state !== "dispatched" || result.state !== "outcome_recorded"
       : !["outcome_recorded", "settled"].includes(result.state)
   )
     unavailable();

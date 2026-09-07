@@ -184,10 +184,15 @@ function cloneJsonValue(
         Object.getOwnPropertyNames(value).length !== value.length + 1
       )
         fail(name);
-      const clone = value.map((item, index) => {
-        if (!Object.prototype.hasOwnProperty.call(value, index)) fail(name);
-        return cloneJsonValue(item, name, stack);
-      });
+      const clone: JsonValue[] = [];
+      for (let index = 0; index < value.length; index += 1) {
+        const descriptor = Object.getOwnPropertyDescriptor(
+          value,
+          String(index),
+        );
+        if (!descriptor?.enumerable || !("value" in descriptor)) fail(name);
+        clone.push(cloneJsonValue(descriptor.value, name, stack));
+      }
       return Object.freeze(clone);
     }
     const prototype = Object.getPrototypeOf(value);

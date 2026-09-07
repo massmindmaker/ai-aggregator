@@ -321,4 +321,26 @@ describe("gateway admission result parser", () => {
     ).toBe(true);
     expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
   });
+
+  it("rejects an array index getter without invoking it", () => {
+    let getterCalls = 0;
+    const accessorArray: unknown[] = [];
+    Object.defineProperty(accessorArray, "0", {
+      get() {
+        getterCalls += 1;
+        return "must-not-run";
+      },
+      enumerable: true,
+      configurable: true,
+    });
+    accessorArray.length = 1;
+
+    expect(() =>
+      parseGatewayChargeAdmissionResult({
+        ...heldRow(),
+        quote_snapshot: { values: accessorArray },
+      }),
+    ).toThrow();
+    expect(getterCalls).toBe(0);
+  });
 });
