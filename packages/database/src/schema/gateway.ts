@@ -5,6 +5,8 @@
  */
 import {
   pgTable,
+  primaryKey,
+  smallint,
   uuid,
   varchar,
   text,
@@ -18,6 +20,7 @@ import {
   uniqueIndex,
   bigserial,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { organizations } from './organizations';
 
 // -----------------------------------------------------------------------------
@@ -527,3 +530,73 @@ export type PredictionJob = typeof predictionJobs.$inferSelect;
 export type Batch = typeof batches.$inferSelect;
 export type ModelSubmission = typeof modelSubmissions.$inferSelect;
 export type NewModelSubmission = typeof modelSubmissions.$inferInsert;
+
+// Durable v2 quotas. CHECK constraints and SID COLLATE "C" are authoritative in 0068.
+export const gatewayQuotaOrgPolicies = pgTable('gateway_quota_org_policies', {
+  orgId: uuid('org_id').primaryKey().references(() => organizations.id, { onDelete: 'restrict' }),
+  enforcementVersion: smallint('enforcement_version').notNull().default(1),
+  dailySupplierUsdMicroLimitV2: bigint('daily_supplier_usd_micro_limit_v2', { mode: 'bigint' }),
+  revision: bigint('revision', { mode: 'bigint' }).notNull().default(1n),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+});
+export const gatewayQuotaKeyPolicies = pgTable('gateway_quota_key_policies', {
+  apiKeyId: uuid('api_key_id').primaryKey().references(() => gatewayApiKeys.id, { onDelete: 'restrict' }),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  sessionMicrocreditsLimitV2: bigint('session_microcredits_limit_v2', { mode: 'bigint' }),
+  revision: bigint('revision', { mode: 'bigint' }).notNull().default(1n),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+});
+export const gatewayQuotaBuckets = pgTable('gateway_quota_buckets', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  kind: varchar('kind', { length: 32 }).notNull(),
+  apiKeyId: uuid('api_key_id').references(() => gatewayApiKeys.id, { onDelete: 'restrict' }),
+  declaredSessionId: varchar('declared_session_id', { length: 128 }),
+  periodStart: timestamp('period_start', { withTimezone: true }),
+  periodEnd: timestamp('period_end', { withTimezone: true }),
+  reservedAmount: bigint('reserved_amount', { mode: 'bigint' }).notNull().default(0n),
+  settledAmount: bigint('settled_amount', { mode: 'bigint' }).notNull().default(0n),
+}, t => ({
+  month: uniqueIndex('gateway_quota_month_uniq').on(t.orgId,t.apiKeyId,t.periodStart).where(sql`${t.kind} = 'key_month_charged_v2'`),
+  day: uniqueIndex('gateway_quota_day_uniq').on(t.orgId,t.periodStart).where(sql`${t.kind} = 'org_day_supplier_v2'`),
+  session: uniqueIndex('gateway_quota_session_uniq').on(t.orgId,t.apiKeyId,t.declaredSessionId).where(sql`${t.kind} = 'key_session_charged_v2'`),
+}));
+export const gatewayChargeQuotaContexts = pgTable('gateway_charge_quota_contexts', {
+  billingRequestId: uuid('billing_request_id').primaryKey().references(() => gatewayChargeAdmissions.billingRequestId, { onDelete: 'restrict' }),
+  quotaVersion: smallint('quota_version').notNull().default(2),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  apiKeyId: uuid('api_key_id').notNull().references(() => gatewayApiKeys.id, { onDelete: 'restrict' }),
+  declaredSessionId: varchar('declared_session_id', { length: 128 }),
+  admittedAt: timestamp('admitted_at', { withTimezone: true }).notNull(),
+  supplierFormulaVersion: varchar('supplier_formula_version', { length: 80 }).notNull(),
+  supplierQuoteSnapshot: jsonb('supplier_quote_snapshot').notNull(),
+  supplierAuthorizedMaxUsdMicro: bigint('supplier_authorized_max_usd_micro', { mode: 'bigint' }).notNull(),
+  supplierActualUsdMicro: bigint('supplier_actual_usd_micro', { mode: 'bigint' }),
+  supplierUsageSnapshot: jsonb('supplier_usage_snapshot'),
+});
+export const gatewayChargeQuotaReservations = pgTable('gateway_charge_quota_reservations', {
+  billingRequestId: uuid('billing_request_id').notNull().references(() => gatewayChargeQuotaContexts.billingRequestId, { onDelete: 'restrict' }),
+  bucketId: uuid('bucket_id').notNull().references(() => gatewayQuotaBuckets.id, { onDelete: 'restrict' }),
+  kind: varchar('kind', { length: 32 }).notNull(),
+  limitSnapshot: bigint('limit_snapshot', { mode: 'bigint' }),
+  policySnapshot: jsonb('policy_snapshot').notNull(),
+  reservedMax: bigint('reserved_max', { mode: 'bigint' }).notNull(),
+  actualAmount: bigint('actual_amount', { mode: 'bigint' }),
+  state: varchar('state', { length: 12 }).notNull().default('reserved'),
+  terminalAt: timestamp('terminal_at', { withTimezone: true }),
+}, t => ({
+  pk: primaryKey({ columns: [t.billingRequestId,t.bucketId] }),
+  dimension: uniqueIndex('gateway_charge_quota_reservations_billing_request_id_kind_key').on(t.billingRequestId,t.kind),
+}));
+export const gatewayChargeQuotaEvents = pgTable('gateway_charge_quota_events', {
+  billingRequestId: uuid('billing_request_id').notNull().references(() => gatewayChargeQuotaContexts.billingRequestId, { onDelete: 'restrict' }),
+  kind: varchar('kind', { length: 32 }).notNull(),
+  eventKind: varchar('event_kind', { length: 12 }).notNull(),
+  bucketId: uuid('bucket_id').notNull().references(() => gatewayQuotaBuckets.id, { onDelete: 'restrict' }),
+  reservedDelta: bigint('reserved_delta', { mode: 'bigint' }).notNull(),
+  settledDelta: bigint('settled_delta', { mode: 'bigint' }).notNull(),
+  releasedAmount: bigint('released_amount', { mode: 'bigint' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+}, t => ({ pk: primaryKey({ columns: [t.billingRequestId,t.kind,t.eventKind] }) }));

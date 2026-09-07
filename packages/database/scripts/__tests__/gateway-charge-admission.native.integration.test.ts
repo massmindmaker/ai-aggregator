@@ -21,7 +21,7 @@ interface Fixture {
   apiKeyId: string;
 }
 
-interface AdmissionRow {
+interface AdmissionRow extends Record<string, unknown> {
   billing_request_id: string;
   org_id: string;
   api_key_id: string;
@@ -62,7 +62,7 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway charge admission", () => {
         guarded = connected;
         const originalEnd = connected.end.bind(connected);
         connected.end = async () => undefined;
-        close = originalEnd;
+        close = async () => { await originalEnd(); };
       },
     );
     return { client: guarded, close };
@@ -540,11 +540,17 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway charge admission", () => {
         pid.rows[0].pid,
         "topup_refund_claim_org_lock",
       );
-      const admitPromise = admit(fixture, { max: 30n });
+      // Observe rejection immediately while the native lock barrier still controls ordering.
+      const admitPromise = admit(fixture, { max: 30n }).then(
+        value => ({ status: "fulfilled" as const, value }),
+        reason => ({ status: "rejected" as const, reason }),
+      );
       await waitForLockedQuery(observer.client, "aiag_admit_gateway_charge");
       await blocker.client.query({ text: "COMMIT", values: [] });
       expect((await claimPromise).kind).toBe("claimed");
-      await expectSqlState(admitPromise, "P0005");
+      const admitted = await admitPromise;
+      expect(admitted.status).toBe("rejected");
+      if (admitted.status === "rejected") expect(admitted.reason).toMatchObject({ code: "P0005" });
       expect(await balances(fixture)).toMatchObject({ payg_credits: "100" });
     } finally {
       await blocker.client
@@ -749,6 +755,7 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway charge admission", () => {
     const firstOutcome = await recordOutcome(fixture, billingRequestId, 0n, {
       verified_zero: true,
     });
+    expect(firstOutcome.rows[0]).toMatchObject({ state: "outcome_recorded", did_transition: true });
     await settle(fixture, billingRequestId);
     const replayOutcome = await recordOutcome(fixture, billingRequestId, 0n, {
       verified_zero: true,

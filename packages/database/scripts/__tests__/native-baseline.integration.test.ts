@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -58,7 +58,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
         expect(
           before.rows.some(
             ({ version }) =>
-              version === "migrations/0067_gateway_charge_admissions.sql",
+              version === "migrations/0068_gateway_durable_spending_quotas.sql",
           ),
         ).toBe(true);
 
@@ -148,13 +148,13 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(result.rows[0].dispatch_function).toContain(
       "aiag_mark_gateway_charge_dispatched",
     );
-    expect(Number(result.rows[0].table_count)).toBe(98);
+    expect(Number(result.rows[0].table_count)).toBe(104);
   });
 
   it("keeps the gateway admission function mirror exact", async () => {
     const migration = await readFile(
       resolve(
-        "packages/database/migrations/0067_gateway_charge_admissions.sql",
+        "packages/database/migrations/0068_gateway_durable_spending_quotas.sql",
       ),
       "utf8",
     );
@@ -163,6 +163,71 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       "utf8",
     );
     expect(migration).toContain(mirror.trim());
+    const quotaMirror = await readFile(
+      resolve(
+        "packages/database/src/functions/gateway-durable-spending-quotas.sql",
+      ),
+      "utf8",
+    );
+    expect(migration).toContain(quotaMirror.trim());
+  });
+
+  it("keeps immutable 0067 checksum, v2 signatures and six durable quota tables", async () => {
+    const historical = await readFile(
+      resolve(
+        "packages/database/migrations/0067_gateway_charge_admissions.sql",
+      ),
+    );
+    expect(createHash("sha256").update(historical).digest("hex")).toBe(
+      "c13bba2c2c6cd8443790ec7587bfd42860ac0a79de10c3edea856f978737b7e3",
+    );
+    const tables = [
+      "gateway_quota_org_policies",
+      "gateway_quota_key_policies",
+      "gateway_quota_buckets",
+      "gateway_charge_quota_contexts",
+      "gateway_charge_quota_reservations",
+      "gateway_charge_quota_events",
+    ];
+    const result = await client.query<{ name: string | null }>({
+      text: "SELECT to_regclass(name)::text name FROM unnest($1::text[]) name",
+      values: [tables],
+    });
+    expect(result.rows.map((row) => row.name)).toEqual(tables);
+    const functions = await client.query<{
+      admit: string | null;
+      outcome: string | null;
+    }>({
+      text: "SELECT to_regprocedure($1)::text admit, to_regprocedure($2)::text outcome",
+      values: [
+        "aiag_admit_gateway_charge_v2(uuid,uuid,uuid,character varying,character varying,character varying,character varying,bigint,jsonb,timestamp with time zone,character varying,jsonb)",
+        "aiag_record_gateway_charge_outcome_v2(uuid,uuid,bigint,jsonb,character varying)",
+      ],
+    });
+    expect(functions.rows[0].admit).toContain("aiag_admit_gateway_charge_v2");
+    expect(functions.rows[0].outcome).toContain(
+      "aiag_record_gateway_charge_outcome_v2",
+    );
+    const schema = await import("../../src/schema/gateway");
+    for (const column of [
+      schema.gatewayQuotaOrgPolicies.dailySupplierUsdMicroLimitV2,
+      schema.gatewayQuotaKeyPolicies.sessionMicrocreditsLimitV2,
+      schema.gatewayQuotaBuckets.reservedAmount,
+      schema.gatewayQuotaBuckets.settledAmount,
+      schema.gatewayChargeQuotaContexts.supplierAuthorizedMaxUsdMicro,
+      schema.gatewayChargeQuotaContexts.supplierActualUsdMicro,
+      schema.gatewayChargeQuotaReservations.limitSnapshot,
+      schema.gatewayChargeQuotaReservations.reservedMax,
+      schema.gatewayChargeQuotaReservations.actualAmount,
+      schema.gatewayChargeQuotaEvents.reservedDelta,
+      schema.gatewayChargeQuotaEvents.settledDelta,
+      schema.gatewayChargeQuotaEvents.releasedAmount,
+    ]) {
+      expect(column.getSQLType()).toBe("bigint");
+      expect(column.mapFromDriverValue("9007199254740993")).toBe(
+        9007199254740993n,
+      );
+    }
   });
 
   it("contains the additive refund admission guard without changing legacy settlement", async () => {
