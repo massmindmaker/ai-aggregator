@@ -74,7 +74,17 @@ Task3 принят TypeScript/spec и React review на `8ddb2fe7c23ac5690fa2dd3
 - После узкого FAQ fix на финальном `8ddb2fe`: DOM regression1/1, Next lint и Web typecheck прошли; весь build/unit повторно не запускался.
 - Controlled startup test импортирует канонический server entry, наблюдает vetted connectAddr в transport options и отказ SSRF до транспорта. Реальный PM2, внешний DNS и платные provider requests этим тестом не проверяются.
 
-Следующий P0 — snapshot выдачи кредитов и clawback при возврате top-up. Уточнён контракт T-Bank: сохранённый ExternalRequestId, строгое доказательство before/after amounts, монотонные статусы и блокировка расходов при неопределённом возврате. Эти изменения пока не считаются реализованными или проверенными сквозным сценарием.
+## Aggregator: принятая проверка ответа на возврат T-Bank
+
+Транспортный этап принят TypeScript/spec review на `000d2bbb0994c61ecb1b683adda3f54480e9be0c` после одного раунда исправлений. Новый путь сохраняет merchant ExternalRequestId, проверяет PaymentId/OrderId и целые суммы до/после возврата, ограничивает ожидание GetState/Cancel и возвращает неопределённый исход при недостаточном доказательстве. Контекст ACQ/cards создаётся самим клиентом после GetState, заморожен и привязан к экземпляру клиента. Старый payment-provider API сохранён.
+
+- Первоначальный этап `b160c63`:91 focused tests, package typecheck и ESM/DTS build прошли.
+- Финальный fix `000d2bb`:80 package tests, typecheck и ESM/DTS build прошли. Это другой, более узкий набор; Web provider tests повторно не запускались.
+- Ревью воспроизвело перенос изменяемого method context и отправку чека с несоответствующей суммой. Повторная проверка подтвердила устранение: скопированный/подменённый контекст и partial verified_receipt не вызывают Cancel.
+- Автоматически поддерживается только доказанный ACQ/cards. Partial с чеком отключён до полной проверки актуальной fiscal schema; допустим только явный server-trusted no_receipt_required context. Остальные методы и отсутствие доказанного контекста дают not_dispatched.
+- Банковские API в этих проверках заменены локальными fixtures; реальных платёжных операций не выполнялось. Наследуемая package-cwd test-команда требует отдельного исправления пути Vitest setup; проверенный root-focused запуск работает.
+
+Снимок выдачи кредитов, DB claim/clawback/debt и подключение routes ещё выполняются. Этот транспортный этап не доказывает сквозной возврат или готовность денежного контура.
 
 ## AI Arena
 
