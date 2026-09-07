@@ -1117,7 +1117,7 @@ describe.skipIf(!enabled)("native durable gateway quotas", () => {
       }
     },
   );
-  it("discards committed acknowledgements and recovers held/dispatched/outcome/settled with fresh connections", async () => {
+  it("recovers held/dispatched/outcome/settled through reconnect and exact replay", async () => {
     const f = await fixture(),
       r = request(f);
     let c = await open();
@@ -1149,6 +1149,78 @@ describe.skipIf(!enabled)("native durable gateway quotas", () => {
       ).rows[0].n,
     ).toBe("6");
   });
+  it.each(["admit", "dispatch", "outcome", "settle"] as const)(
+    "simulates application ACK loss after committed %s and replays without another effect",
+    async (stage) => {
+      const f = await fixture(),
+        r = request(f);
+      if (stage !== "admit") await admit(r);
+      if (stage === "outcome" || stage === "settle") await dispatch(r);
+      if (stage === "settle") await outcome(r);
+      const before = await snapshot(f);
+      const operation = (c: TestDatabaseClient) => {
+        switch (stage) {
+          case "admit":
+            return admit(r, c);
+          case "dispatch":
+            return dispatch(r, c);
+          case "outcome":
+            return outcome(r, "30", usage(r), c);
+          case "settle":
+            return settle(r, c);
+        }
+      };
+      const connection = await open();
+      // Test-only response boundary: SQL really commits, but the application receives
+      // a failure instead of QueryResult. This simulates application ACK loss, not a
+      // network disconnect, backend kill, or power loss.
+      const callWithLostAcknowledgement = async () => {
+        await query("BEGIN", [], connection.db);
+        try {
+          await operation(connection.db);
+          await query("COMMIT", [], connection.db);
+        } catch (error) {
+          await query("ROLLBACK", [], connection.db);
+          throw error;
+        }
+        throw new Error("SIMULATED_APPLICATION_ACK_LOSS");
+      };
+      try {
+        await expect(callWithLostAcknowledgement()).rejects.toThrow(
+          "SIMULATED_APPLICATION_ACK_LOSS",
+        );
+      } finally {
+        await connection.close();
+      }
+      const observer = await open();
+      try {
+        const observed = await query<{ state: string }>(
+          "SELECT state FROM gateway_charge_admissions WHERE billing_request_id=$1",
+          [r.id],
+          observer.db,
+        );
+        expect(observed.rows[0].state).toBe(
+          {
+            admit: "held",
+            dispatch: "dispatched",
+            outcome: "outcome_recorded",
+            settle: "settled",
+          }[stage],
+        );
+      } finally {
+        await observer.close();
+      }
+      const committed = await snapshot(f);
+      expect(committed).not.toEqual(before);
+      const retry = await open();
+      try {
+        expect((await operation(retry.db)).rows[0].did_transition).toBe(false);
+      } finally {
+        await retry.close();
+      }
+      expect(await snapshot(f)).toEqual(committed);
+    },
+  );
   async function refundable(f: Fixture) {
     const p = {
       paymentId: randomUUID(),
