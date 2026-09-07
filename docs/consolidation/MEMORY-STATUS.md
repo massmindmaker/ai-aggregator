@@ -1,5 +1,13 @@
 # Статус developer memory
 
+## Проверка текущего harness — 08.09.2026
+
+LightRAG `query_text` теперь callable: hybrid context получен. Ответ широкий и содержит исторические сведения; это не подтверждение последнего checkpoint locator и не основание менять accepted code. Последняя синхронизация остаётся PENDING до точного dedupe/readback. Для последующих запросов ограничивать вывод и разбирать вложенный JSON перед передачей в контекст.
+
+Serena `initial_instructions` и `get_current_config` вызваны: инструмент работает, но активного canonical проекта нет; auto-activation/index freshness не заявляются. Старые индексы AG после0068 требуют обновления на frozen source. Memory Graph в этой волне не менялся. Brain navigation подтверждена предыдущим checkpoint commit40d040b.
+
+Ниже — исторические проверки 07.09, не текущая code acceptance. Текущий вход: [checkpoint08.09](2026-09-08-development-checkpoint.md) и owner development entrypoint.
+
 Обновлено: 07.09.2026, чекпойнт перед паузой. AG Task5, AM DB Task1, Arena AR-P1/P2.0 приняты; AM Task2 имеет открытый Important cleanup review. Это операционный снимок доступности и правил применения memory-слоёв для трёх канонических репозиториев. Он не утверждает product readiness и не заменяет документы-владельцы.
 
 ## Подтверждённые чтения
