@@ -118,6 +118,15 @@ Task3 принят TypeScript/spec и React review на `8ddb2fe7c23ac5690fa2dd3
 - Положительная дробная BYOK-комиссия и граница half-up проверены. Нулевая цена не превращается в искусственную минимальную комиссию.
 - Модуль не доказывает ограничения конкретного провайдера и ещё не подключён к routes. Следующий этап — точный wrapper принятых DB-функций, затем выбор кандидата, исполнение и сквозные проверки.
 
+## Aggregator: принятый gateway wrapper резервирования
+
+Этап2B.2b-1 принят TypeScript financial/spec+quality review на `1c25d0ff333a6e795fd83459680c847112e37a2a`. Пять prepared wrappers разбирают31поле принятого SQL-контракта, сохраняют точные BIGINT и микросекундные timestamps, сверяют неизменяемую identity и отличают новый dispatch от replay.
+
+- Финальные65focused tests, gateway source/test typechecks и Prettier прошли; полный build/native baseline не повторялся.
+- Один раунд review исправил три дефекта: повторный grant при ошибочном true-флаге, раскрытие произвольного transport AiagError и исполнение accessor массива при JSON cloning. RED воспроизвёл все три; повторное review — без новых замечаний.
+- Wrapper ещё не используется routes. Его работа с реальным postgres.js driver, provider transport, executor, SSE и reconciliation проверяется при последующем подключении. Unit proof не подменяет этот сквозной этап.
+- Отдельно выявлено, что старые Redis monthly/daily/session counters не резервируют quoted maximum и имеют crash/concurrency gaps. Org hold0067 не доказывает соблюдение этих квот; durable quota reservation и прояснение legacy policy остаются обязательными до финальной приёмки.
+
 ## AI Arena
 
 Foundation `692bc12` и review fix `d742077` прошли TypeScript/spec и React review. Удалены 3276 отслеживаемых generated-файлов; исходники и package manifests сохранены. Native PostgreSQL разрешён только в явном тестовом режиме с проверкой адреса и DB marker; production driver остаётся Neon.
