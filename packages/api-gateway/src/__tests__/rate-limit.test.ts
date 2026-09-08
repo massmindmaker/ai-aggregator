@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import IORedisMock from 'ioredis-mock';
 import { setRedisFactory } from '../lib/redis';
-import { rateLimit } from '../middleware/rate-limit-plan04';
+import { rateLimit, rpmOnly } from '../middleware/rate-limit-plan04';
 import { AiagError } from '../lib/errors';
 import type { AuthenticatedApiKey } from '../middleware/auth-plan04';
 
@@ -11,7 +11,7 @@ function setupRedis(): void {
   setRedisFactory(() => instance as any);
 }
 
-function buildApp(keyOverride: Partial<AuthenticatedApiKey> = {}): Hono {
+function buildApp(keyOverride: Partial<AuthenticatedApiKey> = {}, guard: MiddlewareHandler = rateLimit): Hono {
   const key: AuthenticatedApiKey = {
     id: 'k1',
     org_id: 'org1',
@@ -33,7 +33,7 @@ function buildApp(keyOverride: Partial<AuthenticatedApiKey> = {}): Hono {
     c.set('apiKey' as never, key as never);
     await next();
   });
-  app.use('/v1/*', rateLimit);
+  app.use('/v1/*', guard);
   app.get('/v1/chat/x', (c) => c.json({ ok: true }));
   app.get('/v1/batches/x', (c) => c.json({ ok: true }));
   return app;
@@ -78,5 +78,25 @@ describe('rate-limit middleware — per-key RPM', () => {
     await mock.set(`usd_day:org1:${today}`, '0.10');
     const r = await app.fetch(new Request('http://x/v1/chat/x'));
     expect(r.status).toBe(429);
+  });
+});
+
+
+describe('restricted RPM-only guard', () => {
+  beforeEach(setupRedis);
+  it('never reads daily spending but shares the normal atomic RPM bucket', async () => {
+    const mock: any = new (IORedisMock as any)();
+    setRedisFactory(() => mock);
+    await mock.set(`usd_day:org1:${new Date().toISOString().slice(0, 10)}`, '999');
+    mock.get = () => { throw new Error('spending read forbidden'); };
+    const app = buildApp({ id: 'restricted-key', daily_usd_cap: 1, rpm_limit: 1 }, rpmOnly);
+    expect((await app.request('/v1/chat/x')).status).toBe(200);
+    expect((await app.request('/v1/chat/x')).status).toBe(429);
+  });
+  it('fails closed with fixed 503 when Redis is unavailable', async () => {
+    setRedisFactory(() => ({ eval: async () => { throw new Error('secret Redis diagnostic'); } }) as any);
+    const response = await buildApp({}, rpmOnly).request('/v1/chat/x');
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain('secret');
   });
 });

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { get, setex, query } = vi.hoisted(() => ({ get: vi.fn(), setex: vi.fn(), query: vi.fn() }));
 vi.mock('../lib/redis', () => ({ makeRedis: () => ({ get, setex }) }));
 vi.mock('../lib/db', () => ({ sql: query }));
-import { resolveModel, parseResolvedModelCache, resolveModelWithOverride, setResolveModelOverride, type ResolvedModel } from '../routing/resolver';
+import { resolveModel, projectModelRoutingRows, parseResolvedModelCache, resolveModelWithOverride, setResolveModelOverride, type ResolvedModel } from '../routing/resolver';
 const slug = 'openai/gpt-4o-mini';
 const row = () => ({ slug, type: 'chat', upstream_id: 'openrouter', upstream_model_id: slug, provider: 'openrouter', ru_residency: false, latency_p50_ms: 50, uptime: '0.99', price_per_1k_input: '0.123456789012345678', price_per_1k_output: '0.5', markup: '1.25', price_per_image: null, priority: 1, egress_proxy: null, model_upstream_id: 'f0000000-0000-4000-8000-000000000001', billing_input_cents_per_1k: '0.123456789012345678', billing_output_cents_per_1k: '0.5', billing_markup: '1.25' });
 afterEach(() => { setResolveModelOverride(null); });
@@ -98,4 +98,11 @@ it.each(['unknown', 'music', 'upscale'])('does not treat %s as a legacy model ty
   query.mockResolvedValueOnce([{ ...row(), type }]);
   await expect(resolveModel(slug)).rejects.toThrow('Invalid model routing facts');
   expect(setex).not.toHaveBeenCalled();
+});
+
+it('shared DB projection matches legacy output without cache or query effects', async () => {
+  const expected = await resolveModel(slug);
+  vi.clearAllMocks();
+  expect(projectModelRoutingRows([row() as Parameters<typeof projectModelRoutingRows>[0][number]], slug)).toEqual(expected);
+  expect(get).not.toHaveBeenCalled(); expect(query).not.toHaveBeenCalled(); expect(setex).not.toHaveBeenCalled();
 });

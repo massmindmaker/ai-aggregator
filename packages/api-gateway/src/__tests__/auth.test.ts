@@ -109,6 +109,7 @@ describe('requireApiKey middleware', () => {
     expect(selects).toHaveLength(2);
     expect(selects[0]!.text).toContain('revoked_at IS NULL');
     expect(selects[0]!.text).toContain('disabled_at IS NULL');
+    for (const field of ['policies', 'model_whitelist', 'ru_residency_only', 'rpm_limit']) expect(selects[0]!.text).toContain(field);
     expect(selects[0]!.values).toEqual([hashKey(key)]);
     expect(selects[0]!.values).not.toContain(key);
   });

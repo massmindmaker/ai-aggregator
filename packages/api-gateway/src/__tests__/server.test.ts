@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import { AiagError, errors } from '../lib/errors';
 import { requestIdMiddleware } from '../middleware/request-id';
@@ -67,4 +67,24 @@ describe('gateway server shape', () => {
     const j = (await r.json()) as { error: { code: string } };
     expect(j.error.code).toBe('PAYMENT_REQUIRED');
   });
+});
+
+
+const legacyOrder = vi.hoisted(() => [] as string[]);
+vi.mock('../config', async () => ({ ...(await vi.importActual<typeof import('../config')>('../config')) }));
+vi.mock('../egress-executor', () => ({ registerGatewayEgressExecutor: vi.fn() }));
+vi.mock('../middleware/auth-plan04', () => ({ requireApiKey: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('auth'); await next(); } }));
+vi.mock('../middleware/rate-limit-plan04', () => ({ rateLimit: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('rate'); await next(); }, rpmOnly: vi.fn() }));
+vi.mock('../middleware/key-limits', () => ({ keyLimits: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('key'); await next(); } }));
+vi.mock('../middleware/pii-filter', () => ({ piiFilter: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('pii'); await next(); } }));
+vi.mock('../middleware/model-status-check', () => ({ modelStatusMiddleware: () => async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('model'); await next(); } }));
+vi.mock('../routes/v1/chat', async () => { const { Hono } = await import('hono'); return { chat: new Hono().post('/completions', c => { legacyOrder.push('legacy-chat'); c.header('x-aiag-charged-usd-micro','123'); return c.json({legacy:true}); }) }; });
+import { app as productionApp } from '../server';
+it('default production assembly retains legacy middleware order and handler response', async () => {
+  legacyOrder.length = 0;
+  const response = await productionApp.request('/v1/chat/completions',{method:'POST'});
+  expect(response.status).toBe(200); expect(await response.json()).toEqual({legacy:true});
+  expect(legacyOrder).toEqual(['auth','rate','key','pii','model','legacy-chat']);
+  expect(response.headers.get('x-aiag-charged-usd-micro')).toBe('123');
+  expect(response.headers.get('x-aiag-receipt-version')).toBeNull();
 });

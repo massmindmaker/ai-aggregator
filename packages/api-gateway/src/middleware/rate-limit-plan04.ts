@@ -33,13 +33,8 @@ return {1, 0}
 
 type SlidingResult = [number, number];
 
-export const rateLimit: MiddlewareHandler = async (c, next) => {
-  const k = c.get('apiKey' as never) as AuthenticatedApiKey | undefined;
-  if (!k) return next(); // auth middleware didn't populate — skip (defensive)
-
-  const redis = makeRedis('ratelimit');
+async function checkRpm(k: AuthenticatedApiKey, isBatch: boolean, redis = makeRedis('ratelimit')): Promise<SlidingResult> {
   const now_ms = Date.now();
-  const isBatch = c.req.path.startsWith('/v1/batches');
 
   const limit = isBatch ? k.batch_rpm_limit : k.rpm_limit;
   const key = isBatch ? `rl:batch:${k.id}` : `rl:rpm:${k.id}`;
@@ -54,8 +49,37 @@ export const rateLimit: MiddlewareHandler = async (c, next) => {
     String(now_ms),
     member
   )) as SlidingResult;
-  const [ok, retry] = rawResult;
+  return rawResult;
+}
 
+/** Same normal RPM bucket, deliberately no legacy spending reads. */
+export const rpmOnly: MiddlewareHandler = async (c, next) => {
+  const key = c.get('apiKey' as never) as AuthenticatedApiKey | undefined;
+  if (!key) throw errors.unauthorized();
+  let result: SlidingResult;
+  try {
+    result = await checkRpm(key, false);
+    if (!Array.isArray(result) || result.length !== 2 ||
+        ![0, 1].includes(result[0]) || !Number.isSafeInteger(result[1]) || result[1] < 0) throw new Error();
+  } catch {
+    c.header('Retry-After', '2');
+    throw errors.unavailable('Request state unavailable');
+  }
+  const [ok, retry] = result;
+  if (!ok) {
+    const retryAfter = retry || 60;
+    c.header('Retry-After', String(retryAfter));
+    throw errors.rateLimited(retryAfter);
+  }
+  await next();
+};
+
+export const rateLimit: MiddlewareHandler = async (c, next) => {
+  const k = c.get('apiKey' as never) as AuthenticatedApiKey | undefined;
+  if (!k) return next(); // auth middleware didn't populate — skip (defensive)
+
+  const redis = makeRedis('ratelimit');
+  const [ok, retry] = await checkRpm(k, c.req.path.startsWith('/v1/batches'), redis);
   if (!ok) {
     const retryAfter = retry || 60;
     c.header('Retry-After', String(retryAfter));

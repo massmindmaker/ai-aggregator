@@ -19,7 +19,7 @@ export type ResolvedModel = {
   candidates: UpstreamCandidate[];
 };
 
-type DbRow = {
+export type ModelRoutingDbRow = {
   model_upstream_id: string;
   billing_input_cents_per_1k: string;
   billing_output_cents_per_1k: string;
@@ -68,41 +68,9 @@ export function parseResolvedModelCache(value: unknown, slug: string): ResolvedM
   return { slug: data.slug, type: data.type, candidates };
 }
 
-export async function resolveModel(slug: string): Promise<ResolvedModel> {
-  const redis = makeRedis('cache');
-  try {
-    const cached = await redis.get(`model:v2:${slug}`);
-    if (cached) {
-      const parsed = parseResolvedModelCache(JSON.parse(cached), slug);
-      if (parsed) return parsed;
-    }
-  } catch {
-    /* cache optional */
-  }
-
-  // T3 (native egress integration): deterministic FAILOVER order —
-  // model_upstreams.priority ASC (lower = tried first), upstream_id as the
-  // stable tiebreak. The routing engine still picks the preferred candidate
-  // from this list; the order matters to executeWithFailover only.
-  const rows = (await sql<DbRow[]>`
-    SELECT m.slug, m.type,
-           mu.id::text AS model_upstream_id,
-           mu.price_per_1k_input::text AS billing_input_cents_per_1k,
-           mu.price_per_1k_output::text AS billing_output_cents_per_1k,
-           mu.markup::text AS billing_markup,
-           mu.upstream_id, mu.upstream_model_id,
-           u.provider, u.ru_residency, u.latency_p50_ms, u.uptime,
-           mu.price_per_1k_input, mu.price_per_1k_output, mu.price_per_image,
-           mu.markup, mu.egress_proxy, mu.priority
-      FROM models m
-      JOIN model_upstreams mu ON mu.model_id = m.id AND mu.enabled = TRUE
-       JOIN upstreams u       ON u.id = mu.upstream_id AND u.enabled = TRUE
-      WHERE m.slug = ${slug} AND m.enabled = TRUE
-      ORDER BY mu.priority ASC, mu.upstream_id ASC
-  `) as DbRow[];
-
-  if (rows.length === 0) throw errors.badRequest(`Unknown model: ${slug}`);
-
+/** Shared DB projection; exact billing text and reviewed bindings stay identical to legacy. */
+export function projectModelRoutingRows(rows: ModelRoutingDbRow[], slug: string): ResolvedModel {
+  if (!rows.length) throw new Error('Invalid model routing facts');
   const candidates: UpstreamCandidate[] = rows.map((r) => ({
     billing: {
       modelUpstreamId: r.model_upstream_id,
@@ -128,6 +96,45 @@ export async function resolveModel(slug: string): Promise<ResolvedModel> {
 
   const payload = parseResolvedModelCache({ slug, type: rows[0]!.type, candidates }, slug);
   if (!payload) throw new Error('Invalid model routing facts');
+  return payload;
+}
+
+export async function resolveModel(slug: string): Promise<ResolvedModel> {
+  const redis = makeRedis('cache');
+  try {
+    const cached = await redis.get(`model:v2:${slug}`);
+    if (cached) {
+      const parsed = parseResolvedModelCache(JSON.parse(cached), slug);
+      if (parsed) return parsed;
+    }
+  } catch {
+    /* cache optional */
+  }
+
+  // T3 (native egress integration): deterministic FAILOVER order —
+  // model_upstreams.priority ASC (lower = tried first), upstream_id as the
+  // stable tiebreak. The routing engine still picks the preferred candidate
+  // from this list; the order matters to executeWithFailover only.
+  const rows = (await sql<ModelRoutingDbRow[]>`
+    SELECT m.slug, m.type,
+           mu.id::text AS model_upstream_id,
+           mu.price_per_1k_input::text AS billing_input_cents_per_1k,
+           mu.price_per_1k_output::text AS billing_output_cents_per_1k,
+           mu.markup::text AS billing_markup,
+           mu.upstream_id, mu.upstream_model_id,
+           u.provider, u.ru_residency, u.latency_p50_ms, u.uptime,
+           mu.price_per_1k_input, mu.price_per_1k_output, mu.price_per_image,
+           mu.markup, mu.egress_proxy, mu.priority
+      FROM models m
+      JOIN model_upstreams mu ON mu.model_id = m.id AND mu.enabled = TRUE
+       JOIN upstreams u       ON u.id = mu.upstream_id AND u.enabled = TRUE
+      WHERE m.slug = ${slug} AND m.enabled = TRUE
+      ORDER BY mu.priority ASC, mu.upstream_id ASC
+  `) as ModelRoutingDbRow[];
+
+  if (rows.length === 0) throw errors.badRequest(`Unknown model: ${slug}`);
+
+  const payload = projectModelRoutingRows(rows, slug);
   try {
     // Capability bindings are process-owned, never trusted from Redis.
     const cachePayload = { ...payload, candidates: payload.candidates.map(({ reviewedChatProfile: _profile, ...candidate }) => candidate) };

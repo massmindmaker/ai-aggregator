@@ -5,11 +5,12 @@
  * Tests import named { app } and call `app.fetch(new Request(...))`.
  */
 import { Hono } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { logger } from './lib/logger';
 import { config } from './config';
-import { applyAiagErrorHandler, errors } from './lib/errors';
+import { AiagError, applyAiagErrorHandler, errors } from './lib/errors';
 import { requireApiKey } from './middleware/auth-plan04';
-import { rateLimit } from './middleware/rate-limit-plan04';
+import { rateLimit, rpmOnly } from './middleware/rate-limit-plan04';
 import { keyLimits } from './middleware/key-limits';
 import { piiFilter } from './middleware/pii-filter';
 import { modelStatusMiddleware } from './middleware/model-status-check';
@@ -26,6 +27,9 @@ import { batches } from './routes/v1/batches';
 import { adminProxy } from './routes/admin/proxyTest';
 import { adminCatalog } from './routes/admin/catalog';
 import { registerGatewayEgressExecutor } from './egress-executor';
+
+import { storedChat, respondStoredChat, unsupportedStoredExecution } from './routes/v1/stored-chat';
+import { fixedStoredChatHttpError } from './billing/stored-chat-http-contract';
 
 // server-node.ts imports this module directly in production, so startup wiring
 // must live on this path rather than relying on the package barrel (index.ts).
@@ -67,21 +71,64 @@ app.get('/', (c) =>
 );
 
 // ---- /v1 routes: auth + rate-limit + pii ------------------------------------
-app.use('/v1/*', requireApiKey);
-app.use('/v1/*', rateLimit);
-app.use('/v1/*', keyLimits);
-app.use('/v1/*', piiFilter);
-app.use('/v1/*', modelStatusMiddleware());
+if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_only') {
+  // Early cache policy includes auth, RPM, unsupported routes and 404 responses.
+  app.use('/v1/*', async (c, next) => {
+    c.header('Cache-Control', 'private, no-store');
+    await next();
+  });
+  const restricted = new Hono();
+  restricted.onError((error, c) => {
+    // Existing read handlers/guards retain their public contract, without diagnostic logging.
+    if (['GET', 'HEAD'].includes(c.req.method) && error instanceof AiagError)
+      return c.json(error.toResponseBody(), error.status as ContentfulStatusCode);
+    // Execution paths preserve only known operational envelopes; no arbitrary diagnostics.
+    if (error instanceof AiagError && error.code === 'UNAUTHORIZED')
+      return c.json(errors.unauthorized().toResponseBody(), 401);
+    if (error instanceof AiagError && error.code === 'SERVICE_UNAVAILABLE' && error.message === 'Authentication unavailable')
+      return c.json(errors.unavailable('Authentication unavailable').toResponseBody(), 503);
+    if (error instanceof AiagError && error.code === 'RATE_LIMITED') {
+      const retry = Number(c.res.headers.get('Retry-After'));
+      return c.json(errors.rateLimited(Number.isSafeInteger(retry) && retry > 0 ? retry : 60).toResponseBody(), 429);
+    }
+    return respondStoredChat(c, fixedStoredChatHttpError('request_state_unavailable'));
+  });
+  restricted.use('*', requireApiKey);
+  const aliases = (path: string) => [path, `${path}/`];
+  restricted.on('POST', aliases('/chat/completions'), rpmOnly, storedChat);
+  const unsupported = ['/completions', '/embeddings', '/images/generations', '/video/generations',
+    '/audio/speech', '/audio/transcriptions', '/batches'];
+  for (const path of unsupported)
+    restricted.on(['POST', 'PUT', 'PATCH', 'DELETE'], aliases(path), unsupportedStoredExecution);
+  restricted.on(['PUT', 'PATCH', 'DELETE'], aliases('/chat/completions'), unsupportedStoredExecution);
 
-app.route('/v1/chat', chat);
-app.route('/v1/completions', completions);
-app.route('/v1/embeddings', embeddings);
-app.route('/v1/models', modelsRoute);
-app.route('/v1/balance', balanceRoute);
-app.route('/v1/images', images);
-app.route('/v1/video', video);
-app.route('/v1/audio', audio);
-app.route('/v1/batches', batches);
+  // Copy only the existing read handlers, with their existing operational guards.
+  // Importing the batches module must never mount its POST/queue capability here.
+  for (const [prefix, routes] of [['/models', modelsRoute], ['/balance', balanceRoute], ['/batches', batches]] as const) {
+    for (const route of routes.routes) {
+      if (route.method !== 'GET') continue;
+      const path = route.path === '/' ? prefix : `${prefix}${route.path}`;
+      restricted.on('GET', aliases(path), rateLimit, keyLimits, piiFilter, modelStatusMiddleware(), route.handler);
+    }
+  }
+  app.route('/v1', restricted);
+} else {
+  app.use('/v1/*', requireApiKey);
+  app.use('/v1/*', rateLimit);
+  app.use('/v1/*', keyLimits);
+  app.use('/v1/*', piiFilter);
+  app.use('/v1/*', modelStatusMiddleware());
+
+  app.route('/v1/chat', chat);
+  app.route('/v1/completions', completions);
+  app.route('/v1/embeddings', embeddings);
+  app.route('/v1/models', modelsRoute);
+  app.route('/v1/balance', balanceRoute);
+  app.route('/v1/images', images);
+  app.route('/v1/video', video);
+  app.route('/v1/audio', audio);
+  app.route('/v1/batches', batches);
+}
 
 // ---- /api/admin: ops diagnostics. Own guard (AIAG_ADMIN_KEY bearer/x-admin-
 // key, fail-closed) — deliberately OUTSIDE the /v1 API-key middleware chain.
