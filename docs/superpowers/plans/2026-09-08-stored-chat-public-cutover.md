@@ -29,7 +29,7 @@ Deployment-wide exclusivity обязательна перед live switch: то�
 | Запрос | Поведение |
 |---|---|
 | `POST /v1/chat/completions`, supported B2 stored plaintext body | Новый durable путь. Idempotency-Key обязателен, billing UUID создаёт server handle |
-| Этот же path с stream=true, BYOK header, tools/functions/media/unknown generation fields | `501 UNSUPPORTED_EXECUTION_CONTRACT`; не claim/admit/provider. B2 malformed input, отличимый от unsupported contract, даёт400 |
+| Этот же path с stream=true, BYOK header, tools/functions/media | `501 UNSUPPORTED_EXECUTION_CONTRACT`; не claim/admit/provider. B2 malformed input, отличимый от unsupported contract, даёт400 |
 | `POST /v1/completions`, `/v1/embeddings`, `/v1/images/generations`, `/v1/video/generations`, `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/batches` | `501 UNSUPPORTED_EXECUTION_CONTRACT`, никакого legacy handler/queue/job/provider/charge |
 | Другие `/v1` mutation methods/paths, включая trailing-slash варианты | Fail closed:501 для распознанной неподдержанной операции,404/405 для отсутствующего маршрута/метода; ноль billable side effects. Не полагаться на один string-prefix denylist, которую обходит alias |
 | `GET /v1/models`, `/v1/balance`, `/v1/batches/:id` | Сохраняются существующие auth/ownership read contracts; не получают execute grant и не создают работы |
@@ -79,7 +79,7 @@ Gate не удаляет source модальностей и не объявля�
 
 ## HTTP response contract v1 staged режима
 
-Все supported route ответы, включая errors, имеют `Cache-Control: private, no-store`. JSON error envelope для новых недолговечных ошибок ровно `{error:{code,message,type}}` с фиксированными константами ниже. SQL/raw upstream/key/hash/policy/balance детали не отражаются. Existing fresh auth/RPM errors сохраняют свой согласованный envelope; implementation tests явно различают их и route errors. Body не содержит supplier facts.
+Все restricted `/v1` ответы, включая auth/RPM errors, имеют `Cache-Control: private, no-store`: заголовок задаётся в самом начале restricted pipeline доauth, не только успешным handler. JSON error envelope для новых недолговечных ошибок ровно `{error:{code,message,type}}` с фиксированными константами ниже. SQL/raw upstream/key/hash/policy/balance детали не отражаются. Existing fresh auth/RPM errors сохраняют свой согласованный envelope; implementation tests явно различают их и route errors. Body не содержит supplier facts.
 
 | Durable результат / ситуация | HTTP и фиксированный ответ | Следующее разрешённое действие |
 |---|---|---|
