@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it } from 'vitest';
+﻿import { beforeEach, describe, expect, it } from 'vitest';
 import { transformModelsDev, transformModel } from '../transform.js';
 import { runCatalogSyncOnce } from '../sync-cron.js';
 
@@ -48,29 +48,50 @@ describe('transformModelsDev', () => {
 });
 
 describe('runCatalogSyncOnce', () => {
-  const captured: unknown[] = [];
-  const fakeSql = ((strings: TemplateStringsArray, ...values: unknown[]) => {
-    captured.push({ sql: strings.join('?'), values });
-    return Promise.resolve([]);
-  }) as never;
+  // Mirrors the fakeSql/db.execute style of finalize-earnings-cron.test.ts:
+  // the tag builds the parameterized query, db.execute is what runs it.
+  let captured: Array<{ sql: string; values: unknown[] }>;
+  const fakeSql = ((strings: TemplateStringsArray, ...values: unknown[]) => ({
+    sql: strings.join('?'),
+    values,
+  })) as never;
 
-  afterEach(() => captured.length = 0);
+  function makeDb(cap: Array<{ sql: string; values: unknown[] }>, rowCount = 1) {
+    return {
+      execute: async (q: unknown) => {
+        cap.push(q as { sql: string; values: unknown[] });
+        return { rowCount };
+      },
+    };
+  }
 
-  it('fetches api.json and upserts every draft idempotently', async () => {
-    const fetchImpl = (async () =>
-      new Response(JSON.stringify(SAMPLE), { status: 200 })) as typeof fetch;
-    const res = await runCatalogSyncOnce({ sql: fakeSql, fetchImpl });
+  const fetchSample = (async () =>
+    new Response(JSON.stringify(SAMPLE), { status: 200 })) as typeof fetch;
+
+  beforeEach(() => {
+    captured = [];
+  });
+
+  it('fetches api.json and EXECUTES an upsert per draft via db.execute', async () => {
+    const res = await runCatalogSyncOnce({ db: makeDb(captured), sql: fakeSql, fetchImpl: fetchSample });
     expect(res.draftsUpserted).toBe(2);
     expect(captured.length).toBe(2);
+    expect(captured[0].sql).toContain('INSERT INTO model_catalog_drafts');
     expect(captured[0].sql).toContain('ON CONFLICT (provider_slug, model_slug)');
     // CASE keeps applied/rejected statuses from being reset to draft.
     expect(captured[0].sql).toContain("WHEN model_catalog_drafts.status = 'draft'");
   });
 
+  it('counts only rows the database reports written (no fake success)', async () => {
+    // If the handle reports nothing written, the result must say so.
+    const res = await runCatalogSyncOnce({ db: makeDb(captured, 0), sql: fakeSql, fetchImpl: fetchSample });
+    expect(res.draftsUpserted).toBe(0);
+  });
+
   it('HTTP failure propagates to the cron logger', async () => {
     const fetchImpl = (async () => new Response('nope', { status: 503 })) as typeof fetch;
-    await expect(runCatalogSyncOnce({ sql: fakeSql, fetchImpl })).rejects.toThrow(
-      /HTTP 503/
-    );
+    await expect(
+      runCatalogSyncOnce({ db: makeDb(captured), sql: fakeSql, fetchImpl }),
+    ).rejects.toThrow(/HTTP 503/);
   });
 });
