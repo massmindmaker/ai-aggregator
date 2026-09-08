@@ -23,3 +23,9 @@ Restricted plaintext маршрут Aggregator принят локально; de
 **Независимая параллельная задача:** AG-TON1 pure amount/asset/quote contract `a5731d4` принят (63tests, types/lint, independent financial Approved). Это точная арифметика и testnet identity; invoice API и работающая оплата ещё не реализованы. AG-TON2 реализация назначена после принятого MC3; отдельная disposable DB и единственный владелец schema/manifest.
 
 AG-TON2 invoice design (`095d9bf`) принят после финансового и isolation review: совместимый предел PAYG до исправления exact arithmetic в RUB refund consumers. Реализация TON invoice core начата после MC3 acceptance; итоговая migration/native приёмка ещё открыта.
+
+## Текущие замечания, ещё не приёмка
+
+Arena FS-T3 candidate `76bbe22` получил Block от независимых React и TS/spec reviewers. Типы/lint проходят, но exact guarded browser run падает; найдены устаревшие epoch-проверки, потеря восстановления после upload, небезопасное повторение неизвестной операции, обработка deadline/conflict и модальный focus. Fresh исполнитель исправляет семь UI/test файлов по private task-3-fix-brief; API FS-T2 остаётся принят отдельно. Полные FS14–16 и FS-T4 не закрыты.
+
+AM [статический inventory bridge](/home/bob/Projects/agents-market/docs/research/2026-09-08-aggregator-receipt-bridge-inventory.md), commit `f746b63`: текущий worker не сохраняет AG idempotency/SID/receipt и при потере ответа не умеет восстанавливать AG execution. Следующий AM-P2 brief должен определить persistent identity, точные единицы, reservation и защищённый server-to-server receipt. Это подтверждённый пробел исходников, не новая принятая runtime capability.
