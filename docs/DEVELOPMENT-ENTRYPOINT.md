@@ -41,3 +41,5 @@ Aggregator владеет Web, gateway, model catalog, consumer/author money и 
 ## Чекпойнт перед паузой — 07.09
 
 [Состояние трёх проектов](consolidation/2026-09-07-pause-checkpoint.md), [функциональный F-срез108](ecosystem/2026-09-07-functional-checkpoint.md). Исходная формальная I/T/O приёмка не подменяется аналитическим F. Следующий AG этап — quota v2, public route composition затем recovery/refund cutover; новый executor пока не подключён.
+
+**Текущий шаг gateway:** MC1 HTTP/config contract `41ede0c` принят локально после независимого TS/spec review (26 unit tests, types/lint PASS). [MC2 composition](superpowers/plans/2026-09-08-stored-chat-public-cutover.md) в реализации; mounted native MC3 и production switch ещё не выполнены. Режим по умолчанию остаётся legacy.
