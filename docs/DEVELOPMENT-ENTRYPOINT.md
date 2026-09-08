@@ -42,4 +42,6 @@ Aggregator владеет Web, gateway, model catalog, consumer/author money и 
 
 [Состояние трёх проектов](consolidation/2026-09-07-pause-checkpoint.md), [функциональный F-срез108](ecosystem/2026-09-07-functional-checkpoint.md). Исходная формальная I/T/O приёмка не подменяется аналитическим F. Следующий AG этап — quota v2, public route composition затем recovery/refund cutover; новый executor пока не подключён.
 
-**Текущий шаг gateway:** MC1 HTTP/config contract `41ede0c` принят локально после независимого TS/spec review (26 unit tests, types/lint PASS). [MC2 composition](superpowers/plans/2026-09-08-stored-chat-public-cutover.md) в реализации; mounted native MC3 и production switch ещё не выполнены. Режим по умолчанию остаётся legacy.
+**Текущий шаг gateway:** MC1 HTTP/config contract `41ede0c` принят локально после независимого TS/spec review (26 unit tests, types/lint PASS). [MC2 composition](superpowers/plans/2026-09-08-stored-chat-public-cutover.md) `ac23cae` принят (570tests/types/lint, independent Approved); следующий шаг — mounted native MC3. Production switch ещё не выполнен. Режим по умолчанию остаётся legacy.
+
+**TON:** [AG-TON1 pure contract](superpowers/plans/2026-09-07-ton-payments.md) `a5731d4` принят локально (63tests/types/lint, independent financial Approved). Durable invoice, verifier и реальные платежи ещё открыты.

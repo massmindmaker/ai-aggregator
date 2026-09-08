@@ -85,3 +85,9 @@ test('jetton identity includes master', () => {
 - [ ] Сверить operator queue с invoices/chain/ledger totals, настроить deadline/alert ownership. Отработать recovery на локальных fixtures без key custody changes.
 - [ ] Testnet gate: отдельная изолированная testnet identity и test assets, явная network verification, successful/failed/late transfer evidence, restart/replay и reconciliation. Если безопасного test signer/RPC нет, записать BLOCKED только этому live gate; fixture PASS не переименовывать testnet PASS.
 - [ ] Release prerequisite: policy FX/fees/refund, merchant ownership, signer isolation, backup+external-chain reconcile, existing VPS artifact parity. No mainnet/funds/deploy здесь. x402 pilot возможен следующим отдельным планом и не блокирует native TON invoice.
+
+## AG-TON1 — локальная приёмка 08.09.2026
+
+Source `a5731d4`, ровно два pure shared файла. Независимое financial TS/spec review Approved;63/63 unit tests, strict shared type-check, focused ESLint и diff-check PASS. Exact parser имеет отдельную границу persist BIGINT; rational FX использует явные единицы, округление, fee и expiry. Промежуточное произведение ограничено signed BIGINT как консервативная v1 политика, даже если дальнейшее деление уменьшило бы число. Адреса только canonical raw testnet, без friendly-address SDK parsing. Default FX/цены/mainnet assets отсутствуют.
+
+AG-TON2 invoice/ledger, AG-TON3 verifier/sweep и дальнейшие gates остаются открыты; не было DB settlement или live testnet/mainnet. Private evidence `.superpowers/sdd/2026-09-07-ton-payments/task-1-report.md`, immutable task-1.diff. Unit PASS не подтверждает работающий payment rail.
