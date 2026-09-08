@@ -11,7 +11,6 @@
 | Свежая проверка API-ключа | `0fde334` | [Fresh auth](../../superpowers/plans/2026-09-08-fresh-gateway-auth.md) |
 | Неизменный admission reject и восстановление settlement | `a0b6eb8` | [C1a](../../superpowers/plans/2026-09-08-http-terminal-recovery.md): baseline263, native50, независимые review закрыты |
 | Чистая native установка текущих миграций | `f4cd433`, SQL `a0b6eb8` | clean71: 71 apply, повтор71 skip; собственная временная БД удалена, canonical test DB неизменна; это не production runner parity |
-
 | Типизированный C1b bridge и sole terminal seams | `0f0b395`, test fix `fb849ae` | [C1b](../../superpowers/plans/2026-09-08-http-terminal-recovery.md): baseline274/regression403 на candidate, final native12/types/lint и independent Approved |
 
 ## Открытые критерии
