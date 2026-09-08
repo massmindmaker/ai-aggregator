@@ -1,5 +1,16 @@
 # Статус developer memory
 
+## Refresh принятой AM asset isolation — 08.09.2026
+
+Производная навигация к узкому принятому AM исправлению; источники приёмки — [owner plan](/home/bob/Projects/agents-market/docs/superpowers/plans/2026-09-08-topup-asset-isolation.md), [entrypoint](/home/bob/Projects/agents-market/docs/DEVELOPMENT-ENTRYPOINT.md) и private evidence, а не этот статус.
+
+| Слой | Проверенный результат | Граница |
+|---|---|---|
+| Serena AM | Existing locator `ai-hub/development-entrypoint` обновлён через supported Serena CLI и прочитан обратно. Он указывает на accepted source `ac313e8` и documentation acceptance `297a1fa`, на изоляцию native TON от pending USDT/unknown asset и на доказательства TMA native 20/20, worker 111/111, types/lint PASS и independent TS/financial review Approved. | Это только locator принятого source. Full Serena reindex/cache refresh не выполнялся; existing continuation locator и legacy memories сохранены. |
+| Graphify / LightRAG / Brain / Memory Graph | Без записи. | Новый Graphify update отложен: документационный refresh не запускает heavy indexing, а source workers в AG/Arena активны. Existing stable LightRAG continuation locator не дублировался; Memory Graph остаётся read-only. |
+
+Исправление не утверждает production, полный Jetton evidence/network/master binding, wallet proof/login, immutable quote/events/cursor, TON/RUB product acceptance или 108/108.
+
 ## Refresh принятого C1 — 08.09.2026, 01:38 UTC
 
 Производная навигация только для принятого C1; источник приёмки остаётся в [AG-P1](../product/acceptance/AG-P1.md), а не в этом статусе.
