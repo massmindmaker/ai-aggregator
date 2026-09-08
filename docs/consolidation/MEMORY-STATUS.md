@@ -1,5 +1,11 @@
 # Статус developer memory
 
+## Arena FS-T3 accepted-stage refresh — 08.09.2026
+
+Serena locator `ai-hub/development-entrypoint` обновлён supported tool и прочитан обратно: source807fc7c принят после независимых React/TS reviews, focused FS/PV,8 state tests/types/lint. Focused `FinalSelection` symbol readback выполнен. Owner acceptance8f3beb6 остаётся каноном. Полный FS-T4 root run завершён exit0, но final integration review/owner acceptance ещё ожидаются; его не записываем как принятую функцию.
+
+Graphify пока исторический66a323c (1945 nodes/2733 links, без final-selection nodes). Обновление accepted source ждёт очереди TON product tests. LightRAG/Brain/Memory Graph в этом подэтапе не изменялись; предыдущий stable continuation readback сохраняется. Эта запись не подтверждает evaluator, production или108.
+
 ## Ограниченный refresh accepted-stage locators — 08.09.2026
 
 Производная навигация обновлена только для уже принятого source. Канонические доказательства остаются в owner entrypoints, acceptance и plans; этот статус не создаёт новую приёмку.
