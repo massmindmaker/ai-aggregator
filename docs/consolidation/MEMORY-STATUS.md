@@ -1,5 +1,15 @@
 # Статус developer memory
 
+## Ограниченный refresh accepted-stage locators — 08.09.2026
+
+Производная навигация обновлена только для уже принятого source. Канонические доказательства остаются в owner entrypoints, acceptance и plans; этот статус не создаёт новую приёмку.
+
+| Слой | Проверенный результат | Граница |
+|---|---|---|
+| Serena AG | Existing `ai-hub/development-entrypoint` обновлён через supported Serena CLI и прочитан обратно. Он ссылается на accepted MC1 `41ede0c`, MC2 `ac23cae` и TON1 `a5731d4`; TON2 design `095d9bf` с fixture-isolation review `e9b8e59` обозначен как queued design, без implementation. | MC3 source `cd37771` не принят и остаётся текущим 2P2 harness fix. Full Serena/Graphify refresh этого source PENDING до accepted snapshot. Нет заявления о cutover, production, 108/108 или внешней sync. |
+| Serena Arena | Existing `ai-hub/development-entrypoint` обновлён через supported Serena CLI и прочитан обратно. Он ссылается на accepted FS-T1 `692d3d592`, FS-T2 `e8a9586` + test fix `17a4ae7` и acceptance `390a420`. | Dirty FS-T3 UI не является accepted source. Full Serena/Graphify refresh PENDING до accepted snapshot; evaluator, FS-T4 baseline и production не заявляются. |
+| Graphify / LightRAG / Brain / Memory Graph | Без записи. | Не индексировать active dirty trees; stable LightRAG continuation locator не дублировать. Memory Graph read-only. |
+
 ## Refresh принятой AM asset isolation — 08.09.2026
 
 Производная навигация к узкому принятому AM исправлению; источники приёмки — [owner plan](/home/bob/Projects/agents-market/docs/superpowers/plans/2026-09-08-topup-asset-isolation.md), [entrypoint](/home/bob/Projects/agents-market/docs/DEVELOPMENT-ENTRYPOINT.md) и private evidence, а не этот статус.
