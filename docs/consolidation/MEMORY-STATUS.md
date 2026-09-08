@@ -1,5 +1,11 @@
 # Статус developer memory
 
+## Functional checkpoint и user pause — 08.09.2026
+
+Канонический F-срез: [2026-09-08-functional-checkpoint.md](../ecosystem/2026-09-08-functional-checkpoint.md) и CSV с36 требованиями на продукт. Результат: Aggregator45/108, Arena26/108, Agents Market40/108; это не production acceptance. Serena existing locators AG и Arena обновлены supported MCP и прочитаны обратно, указывают на checkpoint и его границы.
+
+TON2 `724a031` прошёл financial re-review и exact native58/unit-scanner214 evidence, но final canonical database baseline и migration0072 **PENDING**: пользователь поставил новые этапы на паузу. Graphify не обновлялся, поскольку accepted source не менялся; LightRAG stable continuation locator подтверждён `processed` без повторной загрузки; Brain и Memory Graph без записи.
+
 ## Arena AR-P2.3 accepted-stage refresh — 08.09.2026
 
 Canonical acceptance — `aiarena/docs/product/acceptance/AR-P2.3.md`, commit `7dcf5bd`; application source `807fc7c6f7b25dda8776079496aff5cc394c2cd1`. В owner entrypoint и final-selection plan зафиксированы полный guarded `--all` exit0 по15 registered scenarios, свежая сборка,21+49+8 unit tests, syntax/types/lint и final independent integration review Approved. `git diff807fc7c -- aiarena-app` пуст: более поздний Arena HEAD `7dcf5bd` документирует приёмку, не меняет application source.
