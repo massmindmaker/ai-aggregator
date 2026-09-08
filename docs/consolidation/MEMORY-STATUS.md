@@ -1,10 +1,15 @@
 # Статус developer memory
 
-## Arena FS-T3 accepted-stage refresh — 08.09.2026
+## Arena AR-P2.3 accepted-stage refresh — 08.09.2026
 
-Serena locator `ai-hub/development-entrypoint` обновлён supported tool и прочитан обратно: source807fc7c принят после независимых React/TS reviews, focused FS/PV,8 state tests/types/lint. Focused `FinalSelection` symbol readback выполнен. Owner acceptance8f3beb6 остаётся каноном. Полный FS-T4 root run завершён exit0, но final integration review/owner acceptance ещё ожидаются; его не записываем как принятую функцию.
+Canonical acceptance — `aiarena/docs/product/acceptance/AR-P2.3.md`, commit `7dcf5bd`; application source `807fc7c6f7b25dda8776079496aff5cc394c2cd1`. В owner entrypoint и final-selection plan зафиксированы полный guarded `--all` exit0 по15 registered scenarios, свежая сборка,21+49+8 unit tests, syntax/types/lint и final independent integration review Approved. `git diff807fc7c -- aiarena-app` пуст: более поздний Arena HEAD `7dcf5bd` документирует приёмку, не меняет application source.
 
-Graphify пока исторический66a323c (1945 nodes/2733 links, без final-selection nodes). Обновление accepted source ждёт очереди TON product tests. LightRAG/Brain/Memory Graph в этом подэтапе не изменялись; предыдущий stable continuation readback сохраняется. Эта запись не подтверждает evaluator, production или108.
+| Слой | Проверенный результат | Граница |
+|---|---|---|
+| Serena Arena | Existing locator `ai-hub/development-entrypoint` обновлён через supported MCP и прочитан обратно. Он указывает на FS-T1 `692d3d592`, FS-T2 `e8a9586` + `17a4ae7`, accepted FS-T3 source `807fc7c` и AR-P2.3 `7dcf5bd`; focused readback включает `readFinalSelection`, `submitFinalSelection` и `FinalSelection`. | Focused navigation, не полный Serena reindex; legacy memories сохранены. |
+| Graphify Arena | `graphify update .` завершён exit0 под `/tmp/ai-ecosystem-build.lock` после TON product chain. JSON readback: `built_at_commit` `7dcf5bd`,2107 nodes/3156 links/217 communities,72 nodes from final-selection files; graph содержит `readFinalSelection`, `submitFinalSelection` и `FinalSelection`. | AST-only, без LLM/API. Commit графа — documentation acceptance; application source остаётся `807fc7c`. Индекс не доказывает evaluator, execution, production или108. |
+| LightRAG | Existing stable `ai-hub-development-continuation-2026-09-08.md` dedupe/readback подтверждён: `doc-365591f10b64a84274fc6ed561d9de74`, `processed`,1 chunk. Повторной загрузки нет. | Это locator к current continuation, не копия AR-P2.3 или acceptance. |
+| Brain / Memory Graph | Без записи. | Brain уже указывает на canonical docs; Memory Graph остаётся read-only. |
 
 ## Ограниченный refresh accepted-stage locators — 08.09.2026
 
