@@ -33,6 +33,7 @@ class RecordingClient implements TestDatabaseClient {
   port = 15432;
   host = "127.0.0.1";
   missingHttpObject = false;
+  missingHttpObjectName: string | null = null;
   closed = false;
   ledger: Ledger = [];
   fail = "";
@@ -55,7 +56,7 @@ class RecordingClient implements TestDatabaseClient {
           database_name: this.wrongIdentity
             ? "wrong"
             : this.target
-              ? "ai_aggregator_clean69_test"
+              ? "ai_aggregator_clean71_test"
               : "ai_aggregator_test",
           oid: this.target ? this.oid : "100",
           host: q.text.includes("host(inet_server_addr())")
@@ -91,7 +92,7 @@ class RecordingClient implements TestDatabaseClient {
     else if (q.text.includes("INSERT INTO public._aiag_test_database_marker"))
       this.marker = String(q.values?.[0]);
     else if (q.text.includes("AS object_name"))
-      rows = [{ object_name: this.missingHttpObject ? null : "present" }];
+      rows = [{ object_name: this.missingHttpObject || q.values?.[0] === this.missingHttpObjectName ? null : "present" }];
     return { rows: rows as Row[], rowCount: rows.length };
   }
 }
@@ -135,7 +136,7 @@ function noMutation(c: RecordingClient) {
 beforeEach(() => {
   vi.restoreAllMocks();
 });
-describe("clean69 ownership protocol (recording clients, not native migration proof)", () => {
+describe("clean71 ownership protocol (recording clients, not native migration proof)", () => {
   it("refuses invalid environment before constructing any client", async () => {
     const s = setup();
     expect(
@@ -178,8 +179,8 @@ describe("clean69 ownership protocol (recording clients, not native migration pr
       ok: true,
       cleanup: "dropped",
       canonicalUnchanged: true,
-      first: { total: 69, applied: 69, skipped: 0 },
-      rerun: { total: 69, applied: 0, skipped: 69 },
+      first: { total: 71, applied: 71, skipped: 0 },
+      rerun: { total: 71, applied: 0, skipped: 71 },
     });
     expect(s.target.closed).toBe(true);
     expect(s.canonical.closed).toBe(true);
@@ -188,15 +189,15 @@ describe("clean69 ownership protocol (recording clients, not native migration pr
         .filter((q) => /^(CREATE|DROP)/.test(q.text))
         .map((q) => q.text),
     ).toEqual([
-      "CREATE DATABASE ai_aggregator_clean69_test TEMPLATE template0",
-      "DROP DATABASE ai_aggregator_clean69_test",
+      "CREATE DATABASE ai_aggregator_clean71_test TEMPLATE template0",
+      "DROP DATABASE ai_aggregator_clean71_test",
     ]);
     const base = new URL(env.TEST_DATABASE_URL);
     const alternate = new URL(s.factory.mock.calls[1][0]);
-    expect(alternate.pathname).toBe("/ai_aggregator_clean69_test");
+    expect(alternate.pathname).toBe("/ai_aggregator_clean71_test");
     alternate.pathname = base.pathname;
     expect(alternate.href === base.href).toBe(true);
-    expect(s.target.marker).toBe(`ai-aggregator:clean69:${runId}`);
+    expect(s.target.marker).toBe(`ai-aggregator:clean71:${runId}`);
   });
   it("never adopts a database after unknown CREATE acknowledgement", async () => {
     const s = setup();
@@ -312,12 +313,12 @@ describe("clean69 ownership protocol (recording clients, not native migration pr
     });
     noMutation(s.canonical);
   });
-  it("rejects frozen source checksum drift before CREATE", async () => {
+  it.each(["0067_", "0068_", "0069_", "0070_"])("rejects frozen source checksum drift %s before CREATE", async (version) => {
     const s = setup();
     const migrations = await migrator.discoverNativeMigrations();
     vi.spyOn(migrator, "discoverNativeMigrations").mockResolvedValue(
       migrations.map((m) =>
-        m.version.includes("0068_") ? { ...m, checksum: "changed" } : m,
+        m.version.includes(version) ? { ...m, checksum: "changed" } : m,
       ),
     );
     expect(await s.run()).toMatchObject({
@@ -358,6 +359,23 @@ describe("clean69 ownership protocol (recording clients, not native migration pr
       error: "http_objects_failed",
       cleanup: "dropped",
     });
+    expect(s.migrate).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    "public.aiag_admit_gateway_http_charge_v1(uuid,uuid,uuid,character varying,character varying,character varying,character varying,bigint,jsonb,timestamp with time zone,character varying,jsonb,text,text,smallint)",
+    "public.aiag_reject_unstarted_gateway_http_request_v1(uuid,uuid,uuid,character varying,character varying,text,text,smallint)",
+    "public.aiag_read_gateway_http_result_v2(uuid,uuid,character varying,character varying,text,text,smallint)",
+    "public.aiag_recover_gateway_http_settlement_v1(uuid,uuid,uuid)",
+  ])("requires new recovery API %s before accepting clean71", async (signature) => {
+    const s = setup();
+    s.target.missingHttpObjectName = signature;
+    expect(await s.run()).toMatchObject({ ok: false, error: "http_objects_failed", cleanup: "dropped" });
+    expect(s.migrate).toHaveBeenCalledTimes(1);
+  });
+  it("requires the terminal rejection table before declaring clean71 complete", async () => {
+    const s = setup();
+    s.target.missingHttpObjectName = "public.gateway_http_rejections";
+    expect(await s.run()).toMatchObject({ ok: false, error: "http_objects_failed", cleanup: "dropped" });
     expect(s.migrate).toHaveBeenCalledTimes(1);
   });
   it("rejects an incomplete rerun even after complete first ledger", async () => {
@@ -423,7 +441,7 @@ describe("clean69 ownership protocol (recording clients, not native migration pr
   );
   // The runner's exact scanner SELECT runs on native PostgreSQL against CTE
   // VALUES catalogs. No schema, table or database is created by this probe.
-  it.skipIf(process.env.RUN_NATIVE_CLEAN69_SCANNER_PROBE !== "1").each([
+  it.skipIf(process.env.RUN_NATIVE_CLEAN71_SCANNER_PROBE !== "1").each([
     ["pgwork", "4"],
     ["pgx", "4"],
     ["pg_catalog", "0"],

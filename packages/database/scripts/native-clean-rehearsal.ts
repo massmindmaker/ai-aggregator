@@ -15,13 +15,17 @@ import {
   type NativeMigration,
 } from "./native-migrate";
 
-const TARGET = "ai_aggregator_clean69_test";
+const TARGET = "ai_aggregator_clean71_test";
 const CANONICAL = "ai_aggregator_test";
 const FROZEN = {
   "migrations/0067_gateway_charge_admissions.sql":
     "c13bba2c2c6cd8443790ec7587bfd42860ac0a79de10c3edea856f978737b7e3",
   "migrations/0068_gateway_durable_spending_quotas.sql":
     "b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6",
+  "migrations/0069_gateway_http_storage.sql":
+    "f6649670ea6aee06c0e3d79b92a0e4db355e99551815a74287a0f4bb784c22a2",
+  "migrations/0070_gateway_http_terminal_recovery.sql":
+    "b38ebb05871648feed2085526b89cdfced8e69328c645b4b0f6a944c664a6efa",
 } as const;
 
 type Counts = { total: number; applied: number; skipped: number };
@@ -161,10 +165,10 @@ async function verifyTargetOid(client: TestDatabaseClient, expected: string) {
 function assertInventory(migrations: NativeMigration[]) {
   const versions = migrations.map((m) => m.version);
   if (
-    migrations.length !== 69 ||
-    new Set(versions).size !== 69 ||
+    migrations.length !== 71 ||
+    new Set(versions).size !== 71 ||
     versions[0] !== "drizzle/0000_moaning_the_fury.sql" ||
-    versions.at(-1) !== "migrations/0069_gateway_http_storage.sql" ||
+    versions.at(-1) !== "migrations/0071_gateway_http_recovery_validation.sql" ||
     JSON.stringify(versions) !== JSON.stringify([...versions].sort())
   )
     throw new Error("inventory");
@@ -191,6 +195,7 @@ async function verifyHttpObjects(client: TestDatabaseClient) {
   for (const table of [
     "public.gateway_http_requests",
     "public.gateway_http_results",
+    "public.gateway_http_rejections",
   ]) {
     const result = await client.query<{ object_name: string | null }>({
       text: "SELECT to_regclass($1)::text AS object_name",
@@ -203,6 +208,10 @@ async function verifyHttpObjects(client: TestDatabaseClient) {
     "public.aiag_record_gateway_http_outcome_v1(uuid,uuid,uuid,text,text,bigint,jsonb,character varying,jsonb,smallint)",
     "public.aiag_read_gateway_http_result_v1(uuid,uuid,character varying,character varying,text,text,smallint)",
     "public.aiag_expire_gateway_http_result_v1(uuid,uuid)",
+    "public.aiag_admit_gateway_http_charge_v1(uuid,uuid,uuid,character varying,character varying,character varying,character varying,bigint,jsonb,timestamp with time zone,character varying,jsonb,text,text,smallint)",
+    "public.aiag_reject_unstarted_gateway_http_request_v1(uuid,uuid,uuid,character varying,character varying,text,text,smallint)",
+    "public.aiag_read_gateway_http_result_v2(uuid,uuid,character varying,character varying,text,text,smallint)",
+    "public.aiag_recover_gateway_http_settlement_v1(uuid,uuid,uuid)",
   ]) {
     const result = await client.query<{ object_name: string | null }>({
       text: "SELECT to_regprocedure($1)::text AS object_name",
@@ -291,11 +300,11 @@ export async function runCleanRehearsal(
             )
           )
             throw new Error("uuid");
-          ownedMarker = `ai-aggregator:clean69:${runId}`;
+          ownedMarker = `ai-aggregator:clean71:${runId}`;
           stage = "create_ack";
           evidence.cleanup = "cleanup_unverified"; // Any CREATE error may hide an ACK loss.
           await canonical.query({
-            text: "CREATE DATABASE ai_aggregator_clean69_test TEMPLATE template0",
+            text: "CREATE DATABASE ai_aggregator_clean71_test TEMPLATE template0",
             values: [],
           });
           createdByThisRun = true;
@@ -338,11 +347,11 @@ export async function runCleanRehearsal(
           stage = "first_migration";
           const first = await runNativeMigrations(target, migrations);
           evidence.first = {
-            total: 69,
+            total: 71,
             applied: first.applied.length,
             skipped: first.skipped.length,
           };
-          if (first.applied.length !== 69 || first.skipped.length !== 0)
+          if (first.applied.length !== 71 || first.skipped.length !== 0)
             throw new Error("first_counts");
           stage = "first_ledger";
           evidence.ledgerCount = await verifyLedger(target, migrations);
@@ -352,11 +361,11 @@ export async function runCleanRehearsal(
           stage = "rerun_migration";
           const rerun = await runNativeMigrations(target, migrations);
           evidence.rerun = {
-            total: 69,
+            total: 71,
             applied: rerun.applied.length,
             skipped: rerun.skipped.length,
           };
-          if (rerun.applied.length !== 0 || rerun.skipped.length !== 69)
+          if (rerun.applied.length !== 0 || rerun.skipped.length !== 71)
             throw new Error("rerun_counts");
           stage = "rerun_ledger";
           await verifyLedger(target, migrations);
@@ -383,7 +392,7 @@ export async function runCleanRehearsal(
               cleanupStage = "drop_ack";
               // No FORCE, retry or adoption. Foreign sessions make this fail safely.
               await canonical.query({
-                text: "DROP DATABASE ai_aggregator_clean69_test",
+                text: "DROP DATABASE ai_aggregator_clean71_test",
                 values: [],
               });
               evidence.cleanup = "dropped";
@@ -429,8 +438,8 @@ export async function runCleanRehearsal(
     !evidence.error &&
     evidence.cleanup === "dropped" &&
     evidence.canonicalUnchanged === true &&
-    evidence.first?.applied === 69 &&
-    evidence.rerun?.skipped === 69;
+    evidence.first?.applied === 71 &&
+    evidence.rerun?.skipped === 71;
   return evidence;
 }
 
@@ -445,7 +454,7 @@ if (
       process.exitCode = evidence.ok ? 0 : 1;
     })
     .catch(() => {
-      console.error("clean69_runner_failed");
+      console.error("clean71_runner_failed");
       process.exitCode = 1;
     });
 }

@@ -2,7 +2,7 @@
 
 Статус: **APPROVED для C1a после независимого повторного architecture/financial/spec review**. Исправление убирает новые DELETE guards, сохраняет существующий native cleanup/FK contract и явно защищает PL/pgSQL FOUND в admission guard. Остальные решения были approved in principle; это не общая приёмка. Это конкретный следующий локальный increment, не разрешение на public cutover. Документ подготовлен по текущим SQL/executor и принятым [0069](2026-09-08-gateway-http-storage.md), [0068](2026-09-07-durable-spending-quotas.md), [B1](2026-09-08-http-storage-gateway-bridge.md), [B2](2026-09-08-stored-chat-http-identity.md). Fresh auth `0fde334` — отдельная волна с собственной приёмкой; здесь auth не меняется. Источники: `gateway-charge-admission.sql`, `gateway-durable-spending-quotas.sql`, `gateway-http-storage.sql`, `billing/stored-chat-attempt.ts`, `http-storage.ts`.
 
-Допущение: scope остаётся server-only stored plaintext/nonstream chat, identity v1, quota v2, одна попытка и один provider POST. Этот draft разрешает только написание документа; ниже описана будущая реализация.
+Допущение: scope остаётся server-only stored plaintext/nonstream chat, identity v1, quota v2, одна попытка и один provider POST. C1a разрешён к локальной реализации после независимого review; C1b зависит от отдельной приёмки C1a.
 
 ## Конкретная проблема и результат
 
@@ -196,3 +196,7 @@ Supplier cost отдельный факт: `supplier_actual_usd_micro` в quota 
 Acceptance заканчивается локальными SQL/wrapper/seam гарантиями. В документе implementation report явно перечисляет оставшиеся unknown-operation reconciliation, fresh trusted composition, mounted billable route/refund cutover и receipt integration gates; score108/production release из C1 не следуют.
 
 Root execution ruling: C1a локальная реализация разрешена после independent plan Approved. C1b не стартует до принятия C1a. Новые тесты, baseline и clean70/rerun обязательны; старый clean69 не переименовывать в новую приёмку.
+
+## C1a review correction: append-only validation migration
+
+0070 candidate был применён к guarded local DB до выявления spec mismatch в helper error mapping. Его SHA `b38ebb05871648feed2085526b89cdfced8e69328c645b4b0f6a944c664a6efa` теперь сохраняется; никаких reset, подмены schema_migrations или редактирования применённого SQL. Ownership C1a расширен на `0071_gateway_http_recovery_validation.sql`: только replacement recovery с remap известных helper P0001/P0005 к фиксированному state conflict, settlement вне catch. Current mirror и проверки latest definition учитывают0071. Native inventory и чистая приёмка теперь71, команда `db:test:clean71`; подготовленный clean70 не был принят и не является доказательством нового tip. Исторические0067–0070 неизменны. Это исправление прежнего контракта C1a, не public activation.
