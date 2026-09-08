@@ -213,6 +213,7 @@ async function fixture(client: SqlClient, other: SqlClient) {
     };
   }
   async function cleanup() {
+    let billingIds: string[] = [];
     await client.begin(async (tx) => {
       const client = tx;
       expect(
@@ -227,6 +228,10 @@ async function fixture(client: SqlClient, other: SqlClient) {
       ).toBe(org);
       const mappings =
         await client`SELECT billing_request_id,api_key_id FROM gateway_http_requests WHERE org_id=${org}::uuid`;
+      const admissions =
+        await client`SELECT billing_request_id,api_key_id FROM gateway_charge_admissions WHERE org_id=${org}::uuid`;
+      for (const admission of admissions) expect(admission.api_key_id).toBe(key);
+      billingIds = [...new Set([...mappings, ...admissions].map((r) => String(r.billing_request_id)))];
       for (const mapping of mappings) {
         expect(mapping.api_key_id).toBe(key);
         await client`DELETE FROM gateway_http_rejections WHERE org_id=${org}::uuid AND api_key_id=${key}::uuid AND billing_request_id=${mapping.billing_request_id}::uuid`;
@@ -244,6 +249,25 @@ async function fixture(client: SqlClient, other: SqlClient) {
       await client`DELETE FROM organizations WHERE id=${org}::uuid`;
       await client`DELETE FROM users WHERE id=${user}::uuid`;
     });
+    // A successful callback/ACK alone is insufficient: verify committed absence
+    // from the independent connection, retaining IDs before their parent rows vanish.
+    const remaining = await other`
+      SELECT 'negative' AS relation,count(*)::text AS count FROM gateway_http_rejections WHERE org_id=${org}::uuid
+      UNION ALL SELECT 'result',count(*)::text FROM gateway_http_results WHERE org_id=${org}::uuid
+      UNION ALL SELECT 'mapping',count(*)::text FROM gateway_http_requests WHERE org_id=${org}::uuid
+      UNION ALL SELECT 'quota event',count(*)::text FROM gateway_charge_quota_events WHERE billing_request_id=ANY(${other.array(billingIds)}::uuid[])
+      UNION ALL SELECT 'quota reservation',count(*)::text FROM gateway_charge_quota_reservations WHERE billing_request_id=ANY(${other.array(billingIds)}::uuid[])
+      UNION ALL SELECT 'quota context',count(*)::text FROM gateway_charge_quota_contexts WHERE org_id=${org}::uuid
+      UNION ALL SELECT 'quota bucket',count(*)::text FROM gateway_quota_buckets WHERE org_id=${org}::uuid
+      UNION ALL SELECT 'quota policy',count(*)::text FROM gateway_quota_org_policies WHERE org_id=${org}::uuid
+      UNION ALL SELECT 'transaction',count(*)::text FROM gateway_transactions WHERE org_id=${org}::uuid
+      UNION ALL SELECT 'admission',count(*)::text FROM gateway_charge_admissions WHERE org_id=${org}::uuid
+      UNION ALL SELECT 'key',count(*)::text FROM gateway_api_keys WHERE org_id=${org}::uuid OR id=${key}::uuid
+      UNION ALL SELECT 'organization',count(*)::text FROM organizations WHERE id=${org}::uuid
+      UNION ALL SELECT 'user',count(*)::text FROM users WHERE id=${user}::uuid`;
+    expect(remaining).toHaveLength(13);
+    for (const residual of remaining)
+      expect(residual.count, `owned cleanup residual: ${residual.relation}`).toBe("0");
   }
   return {
     client,
@@ -266,6 +290,50 @@ async function fixture(client: SqlClient, other: SqlClient) {
 }
 
 describe.skipIf(!enabled)("guarded postgres.js terminal/recovery C1b", () => {
+  it("detects residual owned rows when cleanup receives a false commit acknowledgement", async () =>
+    bridge(async (sentinel) => {
+      const h = await sentinel.prepare();
+      await h.run();
+      const before = await sentinel.snapshot(h.billingRequestId);
+      expect(before.quotas.length).toBeGreaterThan(0);
+      expect(before.balance).toHaveLength(1);
+      const mappingBefore = await sentinel.other`SELECT * FROM gateway_http_requests WHERE org_id=${sentinel.org}::uuid AND api_key_id=${sentinel.key}::uuid`;
+      expect(mappingBefore).toHaveLength(1);
+      let rollbackCleanup = false;
+      const rollback = Error("test cleanup rollback before commit");
+      const intercepted = new Proxy(sentinel.client, {
+        get(target, property) {
+          if (property !== "begin") return Reflect.get(target, property);
+          return async (run: (tx: SqlClient) => Promise<unknown>) => {
+            try {
+              return await target.begin(async (tx) => {
+                const result = await run(tx as unknown as SqlClient);
+                if (rollbackCleanup) throw rollback;
+                return result;
+              });
+            } catch (error) {
+              if (rollbackCleanup && error === rollback) return undefined;
+              throw error;
+            }
+          };
+        },
+      });
+      const disposable = await fixture(intercepted, sentinel.other);
+      try {
+        const controller = new AbortController();
+        disposable.args.signal = controller.signal;
+        const rejected = await disposable.prepare();
+        controller.abort();
+        expect(await rejected.run()).toMatchObject({kind: "rejected"});
+        rollbackCleanup = true;
+        await expect(disposable.cleanup()).rejects.toThrow();
+      } finally {
+        rollbackCleanup = false;
+        await disposable.cleanup();
+      }
+      expect(await sentinel.snapshot(h.billingRequestId)).toEqual(before);
+      expect(await sentinel.other`SELECT * FROM gateway_http_requests WHERE org_id=${sentinel.org}::uuid AND api_key_id=${sentinel.key}::uuid`).toEqual(mappingBefore);
+    }));
   it("claims before execution and uses sole admission/outcome writers with stable replay", async () =>
     bridge(async (f) => {
       const legacy = f.deps.admitGatewayChargeV2;
