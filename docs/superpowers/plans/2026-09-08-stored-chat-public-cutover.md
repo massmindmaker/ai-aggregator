@@ -197,3 +197,5 @@ Architecture review round1: три P2 addressed в этом draft — nullable S
 Architecture review round2: уточнены разные исходы deadline доadmission и послеheld; все run discriminants теперь имеют явный HTTP путь. Scoped повторное review pending, MC source не начат.
 
 Final architecture/spec review784de06: Approved, все3P2 и уточнение deadline/runvariants закрыты. Root разрешил локальный MC1 из полного private brief; MC2/MC3 зависят от принятого MC1 и своих конкретных briefs. Это не mounted source acceptance и не runtime activation.
+
+MC1 accepted locally08.09.2026: source `41ede0c`, independent TS/spec review Approved, findings нет. Авторские26/26 unit tests и locked source/test types/lint PASS; reviewer independently repeated types/full gateway lint/diffcheck, immutable review artifact verified. MC2 composition и MC3 mounted native matrix ещё не приняты; deployed mode не менялся.
