@@ -2,6 +2,7 @@ import {
   parseStoredHttpChatResponse,
   type StoredHttpChatResponse,
 } from './http-storage-result';
+import { isHttpRejectionCode, type HttpRejectionCode } from './http-terminal-recovery';
 import {
   admitGatewayChargeV2,
   recordGatewayChargeOutcomeV2,
@@ -60,6 +61,15 @@ export type StoredChatAttemptDependencies = {
   getAdapter: (key: string) => UpstreamAdapter;
   newUuid: () => string;
   admitGatewayChargeV2: typeof admitGatewayChargeV2;
+  /** Sole admission writer when supplied. A rejection must have a confirmed durable SQL result. */
+  admitAttempt?: (args: AdmitGatewayChargeV2Args) => Promise<
+    Readonly<{kind: 'admitted'; admission: GatewayChargeAdmissionResult}> |
+    Readonly<{kind: 'rejected'; billingRequestId: string; code: HttpRejectionCode}>
+  >;
+  /** Only called for a synchronously known abort before the first admission invocation. */
+  rejectUnstarted?: (args: Readonly<{orgId: string; apiKeyId: string; billingRequestId: string}>) => Promise<
+    Readonly<{kind: 'rejected'; billingRequestId: string; code: HttpRejectionCode}>
+  >;
   markGatewayChargeDispatched: typeof markGatewayChargeDispatched;
   recordGatewayChargeOutcomeV2: typeof recordGatewayChargeOutcomeV2;
   /** Sole trusted writer when supplied; never from request body, never falls back. */
@@ -114,6 +124,8 @@ export function createStoredChatAttempt(
     ...dependencies,
   });
   const persistOutcome = deps.persistOutcome;
+  const admitAttempt = deps.admitAttempt;
+  const rejectUnstarted = deps.rejectUnstarted;
   const signal = args.signal;
   const mechanics = new Map<string, UpstreamAdapter | null>();
   // The quote sees only a frozen facade, bound to the original mechanics receiver/function.
@@ -258,12 +270,27 @@ export function createStoredChatAttempt(
         return unknown('cancel');
       }
     }
-    if (signal?.aborted)
-      return Object.freeze({ kind: 'not_started', billingRequestId });
+    const rejected = (value: unknown): StoredChatAttemptResult => {
+      const result = parseAdmissionJsonObject(value);
+      if(result.kind!=='rejected'||result.billingRequestId!==billingRequestId||!isHttpRejectionCode(result.code)) throw new Error('Unconfirmed rejection');
+      return Object.freeze({kind:'rejected',billingRequestId,code:result.code});
+    };
+    if (signal?.aborted) {
+      if(!rejectUnstarted) return Object.freeze({ kind: 'not_started', billingRequestId });
+      try {return rejected(await rejectUnstarted(Object.freeze({orgId:identity.orgId,apiKeyId:identity.apiKeyId,billingRequestId})));}
+      catch {return unknown('pre_admit_terminal');}
+    }
     let admission: GatewayChargeAdmissionResult;
     try {
-      admission = confirmed(await deps.admitGatewayChargeV2(admissionArgs));
+      if(admitAttempt) {
+        const result=await admitAttempt(admissionArgs);
+        if(result?.kind==='rejected') return rejected(result);
+        if(result?.kind!=='admitted') return unknown('admit');
+        admission=confirmed(result.admission);
+      } else admission = confirmed(await deps.admitGatewayChargeV2(admissionArgs));
     } catch (error) {
+      // A supplied writer failing (including PAYMENT_REQUIRED-shaped errors) is uncertain, never fallback/reject.
+      if(admitAttempt) return unknown('admit');
       if (error instanceof AdmissionDeadlineExpiredError)
         return Object.freeze({
           kind: 'rejected',

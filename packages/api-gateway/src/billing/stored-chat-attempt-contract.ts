@@ -1,4 +1,5 @@
 import { captureDeclaredSessionId } from './admission-internal';
+import type { HttpRejectionCode } from './http-terminal-recovery';
 import { z } from 'zod';
 import {
   normalizeAdmissionTimestamp,
@@ -98,6 +99,7 @@ export function validateStoredChatIdentity(
 }
 
 export type StoredChatAttemptStage =
+  | 'pre_admit_terminal'
   | 'admit'
   | 'dispatch'
   | 'provider'
@@ -123,7 +125,7 @@ export type StoredChatAttemptResult =
   | Readonly<{
       kind: 'rejected';
       billingRequestId: string;
-      code: 'PAYMENT_REQUIRED' | 'ADMISSION_DEADLINE_EXPIRED';
+      code: HttpRejectionCode;
     }>
   | Readonly<{
       kind: 'reconciliation_required';

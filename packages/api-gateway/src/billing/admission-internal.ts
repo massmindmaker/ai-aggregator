@@ -157,7 +157,7 @@ function mapTransportError(
   return new AdmissionUnavailableError();
 }
 
-function admissionProjection(client: SqlClient): SqlFragment {
+export function admissionProjection(client: SqlClient): SqlFragment {
   return client<postgres.Row[]>`
     admission.billing_request_id::text AS billing_request_id,
     admission.org_id::text AS org_id,

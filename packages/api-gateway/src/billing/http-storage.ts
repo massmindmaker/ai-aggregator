@@ -225,6 +225,13 @@ export async function readGatewayHttpResult(
       to_char(r.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at
       FROM aiag_read_gateway_http_result_v1(${i.orgId}::uuid, ${i.apiKeyId}::uuid, ${i.routeKind}::varchar,
       ${i.billingMode}::varchar, ${i.idempotencyKeyDigest}::text, ${i.requestFingerprint}::text, ${i.contractVersion}::smallint) r`;
+    return parseGatewayHttpResultRows(rows);
+  } catch (error) {
+    throw mapped(error);
+  }
+}
+/** Strict v1 projection parser shared by the additive v2 reader. */
+export function parseGatewayHttpResultRows(rows: unknown): GatewayHttpResult {
     const r = row(rows, [
       "contract_version",
       "status",
@@ -300,9 +307,6 @@ export async function readGatewayHttpResult(
       storedAt,
       expiresAt,
     });
-  } catch (error) {
-    throw mapped(error);
-  }
 }
 export async function recordGatewayHttpOutcome(
   args: RecordGatewayHttpOutcomeArgs,
