@@ -1,6 +1,6 @@
 # AG-TON2: TON invoice core Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task; subagent-driven-development only within already authorized delegation. Steps use checkbox (`- [ ]`) syntax for tracking. **Сейчас только проект дизайна: независимое financial/spec review и отдельное назначение реализации обязательны до создания migration или изменения кода.**
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task; subagent-driven-development only within already authorized delegation. Steps use checkbox (`- [ ]`) syntax for tracking. **Дизайн принят после независимого financial/spec review на095d9bf. Реализация требует отдельного назначения владельца migration после завершения текущей MC3 проверки.**
 
 **Goal:** Сохранить immutable TON top-up invoice и атомарно выдать её точный grant в gateway microcredits по доверенному подтверждённому входящему chain event ровно один раз.
 
@@ -25,7 +25,7 @@
 
 ## Статус и подтверждённая исходная база
 
-**DRAFT — предложено для независимого финансового ревью; не Approved и не разрешение на реализацию.** Revision после HIGH finding к `ad3e109`: интегратор выбрал временный PAYG compatibility ceiling и стабильный replay при изменении allowlist; обновлённый документ требует scoped independent re-review. Исходники прочитаны 08.09.2026 при HEAD `9f2470a48bdb4be14fb95aaea343cc737b6b97cc`; HEAD может меняться из-за параллельных владельцев. Этот документ — единственный owned tracked файл данной design-задачи.
+**APPROVED DESIGN — независимое финансовое re-review095d9bf закрывает HIGH совместимости RUB refund. Код, migration и native evidence ещё не реализованы; ожидается отдельный ownership handoff.** Revision после HIGH finding к `ad3e109`: интегратор выбрал временный PAYG compatibility ceiling и стабильный replay при изменении allowlist; обновлённый документ требует scoped independent re-review. Исходники прочитаны 08.09.2026 при HEAD `9f2470a48bdb4be14fb95aaea343cc737b6b97cc`; HEAD может меняться из-за параллельных владельцев. Этот документ — единственный owned tracked файл данной design-задачи.
 
 Source-only inventory по тому же порядку `drizzle/*.sql` + `migrations/*.sql`, который использует `discoverNativeMigrations`: **71** файл, последний `migrations/0071_gateway_http_recovery_validation.sql`. Кандидат будущей additive migration — **`0072_ton_invoice_core.sql`**, ожидаемый total72. Повторно сверить manifest непосредственно перед назначением реализации и перед записью; при занятом 0072 назначить следующий свободный номер и обновить focused brief/все expectations согласованно. В этой design-задаче migration не создаётся и DB не вызывается. Bun не обнаружен в текущем PATH и старых `/tmp/bin`/`~/.bun/bin`; инвентарь пересчитан read-only Python по исходному алгоритму, это не результат native migrator/test run. Перед реализацией восстановить/найти штатный Bun runner, без установки в рамках design.
 
@@ -461,3 +461,7 @@ flock /tmp/ai-ecosystem-build.lock /tmp/ai-ecosystem-run aggregator bunx eslint 
 - [x] Manifest+mandatory baseline+clean runner72 учтены; historical checksums frozen; нет rollout claims из document/test fixtures.
 
 После подготовки исполнителем каждый code commit делать `git commit --only` с явным owned списком под `/tmp/ai-aggregator-git.lock`, без `git add .`, reset/clean чужих файлов или amend чужого HEAD. Этот дизайн коммитится только своим doc path; финальное решение по началу реализации принимает интегратор после independent review.
+
+## Root acceptance дизайна
+
+Независимое financial re-review095d9bf: Approved. Grant/resulting PAYG ceiling, concurrent growth review и persisted replay ordering приняты. До завершения MC3 не менять общий manifest71 и root baseline registration. После MC3 нужен точный implementation brief, актуальный next migration ID и единственный владелец SQL/schema/native-clean runner. Это принятие дизайна, не работающая TON оплата.
