@@ -138,6 +138,7 @@
       "name": "@aiag/database",
       "version": "1.0.0",
       "dependencies": {
+        "@aiag/shared": "*",
         "@neondatabase/serverless": "^0.9.0",
         "drizzle-orm": "^0.30.10",
         "pg": "^8.20.0",

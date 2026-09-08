@@ -29,7 +29,8 @@
     "@neondatabase/serverless": "^0.9.0",
     "drizzle-orm": "^0.30.10",
     "pg": "^8.20.0",
-    "pg-connection-string": "^2.12.0"
+    "pg-connection-string": "^2.12.0",
+    "@aiag/shared": "*"
   },
   "devDependencies": {
     "@aiag/typescript-config": "*",

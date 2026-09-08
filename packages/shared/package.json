@@ -21,6 +21,10 @@
     "./validation": {
       "import": "./dist/validation.js",
       "types": "./dist/validation.d.ts"
+    },
+    "./ton-payment-contract": {
+      "types": "./dist/ton-payment-contract.d.ts",
+      "import": "./dist/ton-payment-contract.js"
     }
   },
   "scripts": {

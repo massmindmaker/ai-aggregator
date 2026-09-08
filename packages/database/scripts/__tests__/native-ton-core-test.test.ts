@@ -1,9 +1,12 @@
+import { EventEmitter } from "node:events";
+import { spawn } from "node:child_process";
+import { resolve } from "node:path";
+vi.mock("node:child_process", async importActual => ({ ...(await importActual<typeof import("node:child_process")>()), spawn: vi.fn() }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as migrator from "../native-migrate";
-import { runCleanRehearsal } from "../native-clean-rehearsal";
+import { runTonCoreNativeTests } from "../native-ton-core-test";
 import {
   TEST_DATABASE_MARKER,
-  withGuardedTestDatabase,
   type QueryConfig,
   type TestDatabaseClient,
 } from "../test-db-guard";
@@ -37,6 +40,7 @@ class RecordingClient implements TestDatabaseClient {
   closed = false;
   ledger: Ledger = [];
   fail = "";
+  sessions = "0";
   constructor(readonly target: boolean) {
     this.marker = target ? null : TEST_DATABASE_MARKER;
   }
@@ -50,13 +54,20 @@ class RecordingClient implements TestDatabaseClient {
     if (this.fail && q.text.includes(this.fail))
       throw new Error("postgres://secret SQL secret");
     let rows: Record<string, unknown>[] = [];
-    if (q.text.includes("current_database()"))
+    if (q.text.includes("AS ledger_rows"))
+      rows = [{ probe: null, ledger_rows: "0" }];
+    else if (q.text.includes("pg_stat_activity"))
+      rows = [{ count: this.sessions }];
+    else if (q.text.includes("pg_backend_pid()")) rows = [{ pid: 99 }];
+    else if (q.text.includes("count(*)::text AS count"))
+      rows = [{ count: "0" }];
+    else if (q.text.includes("current_database()"))
       rows = [
         {
           database_name: this.wrongIdentity
             ? "wrong"
             : this.target
-              ? "ai_aggregator_clean72_test"
+              ? "ai_aggregator_ton_core_test"
               : "ai_aggregator_test",
           oid: this.target ? this.oid : "100",
           host: q.text.includes("host(inet_server_addr())")
@@ -92,7 +103,15 @@ class RecordingClient implements TestDatabaseClient {
     else if (q.text.includes("INSERT INTO public._aiag_test_database_marker"))
       this.marker = String(q.values?.[0]);
     else if (q.text.includes("AS object_name"))
-      rows = [{ object_name: this.missingHttpObject || q.values?.[0] === this.missingHttpObjectName ? null : "present" }];
+      rows = [
+        {
+          object_name:
+            this.missingHttpObject ||
+            q.values?.[0] === this.missingHttpObjectName
+              ? null
+              : "present",
+        },
+      ];
     return { rows: rows as Row[], rowCount: rows.length };
   }
 }
@@ -106,6 +125,10 @@ function setup() {
     .spyOn(migrator, "runNativeMigrations")
     .mockImplementation(async (client, migrations) => {
       expect(client).toBe(target);
+      if (
+        migrations[0]?.version === "migrations/9999_ton_core_rollback_probe.sql"
+      )
+        throw new Error("TON_MIGRATION_PROBE");
       const versions = migrations.map((m) => m.version);
       const first = target.ledger.length === 0;
       target.ledger = migrations.map((m) => ({
@@ -115,12 +138,25 @@ function setup() {
       }));
       return { applied: first ? versions : [], skipped: first ? [] : versions };
     });
+  const child = vi.fn(async () => ({
+    exitCode: 0,
+    timedOut: false,
+    passed: 1,
+    failed: 0,
+    skipped: 0,
+  }));
   return {
+    child,
     canonical,
     target,
     factory,
     migrate,
-    run: () => runCleanRehearsal(env, { clientFactory: factory }),
+    runChild: () => runTonCoreNativeTests(env, { clientFactory: factory }),
+    run: () =>
+      runTonCoreNativeTests(env, {
+        clientFactory: factory,
+        childRunner: child,
+      }),
   };
 }
 function noDrop(c: RecordingClient) {
@@ -136,12 +172,12 @@ function noMutation(c: RecordingClient) {
 beforeEach(() => {
   vi.restoreAllMocks();
 });
-describe("clean72 ownership protocol (recording clients, not native migration proof)", () => {
+describe("ton-core ownership protocol (recording clients, not native migration proof)", () => {
   it("refuses invalid environment before constructing any client", async () => {
     const s = setup();
     expect(
       (
-        await runCleanRehearsal(
+        await runTonCoreNativeTests(
           { ...env, AIAG_TEST_DATABASE: "0" },
           { clientFactory: s.factory },
         )
@@ -189,15 +225,18 @@ describe("clean72 ownership protocol (recording clients, not native migration pr
         .filter((q) => /^(CREATE|DROP)/.test(q.text))
         .map((q) => q.text),
     ).toEqual([
-      "CREATE DATABASE ai_aggregator_clean72_test TEMPLATE template0",
-      "DROP DATABASE ai_aggregator_clean72_test",
+      "CREATE DATABASE ai_aggregator_ton_core_test TEMPLATE template0",
+      "DROP DATABASE ai_aggregator_ton_core_test",
     ]);
     const base = new URL(env.TEST_DATABASE_URL);
     const alternate = new URL(s.factory.mock.calls[1][0]);
-    expect(alternate.pathname).toBe("/ai_aggregator_clean72_test");
+    expect(alternate.pathname).toBe("/ai_aggregator_ton_core_test");
     alternate.pathname = base.pathname;
+    base.search = "";
     expect(alternate.href === base.href).toBe(true);
-    expect(s.target.marker).toBe(`ai-aggregator:clean72:${runId}`);
+    expect(s.target.marker).toMatch(
+      new RegExp(`^ai-aggregator:ton-core:${runId}:[0-9a-f]{64}$`),
+    );
   });
   it("never adopts a database after unknown CREATE acknowledgement", async () => {
     const s = setup();
@@ -313,20 +352,23 @@ describe("clean72 ownership protocol (recording clients, not native migration pr
     });
     noMutation(s.canonical);
   });
-  it.each(["0067_", "0068_", "0069_", "0070_", "0071_"])("rejects frozen source checksum drift %s before CREATE", async (version) => {
-    const s = setup();
-    const migrations = await migrator.discoverNativeMigrations();
-    vi.spyOn(migrator, "discoverNativeMigrations").mockResolvedValue(
-      migrations.map((m) =>
-        m.version.includes(version) ? { ...m, checksum: "changed" } : m,
-      ),
-    );
-    expect(await s.run()).toMatchObject({
-      ok: false,
-      error: "inventory_failed",
-    });
-    noMutation(s.canonical);
-  });
+  it.each(["0067_", "0068_", "0069_", "0070_", "0071_"])(
+    "rejects frozen source checksum drift %s before CREATE",
+    async (version) => {
+      const s = setup();
+      const migrations = await migrator.discoverNativeMigrations();
+      vi.spyOn(migrator, "discoverNativeMigrations").mockResolvedValue(
+        migrations.map((m) =>
+          m.version.includes(version) ? { ...m, checksum: "changed" } : m,
+        ),
+      );
+      expect(await s.run()).toMatchObject({
+        ok: false,
+        error: "inventory_failed",
+      });
+      noMutation(s.canonical);
+    },
+  );
   it("rejects incomplete first migration result", async () => {
     const s = setup();
     s.migrate.mockResolvedValue({ applied: [], skipped: [] });
@@ -366,16 +408,27 @@ describe("clean72 ownership protocol (recording clients, not native migration pr
     "public.aiag_reject_unstarted_gateway_http_request_v1(uuid,uuid,uuid,character varying,character varying,text,text,smallint)",
     "public.aiag_read_gateway_http_result_v2(uuid,uuid,character varying,character varying,text,text,smallint)",
     "public.aiag_recover_gateway_http_settlement_v1(uuid,uuid,uuid)",
-  ])("requires new recovery API %s before accepting clean72", async (signature) => {
-    const s = setup();
-    s.target.missingHttpObjectName = signature;
-    expect(await s.run()).toMatchObject({ ok: false, error: "http_objects_failed", cleanup: "dropped" });
-    expect(s.migrate).toHaveBeenCalledTimes(1);
-  });
-  it("requires the terminal rejection table before declaring clean72 complete", async () => {
+  ])(
+    "requires new recovery API %s before accepting the TON parent",
+    async (signature) => {
+      const s = setup();
+      s.target.missingHttpObjectName = signature;
+      expect(await s.run()).toMatchObject({
+        ok: false,
+        error: "http_objects_failed",
+        cleanup: "dropped",
+      });
+      expect(s.migrate).toHaveBeenCalledTimes(1);
+    },
+  );
+  it("requires the terminal rejection table before declaring the TON parent complete", async () => {
     const s = setup();
     s.target.missingHttpObjectName = "public.gateway_http_rejections";
-    expect(await s.run()).toMatchObject({ ok: false, error: "http_objects_failed", cleanup: "dropped" });
+    expect(await s.run()).toMatchObject({
+      ok: false,
+      error: "http_objects_failed",
+      cleanup: "dropped",
+    });
     expect(s.migrate).toHaveBeenCalledTimes(1);
   });
   it("rejects an incomplete rerun even after complete first ledger", async () => {
@@ -439,81 +492,64 @@ describe("clean72 ownership protocol (recording clients, not native migration pr
       noMutation(s.canonical);
     },
   );
-  // The runner's exact scanner SELECT runs on native PostgreSQL against CTE
-  // VALUES catalogs. No schema, table or database is created by this probe.
-  it.skipIf(process.env.RUN_NATIVE_CLEAN72_SCANNER_PROBE !== "1").each([
-    ["pgwork", "4"],
-    ["pgx", "4"],
-    ["pg_catalog", "0"],
-    ["public", "3"],
-  ])(
-    "native scanner counts objects in %s and enforces empty bootstrap",
-    async (namespace, expected) => {
-      const { Client } = await import("pg");
-      const { parseIntoClientConfig } = await import("pg-connection-string");
-      await withGuardedTestDatabase(
-        process.env,
-        {
-          clientFactory: async (url) => {
-            const parsed = parseIntoClientConfig(url);
-            const client = new Client({
-              host: parsed.host,
-              port: parsed.port,
-              database: parsed.database,
-              user: parsed.user,
-              password: parsed.password,
-              ssl: false,
-              connectionTimeoutMillis: 5000,
-              statement_timeout: 5000,
-              query_timeout: 6000,
-            });
-            client.on("error", () => {});
-            return {
-              connect: () => client.connect(),
-              end: () => client.end(),
-              query: async (q) => {
-                const result = await client.query(q.text, [
-                  ...(q.values ?? []),
-                ]);
-                return { rows: result.rows, rowCount: result.rowCount };
-              },
-            };
-          },
-        },
-        async (native) => {
-          const s = setup();
-          let detected: string | undefined;
-          s.target.scanProbe = async (q) => {
-            const result = await native.query<{ user_objects: string }>({
-              text: `WITH pg_namespace(oid, nspname) AS (VALUES (1, $1::text)),
-            pg_class(relnamespace) AS (VALUES (1)),
-            pg_proc(pronamespace) AS (VALUES (1)),
-            pg_type(typnamespace) AS (VALUES (1)) ${q.text}`,
-              values: [namespace],
-            });
-            detected = result.rows[0]?.user_objects;
-            if (detected === undefined)
-              throw new Error("scanner_probe_missing_result");
-            return detected;
-          };
-          const result = await s.run();
-          // Four counts prove every namespace filter, not just one surviving clause.
-          expect(detected).toBe(expected);
-          if (expected !== "0") {
-            expect(result).toMatchObject({
-              ok: false,
-              error: "empty_target_failed",
-              cleanup: "cleanup_unverified",
-            });
-            expect(s.migrate).not.toHaveBeenCalled();
-            noMutation(s.target);
-            noDrop(s.canonical);
-          } else {
-            expect(result).toMatchObject({ ok: true, cleanup: "dropped" });
-          }
-        },
+});
+
+describe("TON child isolation", () => {
+  it("passes exact isolated env and rejects skipped child despite exit zero", async () => {
+    const s = setup();
+    s.child.mockImplementation(async (...args: unknown[]) => {
+      const e = args[0] as Record<string, string>;
+      expect(e.DATABASE_URL).toBe(e.TEST_DATABASE_URL);
+      expect(new URL(e.DATABASE_URL).pathname).toBe(
+        "/ai_aggregator_ton_core_test",
       );
-    },
-    15000,
-  );
+      expect(new URL(e.DATABASE_URL).search).toBe("");
+      expect(e.RUN_NATIVE_DB_INTEGRATION).toBeUndefined();
+      expect(e.AIAG_TON_CORE_TEST_DB_OID).toBe("12345");
+      return { exitCode: 0, timedOut: false, passed: 0, failed: 0, skipped: 1 };
+    });
+    expect(await s.run()).toMatchObject({
+      ok: false,
+      cleanup: "dropped",
+      canonicalUnchanged: true,
+    });
+  });
+  it("foreign sessions prevent DROP", async () => {
+    const s = setup();
+    s.canonical.sessions = "1";
+    expect(await s.run()).toMatchObject({
+      ok: false,
+      cleanup: "cleanup_unverified",
+    });
+    noDrop(s.canonical);
+  });
+});
+
+const suite = "packages/database/scripts/__tests__/ton-payments.native.integration.test.ts";
+function report(overrides: Record<string, unknown> = {}) {
+ return {success:true,numTotalTests:1,numPassedTests:1,numFailedTests:0,numPendingTests:0,numTodoTests:0,testResults:[{name:resolve(suite),assertionResults:[{status:"passed"}]}],...overrides};
+}
+function childOutput(output: string, code: number | null = 0) {
+ vi.mocked(spawn).mockImplementation(() => {
+  const child = new EventEmitter() as EventEmitter & {stdout:EventEmitter;stderr:EventEmitter};
+  child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+  queueMicrotask(() => {child.stdout.emit("data",Buffer.from(output));child.emit("close",code);});
+  return child as unknown as ReturnType<typeof spawn>;
+ });
+}
+describe("native child command and bounded report",()=>{
+ it("uses the current executable and exact argument array, cwd, pipes and detached group",async()=>{
+  const s=setup();childOutput(JSON.stringify(report()));expect(await s.runChild()).toMatchObject({ok:true,cleanup:"dropped"});
+  const [exe,args,options]=vi.mocked(spawn).mock.calls[0];
+  expect(exe).toBe(process.execPath);expect(args).toEqual(["x","--no-install","vitest","run","--no-file-parallelism","--reporter=json",suite]);
+  expect(options).toMatchObject({cwd:resolve('.'),detached:true,stdio:["ignore","pipe","pipe"]});
+ });
+ it.each(["empty","invalid","oversize","missing_suite","skipped","zero_tests","nonzero","null_exit"])("rejects %s and still cleans only the owned DB",async fault=>{
+  const s=setup();let output=JSON.stringify(report());let code:number|null=0;
+  if(fault==='empty')output='';if(fault==='invalid')output='postgres://secret';if(fault==='oversize')output='x'.repeat(1048577);
+  if(fault==='missing_suite')output=JSON.stringify(report({testResults:[]}));
+  if(fault==='skipped')output=JSON.stringify(report({numPassedTests:0,numPendingTests:1,testResults:[{name:resolve(suite),assertionResults:[{status:'pending'}]}]}));
+  if(fault==='zero_tests')output=JSON.stringify(report({numTotalTests:0,numPassedTests:0}));if(fault==='nonzero')code=1;if(fault==='null_exit')code=null;
+  childOutput(output,code);const result=await s.runChild();expect(result).toMatchObject({ok:false,cleanup:'dropped',canonicalUnchanged:true});expect(JSON.stringify(result)).not.toContain('postgres://secret');
+ });
 });

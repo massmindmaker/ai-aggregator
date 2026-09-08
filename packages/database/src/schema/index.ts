@@ -49,3 +49,5 @@ export * from './prize-awards';
 // a named import (e.g. `import { models } from '@aiag/database/schema/models-marketplace'`)
 // to avoid colliding with the legacy `aiModels` symbol from `./ai-models`.
 // We deliberately do NOT re-export it from this barrel.
+
+export * from './ton-payments';

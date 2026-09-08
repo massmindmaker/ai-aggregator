@@ -164,6 +164,65 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(Number(result.rows[0].table_count)).toBe(107);
   });
 
+  it("verifies TON immutable schema, invoker entrypoints and exact mirror", async () => {
+    const migration = await readFile(
+      resolve("packages/database/migrations/0072_ton_invoice_core.sql"),
+      "utf8",
+    );
+    const mirror = await readFile(
+      resolve("packages/database/src/functions/ton-invoice-core.sql"),
+      "utf8",
+    );
+    expect(migration).toContain(mirror.trim());
+    for (const table of [
+      "ton_invoices",
+      "ton_chain_events",
+      "ton_invoice_event_decisions",
+    ]) {
+      const result = await client.query({
+        text: "SELECT to_regclass($1)::text AS name",
+        values: [table],
+      });
+      expect(result.rows[0]?.name).toBe(table);
+    }
+    for (const signature of [
+      "aiag_create_ton_invoice_v1(uuid,uuid,jsonb,text)",
+      "aiag_read_ton_invoice_v1(uuid,uuid,uuid)",
+      "aiag_expire_ton_invoice_v1(uuid)",
+      "aiag_settle_ton_invoice_v1(uuid,jsonb)",
+    ]) {
+      const result = await client.query({
+        text: "SELECT prosecdef FROM pg_proc WHERE oid=to_regprocedure($1)",
+        values: [signature],
+      });
+      expect(result.rows).toEqual([{ prosecdef: false }]);
+    }
+    const triggers = await client.query<{ name: string; enabled: string }>({
+      text: "SELECT tgname AS name,tgenabled AS enabled FROM pg_trigger WHERE tgname=ANY($1::text[]) ORDER BY tgname",
+      values: [
+        [
+          "ton_invoice_guard",
+          "ton_event_immutable",
+          "ton_decision_immutable",
+          "ton_receipt_immutable",
+          "ton_invoice_consistent",
+          "ton_decision_consistent",
+          "ton_receipt_consistent",
+        ],
+      ],
+    });
+    expect(triggers.rows).toHaveLength(7);
+    expect(triggers.rows.every((row) => row.enabled === "O")).toBe(true);
+    const frozen = await readFile(
+      resolve(
+        "packages/database/migrations/0071_gateway_http_recovery_validation.sql",
+      ),
+    );
+    expect(createHash("sha256").update(frozen).digest("hex")).toBe(
+      "f2fe7fffa30cc03b79712c92b09a7c932ec7af6f84a6abfe759d201dd2eff173",
+    );
+  });
+
   it("keeps the gateway admission function mirror exact", async () => {
     const migration = await readFile(
       resolve(
@@ -187,13 +246,13 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(migration).toContain(quotaMirror.trim());
   });
 
-  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 71 migrations", async () => {
+  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 72 migrations", async () => {
     const migration = await readFile(resolve("packages/database/migrations/0069_gateway_http_storage.sql"), "utf8");
     const mirror = await readFile(resolve("packages/database/src/functions/gateway-http-storage.sql"), "utf8");
     expect(migration).toContain(mirror.trim());
     const previous = await readFile(resolve("packages/database/migrations/0068_gateway_durable_spending_quotas.sql"));
     expect(createHash("sha256").update(previous).digest("hex")).toBe("b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6");
-    expect(await discoverNativeMigrations()).toHaveLength(71);
+    expect(await discoverNativeMigrations()).toHaveLength(72);
     const types = await client.query<{ name: string; fields: string[] }>({ text: `
       SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
       JOIN pg_attribute a ON a.attrelid=t.typrelid AND a.attnum>0 AND NOT a.attisdropped

@@ -51,3 +51,6 @@ export { sql, eq, and, or, desc, asc, like, ilike, inArray, notInArray, isNull, 
 
 // Type for database instance
 export type Database = ReturnType<typeof createDb>;
+
+export * from './ton-payment-types';
+export { createTonInvoice, getTonInvoice, expireTonInvoice, settleTonInvoice } from './ton-payments';

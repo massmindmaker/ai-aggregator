@@ -1,4 +1,7 @@
 import path from "node:path";
+import { randomBytes, createHash } from "node:crypto";
+import { spawn } from "node:child_process";
+import { assertTonCoreTestEnvironment } from "./ton-core-test-db-guard";
 import { parseIntoClientConfig } from "pg-connection-string";
 import { fileURLToPath } from "node:url";
 import {
@@ -15,7 +18,7 @@ import {
   type NativeMigration,
 } from "./native-migrate";
 
-const TARGET = "ai_aggregator_clean72_test";
+const TARGET = "ai_aggregator_ton_core_test";
 const CANONICAL = "ai_aggregator_test";
 const FROZEN = {
   "migrations/0067_gateway_charge_admissions.sql":
@@ -31,8 +34,12 @@ const FROZEN = {
 } as const;
 
 type Counts = { total: number; applied: number; skipped: number };
-export interface CleanRehearsalEvidence {
+export interface TonCoreNativeEvidence {
   ok: boolean;
+  createdByThisRun: boolean;
+  rollbackVerified?: boolean;
+  child?: ChildResult;
+  targetSessionsAfterChild?: number;
   target: typeof TARGET;
   cleanup: "not_created" | "cleanup_unverified" | "dropped";
   canonicalUnchanged: boolean | null;
@@ -63,7 +70,10 @@ const createClient: TestDatabaseClientFactory = async (connectionString) => {
     database: parsed.database,
     user: parsed.user,
     password: parsed.password,
-    application_name: parsed.application_name,
+    application_name:
+      parsed.database === TARGET
+        ? "aiag-ton-core-admin"
+        : parsed.application_name,
     ssl: false,
     connectionTimeoutMillis: 5_000,
     statement_timeout: 30_000,
@@ -148,6 +158,7 @@ async function canonicalSnapshot(client: TestDatabaseClient) {
   return JSON.stringify({
     connected,
     ledger: await ledger(client),
+    counts: await canonicalCounts(client),
     marker: TEST_DATABASE_MARKER,
   });
 }
@@ -166,18 +177,18 @@ async function verifyTargetOid(client: TestDatabaseClient, expected: string) {
 }
 function assertInventory(migrations: NativeMigration[]) {
   const versions = migrations.map((m) => m.version);
+  const total = 72;
   if (
-    migrations.length !== 72 ||
-    new Set(versions).size !== 72 ||
+    migrations.length !== total ||
+    new Set(versions).size !== total ||
     versions[0] !== "drizzle/0000_moaning_the_fury.sql" ||
     versions.at(-1) !== "migrations/0072_ton_invoice_core.sql" ||
     JSON.stringify(versions) !== JSON.stringify([...versions].sort())
   )
     throw new Error("inventory");
-  for (const [version, checksum] of Object.entries(FROZEN)) {
+  for (const [version, checksum] of Object.entries(FROZEN))
     if (migrations.find((m) => m.version === version)?.checksum !== checksum)
       throw new Error("frozen_history");
-  }
 }
 async function verifyLedger(
   client: TestDatabaseClient,
@@ -230,12 +241,16 @@ async function verifyHttpObjects(client: TestDatabaseClient) {
   }
 }
 
-export async function runCleanRehearsal(
+export async function runTonCoreNativeTests(
   env: Record<string, string | undefined>,
-  options: { clientFactory?: TestDatabaseClientFactory } = {},
-): Promise<CleanRehearsalEvidence> {
-  const evidence: CleanRehearsalEvidence = {
+  options: {
+    clientFactory?: TestDatabaseClientFactory;
+    childRunner?: typeof runChild;
+  } = {},
+): Promise<TonCoreNativeEvidence> {
+  const evidence: TonCoreNativeEvidence = {
     ok: false,
+    createdByThisRun: false,
     target: TARGET,
     cleanup: "not_created",
     canonicalUnchanged: null,
@@ -249,6 +264,8 @@ export async function runCleanRehearsal(
     assertTestDatabaseEnvironment(env); // Before factory construction/import of pg.
     const targetUrl = new URL(env.TEST_DATABASE_URL!);
     targetUrl.pathname = `/${TARGET}`;
+    targetUrl.search = "";
+    targetUrl.hash = "";
     const factory = options.clientFactory ?? createClient;
     stage = "canonical_guard";
     await withGuardedTestDatabase(
@@ -279,6 +296,7 @@ export async function runCleanRehearsal(
         let ownedOid: string | undefined;
         let ownedMarker: string | undefined;
         let markerEstablished = false;
+        let adminPid: number | undefined;
         try {
           stage = "canonical_preflight";
           before = await canonicalSnapshot(canonical);
@@ -309,14 +327,15 @@ export async function runCleanRehearsal(
             )
           )
             throw new Error("uuid");
-          ownedMarker = `ai-aggregator:clean72:${runId}`;
+          ownedMarker = `ai-aggregator:ton-core:${runId}:${randomBytes(32).toString("hex")}`;
           stage = "create_ack";
           evidence.cleanup = "cleanup_unverified"; // Any CREATE error may hide an ACK loss.
           await canonical.query({
-            text: "CREATE DATABASE ai_aggregator_clean72_test TEMPLATE template0",
+            text: "CREATE DATABASE ai_aggregator_ton_core_test TEMPLATE template0",
             values: [],
           });
           createdByThisRun = true;
+          evidence.createdByThisRun = true;
           stage = "target_oid";
           ownedOid = await targetOid(canonical);
           if (!ownedOid) throw new Error("missing_oid");
@@ -353,14 +372,24 @@ export async function runCleanRehearsal(
           await identity(target, TARGET, ownedOid);
           await marker(target, ownedMarker);
           markerEstablished = true;
+          const pid = await target.query<{ pid: number }>({
+            text: "SELECT pg_backend_pid() AS pid",
+            values: [],
+          });
+          adminPid = pid.rows[0]?.pid;
+          if (!Number.isSafeInteger(adminPid) || adminPid! < 1)
+            throw new Error("pid");
           stage = "first_migration";
           const first = await runNativeMigrations(target, migrations);
           evidence.first = {
-            total: 72,
+            total: migrations.length,
             applied: first.applied.length,
             skipped: first.skipped.length,
           };
-          if (first.applied.length !== 72 || first.skipped.length !== 0)
+          if (
+            first.applied.length !== migrations.length ||
+            first.skipped.length !== 0
+          )
             throw new Error("first_counts");
           stage = "first_ledger";
           evidence.ledgerCount = await verifyLedger(target, migrations);
@@ -370,14 +399,45 @@ export async function runCleanRehearsal(
           stage = "rerun_migration";
           const rerun = await runNativeMigrations(target, migrations);
           evidence.rerun = {
-            total: 72,
+            total: migrations.length,
             applied: rerun.applied.length,
             skipped: rerun.skipped.length,
           };
-          if (rerun.applied.length !== 0 || rerun.skipped.length !== 72)
+          if (
+            rerun.applied.length !== 0 ||
+            rerun.skipped.length !== migrations.length
+          )
             throw new Error("rerun_counts");
           stage = "rerun_ledger";
           await verifyLedger(target, migrations);
+          stage = "migration_rollback_probe";
+          await verifyMigrationRollback(target);
+          evidence.rollbackVerified = true;
+          stage = "child_environment";
+          const childEnv: Record<string, string | undefined> = {
+            ...env,
+            DATABASE_URL: targetUrl.href,
+            TEST_DATABASE_URL: targetUrl.href,
+            AIAG_TON_CORE_TEST: "1",
+            RUN_TON_CORE_DB_INTEGRATION: "1",
+            AIAG_TON_CORE_TEST_DB_OID: ownedOid,
+            AIAG_TON_CORE_TEST_RUN_ID: runId,
+            AIAG_TON_CORE_TEST_MARKER_SHA256: createHash("sha256")
+              .update(ownedMarker)
+              .digest("hex"),
+          };
+          delete childEnv.RUN_NATIVE_DB_INTEGRATION;
+          assertTonCoreTestEnvironment(childEnv);
+          stage = "child";
+          evidence.child = await (options.childRunner ?? runChild)(childEnv);
+          if (
+            evidence.child.exitCode !== 0 ||
+            evidence.child.timedOut ||
+            evidence.child.passed < 1 ||
+            evidence.child.failed ||
+            evidence.child.skipped
+          )
+            throw new Error("child");
         } catch {
           fail(stage);
         } finally {
@@ -390,6 +450,12 @@ export async function runCleanRehearsal(
           ) {
             let cleanupStage = "cleanup_identity";
             try {
+              evidence.targetSessionsAfterChild = await sessions(
+                canonical,
+                ownedOid,
+                adminPid,
+              );
+              assertZeroSessions(evidence.targetSessionsAfterChild);
               await identity(target, TARGET, ownedOid);
               await marker(target, ownedMarker);
               cleanupStage = "target_close";
@@ -398,12 +464,15 @@ export async function runCleanRehearsal(
               cleanupStage = "cleanup_oid";
               await identity(canonical, CANONICAL);
               await verifyTargetOid(canonical, ownedOid);
+              cleanupStage = "cleanup_sessions";
+              assertZeroSessions(await sessions(canonical, ownedOid));
               cleanupStage = "drop_ack";
               // No FORCE, retry or adoption. Foreign sessions make this fail safely.
               await canonical.query({
-                text: "DROP DATABASE ai_aggregator_clean72_test",
+                text: "DROP DATABASE ai_aggregator_ton_core_test",
                 values: [],
               });
+              await assertTargetAbsent(canonical);
               evidence.cleanup = "dropped";
             } catch {
               fail(cleanupStage);
@@ -445,11 +514,249 @@ export async function runCleanRehearsal(
   }
   evidence.ok =
     !evidence.error &&
+    evidence.rollbackVerified === true &&
+    evidence.child?.exitCode === 0 &&
+    evidence.child.passed > 0 &&
+    evidence.child.failed === 0 &&
+    evidence.child.skipped === 0 &&
+    !evidence.child.timedOut &&
     evidence.cleanup === "dropped" &&
     evidence.canonicalUnchanged === true &&
-    evidence.first?.applied === 72 &&
-    evidence.rerun?.skipped === 72;
+    evidence.first?.applied === evidence.first?.total &&
+    evidence.rerun?.skipped === evidence.first?.total;
   return evidence;
+}
+
+async function verifyMigrationRollback(client: TestDatabaseClient) {
+  // This probe only runs after this parent created and proved the whole target.
+  // A separate failed migration transaction cannot leave objects or ledger rows.
+  const sql =
+    "CREATE TABLE public._ton_core_rollback_probe(id integer); DO $$ BEGIN RAISE EXCEPTION 'TON_MIGRATION_PROBE'; END $$;";
+  const version = "migrations/9999_ton_core_rollback_probe.sql";
+  let failedAsExpected = false;
+  try {
+    await runNativeMigrations(client, [
+      {
+        version,
+        filename: "9999_ton_core_rollback_probe.sql",
+        sql,
+        checksum: createHash("sha256").update(sql).digest("hex"),
+      },
+    ]);
+  } catch (error) {
+    failedAsExpected =
+      error instanceof Error && error.message.includes("TON_MIGRATION_PROBE");
+  }
+  const result = await client.query({
+    text: "SELECT to_regclass('public._ton_core_rollback_probe')::text AS probe, (SELECT count(*)::text FROM public.schema_migrations WHERE version=$1) AS ledger_rows",
+    values: [version],
+  });
+  if (
+    !failedAsExpected ||
+    result.rows[0]?.probe !== null ||
+    result.rows[0]?.ledger_rows !== "0"
+  )
+    throw new Error("rollback_probe");
+}
+
+function assertZeroSessions(count: number) {
+  if (count !== 0) throw new Error("sessions");
+}
+async function assertTargetAbsent(client: TestDatabaseClient) {
+  if ((await targetOid(client)) !== undefined) throw new Error("drop_presence");
+}
+
+async function sessions(
+  client: TestDatabaseClient,
+  oid: string,
+  excludePid?: number,
+) {
+  const result = await client.query<{ count: string }>({
+    text: "SELECT count(*)::text AS count FROM pg_stat_activity WHERE datid=$1::oid AND ($2::integer IS NULL OR pid <> $2::integer)",
+    values: [oid, excludePid ?? null],
+  });
+  const count = result.rows[0]?.count;
+  if (!count || !/^(0|[1-9][0-9]*)$/.test(count)) throw new Error("sessions");
+  return Number(count);
+}
+async function canonicalCounts(client: TestDatabaseClient) {
+  const counts: Record<string, string> = {};
+  for (const name of [
+    "ton_invoices",
+    "ton_chain_events",
+    "ton_invoice_event_decisions",
+    "gateway_transactions",
+  ]) {
+    const exists = await client.query({
+      text: "SELECT to_regclass($1)::text AS object_name",
+      values: [`public.${name}`],
+    });
+    if (exists.rows[0]?.object_name) {
+      // name comes exclusively from the fixed literal inventory above.
+      const result = await client.query<{ count: string }>({
+        text: `SELECT count(*)::text AS count FROM public.${name}`,
+        values: [],
+      });
+      counts[name] = result.rows[0]!.count;
+    }
+  }
+  return counts;
+}
+export interface ChildResult {
+  exitCode: number | null;
+  timedOut: boolean;
+  passed: number;
+  failed: number;
+  skipped: number;
+  failureCodes?: string[];
+  failedTestIndexes?: number[];
+}
+const SUITE =
+  "packages/database/scripts/__tests__/ton-payments.native.integration.test.ts";
+async function runChild(
+  env: Record<string, string | undefined>,
+): Promise<ChildResult> {
+  assertTonCoreTestEnvironment(env);
+  return new Promise((resolve) => {
+    const result: ChildResult = {
+      exitCode: null,
+      timedOut: false,
+      passed: 0,
+      failed: 1,
+      skipped: 0,
+    };
+    const child = spawn(
+      process.execPath,
+      [
+        "x",
+        "--no-install",
+        "vitest",
+        "run",
+        "--no-file-parallelism",
+        "--reporter=json",
+        SUITE,
+      ],
+      {
+        cwd: path.resolve(fileURLToPath(new URL("../../../", import.meta.url))),
+        env,
+        detached: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let output = "",
+      size = 0,
+      invalid = false;
+    let killTimer: ReturnType<typeof setTimeout> | undefined;
+    const signal = (sig: NodeJS.Signals) => {
+      if (child.pid) {
+        try {
+          process.kill(-child.pid, sig);
+        } catch {
+          /* already gone */
+        }
+      }
+    };
+    const stop = () => {
+      signal("SIGTERM");
+      killTimer ??= setTimeout(() => signal("SIGKILL"), 10_000);
+    };
+    const parentExit = () => signal("SIGKILL");
+    const parentSignal = () => { result.timedOut = true; stop(); };
+    process.once("exit", parentExit);
+    process.once("SIGTERM", parentSignal);
+    process.once("SIGINT", parentSignal);
+    const timer = setTimeout(() => {
+      result.timedOut = true;
+      stop();
+    }, 180_000);
+    const collect = (chunk: Buffer, stdout: boolean) => {
+      size += chunk.length;
+      if (size > 1048576) {
+        invalid = true;
+        stop();
+      } else if (stdout) output += chunk.toString();
+    };
+    child.stdout.on("data", (chunk: Buffer) => collect(chunk, true));
+    child.stderr.on("data", (chunk: Buffer) => collect(chunk, false));
+    child.on("error", () => {
+      invalid = true;
+    });
+    child.on("close", async (code) => {
+      clearTimeout(timer);
+      clearTimeout(killTimer);
+      process.removeListener("exit", parentExit);
+      process.removeListener("SIGTERM", parentSignal);
+      process.removeListener("SIGINT", parentSignal);
+      result.exitCode = code;
+      // The runner owns only this detached group. A dead leader is not proof
+      // that Vitest workers stopped; terminate/reap the owned group before DB cleanup.
+      if (child.pid) {
+        signal("SIGTERM");
+        const until = Date.now() + 10_000;
+        for (;;) {
+          let alive = true;
+          try {
+            process.kill(-child.pid, 0);
+          } catch (error) {
+            alive = (error as NodeJS.ErrnoException).code !== "ESRCH";
+          }
+          if (!alive) break;
+          if (Date.now() >= until) {
+            signal("SIGKILL");
+            invalid = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
+      try {
+        const report = JSON.parse(output);
+        if (
+          invalid ||
+          ![
+            report.numTotalTests,
+            report.numPassedTests,
+            report.numFailedTests,
+            report.numPendingTests,
+            report.numTodoTests,
+          ].every((n) => Number.isSafeInteger(n) && n >= 0) ||
+          report.numTotalTests < 1 ||
+          !Array.isArray(report.testResults) ||
+          report.testResults.length !== 1 ||
+          report.testResults[0].name !==
+            fileURLToPath(new URL(`../../../${SUITE}`, import.meta.url))
+        )
+          throw new Error("report");
+        result.passed = report.numPassedTests;
+        result.failed = report.numFailedTests;
+        result.skipped = report.numPendingTests + report.numTodoTests;
+        const assertions = report.testResults[0].assertionResults;
+        if (
+          !Array.isArray(assertions) ||
+          assertions.length !== report.numTotalTests
+        )
+          throw new Error("report");
+        result.failedTestIndexes = assertions.flatMap(
+          (a: { status: string }, index: number) =>
+            a.status === "failed" ? [index] : [],
+        );
+        // Only owned stable error identifiers escape. Never raw pg errors, URLs,
+        // failure messages, test payloads, environment or credential-bearing text.
+        const codes =
+          JSON.stringify(assertions).match(/TON_[A-Z_]{1,64}/g) ?? [];
+        result.failureCodes = [...new Set(codes)].slice(0, 20);
+        if (
+          report.success !== true ||
+          report.numPassedTests !== report.numTotalTests ||
+          assertions.some((a: { status: string }) => a.status !== "passed")
+        )
+          result.failed = Math.max(result.failed, 1);
+      } catch {
+        result.failed = 1;
+      }
+      resolve(result);
+    });
+  });
 }
 
 // Node/Bun compatible and import-safe: unit imports cannot start a DB command.
@@ -457,13 +764,17 @@ if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  void runCleanRehearsal(process.env)
-    .then((evidence) => {
-      console.log(JSON.stringify(evidence));
-      process.exitCode = evidence.ok ? 0 : 1;
-    })
-    .catch(() => {
-      console.error("clean72_runner_failed");
-      process.exitCode = 1;
-    });
+  if (process.argv.length !== 2) {
+    console.error("ton_core_arguments_denied");
+    process.exitCode = 1;
+  } else
+    void runTonCoreNativeTests(process.env)
+      .then((evidence) => {
+        console.log(JSON.stringify(evidence));
+        process.exitCode = evidence.ok ? 0 : 1;
+      })
+      .catch(() => {
+        console.error("ton_core_runner_failed");
+        process.exitCode = 1;
+      });
 }
