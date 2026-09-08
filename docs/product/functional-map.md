@@ -2,7 +2,7 @@
 
 Срез на **08.09.2026**. Это продуктовая карта, составленная по исходникам, принятому локальному evidence и планам. Она не является новой приёмкой, не пересчитывает F=43/108 и не подтверждает production: развёртывание, реальные платежи и платные вызовы провайдеров в этом срезе не проверялись.
 
-**Статусы:** «исходники» — путь существует; «принято локально» — есть зафиксированная локальная проверка/review; «production не проверен» — обязательный внешний или сквозной gate не пройден; «план» — будущая работа. Quota v2 DB prerequisite принят локально 08.09 после независимых финансового и TypeScript review; публичный маршрут ещё не подключён.
+**Статусы:** «исходники» — путь существует; «принято локально» — есть зафиксированная локальная проверка/review; «production не проверен» — обязательный внешний или сквозной gate не пройден; «план» — будущая работа. Quota v2 и restricted plaintext HTTP route приняты локально с независимым review; default legacy и production не переключались.
 
 ```mermaid
 mindmap
@@ -37,6 +37,6 @@ mindmap
 | AG-11. Поддержка и эксплуатация | Выпустить, восстановить, разобрать спор | Native test/migration contracts приняты локально | Release gate, restore rehearsal, операторская сверка и disputes | [checkpoint](/home/bob/Projects/ai-aggregator/docs/consolidation/2026-09-07-pause-checkpoint.md) |
 | AG-12. Связь хаба | Передать каталог/usage AM, прикрепить evidence Arena | Базовые API существуют; сквозная интеграция не принята | Rich HTTP catalog, version/evidence/rights manifests и авторский выпуск | [кооперативная roadmap](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-07-cooperative-roadmap.md) |
 
-Ближайший продуктовый маршрут: после принятых quota v2 DB, typed executor bridge и DB HTTP identity/resultbox и typed storage seam — принятые canonical HTTP identity и C1a SQL reject/recovery, принятый C1b typed bridge и затем один публичный plaintext route с точной idempotency и recovery/refund; после этого — rich catalog для AM, авторская версия и TON/RUB regression. Tools, SSE, media и BYOK идут после первого доверенного маршрута. Arena и AM подключаются через versioned HTTP contracts, без общей БД или общего баланса.
+Ближайший продуктовый маршрут: restricted plaintext route с durable identity/resultbox и recovery принят локально. В работе TON invoice core и совместимость с RUB; далее остаются refund cutover, rich catalog и защищённый receipt для AM, авторская версия. Tools, SSE, media и BYOK требуют отдельных контрактов и проверок. Arena и AM подключаются через versioned HTTP contracts, без общей БД или общего баланса.
 
 Кооперативные программы, общая память продукта, мем-конкурс и программы паёв/мем-токенов отложены: это не активная функция Aggregator и не относится к TON payment или wallet login/link. Приоритет общего потока остаётся **AG → Arena → AM**.
