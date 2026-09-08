@@ -1,8 +1,8 @@
 Canonical development entrypoint: docs/DEVELOPMENT-ENTRYPOINT.md
 Canonical continuation and accepted evidence: docs/consolidation/2026-09-08-development-continuation.md
 Functional map: docs/product/functional-map.md
-Canonical active-project boundaries: docs/consolidation/ACTIVE-PROJECTS.md
-Shared provenance and refresh boundary: docs/consolidation/MEMORY-STATUS.md
-Existing project memories are historical provenance only; do not treat them as current instructions or copy their decisions/journals here. Read current code and owner acceptance before claiming readiness.
+Canonical active-product boundaries: docs/consolidation/ACTIVE-PROJECTS.md
+Memory freshness and readback: docs/consolidation/MEMORY-STATUS.md
+Read current code, owner acceptance and git before work. Historical project memories remain provenance.
 
-08.09.2026 canonical functional checkpoint: `docs/ecosystem/2026-09-08-functional-checkpoint.md` and its CSV record Aggregator 45/108 F, Arena 26/108 F, and Agents Market 40/108 F; none has production acceptance. MC1 `41ede0c`, MC2 `ac23cae`, MC3/MC4 `cd37771` + `1c072b3`, and AG-TON1 `a5731d4` remain accepted local evidence. TON2 source `724a031` passed financial re-review and exact native58/unit-scanner214 evidence, but final canonical database baseline and migration0072 are PENDING during the user pause. This locator claims neither public-route cutover, production deployment, payment/login/mainnet, 108/108, nor external semantic-memory synchronization. Graphify is unchanged because no newly accepted AG source required a rebuild.
+2026-09-08 accepted-source locator: TON2 source 724a031 is locally accepted by documentation 21bf66a, docs/superpowers/plans/2026-09-08-ton-invoice-core.md and docs/product/acceptance/AG-P1.md. Owner documents distinguish final baseline12/322 preserved in canonical handoff from separately read exact native58 evidence. Applied migration0072 must not be rewritten. Next gate is AG-TON3 trusted verifier; no checkout/login/mainnet or production acceptance. Earlier local MC1/MC2/MC3/MC4 and TON1 evidence remains in the entrypoint. New authorization resumes local work with full Agents Market Web priority. This locator is navigation, not a scorecard, a full index refresh or a duplicate acceptance record.

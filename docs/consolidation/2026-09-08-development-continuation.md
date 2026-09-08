@@ -2,7 +2,7 @@
 
 **Передача новой сессии:** [последний полный handoff](2026-09-08-session-handoff.md), включая завершённый TON2 baseline и новый Web scope.
 
-**Возобновлено по указанию пользователя:** параллельные узкие задачи по трём проектам, общий canonical checkpoint; Agents Market Web — полноценные реальные сценарии с TMA business logic, без фиктивных capabilities. Root baseline после паузы завершён exit0:12 suites/322 tests, migration72 applied1/skipped71; обязательный isolated TON child58 PASS0skip, fresh72/noop72, owned DB dropped, sessions0. TON2 acceptance documentation pending; production не менялся.
+**Возобновлено по указанию пользователя:** параллельные узкие задачи по трём проектам, общий canonical checkpoint; Agents Market Web — полноценные реальные сценарии с TMA business logic, без фиктивных capabilities. Root baseline после паузы завершён exit0:12 suites/322 tests, migration72 applied1/skipped71; обязательный isolated TON child58 PASS0skip, fresh72/noop72, owned DB dropped, sessions0. TON2 owner acceptance оформлена в `21bf66a`; raw полный baseline log не найден в новой сессии, результат12/322 сохранён handoff, а exact native58 evidence прочитано. Production не менялся.
 
 **Историческая пауза снята:** [переоценка F108](../ecosystem/2026-09-08-functional-checkpoint.md) остаётся аналитическим срезом. Текущее разрешение и завершённый baseline зафиксированы выше и в handoff.
 
@@ -26,12 +26,16 @@ Restricted plaintext маршрут Aggregator принят локально; de
 
 Существующий local test runtime PG15432/Redis16379; один тяжёлый процесс под /tmp/ai-ecosystem-build.lock. Секреты не копируются в документы. Private review packages и отчёты .superpowers/sdd сохранены для непрерывного продолжения. Новые accepted commits требуют refresh Serena/Graphify; старый индекс не доказывает текущую реализацию. LightRAG locator теперь processed и подтверждён hybrid readback; AM Serena locator обновлён с readback и focused symbol lookup. AST Graphify обновлён для трёх проектов, Serena locators проверены чтением и точечным поиском символов; это не полный LSP reindex. C1 refresh принятого снимка выполнен (`f675a6b`), последующие MC изменения требуют нового refresh после приёмки. AM Serena locator обновлён после asset fix (`f1a51e2`, readback); Arena FS-T1 locator/index refresh ещё ожидается. Memory Graph не менялся этой волной.
 
-**Независимая параллельная задача:** AG-TON1 pure amount/asset/quote contract `a5731d4` принят (63tests, types/lint, independent financial Approved). Это точная арифметика и testnet identity; invoice API и работающая оплата ещё не реализованы. AG-TON2 реализация назначена после принятого MC3; отдельная disposable DB и единственный владелец schema/manifest.
+**Независимая параллельная задача:** AG-TON1 pure amount/asset/quote contract `a5731d4` принят (63tests, types/lint, independent financial Approved). Это точная арифметика и testnet identity; invoice API и работающая оплата ещё не реализованы. AG-TON2 source `724a031` принят локально, owner acceptance `21bf66a`; дальнейший TON gate — trusted verifier.
 
-AG-TON2 invoice design (`095d9bf`) принят после финансового и isolation review: совместимый предел PAYG до исправления exact arithmetic в RUB refund consumers. Реализация TON invoice core начата после MC3 acceptance; итоговая migration/native приёмка ещё открыта.
+AG-TON2 invoice design (`095d9bf`) принят после финансового и isolation review: совместимый предел PAYG до исправления exact arithmetic в RUB refund consumers. TON invoice core реализован и принят: baseline12/322, applied72, native58/0skip, fresh72/noop72; точные источники и предел архивного evidence — в [owner plan](../superpowers/plans/2026-09-08-ton-invoice-core.md). Verifier/checkout/login/mainnet остаются открыты.
 
 ## Текущие замечания, ещё не приёмка
 
 Исторический Arena FS-T3 candidate `76bbe22` получил Block от независимых React и TS/spec reviewers. Типы/lint проходят, но exact guarded browser run падает; найдены устаревшие epoch-проверки, потеря восстановления после upload, небезопасное повторение неизвестной операции, обработка deadline/conflict и модальный focus. Исправления99c8d3b/807fc7c закрыли все findings, включая M1. Полные FS14–16/PV и FS-T4 прошли, independent final reviews Approved; [AR-P2.3](/home/bob/Projects/aiarena/docs/product/acceptance/AR-P2.3.md) принят7dcf5bd. Этот прежний Block не является текущим статусом.
 
 AM [статический inventory bridge](/home/bob/Projects/agents-market/docs/research/2026-09-08-aggregator-receipt-bridge-inventory.md), commit `f746b63`: текущий worker не сохраняет AG idempotency/SID/receipt и при потере ответа не умеет восстанавливать AG execution. Следующий AM-P2 brief должен определить persistent identity, точные единицы, reservation и защищённый server-to-server receipt. Это подтверждённый пробел исходников, не новая принятая runtime capability.
+
+## Текущая волна Web и Arena
+
+AM Web Task1 public shell прошёл read-only prerequisites review и реализуется. Task2 требует конкретного account UUID/session/backfill/backend+worker subplan; private API и полезный Web run ещё не приняты. Arena PE-T1 реализуется в рамках approved pure architecture, без DB/runner/UI. Новые source проходят свои тесты и независимые reviews перед acceptance.
