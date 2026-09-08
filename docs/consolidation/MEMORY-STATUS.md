@@ -1,5 +1,19 @@
 # Статус developer memory
 
+## Refresh принятого snapshot — 08.09.2026, 00:36 UTC
+
+Производная навигация к [принятому continuation](2026-09-08-development-continuation.md); не новая приёмка продукта.
+
+| Слой | Проверенный результат | Граница |
+|---|---|---|
+| Graphify AG | `graphify update` exit0 под shared flock; JSON readback 9599 nodes / 14537 links / 694 communities, mtime 00:35:04 UTC | Source snapshot `73d6c3f` (включает accepted `0fde334`); последующий `f315508` меняет только C1 plan. После начала новой SQL implementation C1a этот индекс исторический; refresh нового source PENDING до freeze/acceptance. |
+| Graphify Arena | exit0, JSON readback 1945 / 2733 / 205, mtime 00:35:42 UTC | HEAD `66a323c`, accepted runtime `2465f33`; прежние untracked docs сохранены. |
+| Graphify AM | exit0, JSON readback 1714 / 2466 / 191, mtime 00:36:31 UTC | HEAD `dca7746`, accepted CAS `9e24aff`; исходники frozen. |
+| Serena | Все три existing `ai-hub/development-entrypoint` прочитаны через MCP; Arena locator дополнен continuation/map и прочитан обратно. Focused symbols: AG `auth-plan04.ts` (`requireApiKey`, `resolveFromDb`), Arena `submission-versions.ts` (`savePrivateVersion`, `readPrivateWorkspace`), AM `db.ts` (`markStarted`, `markFailed`, `settleRun`). | Это focused live navigation, не полный Serena reindex. В конце явно активирован AG. Новый экземпляр MCP начинал с No active project, поэтому активацию нужно проверять в своём harness. |
+| Brain / Codex | Brain README направлен на continuation вместо раннего checkpoint; отдельная Codex ad-hoc correction note отменяет устаревшие формулировки clean69/private versions. | Только ссылки на owner evidence, без копии решений/баллов. |
+
+Все Graphify запуски последовательны под `/tmp/ai-ecosystem-build.lock`, AST-only, без LLM/API. CLI также создал стандартные local cache/backup/report/html artifacts; community labels обновлены по hub эвристике, semantic labeling не запускался. LightRAG locator `doc-365591f10b64a84274fc6ed561d9de74` не загружался повторно: canonical references неизменны, прежний processed/hybrid readback сохранён. В этой подволне нового LightRAG readback нет. Memory Graph без мутации; Wiki не дублируется, канбан принадлежит Hermes. Полных 108, production deployment, paid/mainnet и C1a implementation acceptance эта запись не утверждает.
+
 ## Подтверждённое продолжение — 08.09.2026
 
 - **LightRAG: новый locator подтверждён.** Перед записью точный hybrid lookup не нашёл continuation path. MCP insert_texts вернул duplicated для общего text_input_1.txt и старый track: это не загрузка нового текста. Повторную вставку/удаление старого документа не делали; upload уникального ai-hub-development-continuation-2026-09-08.md завершился processed, doc-365591f10b64a84274fc6ed561d9de74, track upload_20260907_233646_34165808. Последующий hybrid readback вернул точный canonical path и содержимое locator. Это навигация к [текущему continuation](2026-09-08-development-continuation.md), не копия acceptance/баллов. Старые UNKNOWN записи research locator этим не переоцениваются.
