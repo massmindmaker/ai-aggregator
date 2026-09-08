@@ -22,6 +22,9 @@ export function guard() {
   )
     throw Error("MC3 requires dedicated Redis 127.0.0.1:16379 database 0");
 }
+export type CatalogMutationOwnership = {
+  state: "not_started" | "uncertain" | "committed" | "rolled_back";
+};
 export async function runtime() {
   guard();
   await withGuardedTestDatabase(
@@ -129,13 +132,13 @@ export async function runtime() {
     const rpm = redisModule.makeRedis("ratelimit");
     setupCleanup.push(() => rpm.disconnect());
     await rpm.ping();
-    const catalog = async () => ({
+    const catalog = async (reader: SqlClient = client) => ({
       models:
-        await client`SELECT to_jsonb(m)::text AS row FROM models m WHERE slug=${slug}`,
+        await reader`SELECT to_jsonb(m)::text AS row FROM models m WHERE slug=${slug}`,
       candidates:
-        await client`SELECT to_jsonb(mu)::text AS row FROM model_upstreams mu JOIN models m ON mu.model_id=m.id WHERE m.slug=${slug} ORDER BY mu.id`,
+        await reader`SELECT to_jsonb(mu)::text AS row FROM model_upstreams mu JOIN models m ON mu.model_id=m.id WHERE m.slug=${slug} ORDER BY mu.id`,
       upstreams:
-        await client`SELECT to_jsonb(u)::text AS row FROM upstreams u WHERE id='openrouter'`,
+        await reader`SELECT to_jsonb(u)::text AS row FROM upstreams u WHERE id='openrouter'`,
     });
     const original = await catalog();
     // These are the canonical seed/profile anchors, never arbitrary catalog rows.
@@ -164,36 +167,88 @@ export async function runtime() {
     expect(m.display_name).toBe("GPT-4o mini");
     expect(u.provider).toBe("openrouter");
     expect(u).toMatchObject({ id: "openrouter", enabled: true });
+    type Catalog = Awaited<ReturnType<typeof catalog>>;
+    type Mutation = {
+      before: Catalog;
+      after: Catalog;
+      ownership?: CatalogMutationOwnership;
+    };
     let expected = original;
-    async function mutateCatalog(run: (db: SqlClient) => Promise<unknown>) {
-      expect(
-        JSON.stringify(await catalog()) === JSON.stringify(expected),
-        "competing catalog mutation",
-      ).toBe(true);
-      await run(client);
-      expected = await catalog();
+    let pending: Mutation | null = null;
+    const same = (left: Catalog, right: Catalog) =>
+      JSON.stringify(left) === JSON.stringify(right);
+    async function reconcileMutation() {
+      if (!pending) return;
+      const intent = pending;
+      const observed = await catalog(other);
+      if (same(observed, intent.after)) {
+        expected = intent.after;
+        if (intent.ownership) intent.ownership.state = "committed";
+      } else if (same(observed, intent.before)) {
+        expected = intent.before;
+        if (intent.ownership) intent.ownership.state = "rolled_back";
+      } else {
+        throw Error(
+          "refuse to adopt competing catalog mutation during reconciliation",
+        );
+      }
+      pending = null;
+    }
+    async function mutateCatalog(
+      run: (db: SqlClient) => Promise<unknown>,
+      options: {
+        ownership?: CatalogMutationOwnership;
+        losePostCommitSnapshotAck?: boolean;
+      } = {},
+    ) {
+      await reconcileMutation();
+      try {
+        await client.begin(async (tx) => {
+          // Serialize the precondition, mutation and intended snapshot. A failed
+          // in-transaction snapshot rolls back instead of losing cleanup ownership.
+          await tx`LOCK TABLE models,model_upstreams,upstreams IN SHARE ROW EXCLUSIVE MODE`;
+          expect(
+            same(await catalog(tx as unknown as SqlClient), expected),
+            "competing catalog mutation",
+          ).toBe(true);
+          const before = expected;
+          await run(tx as unknown as SqlClient);
+          const after = await catalog(tx as unknown as SqlClient);
+          pending = { before, after, ownership: options.ownership };
+          if (options.ownership) options.ownership.state = "uncertain";
+        });
+        // Keep intent and ownership before any fallible post-commit audit read.
+        if (options.ownership) options.ownership.state = "committed";
+        const observed = await catalog();
+        if (options.losePostCommitSnapshotAck)
+          throw Error("MC3 simulated post-commit snapshot ACK loss");
+        if (!pending || !same(observed, pending.after))
+          throw Error("competing post-commit catalog mutation");
+        expected = pending.after;
+        pending = null;
+      } catch (originalError) {
+        try {
+          await reconcileMutation();
+        } catch (reconciliationError) {
+          // Keep pending intent for a later independent retry; never adopt an
+          // unexplained row state or overwrite it during restore.
+          throw new AggregateError(
+            [originalError, reconciliationError],
+            "MC3 catalog mutation and reconciliation failed",
+          );
+        }
+        throw originalError;
+      }
     }
     async function restoreCatalog() {
-      expect(
-        JSON.stringify(await catalog()) === JSON.stringify(expected),
-        "refuse to overwrite competing catalog mutation",
-      ).toBe(true);
-      await client.begin(async (tx) => {
+      await reconcileMutation();
+      await mutateCatalog(async (tx) => {
         await tx`UPDATE models SET enabled=${m.enabled},status=${m.status} WHERE id=${m.id}::uuid`;
         await tx`UPDATE model_upstreams SET enabled=${c.enabled},price_per_1k_input=${c.price_per_1k_input},price_per_1k_output=${c.price_per_1k_output},markup=${c.markup},upstream_model_id=${c.upstream_model_id} WHERE id=${c.id}::uuid`;
         await tx`UPDATE upstreams SET enabled=${u.enabled},ru_residency=${u.ru_residency} WHERE id='openrouter'`;
       });
-      expected = original;
-      const restored = {
-        models:
-          await other`SELECT to_jsonb(m)::text AS row FROM models m WHERE slug=${slug}`,
-        candidates:
-          await other`SELECT to_jsonb(mu)::text AS row FROM model_upstreams mu JOIN models m ON mu.model_id=m.id WHERE m.slug=${slug} ORDER BY mu.id`,
-        upstreams:
-          await other`SELECT to_jsonb(u)::text AS row FROM upstreams u WHERE id='openrouter'`,
-      };
       expect(
-        JSON.stringify(restored) === JSON.stringify(original),
+        same(await catalog(other), original),
         "catalog restored exactly",
       ).toBe(true);
     }
@@ -246,6 +301,7 @@ export async function runtime() {
       failover,
       mutateCatalog,
       restoreCatalog,
+      reconcileMutation,
       close,
     };
   } catch (originalError) {

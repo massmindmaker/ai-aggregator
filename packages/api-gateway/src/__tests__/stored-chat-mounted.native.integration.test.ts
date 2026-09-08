@@ -17,6 +17,7 @@ import {
   slug,
   type Runtime,
   type Owner,
+  type CatalogMutationOwnership,
 } from "./stored-chat-mounted.native.fixture";
 import type { SqlClient } from "../lib/db";
 
@@ -49,6 +50,111 @@ async function waitFor(check: () => Promise<boolean>, message: string) {
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw Error(message);
+}
+async function concurrentFreshPair(
+  r: Runtime,
+  f: Owner,
+  probes: {
+    afterStart?: () => void;
+    afterLock?: () => void;
+    completed?: (index: number) => void;
+  } = {},
+) {
+  let release!: () => void, locked!: () => void, releaseReads!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    locked = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const readGate = new Promise<void>((resolve) => {
+    releaseReads = resolve;
+  });
+  const held = r.client.begin(async (tx) => {
+    await tx`LOCK TABLE gateway_http_requests IN SHARE ROW EXCLUSIVE MODE`;
+    locked();
+    await gate;
+  });
+  // Attach rejection handlers immediately, before any inspection can throw.
+  const heldDone = Promise.allSettled([held]);
+  let requestsDone: Promise<PromiseSettledResult<Response>[]> = Promise.resolve(
+    [],
+  );
+  let readSpy: { mockRestore(): void } | undefined;
+  const failures: unknown[] = [];
+  const id = randomUUID();
+  let results: PromiseSettledResult<Response>[] = [];
+  try {
+    await Promise.race([
+      ready,
+      heldDone.then(([result]) => {
+        if (result?.status === "rejected") throw result.reason;
+        throw Error("claim lock finished before readiness");
+      }),
+    ]);
+    let reads = 0;
+    const actualRead = r.terminal.readGatewayHttpResultV2;
+    readSpy = vi
+      .spyOn(r.terminal, "readGatewayHttpResultV2")
+      .mockImplementation(async (args) => {
+        const committed = await actualRead(args);
+        if (committed.status === "not_found") {
+          reads++;
+          if (reads === 2) releaseReads();
+          await readGate;
+        }
+        return committed;
+      });
+    requestsDone = Promise.allSettled(
+      [0, 1].map((index) =>
+        f.post(id).then((result) => {
+          probes.completed?.(index);
+          return result;
+        }),
+      ),
+    );
+    probes.afterStart?.();
+    await waitFor(
+      async () =>
+        Number(
+          (
+            await r.other`SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%aiag_claim_gateway_http_request_v1%'`
+          )[0]?.n,
+        ) >= 2,
+      "two native claim lock waits not observed",
+    );
+    expect(r.fresh).toHaveBeenCalledTimes(2);
+    expect(r.provider).not.toHaveBeenCalled();
+    probes.afterLock?.();
+  } catch (error) {
+    failures.push(error);
+  } finally {
+    releaseReads();
+    release();
+    // Drain every started operation even when inspection or lock release fails.
+    // Restoring the spy/allowing fixture cleanup happens only after that drain.
+    for (const result of await heldDone)
+      if (result.status === "rejected" && !failures.includes(result.reason))
+        failures.push(result.reason);
+    results = await requestsDone;
+    for (const result of results)
+      if (result.status === "rejected") failures.push(result.reason);
+    readSpy?.mockRestore();
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length)
+    throw new AggregateError(
+      failures,
+      "MC3 concurrent inspection and drain failed",
+    );
+  return {
+    id,
+    results: results.map((result) => {
+      if (result.status !== "fulfilled")
+        throw Error("unreachable rejected request");
+      return result.value;
+    }),
+  };
 }
 describe.skipIf(!enabled)(
   "MC01–18 guarded actual server.ts mounted native acceptance",
@@ -339,58 +445,7 @@ describe.skipIf(!enabled)(
       expect(r.provider).toHaveBeenCalledTimes(1);
     });
     it("MC05: two fresh not_found requests visibly wait for real PG claim lock; exactly one durable winner", async () => {
-      let release!: () => void, locked!: () => void;
-      const ready = new Promise<void>((resolve) => {
-        locked = resolve;
-      });
-      const gate = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      const held = r.client.begin(async (tx) => {
-        await tx`LOCK TABLE gateway_http_requests IN SHARE ROW EXCLUSIVE MODE`;
-        locked();
-        await gate;
-      });
-      await ready;
-      let reads = 0,
-        releaseReads!: () => void;
-      const readGate = new Promise<void>((resolve) => {
-        releaseReads = resolve;
-      });
-      const actualRead = r.terminal.readGatewayHttpResultV2;
-      const readSpy = vi
-        .spyOn(r.terminal, "readGatewayHttpResultV2")
-        .mockImplementation(async (a) => {
-          const committed = await actualRead(a);
-          if (committed.status === "not_found") {
-            reads++;
-            if (reads === 2) releaseReads();
-            await readGate;
-          }
-          return committed;
-        });
-      restore.push(() => readSpy.mockRestore());
-      const id = randomUUID();
-      const first = f.post(id),
-        second = f.post(id);
-      try {
-        await waitFor(
-          async () =>
-            Number(
-              (
-                await r.other`SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%aiag_claim_gateway_http_request_v1%'`
-              )[0]?.n,
-            ) >= 2,
-          "two native claim lock waits not observed",
-        );
-        expect(r.fresh).toHaveBeenCalledTimes(2);
-        expect(r.provider).not.toHaveBeenCalled();
-      } finally {
-        releaseReads();
-        release();
-        await held;
-      }
-      const results = await Promise.all([first, second]);
+      const { id, results } = await concurrentFreshPair(r, f);
       for (const res of results) expect([200, 202]).toContain(res.status);
       const final = await f.post(id);
       expect(final.status).toBe(200);
@@ -1264,18 +1319,57 @@ describe.skipIf(!enabled)(
       expect(r.provider).toHaveBeenCalledTimes(1);
       expect(r.fresh).toHaveBeenCalledTimes(1);
     });
-    it("MC14: native mixed RU/non-RU pool filters owned unreviewed candidate and dispatches only reviewed canonical adapter", async () => {
+    async function withMixedCandidate(
+      run: (upstream: string, candidate: string) => Promise<void>,
+      losePostCommitSnapshotAck = false,
+    ) {
       const upstream = `mc3-${randomUUID()}`,
         candidate = randomUUID();
-      let committed = false;
+      const ownership: CatalogMutationOwnership = { state: "not_started" };
+      const failures: unknown[] = [];
       try {
-        await r.mutateCatalog((db) =>
-          db.begin(async (tx) => {
+        await r.mutateCatalog(
+          async (tx) => {
             await tx`INSERT INTO upstreams(id,provider,ru_residency,enabled) VALUES(${upstream},'openrouter',FALSE,TRUE)`;
             await tx`INSERT INTO model_upstreams(id,model_id,upstream_id,upstream_model_id,price_per_1k_input,price_per_1k_output,markup) SELECT ${candidate}::uuid,id,${upstream},${slug},0.015,0.06,1.8 FROM models WHERE slug=${slug}`;
-          }),
+          },
+          { ownership, losePostCommitSnapshotAck },
         );
-        committed = true;
+        await run(upstream, candidate);
+      } catch (error) {
+        failures.push(error);
+      } finally {
+        try {
+          await r.reconcileMutation();
+          if (ownership.state === "committed") {
+            await r.mutateCatalog(async (tx) => {
+              await tx`DELETE FROM model_upstreams WHERE id=${candidate}::uuid AND upstream_id=${upstream}`;
+              await tx`DELETE FROM upstreams WHERE id=${upstream}`;
+            });
+          }
+          expect(
+            (
+              await r.other`SELECT count(*)::int AS n FROM model_upstreams WHERE id=${candidate}::uuid`
+            )[0]?.n,
+          ).toBe(0);
+          expect(
+            (
+              await r.other`SELECT count(*)::int AS n FROM upstreams WHERE id=${upstream}`
+            )[0]?.n,
+          ).toBe(0);
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length)
+        throw new AggregateError(
+          failures,
+          "MC3 mixed fixture and cleanup failed",
+        );
+    }
+    it("MC14: native mixed RU/non-RU pool filters owned unreviewed candidate and dispatches only reviewed canonical adapter", async () => {
+      await withMixedCandidate(async () => {
         await r.mutateCatalog(
           (db) =>
             db`UPDATE upstreams SET ru_residency=TRUE WHERE id='openrouter'`,
@@ -1292,27 +1386,129 @@ describe.skipIf(!enabled)(
         expect(prepared.model.candidates[0].upstream_id).toBe("openrouter");
         expect(r.provider).toHaveBeenCalledTimes(1);
         expect((await f.facts()).admission[0]?.upstream_id).toBe("openrouter");
+      });
+    });
+    it("MC18 review fix: committed catalog mutation survives lost snapshot ACK and restores only known owned changes", async () => {
+      const ownership: CatalogMutationOwnership = { state: "not_started" };
+      await expect(
+        r.mutateCatalog(
+          (db) => db`UPDATE models SET status='frozen' WHERE slug=${slug}`,
+          { ownership, losePostCommitSnapshotAck: true },
+        ),
+      ).rejects.toThrow("post-commit snapshot ACK loss");
+      expect(ownership.state).toBe("committed");
+      expect(
+        (await r.other`SELECT status FROM models WHERE slug=${slug}`)[0]
+          ?.status,
+      ).toBe("frozen");
+      await r.restoreCatalog();
+      expect(
+        (await r.other`SELECT status FROM models WHERE slug=${slug}`)[0]
+          ?.status,
+      ).toBe("live");
+    });
+    it("MC18 review fix: uncertain catalog commit ACK reconciles native committed intent before restore", async () => {
+      const ownership: CatalogMutationOwnership = { state: "not_started" };
+      const actualBegin = r.client.begin;
+      const ackLost = Error("MC3 simulated catalog commit ACK loss");
+      const spy = vi
+        .spyOn(r.client, "begin")
+        .mockImplementationOnce(async (...args) => {
+          await Reflect.apply(actualBegin, r.client, args);
+          expect(ownership.state).toBe("uncertain");
+          throw ackLost;
+        });
+      try {
+        await expect(
+          r.mutateCatalog(
+            (db) => db`UPDATE models SET status='frozen' WHERE slug=${slug}`,
+            { ownership },
+          ),
+        ).rejects.toBe(ackLost);
+        expect(ownership.state).toBe("committed");
+        expect(
+          (await r.other`SELECT status FROM models WHERE slug=${slug}`)[0]
+            ?.status,
+        ).toBe("frozen");
       } finally {
-        if (committed) {
-          await r.mutateCatalog((db) =>
-            db.begin(async (tx) => {
-              await tx`DELETE FROM model_upstreams WHERE id=${candidate}::uuid AND upstream_id=${upstream}`;
-              await tx`DELETE FROM upstreams WHERE id=${upstream}`;
-            }),
-          );
-          expect(
-            (
-              await r.other`SELECT count(*)::int AS n FROM model_upstreams WHERE id=${candidate}::uuid`
-            )[0]?.n,
-          ).toBe(0);
-          expect(
-            (
-              await r.other`SELECT count(*)::int AS n FROM upstreams WHERE id=${upstream}`
-            )[0]?.n,
-          ).toBe(0);
-        }
+        spy.mockRestore();
+        await r.restoreCatalog();
       }
     });
+    it("MC18 review fix: mixed-pool post-commit snapshot ACK loss still cleans both owned rows", async () => {
+      await expect(
+        withMixedCandidate(async () => {
+          throw Error("must not run after snapshot failure");
+        }, true),
+      ).rejects.toThrow("post-commit snapshot ACK loss");
+      await r.restoreCatalog();
+    });
+    it.each([
+      "early-assertion",
+      "barrier-failure",
+      "inspection-and-drain-failure",
+    ] as const)(
+      "MC05 review fix: %s drains both started mounted requests before cleanup",
+      async (stage) => {
+        const disposable = await owner(r);
+        const original = Error(`MC3 injected ${stage}`),
+          drainError = Error("MC3 injected completion rejection");
+        const completed: number[] = [];
+        let failure: unknown;
+        try {
+          try {
+            await concurrentFreshPair(r, disposable, {
+              ...(stage === "barrier-failure"
+                ? {
+                    afterStart: () => {
+                      throw original;
+                    },
+                  }
+                : {
+                    afterLock: () => {
+                      throw original;
+                    },
+                  }),
+              completed: (index) => {
+                completed.push(index);
+                if (stage === "inspection-and-drain-failure" && index === 0)
+                  throw drainError;
+              },
+            });
+          } catch (error) {
+            failure = error;
+          }
+          expect(completed.sort()).toEqual([0, 1]);
+          if (stage === "inspection-and-drain-failure")
+            expect((failure as AggregateError).errors).toEqual([
+              original,
+              drainError,
+            ]);
+          else expect(failure).toBe(original);
+          const settled = await disposable.facts();
+          expect(settled.mapping).toHaveLength(1);
+          expect(settled.ledger).toHaveLength(1);
+          expect(r.provider).toHaveBeenCalledTimes(1);
+        } finally {
+          await disposable.cleanup();
+        }
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        const after = await disposable.facts();
+        for (const field of [
+          "mapping",
+          "admission",
+          "result",
+          "ledger",
+          "bucket",
+          "context",
+          "event",
+          "balance",
+        ] as const)
+          expect(after[field]).toHaveLength(0);
+        expect(r.provider).toHaveBeenCalledTimes(1);
+      },
+      15000,
+    );
     it("MC18/02: actual runtime pool closure makes authentication unavailable; no cached replay grant", async () => {
       const { id } = await settle();
       const facts = await f.facts();
