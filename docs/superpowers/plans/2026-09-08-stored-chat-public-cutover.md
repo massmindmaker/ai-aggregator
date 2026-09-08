@@ -131,3 +131,5 @@ Verification последовательно: focused HTTP units; accepted B1/B2/
 ## Stop/acceptance boundary
 
 Независимый review должен явно принять режим/HTTP/RPM/receipt решения или изменить draft до implementation. После реализации закрываются только restricted mounted source и local evidence. Отдельно остаются controlled runtime activation, existing-org opening balances/policies/inflight, internal receipt consumers, refund rails/cutover, recovery automation/unknown operations и весь согласованный v1 modality scope. Live env, production migration/deploy, paid upstream и внешняя публикация не разрешены этим документом.
+
+Root product review: staged режим, default legacy, fresh auth + RPM для replay,256KiB body bound, fixed HTTP statuses и exact charge headers приняты как рабочие defaults для локальной реализации. Separate supplier receipt/AM cutover и все итоговые modalities остаются обязательными. Это не финальное architecture/spec review: C1b и независимый review этого draft ещё открыты, MC implementation не начат.
