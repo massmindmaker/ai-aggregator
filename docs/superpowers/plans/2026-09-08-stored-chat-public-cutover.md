@@ -1,6 +1,6 @@
 # AG — staged mounted stored-chat HTTP integration
 
-Статус: **DRAFT для независимого product/financial/TypeScript review. Реализация и переключение runtime ещё не разрешены этим документом.** Подготовлен 08.09.2026 после C1a (`a0b6eb8`, локальная приёмка `1382f9b`); C1b ещё реализуется и должен быть отдельно принят до начала этого этапа. Документ изменяет только план. Все проверки ниже — будущая acceptance matrix, не результаты запусков.
+Статус: **APPROVED для локальной MC реализации после независимого architecture/spec review. Runtime переключение и production не разрешены этим документом.** Подготовлен 08.09.2026 после C1a (`a0b6eb8`, локальная приёмка `1382f9b`); C1b принят отдельно: source0f0b395/testfixfb849ae, acceptancefbccc4f. Документ изменяет только план. Все проверки ниже — будущая acceptance matrix, не результаты запусков.
 
 Допущение: первый controlled cutover покрывает только stored plaintext nonstream chat уже принятого executor contract. Это временный ограниченный режим gateway, а не сокращение согласованного продуктового v1. Streaming, BYOK, tools, другие модальности и batches остаются отдельными обязательными gates полной приёмки. Ни число закрытых gates, ни этот режим не дают108/production readiness.
 
@@ -195,3 +195,5 @@ Root product review: staged режим, default legacy, fresh auth + RPM для 
 Architecture review round1: три P2 addressed в этом draft — nullable SID, concrete fresh-preparation inventory и полный source-discriminated mapper. Root выбрал snapshot routing policy (не midflight revocation), fresh uncached live model query и30s pre-dispatch window как explicit local defaults. Независимое повторное review ещё требуется; MC coding не запущен.
 
 Architecture review round2: уточнены разные исходы deadline доadmission и послеheld; все run discriminants теперь имеют явный HTTP путь. Scoped повторное review pending, MC source не начат.
+
+Final architecture/spec review784de06: Approved, все3P2 и уточнение deadline/runvariants закрыты. Root разрешил локальный MC1 из полного private brief; MC2/MC3 зависят от принятого MC1 и своих конкретных briefs. Это не mounted source acceptance и не runtime activation.
