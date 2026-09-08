@@ -1,6 +1,6 @@
 # AG-P1 — локальная приёмка денежного пути
 
-Статус на 08.09.2026: **основание принято частями; весь AG-P1 ещё не принят**. Публичный chat продолжает legacy execution. Этот указатель связывает принятые узкие проверки с оставшимися продуктовыми критериями, без автоматического повышения 108-балльной оценки.
+Статус на 08.09.2026: **основание принято частями; весь AG-P1 ещё не принят**. По умолчанию chat сохраняет legacy execution. Ограниченный stored_chat_only маршрут теперь принят локально; live mode не переключался. Этот указатель связывает принятые узкие проверки с оставшимися продуктовыми критериями, без автоматического повышения 108-балльной оценки.
 
 | Принятый блок | Source | Авторитетный контракт и evidence |
 |---|---|---|
@@ -13,10 +13,12 @@
 | Чистая native установка текущих миграций | `f4cd433`, SQL `a0b6eb8` | clean71: 71 apply, повтор71 skip; собственная временная БД удалена, canonical test DB неизменна; это не production runner parity |
 | Типизированный C1b bridge и sole terminal seams | `0f0b395`, test fix `fb849ae` | [C1b](../../superpowers/plans/2026-09-08-http-terminal-recovery.md): baseline274/regression403 на candidate, final native12/types/lint и independent Approved |
 
+| Mounted plaintext HTTP и native verification | `ac23cae`, harness `cd37771`, test fix `1c072b3` | [MC acceptance](../../superpowers/plans/2026-09-08-stored-chat-public-cutover.md): baseline315, final native46, types/lint и independent Approved; явные границы evidence и default legacy |
+
 ## Открытые критерии
 
-1. **Граница C1b:** локальные wrappers/seams и закрытый real-driver harness приняты; это ещё не mounted HTTP проверка.
-2. **Mounted HTTP:** public route использует новый executor; replay проходит по сохранённой identity до изменяемых моделей/цен/spending guards. Fresh credential scope проверяется всегда. Один provider effect и одна финансовая проводка при retry/обрыве.
+1. **C1b → mounted:** локальная связка принята в restricted plaintext режиме; production переключение остаётся открытым.
+2. **Mounted HTTP:** локально подтверждены новый executor, replay до изменяемых моделей/политики, fresh auth/RPM, одно исполнение и списание при retry. Остались live rollout, opening balances и inventory/drain остальных writers; синтетический транспорт не доказывает production upstream.
 3. **Полное покрытие денежных маршрутов:** включённые modalities используют новый учёт; неподдержанные пути закрываются до provider/queue. Временный plaintext gate не сокращает согласованный итоговый состав продукта ради балла.
 4. **Receipt и восстановление:** клиент получает authoritative расход в точных единицах; supplier valuation отдельна. Неизвестный outcome не даёт права повторно запускать модель. Нужны operator reconciliation, refund/debt и переход opening balances.
 5. **Сквозная приёмка:** пополнение RUB/TON → доступ → вызов → usage → возврат; независимый автор и earnings. Локальные synthetic fixtures не подтверждают платный upstream, mainnet или production.

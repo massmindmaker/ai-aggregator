@@ -42,6 +42,8 @@ Aggregator владеет Web, gateway, model catalog, consumer/author money и 
 
 [Состояние трёх проектов](consolidation/2026-09-07-pause-checkpoint.md), [функциональный F-срез108](ecosystem/2026-09-07-functional-checkpoint.md). Исходная формальная I/T/O приёмка не подменяется аналитическим F. Следующий AG этап — quota v2, public route composition затем recovery/refund cutover; новый executor пока не подключён.
 
-**Текущий шаг gateway:** MC1 HTTP/config contract `41ede0c` принят локально после независимого TS/spec review (26 unit tests, types/lint PASS). [MC2 composition](superpowers/plans/2026-09-08-stored-chat-public-cutover.md) `ac23cae` принят (570tests/types/lint, independent Approved); следующий шаг — mounted native MC3. Production switch ещё не выполнен. Режим по умолчанию остаётся legacy.
+**Текущий шаг gateway:** MC1 HTTP/config contract `41ede0c` принят локально после независимого TS/spec review (26 unit tests, types/lint PASS). [MC2 composition](superpowers/plans/2026-09-08-stored-chat-public-cutover.md) `ac23cae` принят (570tests/types/lint, independent Approved); MC3/MC4 приняты (`cd37771`, test fix `1c072b3`): baseline315 и final native46 PASS, independent Approved. Production switch ещё не выполнен. Режим по умолчанию остаётся legacy.
 
 **TON:** [AG-TON1 pure contract](superpowers/plans/2026-09-07-ton-payments.md) `a5731d4` принят локально (63tests/types/lint, independent financial Approved). Durable invoice, verifier и реальные платежи ещё открыты.
+
+**Следующий финансовый этап:** [TON invoice core](superpowers/plans/2026-09-08-ton-invoice-core.md) — дизайн принят; реализация с отдельной disposable test DB может получить ownership после закрытого MC3. Сохраняются совместимость RUB refund, PAYG ceiling и отдельный mainnet/release gate.
