@@ -73,7 +73,7 @@ Gate не удаляет source модальностей и не объявля�
 | Candidate support | Fresh DB facts повторно связываются с process-owned reviewed profile и registered admitted adapter; existing createStoredChatAttempt выбирает один кандидат и фиксирует quote/mechanics. Нет matching profile/adapter/valid quote →503 STORED_CHAT_UNAVAILABLE. Не расширять registry по client JSON |
 | Config decimals | Startup capture исходной CACHING_DISCOUNT string, при отсутствии literal '0.5' из existing default; валидировать existing exact charge parser. Не восстанавливать через String(Number). Это две представления одного setting для legacy/restricted, не две настройки. Invalid restricted config отказывает startup. DEFAULT_MARKUP не заменяет точный model_upstreams.markup |
 | Token default | Existing validated GATEWAY_DEFAULT_MAX_OUTPUT_TOKENS default4096. Client max_tokens уже B2 validated; existing profile clamp/quote остаётся. Ни public max budget, ни price override не добавлять |
-| `preDispatchDeadlineAt` | Один server Date.now snapshot непосредственно перед синхронным createStoredChatAttempt после fresh DB/policy work, deadline +30000ms, ISO UTC; фиксированный local contract constant, caller не задаёт. Между handle/claim/run не продлевать. SQL clock решает истечение; истёкший deadline даёт existing durable ADMISSION_DEADLINE_EXPIRED. Clock skew не даёт обещания30s provider execution: это только pre-dispatch admission window |
+| `preDispatchDeadlineAt` | Один server Date.now snapshot непосредственно перед синхронным createStoredChatAttempt после fresh DB/policy work, deadline +30000ms, ISO UTC; фиксированный local contract constant, caller не задаёт. Между handle/claim/run не продлевать. SQL clock решает истечение. Отказ HTTP-admit до admission сохраняет durable ADMISSION_DEADLINE_EXPIRED. Истечение после held на mark-dispatch запускает accepted cancel path, не negative; confirmed cancelled_no_charge читается как unavailable409, unknown cancel ACK даёт503. Clock skew не даёт обещания30s provider execution: это только pre-dispatch admission window |
 
 Нужны focused RED/negative tests всех строк, включая top-level RU-only при policyfalse, mixed RU/nonRU PII pool, unknown keys, cache с ранееlive моделью после DBfreeze, price revision изDB, default mode change наreplay и отсутствующий SID с включённой/выключенной session quota. В mounted MC06/MC14 добавить эти случаи; новые guards не исполняются на saved result branch.
 
@@ -112,6 +112,15 @@ Gate не удаляет source модальностей и не объявля�
 | Прямой HttpStorageConflictError из read/claim |409 / REQUEST_CONFLICT / Request conflicts with stored state / request_error; generic error не доказывает fingerprint mismatch |
 | HttpStorageUnavailableError/DB/Redis/unknown exception либо run reconciliation |503 / REQUEST_STATE_UNAVAILABLE / Request state unavailable / server_error; Retry-After2, сохранить key/body |
 | Startup invalid enum/exact config |Процесс не стартует; нет HTTPfallback и чтения malformed config изrequest |
+
+Полная таблица результатов `handle.run()` при обязательных C1b seams:
+
+| Discriminant | HTTP действие |
+|---|---|
+| settled_success / rejected / replay / cancelled_no_charge | Только validated read-v2 текущей identity, затем durable mapping200/terminal status/202/409/410. Не сериализовать guessed run payload; cancellation не становится negative. Ошибка read классифицируется как прямой access/conflict/unavailable из таблицы выше |
+| reconciliation_required |503 REQUEST_STATE_UNAVAILABLE без попытки восстановить утраченный discriminant и без нового run |
+| not_started | При обязательном rejectUnstarted это нарушение composition contract:503 REQUEST_STATE_UNAVAILABLE, не объявлять безопасный бесплатный отказ |
+| Неизвестный/malformed result либо throw |503 REQUEST_STATE_UNAVAILABLE, no fallback/provider retry |
 
 Для новых503 route errors ставить Retry-After2 без обещания автоматического восстановления. Бюджетные402/429 возвращаются только через validated C1 rejected row; operational RPM429 отдельно, по existing counter contract. Никаких raw exception.message/stack/cause в HTTP или generic logs. Неподдержанный known feature определяется bounded parsed JSON доB2, но не создаёт альтернативную canonical identity. Обязательный Idempotency-Key не применяется к другим unsupported paid routes, чтобы501 не требовал бессмысленного ключа.
 
@@ -184,3 +193,5 @@ Verification последовательно: focused HTTP units; accepted B1/B2/
 Root product review: staged режим, default legacy, fresh auth + RPM для replay,256KiB body bound, fixed HTTP statuses и exact charge headers приняты как рабочие defaults для локальной реализации. Separate supplier receipt/AM cutover и все итоговые modalities остаются обязательными. Это не финальное architecture/spec review: C1b и независимый review этого draft ещё открыты, MC implementation не начат.
 
 Architecture review round1: три P2 addressed в этом draft — nullable SID, concrete fresh-preparation inventory и полный source-discriminated mapper. Root выбрал snapshot routing policy (не midflight revocation), fresh uncached live model query и30s pre-dispatch window как explicit local defaults. Независимое повторное review ещё требуется; MC coding не запущен.
+
+Architecture review round2: уточнены разные исходы deadline доadmission и послеheld; все run discriminants теперь имеют явный HTTP путь. Scoped повторное review pending, MC source не начат.
