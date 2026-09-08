@@ -68,3 +68,5 @@ git diff --check -- packages/api-gateway/src/middleware/auth-plan04.ts packages/
 - Existing `last_used_at` remains asynchronous and best-effort; it cannot make a failed authorization succeed and must never carry the raw bearer into SQL, logs, or context.
 
 Root plan review: approved for narrow local implementation. Preserve lookup-time versus transaction-time revocation boundary; use sanitized503 for resolver outages. Independent source review remains required before acceptance.
+
+Accepted locally: 0fde334. Independent TypeScript/spec review Approved. RED: four failures on old cache-backed implementation; GREEN: 11 focused auth tests, source/test strict types and scoped ESLint PASS. Tests exercise default SQL path with mocks, not native DB or production. Extra DB lookup per request and lookup-time revocation boundary remain explicit.
