@@ -450,12 +450,15 @@ export async function runTonCoreNativeTests(
           ) {
             let cleanupStage = "cleanup_identity";
             try {
+              cleanupStage = "cleanup_child_group";
+              assertChildGroupStopped(evidence.child);
               evidence.targetSessionsAfterChild = await sessions(
                 canonical,
                 ownedOid,
                 adminPid,
               );
               assertZeroSessions(evidence.targetSessionsAfterChild);
+              cleanupStage = "cleanup_identity";
               await identity(target, TARGET, ownedOid);
               await marker(target, ownedMarker);
               cleanupStage = "target_close";
@@ -559,6 +562,10 @@ async function verifyMigrationRollback(client: TestDatabaseClient) {
     throw new Error("rollback_probe");
 }
 
+function assertChildGroupStopped(child: ChildResult | undefined) {
+  if (child?.processGroupStopped === false) throw new Error("child_group_unverified");
+}
+
 function assertZeroSessions(count: number) {
   if (count !== 0) throw new Error("sessions");
 }
@@ -610,6 +617,9 @@ export interface ChildResult {
   skipped: number;
   failureCodes?: string[];
   failedTestIndexes?: number[];
+  processGroupStopped?: boolean;
+  committedFixtureBeforeStop?: boolean;
+  terminationSignals?: NodeJS.Signals[];
 }
 const SUITE =
   "packages/database/scripts/__tests__/ton-payments.native.integration.test.ts";
@@ -647,10 +657,14 @@ async function runChild(
       size = 0,
       invalid = false;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
+    let closeAckTimer: ReturnType<typeof setTimeout> | undefined;
+    let finishing = false;
+    result.terminationSignals = [];
     const signal = (sig: NodeJS.Signals) => {
       if (child.pid) {
         try {
           process.kill(-child.pid, sig);
+          if (!result.terminationSignals!.includes(sig)) result.terminationSignals!.push(sig);
         } catch {
           /* already gone */
         }
@@ -658,7 +672,11 @@ async function runChild(
     };
     const stop = () => {
       signal("SIGTERM");
-      killTimer ??= setTimeout(() => signal("SIGKILL"), 10_000);
+      killTimer ??= setTimeout(() => {
+        signal("SIGKILL");
+        // A missing close event cannot keep the parent hung indefinitely.
+        closeAckTimer ??= setTimeout(() => { invalid = true; void finish(null); }, 5_000);
+      }, 10_000);
     };
     const parentExit = () => signal("SIGKILL");
     const parentSignal = () => { result.timedOut = true; stop(); };
@@ -681,33 +699,36 @@ async function runChild(
     child.on("error", () => {
       invalid = true;
     });
-    child.on("close", async (code) => {
+    const finish = async (code: number | null) => {
+      if (finishing) return;
+      finishing = true;
       clearTimeout(timer);
       clearTimeout(killTimer);
-      process.removeListener("exit", parentExit);
-      process.removeListener("SIGTERM", parentSignal);
-      process.removeListener("SIGINT", parentSignal);
+      clearTimeout(closeAckTimer);
       result.exitCode = code;
+      if (env.AIAG_TON_CORE_FIXTURE_HANG_AFTER_COMMIT === "1")
+        result.committedFixtureBeforeStop = output.includes("TON_FIXTURE_COMMITTED_HANG_READY");
       // The runner owns only this detached group. A dead leader is not proof
       // that Vitest workers stopped; terminate/reap the owned group before DB cleanup.
-      if (child.pid) {
-        signal("SIGTERM");
-        const until = Date.now() + 10_000;
-        for (;;) {
-          let alive = true;
-          try {
-            process.kill(-child.pid, 0);
-          } catch (error) {
-            alive = (error as NodeJS.ErrnoException).code !== "ESRCH";
-          }
-          if (!alive) break;
-          if (Date.now() >= until) {
-            signal("SIGKILL");
-            invalid = true;
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 50));
+      const groupAlive = () => {
+        if (!child.pid) return false;
+        try { process.kill(-child.pid, 0); return true; }
+        catch (error) { return (error as NodeJS.ErrnoException).code !== "ESRCH"; }
+      };
+      const waitStopped = async (ms: number) => {
+        const until = Date.now() + ms;
+        while (groupAlive()) {
+          if (Date.now() >= until) return false;
+          await new Promise((done) => setTimeout(done, 50));
         }
+        return true;
+      };
+      if (child.pid) signal("SIGTERM");
+      result.processGroupStopped = await waitStopped(10_000);
+      if (!result.processGroupStopped) {
+        signal("SIGKILL");
+        result.processGroupStopped = await waitStopped(5_000);
+        invalid = true;
       }
       try {
         const report = JSON.parse(output);
@@ -754,8 +775,14 @@ async function runChild(
       } catch {
         result.failed = 1;
       }
+      process.removeListener("exit", parentExit);
+      process.removeListener("SIGTERM", parentSignal);
+      process.removeListener("SIGINT", parentSignal);
+      clearTimeout(killTimer);
+      clearTimeout(closeAckTimer);
       resolve(result);
-    });
+    };
+    child.on("close", (code) => { void finish(code); });
   });
 }
 

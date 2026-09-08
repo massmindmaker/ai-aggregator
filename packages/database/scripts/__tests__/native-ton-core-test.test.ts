@@ -553,3 +553,65 @@ describe("native child command and bounded report",()=>{
   childOutput(output,code);const result=await s.runChild();expect(result).toMatchObject({ok:false,cleanup:'dropped',canonicalUnchanged:true});expect(JSON.stringify(result)).not.toContain('postgres://secret');
  });
 });
+
+describe("owned child process-group lifecycle", () => {
+  it.each(["timeout", "SIGTERM", "SIGINT", "exit", "orphan_worker"] as const)("bounds %s and signals only the spawned detached group", async (cause) => {
+    vi.useFakeTimers();
+    const s = setup();
+    const pid = 876543;
+    const child = Object.assign(new EventEmitter(), { pid, stdout: new EventEmitter(), stderr: new EventEmitter() });
+    let started!: () => void;
+    const ready = new Promise<void>((resolveReady) => { started = resolveReady; });
+    let alive = true;
+    let closed = false;
+    const kill = vi.spyOn(process, "kill").mockImplementation((target, signal) => {
+      expect(target).toBe(-pid);
+      if (!alive) throw Object.assign(new Error("gone"), { code: "ESRCH" });
+      if (signal === "SIGKILL") {
+        alive = false;
+        if (!closed) { closed = true; queueMicrotask(() => child.emit("close", null)); }
+      }
+      return true;
+    });
+    vi.mocked(spawn).mockImplementation(() => { started(); return child as unknown as ReturnType<typeof spawn>; });
+    const listenersBefore = { exit: process.listenerCount("exit"), SIGTERM: process.listenerCount("SIGTERM"), SIGINT: process.listenerCount("SIGINT") };
+    try {
+      const running = s.runChild();
+      await ready;
+      if (cause === "timeout") await vi.advanceTimersByTimeAsync(180_000);
+      else if (cause === "orphan_worker") { closed = true; child.emit("close", 0); }
+      else {
+        const listener = (cause === "exit" ? process.listeners("exit") : process.listeners(cause)).at(-1)!;
+        Reflect.apply(listener, process, cause === "exit" ? [0] : []);
+      }
+      await vi.advanceTimersByTimeAsync(15_100);
+      const result = await running;
+      expect(result).toMatchObject({ ok: false, cleanup: "dropped", canonicalUnchanged: true, targetSessionsAfterChild: 0, child: { processGroupStopped: true } });
+      expect(kill.mock.calls.some(([, sig]) => sig === "SIGKILL")).toBe(true);
+      if (cause !== "exit") expect(kill.mock.calls.some(([, sig]) => sig === "SIGTERM")).toBe(true);
+      expect(process.listenerCount("exit")).toBe(listenersBefore.exit);
+      expect(process.listenerCount("SIGTERM")).toBe(listenersBefore.SIGTERM);
+      expect(process.listenerCount("SIGINT")).toBe(listenersBefore.SIGINT);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); kill.mockRestore(); }
+  });
+});
+
+it("bounds missing close acknowledgement and refuses DROP when the group remains unverified", async () => {
+  vi.useFakeTimers();
+  const s = setup();
+  const child = Object.assign(new EventEmitter(), { pid: 876544, stdout: new EventEmitter(), stderr: new EventEmitter() });
+  let started!: () => void;
+  const ready = new Promise<void>((resolveReady) => { started = resolveReady; });
+  vi.mocked(spawn).mockImplementation(() => { started(); return child as unknown as ReturnType<typeof spawn>; });
+  const kill = vi.spyOn(process, "kill").mockImplementation((pid) => { expect(pid).toBe(-876544); return true; });
+  try {
+    const running = s.runChild();
+    await ready;
+    await vi.advanceTimersByTimeAsync(210_100);
+    expect(await running).toMatchObject({ ok: false, cleanup: "cleanup_unverified", canonicalUnchanged: true, gaps: ["cleanup_child_group_unverified"], child: { timedOut: true, processGroupStopped: false } });
+    noDrop(s.canonical);
+    expect(s.target.closed).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { vi.useRealTimers(); kill.mockRestore(); }
+});

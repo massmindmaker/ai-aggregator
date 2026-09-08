@@ -161,7 +161,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(result.rows[0].dispatch_function).toContain(
       "aiag_mark_gateway_charge_dispatched",
     );
-    expect(Number(result.rows[0].table_count)).toBe(107);
+    expect(Number(result.rows[0].table_count)).toBe(110);
   });
 
   it("verifies TON immutable schema, invoker entrypoints and exact mirror", async () => {
@@ -185,17 +185,17 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       });
       expect(result.rows[0]?.name).toBe(table);
     }
-    for (const signature of [
-      "aiag_create_ton_invoice_v1(uuid,uuid,jsonb,text)",
-      "aiag_read_ton_invoice_v1(uuid,uuid,uuid)",
-      "aiag_expire_ton_invoice_v1(uuid)",
-      "aiag_settle_ton_invoice_v1(uuid,jsonb)",
-    ]) {
-      const result = await client.query({
-        text: "SELECT prosecdef FROM pg_proc WHERE oid=to_regprocedure($1)",
-        values: [signature],
-      });
-      expect(result.rows).toEqual([{ prosecdef: false }]);
+    const expected = [...mirror.matchAll(/CREATE FUNCTION (\w+)\([^]*? AS \$\$([^]*?)\$\$;/g)];
+    expect(expected).toHaveLength(18);
+    const applied = await client.query<{ name: string; definition: string; invoker: boolean; public_execute: boolean; config: string[] }>({
+      text: "SELECT p.proname AS name,pg_get_functiondef(p.oid) AS definition,NOT p.prosecdef AS invoker,p.proconfig AS config,EXISTS(SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') AS public_execute FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname=ANY($1::text[]) ORDER BY p.proname",
+      values: [expected.map((match) => match[1])],
+    });
+    expect(applied.rows).toHaveLength(18);
+    for (const match of expected) {
+      const row = applied.rows.find((entry) => entry.name === match[1]);
+      expect(row).toMatchObject({ invoker: true, public_execute: false, config: ["search_path=pg_catalog, public, pg_temp"] });
+      expect(row?.definition.split("$function$")[1]?.trim()).toBe(match[2].trim());
     }
     const triggers = await client.query<{ name: string; enabled: string }>({
       text: "SELECT tgname AS name,tgenabled AS enabled FROM pg_trigger WHERE tgname=ANY($1::text[]) ORDER BY tgname",

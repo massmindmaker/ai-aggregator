@@ -51,6 +51,25 @@ describe("TON invoice wrappers", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it.each([
+    ["grantMicrocredits", "03"], ["grantMicrocredits", "9223372036854775808"],
+    ["recipient", "not-an-address"], ["priceRevision", "x".repeat(17000)],
+    ["quote.sourcePrice.unit", "rub_kopecks"], ["quote.sourcePrice.amountAtomic", "4"],
+    ["quote.fx.sourceUnit", "rub_kopecks"], ["quote.fx.denominator", "0"],
+    ["quote.fx.numerator", "9223372036854775807"], ["quote.fx.rounding", "bankers"],
+    ["quote.additionalFeeAtomic", "-1"], ["quote.additionalFeeAtomic", "9223372036854775807"],
+    ["quote.amountAtomic", "6"], ["quote.asset.decimals", 6], ["invoiceId", "client-chosen"],
+  ])("rejects malformed %s without a mutating query", async (field, value) => {
+    const { db, calls } = recordingDatabase([[{ id: org }], []]);
+    const malformed = JSON.parse(JSON.stringify(input()));
+    const parts = String(field).split(".");
+    let target = malformed;
+    for (const part of parts.slice(0, -1)) target = target[part];
+    target[parts.at(-1)!] = value;
+    await expect(createTonInvoice(db, { actorUserId: actor, orgId: org }, malformed, { allowlist: [asset] })).rejects.toThrow();
+    expect(calls.every((call) => call.text.startsWith("SELECT id FROM"))).toBe(true);
+  });
+
   it("validates credit shape before calling the settlement SQL entrypoint", async () => {
     const { db, calls } = recordingDatabase();
     await expect(settleTonInvoice(db, "00000000-0000-4000-8000-000000000003", {

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Client as PgClient } from "pg";
+import type { Database } from "../../src";
 
 import type { Asset } from "@aiag/shared/ton-payment-contract";
 import type {
@@ -88,7 +89,7 @@ export interface TonNativeFixture {
   beginRealRubRefund(payment: { paymentId: string; providerPaymentId: string; providerOrderId: string }): Promise<unknown>;
   finalizeRealRubRefund(payment: { paymentId: string; providerPaymentId: string; providerOrderId: string }): Promise<unknown>;
   replayLastRealRubRefund(): Promise<unknown>;
-  openSecondary(): Promise<{ client: TestDatabaseClient; db: TonPaymentDatabase; close(): Promise<void> }>;
+  openSecondary(): Promise<{ client: TestDatabaseClient; db: TonPaymentDatabase; refundDb: Database; close(): Promise<void> }>;
   close(): Promise<void>;
 }
 
@@ -181,7 +182,9 @@ export async function openTonFixture(options: { initialPayg?: string; initialDeb
         const secondary = await openHeldClient(process.env);
         live.add(secondary);
         let closed = false;
-        return { client: secondary.client, db: transactionDatabase(secondary.client), async close() {
+        const { drizzle } = await import("drizzle-orm/node-postgres");
+        const schema = await import("../../src/schema");
+        return { client: secondary.client, db: transactionDatabase(secondary.client), refundDb: drizzle(secondary.raw, { schema }), async close() {
           if (closed) return;
           closed = true;
           live.delete(secondary);
