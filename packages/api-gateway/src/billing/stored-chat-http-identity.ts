@@ -71,10 +71,9 @@ function parseBody(body: unknown): Readonly<{
   const requestedMode = hasMode
     ? parseRequestedMode(detached.aiag_mode)
     : null;
-  const supportedBody: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(detached)) {
-    if (key !== 'aiag_mode') supportedBody[key] = value;
-  }
+  const supportedBody = Object.fromEntries(
+    Object.entries(detached).filter(([key]) => key !== 'aiag_mode'),
+  );
   if (typeof supportedBody.model !== 'string') badRequest();
   const parsed = parseStoredChatBody(supportedBody, supportedBody.model);
   const messages = Object.freeze(

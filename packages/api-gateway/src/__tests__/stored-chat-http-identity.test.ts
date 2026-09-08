@@ -166,6 +166,13 @@ describe('stored chat HTTP identity', () => {
     badRequest(() => captureStoredChatHttpIdentity(args({ body }))),
   );
 
+  it.each([null, 'ignored', 42])('rejects own JSON __proto__ field %#', (value) => {
+    const body: unknown = JSON.parse(
+      `{"model":"${model}","messages":[{"role":"user","content":"private prompt"}],"__proto__":${JSON.stringify(value)}}`,
+    );
+    badRequest(() => captureStoredChatHttpIdentity(args({ body })));
+  });
+
   it('rejects accessors without invoking their getters', () => {
     const body = request();
     let invoked = false;
