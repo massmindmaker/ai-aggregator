@@ -1,5 +1,15 @@
 # Статус developer memory
 
+## Refresh принятого C1 — 08.09.2026, 01:38 UTC
+
+Производная навигация только для принятого C1; источник приёмки остаётся в [AG-P1](../product/acceptance/AG-P1.md), а не в этом статусе.
+
+| Слой | Проверенный результат | Граница |
+|---|---|---|
+| Graphify AG | `graphify update .` завершён под `flock /tmp/ai-ecosystem-build.lock`; JSON readback: 9710 nodes / 14836 links / 692 communities, `built_at_commit` `fbccc4f`, mtime 01:38 UTC. Focused graph readback: `createStoredChatAttempt`, `rejectUnstartedGatewayHttpRequest`, `recoverGatewayHttpSettlement`. | AST-only, без LLM/API. `fbccc4f` принимает C1b-документацию; после него рабочее дерево содержит только незакоммиченные изменения plan/acceptance формата, не новый runtime source. Индекс не доказывает mounted public cutover, 108/108 или production. |
+| Serena AG | Existing locator `ai-hub/development-entrypoint` прочитан, дополнен C1 locator и прочитан обратно через supported Serena CLI; existing 24 legacy memories сохранены. Serena health-check подтвердил registered project `aiag-new` и LSP cache 652 TypeScript entries. | Это locator и focused navigation, не полный reindex. Текущий Codex harness не предоставляет Serena MCP tool-calls; глобальная конфигурация не менялась. |
+| LightRAG / Brain / Memory Graph | Без записи. Existing LightRAG continuation locator, Brain/Codex locators и Memory Graph не менялись. | Повторную загрузку без dedupe/readback не выполнять; Memory Graph остаётся read-only до доказанного concurrency contract. |
+
 ## Refresh принятого snapshot — 08.09.2026, 00:36 UTC
 
 Производная навигация к [принятому continuation](2026-09-08-development-continuation.md); не новая приёмка продукта.
