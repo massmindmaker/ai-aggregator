@@ -12,9 +12,11 @@
 | Неизменный admission reject и восстановление settlement | `a0b6eb8` | [C1a](../../superpowers/plans/2026-09-08-http-terminal-recovery.md): baseline263, native50, независимые review закрыты |
 | Чистая native установка текущих миграций | `f4cd433`, SQL `a0b6eb8` | clean71: 71 apply, повтор71 skip; собственная временная БД удалена, canonical test DB неизменна; это не production runner parity |
 
+| Типизированный C1b bridge и sole terminal seams | `0f0b395`, test fix `fb849ae` | [C1b](../../superpowers/plans/2026-09-08-http-terminal-recovery.md): baseline274/regression403 на candidate, final native12/types/lint и independent Approved |
+
 ## Открытые критерии
 
-1. **C1b:** строгие TS wrappers, trusted seams и закрытая композиция с реальным postgres.js. SQL PASS не заменяет проверку binding, malformed driver rows и потери ACK в приложении.
+1. **Граница C1b:** локальные wrappers/seams и закрытый real-driver harness приняты; это ещё не mounted HTTP проверка.
 2. **Mounted HTTP:** public route использует новый executor; replay проходит по сохранённой identity до изменяемых моделей/цен/spending guards. Fresh credential scope проверяется всегда. Один provider effect и одна финансовая проводка при retry/обрыве.
 3. **Полное покрытие денежных маршрутов:** включённые modalities используют новый учёт; неподдержанные пути закрываются до provider/queue. Временный plaintext gate не сокращает согласованный итоговый состав продукта ради балла.
 4. **Receipt и восстановление:** клиент получает authoritative расход в точных единицах; supplier valuation отдельна. Неизвестный outcome не даёт права повторно запускать модель. Нужны operator reconciliation, refund/debt и переход opening balances.
