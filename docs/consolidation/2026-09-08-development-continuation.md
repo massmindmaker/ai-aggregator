@@ -5,7 +5,7 @@
 | Проект | Принято локально | Проверки | Дальше |
 |---|---|---|---|
 | AI Aggregator | Quota/executor bridge20187ec, включая исправление JSONB binding реального postgres.js | focused230, native7, strict types/lint; независимое TS/financial Approved | HTTP storage gate A a6c0513 принят (203native/9schema/types/lint, independent Approved); B1 wrappers/seam77f0148 принят (219unit/15native/types/lint, independent Approved); B2 identity `b4ce9f3` принят (162 tests/types/lint); fresh mounted auth `0fde334` принят (11 tests/types/lint, independent Approved); public admission route и recovery открыты |
-| AI Arena | Immutable participation policy1de43e7 и review fixes636866f | full12 native и52unit на первом коде; послеfix свежий PP01–PP06+types/lint; независимое повторное Approved | Private immutable versions, затем sandboxed evaluator; не подменять срок сдачи сроком регистрации |
+| AI Arena | Immutable participation policy1de43e7 и review fixes636866f | full12 native и52unit на первом коде; послеfix свежий PP01–PP06+types/lint; независимое повторное Approved | Private immutable versions и Web workspace приняты (`47ce44b`, `2465f33`): full baseline на исходном UI, финальный fresh PV01–17/build/types/lint и оба review PASS. Далее final selection и sandboxed evaluator; не подменять срок сдачи сроком регистрации |
 | Agents Market | Run terminal CAS9e24aff и lint setupff466d0: failed/completed не перезаписываются, payer из persisted run | native37, worker47, types/lint; независимое TS/financial Approved | Authoritative receipt, reservation/recovery; полноценный useful-run Web/TMA |
 
 ## Границы приёмки
