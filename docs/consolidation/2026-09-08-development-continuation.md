@@ -4,9 +4,9 @@
 
 **Возобновлено по указанию пользователя:** параллельные узкие задачи по трём проектам, общий canonical checkpoint; Agents Market Web — полноценные реальные сценарии с TMA business logic, без фиктивных capabilities. Root baseline после паузы завершён exit0:12 suites/322 tests, migration72 applied1/skipped71; обязательный isolated TON child58 PASS0skip, fresh72/noop72, owned DB dropped, sessions0. TON2 acceptance documentation pending; production не менялся.
 
-**Текущая пауза:** [переоценка F108 и точка возобновления](../ecosystem/2026-09-08-functional-checkpoint.md). TON2 reviewed724a031, final canonical baseline PENDING; не запускать следующую миграцию до возобновления.
+**Историческая пауза снята:** [переоценка F108](../ecosystem/2026-09-08-functional-checkpoint.md) остаётся аналитическим срезом. Текущее разрешение и завершённый baseline зафиксированы выше и в handoff.
 
-Приоритет AG → Arena → AM. Superpowers: узкие планы, реализация с независимым review; Caveman: краткие отчёты. Эта страница фиксирует принятые изменения, а не108/108 или production. Ранний [checkpoint](2026-09-08-development-checkpoint.md) сохраняется как история.
+Текущий приоритет — полноценный Web Agents Market; независимые узкие этапы AG и Arena продолжаются параллельно. Superpowers: узкие планы, реализация с независимым review; Caveman: краткие отчёты. Эта страница фиксирует принятые изменения, а не108/108 или production. Ранний [checkpoint](2026-09-08-development-checkpoint.md) сохраняется как история.
 
 | Проект | Принято локально | Проверки | Дальше |
 |---|---|---|---|

@@ -1,5 +1,17 @@
 # Статус developer memory
 
+## Readback новой сессии — 08.09.2026
+
+Текущее разрешение возобновляет локальную разработку; исторические PENDING/паузы ниже не отменяют [handoff](2026-09-08-session-handoff.md) и [единый continuation](2026-09-08-development-continuation.md). TON2 final baseline уже завершён по handoff; оформление owner acceptance выполняется отдельно.
+
+- LightRAG MCP callable: hybrid context прочитан; точный `get_documents_paginated` readback подтвердил `doc-365591f10b64a84274fc6ed561d9de74`, `processed`. Повторной записи нет. Semantic recall не заменяет текущие исходники.
+- Serena MCP callable: instructions, activation canonical Agents Market и чтение existing `ai-hub/development-entrypoint` выполнены. Locator ведёт к owner entrypoint/continuation и прежней принятой asset isolation `ac313e8`; новых code capabilities не подтверждает.
+- Graphify JSON readback: AG `fbccc4fc2fa9afda1b0fb6d6f485a506a6103da1` (9710 nodes/14836 links), Arena `7dcf5bd21f8c5c1e92b96f53e7bfb2b96a6e2631` (2107/3156), AM `dca7746a7d454777953d42bbe8be9ca99484f55a` (1714/2466). Это прежние snapshots, не текущая полная индексация; refresh после принятия новых source, под shared lock.
+- Brain `/home/bob/brain/Projects/AI-Hub/README.md` прочитан: ссылки на все три owner entrypoints, MEMORY-STATUS и continuation существуют. Изменений нет.
+- Memory Graph остаётся read-only, запись не выполнялась.
+- Конфигурация Codex прочитана: `[features.context_management] experimental_mode = true`. Это подтверждение настройки, не доказательство поведенческого эффекта.
+
+
 ## Functional checkpoint и user pause — 08.09.2026
 
 Канонический F-срез: [2026-09-08-functional-checkpoint.md](../ecosystem/2026-09-08-functional-checkpoint.md) и CSV с36 требованиями на продукт. Результат: Aggregator45/108, Arena26/108, Agents Market40/108; это не production acceptance. Serena existing locators AG и Arena обновлены supported MCP и прочитаны обратно, указывают на checkpoint и его границы.
