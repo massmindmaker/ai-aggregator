@@ -81,6 +81,11 @@ BEGIN
 
   PERFORM pg_advisory_xact_lock(hashtextextended(_billing_request_id::text, 0));
 
+  -- HTTP terminal fence, before the original SELECT/FOUND pair.
+  IF EXISTS (SELECT 1 FROM gateway_http_rejections WHERE billing_request_id = _billing_request_id) THEN
+    RAISE EXCEPTION 'HTTP_TERMINAL_REJECTION_EXISTS' USING ERRCODE = 'P0005';
+  END IF;
+
   SELECT a.* INTO _existing
   FROM gateway_charge_admissions a
   WHERE a.billing_request_id = _billing_request_id

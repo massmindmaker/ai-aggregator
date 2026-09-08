@@ -649,3 +649,21 @@ export const gatewayHttpResults = pgTable('gateway_http_results', {
 }));
 export type GatewayHttpRequest = typeof gatewayHttpRequests.$inferSelect;
 export type GatewayHttpResult = typeof gatewayHttpResults.$inferSelect;
+
+export type GatewayHttpRejectionCode = 'PAYMENT_REQUIRED' | 'QUOTA_EXCEEDED' | 'ADMISSION_DEADLINE_EXPIRED' | 'SESSION_REQUIRED' | 'REFUND_BLOCKED' | 'REQUEST_NOT_STARTED';
+/** Fixed SQL-generated no-admission DTO. It is neither usage evidence nor a zero-price receipt. */
+export const gatewayHttpRejections = pgTable('gateway_http_rejections', {
+  billingRequestId: uuid('billing_request_id').primaryKey(),
+  orgId: uuid('org_id').notNull(),
+  apiKeyId: uuid('api_key_id').notNull(),
+  resultVersion: smallint('result_version').$type<1>().notNull(),
+  rejectionCode: text('rejection_code').$type<GatewayHttpRejectionCode>().notNull(),
+  httpStatus: smallint('http_status').$type<400 | 402 | 409 | 429>().notNull(),
+  contentType: text('content_type').$type<'application/json'>().notNull(),
+  responseBody: jsonb('response_body').$type<{ error: { code: GatewayHttpRejectionCode; message: string; type: 'billing_error' | 'request_error' } }>().notNull(),
+  terminalAt: timestamp('terminal_at', { withTimezone: true }).notNull(),
+}, t => ({
+  keyOwner: foreignKey({ name: 'gateway_http_rejections_key_owner_fk', columns: [t.orgId, t.apiKeyId], foreignColumns: [gatewayApiKeys.orgId, gatewayApiKeys.id] }).onDelete('restrict'),
+  requestOwner: foreignKey({ name: 'gateway_http_rejections_request_owner_fk', columns: [t.orgId, t.apiKeyId, t.billingRequestId], foreignColumns: [gatewayHttpRequests.orgId, gatewayHttpRequests.apiKeyId, gatewayHttpRequests.billingRequestId] }).onDelete('restrict'),
+}));
+export type GatewayHttpRejection = typeof gatewayHttpRejections.$inferSelect;

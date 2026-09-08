@@ -59,16 +59,16 @@ describe("native ordered migrator", () => {
   it("discovers the complete immutable history in deterministic order", async () => {
     const migrations = await discoverNativeMigrations();
 
-    expect(migrations).toHaveLength(69);
+    expect(migrations).toHaveLength(71);
     expect(migrations[0].version).toBe("drizzle/0000_moaning_the_fury.sql");
     expect(migrations[1].version).toBe("migrations/0004_gateway_core.sql");
     expect(migrations[2].version).toBe(
       "migrations/0004_seed_test_upstreams.sql",
     );
     expect(migrations.at(-1)?.version).toBe(
-      "migrations/0069_gateway_http_storage.sql",
+      "migrations/0071_gateway_http_recovery_validation.sql",
     );
-    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(69);
+    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(71);
   });
 
   it("removes only an outer transaction wrapper owned by a historical file", () => {
