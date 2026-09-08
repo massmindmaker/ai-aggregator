@@ -13,6 +13,7 @@
 | Чистая native установка текущих миграций | `f4cd433`, SQL `a0b6eb8` | clean71: 71 apply, повтор71 skip; собственная временная БД удалена, canonical test DB неизменна; это не production runner parity |
 | Типизированный C1b bridge и sole terminal seams | `0f0b395`, test fix `fb849ae` | [C1b](../../superpowers/plans/2026-09-08-http-terminal-recovery.md): baseline274/regression403 на candidate, final native12/types/lint и independent Approved |
 | Mounted plaintext HTTP и native verification | `ac23cae`, harness `cd37771`, test fix `1c072b3` | [MC acceptance](../../superpowers/plans/2026-09-08-stored-chat-public-cutover.md): baseline315, final native46, types/lint и independent Approved; явные границы evidence и default legacy |
+| TON invoice core | `c62ce98`, review-fix `724a031` | [AG-TON2](../../superpowers/plans/2026-09-08-ton-invoice-core.md): independent financial/TS re-review Approved; baseline12/322, migration72 applied1/skipped71, isolated native58 без skip, fresh72/noop72; own DB dropped/sessions0/canonical unchanged. Verifier, checkout, login, testnet/mainnet и production не приняты. |
 
 ## Открытые критерии
 
