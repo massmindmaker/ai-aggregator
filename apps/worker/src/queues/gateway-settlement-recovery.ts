@@ -194,7 +194,7 @@ export function parseGatewaySettlementRecoveryDatabaseUrl(raw: string): string {
   try {
     if (raw.length === 0 || raw.trim() !== raw) throw new Error();
     const parsed = new URL(raw);
-    if ((parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") || parsed.hostname.length === 0 || parsed.pathname === "/" || parsed.hash.length !== 0) throw new Error();
+    if ((parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") || parsed.hostname.length === 0 || parsed.pathname.length === 0 || parsed.pathname === "/" || parsed.hash.length !== 0) throw new Error();
     for (const key of parsed.searchParams.keys()) {
       if (FORBIDDEN_DATABASE_URL_KEYS.has(key.toLowerCase())) throw new Error();
     }
@@ -295,7 +295,8 @@ export function startGatewaySettlementRecovery(input: Readonly<{
 }>): GatewaySettlementRecoveryHandle {
   const loop = createGatewaySettlementRecoveryLoop(input.db);
   let stopping = false;
-  let timer: unknown | null = null;
+  let timer: unknown;
+  let hasTimer = false;
   let activeTick: Promise<void> | null = null;
   let closePromise: Promise<void> | null = null;
 
@@ -305,10 +306,14 @@ export function startGatewaySettlementRecovery(input: Readonly<{
       try {
         const tick = await loop.runTick(() => stopping);
         try { input.onTick(tick); } catch { /* callback failures have no recovery boundary */ }
-        if (!stopping) timer = input.scheduler.setTimeout(() => {
-          timer = null;
-          beginTick();
-        }, 60_000);
+        if (!stopping) {
+          timer = input.scheduler.setTimeout(() => {
+            hasTimer = false;
+            timer = undefined;
+            beginTick();
+          }, 60_000);
+          hasTimer = true;
+        }
       } finally {
         activeTick = null;
       }
@@ -320,9 +325,10 @@ export function startGatewaySettlementRecovery(input: Readonly<{
     close(): Promise<void> {
       if (closePromise !== null) return closePromise;
       stopping = true;
-      if (timer !== null) {
+      if (hasTimer) {
         input.scheduler.clearTimeout(timer);
-        timer = null;
+        hasTimer = false;
+        timer = undefined;
       }
       closePromise = (async () => {
         if (activeTick !== null) await activeTick;
