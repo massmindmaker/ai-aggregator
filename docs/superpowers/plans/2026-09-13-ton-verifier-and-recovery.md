@@ -344,7 +344,7 @@ Lease не держит SQL transaction во время RPC. После кажд
 - Consumes: `TonInvoice`, `VerifiedChainCredit` type only from `@aiag/database`; no database value import.
 - Produces: `normalizeCanonicalTonEvidence(input:unknown,limits): NormalizedTonEvidence | TonNormalizationFailure`; `verifyChainCredit(invoice,evidence,policy): TonVerificationResult`.
 
-- [ ] **Step 1: write RED bounds/identity tests.** Use the exact constants and unions above. Assert outer serialized fixture `<=1_048_576` bytes, transactions `<=128`, messages per transaction `<=64`, hashes lowercase64, addresses canonical raw, LT/amount canonical decimal≤78, timestamps safe integers, exact known keys after normalization. Oversized input returns `{kind:'source_error',code:'response_too_large'}` before array mapping/hash work.
+- [x] **Step 1: write RED bounds/identity tests.** Use the exact constants and unions above. Assert outer serialized fixture `<=1_048_576` bytes, transactions `<=128`, messages per transaction `<=64`, hashes lowercase64, addresses canonical raw, LT/amount canonical decimal≤78, timestamps safe integers, exact known keys after normalization. Oversized input returns `{kind:'source_error',code:'response_too_large'}` before array mapping/hash work.
 
 ```ts
 it('never promotes missing full-path or provider-attested finality', () => {
@@ -357,11 +357,11 @@ it('never promotes missing full-path or provider-attested finality', () => {
 });
 ```
 
-- [ ] **Step 2: run RED.** Run `bunx vitest run apps/worker/src/__tests__/ton-payment-verifier.test.ts`; expected failure is missing modules/exports, not fixture parse failure.
-- [ ] **Step 3: implement the minimal pure normalizer and verifier.** No `fetch`, env, timers, logger, DB imports or settlement call. Canonicalize once, SHA-256 the stable normalized evidence for `executionPathDigest/evidenceDigest`, and construct `VerifiedChainCredit` only in the `verified` branch with invoice pins copied exactly.
-- [ ] **Step 4: add the complete adversarial matrix.** Synthetic cases: wrong network/recipient/reference/amount/decimals/sender, fake jetton master, notification-only path, wrong derived wallet, wrong opcode, broken message hash link, duplicate/reordered path, aborted/compute/action failure, bounced input/output, incomplete/emulated trace, inconsistent block/mc anchors, missing depth and arrays at bound/bound+1. Every fixture metadata says `evidenceClass:'synthetic'` and `realProvider:false`.
-- [ ] **Step 5: run PASS and static boundary checks.** Run focused Vitest and `bun run --filter @aiag/worker type-check`. `rg -n "fetch\(|settleTonInvoice|DATABASE_URL|setInterval" apps/worker/src/ton-payment-{evidence,verifier}.ts` must return no matches.
-- [ ] **Step 6: review/commit.** Independent TS/security review must confirm pure boundary, reason precedence and no proof claim. Commit only these files with `feat(worker): add pure TON evidence verifier`.
+- [x] **Step 2: run RED.** Run `bunx vitest run apps/worker/src/__tests__/ton-payment-verifier.test.ts`; expected failure is missing modules/exports, not fixture parse failure.
+- [x] **Step 3: implement the minimal pure normalizer and verifier.** No `fetch`, env, timers, logger, DB imports or settlement call. Canonicalize once, SHA-256 the stable normalized evidence for `executionPathDigest/evidenceDigest`, and construct `VerifiedChainCredit` only in the `verified` branch with invoice pins copied exactly.
+- [x] **Step 4: add the complete adversarial matrix.** Synthetic cases: wrong network/recipient/reference/amount/decimals/sender, fake jetton master, notification-only path, wrong derived wallet, wrong opcode, broken message hash link, duplicate/reordered path, aborted/compute/action failure, bounced input/output, incomplete/emulated trace, inconsistent block/mc anchors, missing depth and arrays at bound/bound+1. Every fixture metadata says `evidenceClass:'synthetic'` and `realProvider:false`.
+- [x] **Step 5: run PASS and static boundary checks.** Run focused Vitest and `bun run --filter @aiag/worker type-check`. `rg -n "fetch\(|settleTonInvoice|DATABASE_URL|setInterval" apps/worker/src/ton-payment-{evidence,verifier}.ts` must return no matches.
+- [x] **Step 6: review/commit.** Independent TS/security review must confirm pure boundary, reason precedence and no proof claim. Commit only these files with `feat(worker): add pure TON evidence verifier`.
 
 **Gate 1 result:** test code may produce a `VerifiedChainCredit` from synthetic normalized evidence. Task 1 adds no new runtime call path to settlement: source, tests and fixtures may use database types only, with no settlement value import/call. The existing database root export remains until Task 5; this gate does not claim package export isolation or a worker-only security capability. No claim of real provider/testnet verification is allowed.
 
@@ -564,3 +564,5 @@ Task 1 pure synthetic slice APPROVE independently, with the corrected Gate 1 abo
 **Review fix candidate:** resolved-recipient binding is persisted and immutable; mismatch preserves old history/cursor and forbids scan. Lease deps are explicit and backoff uses atomic DB clock/state. Unmatched returns invoiceStatus:null. Tasks1–6 runtime is at most observe-only; settlement awaits separate worker DB principal/ACL proof. Independent scoped re-review pending.
 
 **Scoped re-review 13.09 — APPROVE:** amendment `4eaa44d` закрывает все четыре blockers; существенных новых противоречий нет. Literal sourceId/network/provider/asset/owner validation against pinned recipient binding остаётся обязательной реализационной проверкой. Это принятие архитектурного плана Tasks1–6 с runtime максимум observe, не verifier/provider/testnet acceptance. Task1 продолжает отдельную реализацию/review.
+
+**Task1 source принят13.09:** `f46386c` + fix `b17603e`, independent TS/security scoped re-review APPROVE. Final46 focused tests, worker TypeScript/applicable focused ESLint и all-five-file boundary scans PASS. Закрыты unbounded pre-serialization, dangling/disconnected complete trace и conflicting block-coordinate identity. Проверки доказывают только pure synthetic behavior; actual provider fixture/RPC/runtime/settlement отсутствуют. Следующий этап Task2 начинается с exact response manifest и sanitized real fixtures, без ослабления обязательных полей.

@@ -53,3 +53,5 @@ Aggregator владеет Web, gateway, model catalog, consumer/author money и 
 **TON3 source grounding13.09:** [официальные источники и граница REST/proof](research/2026-09-13-ton-verifier-source-boundary.md). Это подготовка architecture gate, без RPC fixtures, новой settlement capability или повторного TON2 baseline.
 
 **AG-TON3 architecture13.09:** [verifier/recovery plan](superpowers/plans/2026-09-13-ton-verifier-and-recovery.md) принят независимым financial re-review после `4eaa44d`. Первый pure synthetic verifier реализуется отдельно; реальный provider fixture и runtime evidence ещё не приняты. Tasks1–6 максимум disabled/observe, settlement activation требует отдельного worker-only DB principal/ACL gate. TON2 source/evidence неизменны.
+
+**AG-TON3 Task1 принят13.09:** pure synthetic verifier `f46386c` + `b17603e`, independent TS/security APPROVE, focused46/types/applicable lint/boundary scans PASS. [Owner plan](superpowers/plans/2026-09-13-ton-verifier-and-recovery.md). Следующий gate — exact TON Center testnet manifest и sanitized real fixtures; real chain/provider/runtime/settlement ещё не приняты.
