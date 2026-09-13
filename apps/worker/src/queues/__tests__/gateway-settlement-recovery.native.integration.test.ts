@@ -114,14 +114,44 @@ async function guardedRun(
               FROM organizations WHERE id=${foreignOrg}::uuid
             `).toEqual(sentinel);
           });
-          await teardown("foreign-sentinel-deleted", () => other!.begin(async (tx) => {
-            expect(await tx`
-              SELECT id::text,owner_id::text,payg_credits::text
-              FROM organizations WHERE id=${foreignOrg}::uuid FOR UPDATE
-            `).toEqual(sentinel);
-            await tx`DELETE FROM organizations WHERE id=${foreignOrg}::uuid`;
-            await tx`DELETE FROM users WHERE id=${foreignUser}::uuid`;
-          }));
+          await teardown("foreign-sentinel-deleted", async () => {
+            const deletion = await other!.begin(async (tx) => {
+              const owner = await tx`
+                SELECT owner_id::text
+                FROM organizations WHERE id=${foreignOrg}::uuid FOR UPDATE
+              `;
+              const deletedOrg = owner[0]?.owner_id === foreignUser
+                ? await tx`
+                    DELETE FROM organizations
+                    WHERE id=${foreignOrg}::uuid AND owner_id=${foreignUser}::uuid
+                    RETURNING id::text
+                  `
+                : [];
+              const userBefore = await tx`SELECT id::text FROM users WHERE id=${foreignUser}::uuid`;
+              const userReferences = await tx`
+                SELECT count(*)::text AS count FROM organizations WHERE owner_id=${foreignUser}::uuid
+              `;
+              const deletedUser = userBefore.length > 0 && userReferences[0]?.count === "0"
+                ? await tx`DELETE FROM users WHERE id=${foreignUser}::uuid RETURNING id::text`
+                : [];
+              return { owner, deletedOrg, userBefore, userReferences, deletedUser };
+            });
+            expect(deletion.owner.length).toBeLessThanOrEqual(1);
+            if (deletion.owner.length === 1) {
+              expect(deletion.owner).toEqual([{ owner_id: foreignUser }]);
+              expect(deletion.deletedOrg).toEqual([{ id: foreignOrg }]);
+            } else {
+              expect(deletion.deletedOrg).toEqual([]);
+            }
+            expect(deletion.userReferences).toHaveLength(1);
+            if (deletion.userBefore.length === 0) {
+              expect(deletion.deletedUser).toEqual([]);
+            } else if (deletion.userReferences[0]?.count === "0") {
+              expect(deletion.deletedUser).toEqual([{ id: foreignUser }]);
+            } else {
+              expect(deletion.deletedUser).toEqual([]);
+            }
+          });
         }
         if (client !== undefined) await teardown("primary-client-closed", () => client!.end());
         if (other !== undefined) await teardown("secondary-client-closed", () => other!.end());
@@ -503,6 +533,64 @@ describe.skipIf(!enabled)("guarded native gateway settlement recovery", () => {
       "secondary-client-closed",
       "api-gateway-singleton-closed",
     ]);
+  }, nativeTestTimeoutMs);
+
+  it("retains a full sentinel mismatch while deleting owned sentinel rows and closing clients", async () => {
+    const teardownSteps: TeardownStep[] = [];
+    let foreignOrg: string | undefined;
+    let foreignUser: string | undefined;
+    let observedFailure: unknown;
+
+    try {
+      await guardedRun(async (f) => {
+        foreignOrg = f.foreignOrg;
+        const owner = await f.other`
+          SELECT owner_id::text FROM organizations WHERE id=${f.foreignOrg}::uuid
+        `;
+        expect(owner).toHaveLength(1);
+        foreignUser = String(owner[0]?.owner_id);
+        await f.other`
+          UPDATE organizations SET payg_credits=payg_credits+1 WHERE id=${f.foreignOrg}::uuid
+        `;
+      }, (step) => teardownSteps.push(step));
+    } catch (error) {
+      observedFailure = error;
+    }
+
+    expect(observedFailure).toBeInstanceOf(AggregateError);
+    const failures = (observedFailure as AggregateError).errors;
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({ message: "guarded native teardown failed: foreign-sentinel-verified" });
+    expect((failures[0] as Error & { cause?: unknown }).cause).toBeInstanceOf(Error);
+    expect(teardownSteps).toEqual([
+      "recovery-resources",
+      "fixture-rows",
+      "foreign-sentinel-verified",
+      "foreign-sentinel-deleted",
+      "primary-client-closed",
+      "secondary-client-closed",
+      "api-gateway-singleton-closed",
+    ]);
+    if (foreignOrg === undefined || foreignUser === undefined) throw new Error("foreign sentinel identity was not captured");
+    await withGuardedTestDatabase(
+      process.env,
+      { clientFactory: createPgTestClient },
+      async (guardClient) => {
+        const residual = await guardClient.query<{ relation: string; count: string }>({
+          text: `
+            SELECT 'org' AS relation,count(*)::text AS count FROM organizations WHERE id=$1::uuid
+            UNION ALL
+            SELECT 'user' AS relation,count(*)::text AS count FROM users WHERE id=$2::uuid
+            ORDER BY relation
+          `,
+          values: [foreignOrg, foreignUser],
+        });
+        expect(residual.rows).toEqual([
+          { relation: "org", count: "0" },
+          { relation: "user", count: "0" },
+        ]);
+      },
+    );
   }, nativeTestTimeoutMs);
 
   it("settles through the scheduled loop, races two pools once, and replays a lost ACK with one financial effect", async () =>
