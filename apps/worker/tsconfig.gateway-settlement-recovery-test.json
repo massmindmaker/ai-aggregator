@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/queues/gateway-settlement-recovery.ts",
+    "src/queues/__tests__/gateway-settlement-recovery.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
