@@ -386,6 +386,8 @@ it('never promotes missing full-path or provider-attested finality', () => {
 - Consumes: chosen constants, `safeFetch` from `@aiag/shared/server`, injected `fetchImpl` in tests.
 - Produces: `createToncenterV3Provider(config): TonEvidenceProvider`; `resolveRecipientAccount(source,signal)` and `scanAccountPage(recipientAccount,cursor,signal): Promise<TonProviderResult>`.
 
+**Native source acceptance (13.09):** `76ff70c` passed independent scoped spec/quality re-review after source fixwave2: all four HIGH addressed; focused234 and covered type/lint gates PASS. This accepts historical native adapter/verification only. Full Task2/jetton and downstream Tasks3–6 remain open; a native-only continuation amendment and lease-budget preflight are required before their dispatch.
+
 **Native-only sub-gate (accepted68ddb93 after scoped review):** после принятия provider manifest Steps3–7 могут реализовать только `source.asset.kind='native'`. `resolveRecipientAccount` возвращает canonical native owner address без сети. Для `source.asset.kind='jetton'` он обязан вернуть `{kind:'source_error',code:'unsupported_asset',retryAfterMs:null}` до `fetchImpl` или любой provider/network операции. Это ограничение не маскируется `provider_schema_invalid`. Sub-gate не закрывает Gate2: полный Task2 и jetton auto-credit остаются OPEN до reviewed wallet-derivation mechanism и sanitized complete policy-qualifying jetton success fixture. Native historical provider acceptance не является merchant payment/runtime/settlement acceptance.
 
 **Adapter review amendment13.09 — pending independent review before fixwave1:**
