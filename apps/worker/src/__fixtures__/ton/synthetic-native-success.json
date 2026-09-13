@@ -1,0 +1,71 @@
+{
+  "evidenceClass": "synthetic",
+  "realProvider": false,
+  "evidence": {
+    "schemaVersion": 1,
+    "source": {
+      "providerId": "toncenter-v3-testnet",
+      "origin": "https://testnet.toncenter.com",
+      "evidenceModel": "server_trusted_indexer",
+      "fetchedAtMs": 1700000005000
+    },
+    "network": "tvm:-3",
+    "asset": {
+      "network": "tvm:-3",
+      "kind": "native",
+      "decimals": 9
+    },
+    "trace": {
+      "id": "8888888888888888888888888888888888888888888888888888888888888888",
+      "complete": true,
+      "masterchainSeqno": 100,
+      "orderedTransactionHashes": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ]
+    },
+    "latestIndexedMasterchain": {
+      "seqno": 102,
+      "rootHash": "6666666666666666666666666666666666666666666666666666666666666666",
+      "fileHash": "7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    "transactions": [
+      {
+        "account": "0:1111111111111111111111111111111111111111111111111111111111111111",
+        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "lt": "1000",
+        "chainTimeMs": 1700000000000,
+        "emulated": false,
+        "aborted": false,
+        "computeSuccess": true,
+        "actionSuccess": true,
+        "blockRef": {
+          "workchain": 0,
+          "shard": "8000000000000000",
+          "seqno": 10,
+          "rootHash": "4444444444444444444444444444444444444444444444444444444444444444",
+          "fileHash": "5555555555555555555555555555555555555555555555555555555555555555",
+          "masterchainSeqno": 100
+        },
+        "inMessage": {
+          "hash": "3333333333333333333333333333333333333333333333333333333333333333",
+          "index": 0,
+          "source": "0:2222222222222222222222222222222222222222222222222222222222222222",
+          "destination": "0:1111111111111111111111111111111111111111111111111111111111111111",
+          "bounced": false,
+          "opcode": "0x00000000",
+          "amountAtomic": "1000000000",
+          "decodedPayload": {
+            "kind": "native_comment",
+            "reference": "AIAG-NATIVE-TEST-001"
+          }
+        },
+        "outMessages": []
+      }
+    ],
+    "creditPath": {
+      "kind": "native",
+      "recipientTransactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "creditMessageHash": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  }
+}

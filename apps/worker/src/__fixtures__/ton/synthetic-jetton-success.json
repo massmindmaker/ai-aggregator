@@ -1,0 +1,181 @@
+{
+  "evidenceClass": "synthetic",
+  "realProvider": false,
+  "evidence": {
+    "schemaVersion": 1,
+    "source": {
+      "providerId": "toncenter-v3-testnet",
+      "origin": "https://testnet.toncenter.com",
+      "evidenceModel": "server_trusted_indexer",
+      "fetchedAtMs": 1700000105000
+    },
+    "network": "tvm:-3",
+    "asset": {
+      "network": "tvm:-3",
+      "kind": "jetton",
+      "masterAddress": "0:3333333333333333333333333333333333333333333333333333333333333333",
+      "decimals": 6
+    },
+    "trace": {
+      "id": "9999999999999999999999999999999999999999999999999999999999999999",
+      "complete": true,
+      "masterchainSeqno": 200,
+      "orderedTransactionHashes": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      ]
+    },
+    "latestIndexedMasterchain": {
+      "seqno": 202,
+      "rootHash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "fileHash": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "transactions": [
+      {
+        "account": "0:4444444444444444444444444444444444444444444444444444444444444444",
+        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "lt": "2000",
+        "chainTimeMs": 1700000100000,
+        "emulated": false,
+        "aborted": false,
+        "computeSuccess": true,
+        "actionSuccess": true,
+        "blockRef": {
+          "workchain": 0,
+          "shard": "8000000000000000",
+          "seqno": 20,
+          "rootHash": "3333333333333333333333333333333333333333333333333333333333333333",
+          "fileHash": "4444444444444444444444444444444444444444444444444444444444444444",
+          "masterchainSeqno": 200
+        },
+        "inMessage": {
+          "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "index": 0,
+          "source": "0:2222222222222222222222222222222222222222222222222222222222222222",
+          "destination": "0:4444444444444444444444444444444444444444444444444444444444444444",
+          "bounced": false,
+          "opcode": "0x0f8a7ea5",
+          "amountAtomic": "50000000",
+          "decodedPayload": {
+            "kind": "jetton_transfer",
+            "amountAtomic": "2500000",
+            "destination": "0:1111111111111111111111111111111111111111111111111111111111111111",
+            "forwardReference": "AIAG-JETTON-TEST-001"
+          }
+        },
+        "outMessages": [
+          {
+            "hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "index": 0,
+            "source": "0:4444444444444444444444444444444444444444444444444444444444444444",
+            "destination": "0:5555555555555555555555555555555555555555555555555555555555555555",
+            "bounced": false,
+            "opcode": "0x178d4519",
+            "amountAtomic": "40000000",
+            "decodedPayload": {
+              "kind": "jetton_internal_transfer",
+              "amountAtomic": "2500000",
+              "sender": "0:2222222222222222222222222222222222222222222222222222222222222222",
+              "responseDestination": "0:2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          }
+        ]
+      },
+      {
+        "account": "0:5555555555555555555555555555555555555555555555555555555555555555",
+        "hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "lt": "2001",
+        "chainTimeMs": 1700000101000,
+        "emulated": false,
+        "aborted": false,
+        "computeSuccess": true,
+        "actionSuccess": true,
+        "blockRef": {
+          "workchain": 0,
+          "shard": "8000000000000000",
+          "seqno": 21,
+          "rootHash": "5555555555555555555555555555555555555555555555555555555555555555",
+          "fileHash": "6666666666666666666666666666666666666666666666666666666666666666",
+          "masterchainSeqno": 200
+        },
+        "inMessage": {
+          "hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "index": 0,
+          "source": "0:4444444444444444444444444444444444444444444444444444444444444444",
+          "destination": "0:5555555555555555555555555555555555555555555555555555555555555555",
+          "bounced": false,
+          "opcode": "0x178d4519",
+          "amountAtomic": "40000000",
+          "decodedPayload": {
+            "kind": "jetton_internal_transfer",
+            "amountAtomic": "2500000",
+            "sender": "0:2222222222222222222222222222222222222222222222222222222222222222",
+            "responseDestination": "0:2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        },
+        "outMessages": [
+          {
+            "hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "index": 0,
+            "source": "0:5555555555555555555555555555555555555555555555555555555555555555",
+            "destination": "0:1111111111111111111111111111111111111111111111111111111111111111",
+            "bounced": false,
+            "opcode": "0x7362d09c",
+            "amountAtomic": "30000000",
+            "decodedPayload": {
+              "kind": "jetton_notification",
+              "amountAtomic": "2500000",
+              "sender": "0:2222222222222222222222222222222222222222222222222222222222222222",
+              "forwardReference": "AIAG-JETTON-TEST-001"
+            }
+          }
+        ]
+      },
+      {
+        "account": "0:1111111111111111111111111111111111111111111111111111111111111111",
+        "hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "lt": "2002",
+        "chainTimeMs": 1700000102000,
+        "emulated": false,
+        "aborted": false,
+        "computeSuccess": true,
+        "actionSuccess": true,
+        "blockRef": {
+          "workchain": 0,
+          "shard": "8000000000000000",
+          "seqno": 22,
+          "rootHash": "7777777777777777777777777777777777777777777777777777777777777777",
+          "fileHash": "8888888888888888888888888888888888888888888888888888888888888888",
+          "masterchainSeqno": 200
+        },
+        "inMessage": {
+          "hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "index": 0,
+          "source": "0:5555555555555555555555555555555555555555555555555555555555555555",
+          "destination": "0:1111111111111111111111111111111111111111111111111111111111111111",
+          "bounced": false,
+          "opcode": "0x7362d09c",
+          "amountAtomic": "30000000",
+          "decodedPayload": {
+            "kind": "jetton_notification",
+            "amountAtomic": "2500000",
+            "sender": "0:2222222222222222222222222222222222222222222222222222222222222222",
+            "forwardReference": "AIAG-JETTON-TEST-001"
+          }
+        },
+        "outMessages": []
+      }
+    ],
+    "creditPath": {
+      "kind": "jetton",
+      "masterAddress": "0:3333333333333333333333333333333333333333333333333333333333333333",
+      "walletDerivationOwner": "0:1111111111111111111111111111111111111111111111111111111111111111",
+      "derivedMerchantWallet": "0:5555555555555555555555555555555555555555555555555555555555555555",
+      "transferMessageHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "internalTransferMessageHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "creditTransactionHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "notificationMessageHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  }
+}
