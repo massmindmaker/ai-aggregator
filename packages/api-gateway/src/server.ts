@@ -24,6 +24,8 @@ import { images } from './routes/v1/images';
 import { video } from './routes/v1/video';
 import { audio } from './routes/v1/audio';
 import { batches } from './routes/v1/batches';
+import { catalogRoute } from './routes/v1/catalog';
+import { catalogHttpBoundary } from './catalog/http-contract';
 import { adminProxy } from './routes/admin/proxyTest';
 import { adminCatalog } from './routes/admin/catalog';
 import { registerGatewayEgressExecutor } from './egress-executor';
@@ -71,6 +73,10 @@ app.get('/', (c) =>
 );
 
 // ---- /v1 routes: auth + rate-limit + pii ------------------------------------
+// This is intentionally before either assembly's shared guards: catalog has a
+// fixed public error envelope while every other v1 route retains its own one.
+app.use('/v1/catalog', catalogHttpBoundary);
+app.use('/v1/catalog/', catalogHttpBoundary);
 if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_only') {
   // Early cache policy includes auth, RPM, unsupported routes and 404 responses.
   app.use('/v1/*', async (c, next) => {
@@ -104,7 +110,7 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_only') {
 
   // Copy only the existing read handlers, with their existing operational guards.
   // Importing the batches module must never mount its POST/queue capability here.
-  for (const [prefix, routes] of [['/models', modelsRoute], ['/balance', balanceRoute], ['/batches', batches]] as const) {
+  for (const [prefix, routes] of [['/catalog', catalogRoute], ['/models', modelsRoute], ['/balance', balanceRoute], ['/batches', batches]] as const) {
     for (const route of routes.routes) {
       if (route.method !== 'GET') continue;
       const path = route.path === '/' ? prefix : `${prefix}${route.path}`;
@@ -122,6 +128,8 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_only') {
   app.route('/v1/chat', chat);
   app.route('/v1/completions', completions);
   app.route('/v1/embeddings', embeddings);
+  app.route('/v1/catalog', catalogRoute);
+  app.route('/v1/catalog/', catalogRoute);
   app.route('/v1/models', modelsRoute);
   app.route('/v1/balance', balanceRoute);
   app.route('/v1/images', images);

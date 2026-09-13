@@ -71,14 +71,19 @@ describe('gateway server shape', () => {
 
 
 const legacyOrder = vi.hoisted(() => [] as string[]);
+const catalogRead = vi.hoisted(() => vi.fn());
 vi.mock('../config', async () => ({ ...(await vi.importActual<typeof import('../config')>('../config')) }));
 vi.mock('../egress-executor', () => ({ registerGatewayEgressExecutor: vi.fn() }));
-vi.mock('../middleware/auth-plan04', () => ({ requireApiKey: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('auth'); await next(); } }));
+vi.mock('../middleware/auth-plan04', () => ({ requireApiKey: async (c: any, next: () => Promise<void>) => { legacyOrder.push('auth'); c.set('apiKey', { id: '30000000-0000-4000-8000-000000000001', org_id: '40000000-0000-4000-8000-000000000001', policies: {}, rpm_limit: 10, batch_rpm_limit: 1, daily_usd_cap: null, model_whitelist: [], ru_residency_only: false }); await next(); } }));
 vi.mock('../middleware/rate-limit-plan04', () => ({ rateLimit: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('rate'); await next(); }, rpmOnly: vi.fn() }));
 vi.mock('../middleware/key-limits', () => ({ keyLimits: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('key'); await next(); } }));
 vi.mock('../middleware/pii-filter', () => ({ piiFilter: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('pii'); await next(); } }));
 vi.mock('../middleware/model-status-check', () => ({ modelStatusMiddleware: () => async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('model'); await next(); } }));
 vi.mock('../routes/v1/chat', async () => { const { Hono } = await import('hono'); return { chat: new Hono().post('/completions', c => { legacyOrder.push('legacy-chat'); c.header('x-aiag-charged-usd-micro','123'); return c.json({legacy:true}); }) }; });
+vi.mock('../catalog/public-catalog', () => ({
+  PublicCatalogError: class PublicCatalogError extends Error { constructor(readonly kind: string) { super(kind); } },
+  readPublicCatalog: catalogRead,
+}));
 import { app as productionApp } from '../server';
 it('default production assembly retains legacy middleware order and handler response', async () => {
   legacyOrder.length = 0;
@@ -87,4 +92,18 @@ it('default production assembly retains legacy middleware order and handler resp
   expect(legacyOrder).toEqual(['auth','rate','key','pii','model','legacy-chat']);
   expect(response.headers.get('x-aiag-charged-usd-micro')).toBe('123');
   expect(response.headers.get('x-aiag-receipt-version')).toBeNull();
+});
+
+it.each(['/v1/catalog', '/v1/catalog/'])('legacy assembly mounts catalog alias through the unchanged common guard order: %s', async (path) => {
+  legacyOrder.length = 0;
+  catalogRead.mockResolvedValueOnce({
+    schemaVersion: 1, object: 'catalog.list', catalogRevision: `sha256:${'a'.repeat(64)}`,
+    data: [], page: { limit: 20, nextCursor: null },
+  });
+  const response = await productionApp.request(path);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ object: 'catalog.list' });
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('vary')).toBe('Authorization');
+  expect(legacyOrder).toEqual(['auth', 'rate', 'key', 'pii', 'model']);
 });

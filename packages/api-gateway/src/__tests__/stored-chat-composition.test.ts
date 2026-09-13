@@ -13,6 +13,7 @@ const spies = vi.hoisted(() => ({
   query: vi.fn(),
   eval: vi.fn(),
   spending: vi.fn(),
+  catalog: vi.fn(),
   order: [] as string[],
 }));
 vi.mock('../config', async () => {
@@ -27,6 +28,10 @@ vi.mock('../config', async () => {
 vi.mock('../lib/db', () => ({ sql: spies.query }));
 vi.mock('../egress-executor', () => ({
   registerGatewayEgressExecutor: vi.fn(),
+}));
+vi.mock('../catalog/public-catalog', () => ({
+  PublicCatalogError: class PublicCatalogError extends Error { constructor(readonly kind: string) { super(kind); } },
+  readPublicCatalog: spies.catalog,
 }));
 vi.mock('../billing/http-storage', async () => ({
   ...(await vi.importActual<typeof import('../billing/http-storage')>(
@@ -130,6 +135,10 @@ function request(
 beforeEach(() => {
   vi.clearAllMocks();
   spies.order.length = 0;
+  spies.catalog.mockResolvedValue({
+    schemaVersion: 1, object: 'catalog.list', catalogRevision: `sha256:${'a'.repeat(64)}`,
+    data: [], page: { limit: 20, nextCursor: null },
+  });
   setApiKeyResolver(async () => {
     spies.order.push('auth');
     return key;
@@ -171,6 +180,21 @@ beforeEach(() => {
     spies.order.push('run');
     return runResult();
   });
+});
+it.each(['/v1/catalog', '/v1/catalog/'])('stored_chat_only assembly copies catalog GET alias through its restricted read guard chain: %s', async (path) => {
+  spies.spending.mockResolvedValue(null);
+  const response = await app.request(path, {
+    headers: { authorization: `Bearer sk_aiag_test_${'a'.repeat(32)}` },
+  });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ object: 'catalog.list' });
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('vary')).toBe('Authorization');
+  expect(spies.order).toEqual(['auth', 'rpm']);
+  expect(spies.catalog).toHaveBeenCalledOnce();
+  expect(spies.resolve).not.toHaveBeenCalled();
+  expect(spies.prepare).not.toHaveBeenCalled();
+  expect(spies.admit).not.toHaveBeenCalled();
 });
 it('production assembly authenticates and applies only RPM before replay, with no fresh effects', async () => {
   const response = await request();
