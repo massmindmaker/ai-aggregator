@@ -8,9 +8,9 @@
 
 - Канон: [entrypoint](../DEVELOPMENT-ENTRYPOINT.md), [production continuation](../superpowers/plans/2026-09-07-production-continuation.md), [TON3 plan](../superpowers/plans/2026-09-13-ton-verifier-and-recovery.md).
 - TON3 Task1 pure verifier принят: `f46386c` + `b17603e`, scoped independent APPROVE; final46 focused/types/applicable lint/import-boundary PASS. Только synthetic behavior.
-- Task2 manifest/real historical fixtures candidate `d74f469` получил BLOCK; fixwave1 выполняется только в четырёх JSON под `apps/worker/src/__fixtures__/ton/toncenter-v3-testnet/`. Замечания: обязательные поля и indexed-head в negative fixtures; точное отображение comment/path/block anchors; ownership курсора на terminal/cap. Повторное review обязательно до mapping code.
-- Исходный public testnet capture budget:20 requests, использовано19 на snapshot. Последний запрос допустим только для восстановления недостающих exact facts в уже разрешённом capture, без auth/redirects/raw BOC persistence. Новый provider/mainnet не разрешён этим gate.
-- Native-only adapter требует принятого manifest и явного native sub-gate. Jetton остаётся закрыт: indexed wallet lookup не заменяет master `get_wallet_address`, подходящей полной success fixture нет. Tasks1–6 максимум disabled/observe; settlement требует отдельного worker-only DB principal/ACL gate.
+- Task2 manifest/native historical fixtures приняты после fixwave1 `744ac63` и independent scoped APPROVE: восстановлены обязательные negative facts/head, exact comment/path/block mapping и cursor ownership. Native-only test contract согласован в `68ddb93`, sub-gate APPROVE. Полный Task2 остаётся OPEN.
+- Public testnet capture budget исчерпан: **20/20 requests**. Дальнейшие adapter tests используют только checked-in fixtures и mocked transport; новые RPC не входят в текущий этап.
+- Native-only adapter Steps3–7 выполняется отдельным владельцем. Jetton возвращает `unsupported_asset` до сетевого вызова: indexed wallet lookup не заменяет master `get_wallet_address`, подходящей полной success fixture нет. Tasks1–6 максимум disabled/observe; settlement требует отдельного worker-only DB principal/ACL gate.
 - Параллельно выполняется read-only inventory оставшихся Aggregator tracks по canonical programme. Текущие `.Codex/` и `stderr` untracked сохранены; не чистить и не включать случайно в commits.
 
 ## Agents Market — остановлен, сохранить
