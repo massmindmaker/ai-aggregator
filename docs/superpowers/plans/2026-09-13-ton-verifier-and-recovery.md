@@ -346,7 +346,7 @@ it('never promotes missing full-path or provider-attested finality', () => {
 - [ ] **Step 5: run PASS and static boundary checks.** Run focused Vitest and `bun run --filter @aiag/worker type-check`. `rg -n "fetch\(|settleTonInvoice|DATABASE_URL|setInterval" apps/worker/src/ton-payment-{evidence,verifier}.ts` must return no matches.
 - [ ] **Step 6: review/commit.** Independent TS/security review must confirm pure boundary, reason precedence and no proof claim. Commit only these files with `feat(worker): add pure TON evidence verifier`.
 
-**Gate 1 result:** test code may produce a `VerifiedChainCredit` from synthetic normalized evidence, but no runtime module can import a settlement capability and no claim of real provider/testnet verification is allowed.
+**Gate 1 result:** test code may produce a `VerifiedChainCredit` from synthetic normalized evidence. Task 1 adds no new runtime call path to settlement: source, tests and fixtures may use database types only, with no settlement value import/call. The existing database root export remains until Task 5; this gate does not claim package export isolation or a worker-only security capability. No claim of real provider/testnet verification is allowed.
 
 ## Task 2: exact TON Center v3 manifest, bounded adapter and sanitized real fixtures
 
@@ -525,3 +525,7 @@ Stop without weakening policy when any of these occurs:
 - evidence pins differ from immutable invoice, or a test only passes by calling `settleTonInvoice` with handcrafted credit outside the worker seam.
 
 No stop condition authorizes a fallback to indexer flags, client wallet success, raw JSON/BOC, a different provider, mainnet, or a looser historical invoice policy.
+
+## Independent architecture review — 13.09.2026
+
+Task 1 pure synthetic slice APPROVE independently, with the corrected Gate 1 above and boundary checks covering its source/tests/fixtures. Full Tasks2–6 remain BLOCK pending explicit fixes for durable resolved wallet/cursor binding, complete lease/backoff dependencies, nullable unmatched observation result, and an honest source import fence versus worker-only DB authorization gate. No implementation beyond Task 1 is accepted by this review.
