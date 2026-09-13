@@ -1,5 +1,10 @@
 # Статус developer memory
 
+## AM account scopes refresh — 13.09.2026
+
+Existing Serena locator updated and read back: T2.2 owner8f16036/source dceef78+0cfefe5, guarded schema10/0, backfill marker+postconditions true, zero-change replay. Locator commit9e03ecc. Shared stack remains stopped until full T2.5; auth3c33a6e is candidate. AM Graphify deferred during auth implementation/review; stable LightRAG/Brain navigation not duplicated, Memory Graph unchanged.
+
+
 ## AM foundation refresh — 13.09.2026
 
 Existing Serena locator updated/readback: accepted foundation645cbf7/sourcecaefcd6 и canonical guarded schema9/0. Public Web/TMA acceptance сохранена; следующие scopes/auth помечены как незавершённые. Graphify AM отложен: текущий tree уже принимает непринятый0010 от отдельного owner. Stable LightRAG/Brain ссылки не дублировались; Memory Graph без записи.
