@@ -72,7 +72,8 @@ export interface TonVerifierPolicy {
 export type TonSourceErrorCode =
   | 'origin_mismatch' | 'redirect_rejected' | 'response_too_large'
   | 'http_unauthorized' | 'rate_limited' | 'timeout' | 'upstream_5xx'
-  | 'provider_schema_invalid' | 'pagination_regressed' | 'recipient_binding_changed';
+  | 'provider_schema_invalid' | 'pagination_regressed' | 'recipient_binding_changed'
+  | 'unsupported_asset';
 
 export type TonObservedReason =
   | 'candidate_not_found' | 'trace_incomplete' | 'finality_pending';
@@ -328,6 +329,8 @@ Task 3 создаёт этот subpath только с observation/recovery APIs
 
 `limit` допускает integer `1..16`. Source list выводит distinct `(network,asset,invoice recipient)` из immutable invoices, добавляет `scanFloorTimeMs=min(quoted_at)` и сортируется по `sourceId=sha256(providerId+'\0'+stableAssetJson+'\0'+recipient)`. Provider scan идёт newest→older по resolved credit-account LT с inclusive one-item overlap, максимум четыре страницы по восемь transactions на source за run и не идёт старше `scanFloorTimeMs`. `cycleUpperLt` фиксирует первый LT цикла: новые transactions выше него будут прочитаны в следующем цикле, а не потеряны посреди descending pagination. На empty page или достижении floor cursor сбрасывается в `null`, поэтому следующий cycle намеренно пересканирует bounded history и увидит поздно проиндексированный transfer; duplicates удаляются по `(account,txHash,messageHash)`. Это консервативный testnet v1 tradeoff; оптимизация high-water/retention требует отдельной policy и не может вводиться скрыто.
 
+**Разделение provider/runner cursor:** `scanAccountPage` владеет одной provider page, проверкой inclusive overlap и возвращает `TonProviderResult.nextCursor/exhausted` (`exhausted` — сигнал endReached). Empty и exact-overlap-only raw pages возвращают `evidence=[]`, `nextCursor=null`, `exhausted=true`; overlap-only не является `pagination_regressed`. Provider не получает `scanFloorTimeMs` или счётчик страниц. Runner владеет floor, четырьмя страницами за run и durable `TonSweepCursor`. При пересечении floor runner сохраняет допустимые observations, затем cursor=null и завершает цикл. После четвёртой non-terminal page он сохраняет observations и точный non-null nextCursor provider, завершает run, но не сбрасывает цикл. Любое продвижение/reset cursor допускается только после durable observations всей принятой части страницы.
+
 Lease не держит SQL transaction во время RPC. После каждой полностью обработанной provider page runner renew/advance делает compare-and-set по `sourceId+leaseOwner+expected cursor`; loss останавливает текущий run. Backoff вычисляется атомарно в `advanceTonReconciliationCursor` по persisted consecutive_failures и DB clock, caller передаёт лишь bounded Retry-After, не следующий timestamp. Source-error advance обязан сохранять expected cursor как next; claim учитывает next_attempt_at, lease CAS проверяет owner и expiry, successful advance продлевает lease90s. Backoff: timeout/5xx — `min(5_000 * 2^(failures-1), 900_000)` ms; `Retry-After` для 429 clamp `1_000..900_000`; остальные source errors используют тот же bounded exponential fallback; successful bounded run сбрасывает failures. `bind` меняет NULL binding один раз под lease CAS; любой последующий отличный binding отвергается до scan. Immutable binding trigger запрещает менять уже установленную пару вне отдельного будущего reviewed recovery gate. Cursor двигается только после durable observations всей page и, в settle mode, после settlement result/ACK каждого связанного candidate.
 
 ## Task 1: первый implementable slice — pure evidence verifier
@@ -380,6 +383,8 @@ it('never promotes missing full-path or provider-attested finality', () => {
 **Interfaces:**
 - Consumes: chosen constants, `safeFetch` from `@aiag/shared/server`, injected `fetchImpl` in tests.
 - Produces: `createToncenterV3Provider(config): TonEvidenceProvider`; `resolveRecipientAccount(source,signal)` and `scanAccountPage(recipientAccount,cursor,signal): Promise<TonProviderResult>`.
+
+**Native-only sub-gate (amendment13.09, pending scoped review):** после принятия provider manifest Steps3–7 могут реализовать только `source.asset.kind='native'`. `resolveRecipientAccount` возвращает canonical native owner address без сети. Для `source.asset.kind='jetton'` он обязан вернуть `{kind:'source_error',code:'unsupported_asset',retryAfterMs:null}` до `fetchImpl` или любой provider/network операции. Это ограничение не маскируется `provider_schema_invalid`. Sub-gate не закрывает Gate2: полный Task2 и jetton auto-credit остаются OPEN до reviewed wallet-derivation mechanism и sanitized complete policy-qualifying jetton success fixture. Native historical provider acceptance не является merchant payment/runtime/settlement acceptance.
 
 - [ ] **Step 1: freeze the response manifest before mapping code.** Record exact endpoint paths/query parameters, request order, required fields/types, nullability, pagination direction, content types and fixture SHA-256. At minimum cover transactions by recipient account/time/LT, trace by tx/message hash, masterchain info and jetton master wallet derivation. Store no Authorization header/query secret and no unsanitized raw BOC.
 - [ ] **Step 2: enforce evidence labels.** Real files contain `evidenceClass:'sanitized_real_provider_response'`, `providerId`, exact origin, network, `capturedAt`, endpoint path, redactions list and sanitized body. Synthetic files cannot be placed in this directory. A test rejects `evidenceClass:'synthetic'` when loading the real-fixture suite.
