@@ -373,6 +373,7 @@ Steps:
 - `packages/api-gateway/src/__tests__/catalog-retail-token-pricing.test.ts` (new)
 - `packages/api-gateway/src/__tests__/public-catalog.test.ts` (new)
 - `packages/api-gateway/src/__tests__/stored-chat-fresh-policy.test.ts`
+- `packages/api-gateway/src/__tests__/catalog-reader.native.integration.test.ts` (new, pulled forward only to prove actual PostgreSQL reader syntax/execution after the Task3 review finding)
 
 Steps:
 
@@ -386,6 +387,8 @@ Steps:
 - [ ] Fail closed on invalid status/type/price/profile/config/policy shapes. Ignore descriptive metadata as a capability source.
 
 **Focused acceptance:** projector/pricing/policy unit tests, mutation-after-capture immutability checks, source/test typecheck, applicable lint and diff check. Independent financial/spec review must confirm exact pricing and old snapshot semantics before route wiring.
+
+**Review correction ruling (13 September):** the injected runner did not parse the invalid `CROSS JOIN LATERAL ... ON TRUE` SQL. Pull forward one guarded native assertion of the actual default reader query with a nonempty model-ID input, so PostgreSQL executes the real prepared query rather than a copied string. Use the already-applied guarded local test DB, with environment/connected marker checks before production imports and only exact UUID-owned fixture setup/cleanup if needed; no bootstrap, migration or shared reset. This narrow extra test file does not claim mounted HTTP, fan-out matrix or consumer acceptance owned by Task5. Preserve bound17/513 and ordering. Task5 must include this test in its final native/baseline composition. Cost: one additional focused integration test, replacing a known mock-only grammar blind spot.
 
 ### Task 4: route, both server modes and sanitized errors
 
