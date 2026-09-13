@@ -1,6 +1,6 @@
 # AG-P2: public catalog contract Implementation Plan
 
-> **Status:** DRAFT — contract candidate for independent design review. No implementation or AG-P2 acceptance is implied by this document. Implementation may start only after the root independent review records an explicit approval.
+> **Status:** APPROVED_FOR_IMPLEMENTATION13.09 — independent scoped design review accepted `229a83f`; all two Critical, five Important and two minor findings addressed. Root authorizes Task1 from this contract. This is design acceptance, not source, runtime or full AG-P2 acceptance.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use Superpowers `executing-plans` or the controller-approved `subagent-driven-development` workflow. Execute one task at a time, keep exclusive file ownership, and obtain an independent review before each scoped commit.
 
@@ -322,8 +322,8 @@ Every body in this matrix contains exactly `{error:{code,message}}` when it is a
 
 **Files:** this plan and private review report only.
 
-- [ ] Root independent reviewer checks schema consistency, identity/attestation language, pricing parity, revision/pagination races, auth/402 semantics, leakage boundary, task ownership and the acceptance matrix.
-- [ ] Any contract change is made here before source work. Record `APPROVED_FOR_IMPLEMENTATION` or blocking findings in the private controller workspace.
+- [x] Root independent reviewer checks schema consistency, identity/attestation language, pricing parity, revision/pagination races, auth/402 semantics, leakage boundary, task ownership and the acceptance matrix.
+- [x] Any contract change is made here before source work. Record `APPROVED_FOR_IMPLEMENTATION` or blocking findings in the private controller workspace.
 
 **Gate:** no implementation task starts while this plan remains DRAFT or the review is unresolved.
 
