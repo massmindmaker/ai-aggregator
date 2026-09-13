@@ -1,5 +1,8 @@
 # Приоритет 13.09: завершить AI Aggregator
 
+> **Пауза по расходу токенов.** После сообщения пользователя о расходе токенов контроллер остановил всех трёх активных агентов. На момент остановки HEAD `ace97b8`; общая heavy-lock очередь пуста. Recovery Task2 принят, Task3 bootstrap только начат без новых tracked source files. TON Task3 candidate `a598d01` прошёл локальные проверки, независимый review прерван и не принят. Catalog Task3 fixwave1 остаётся WIP: изменены `public-catalog.ts` и `public-catalog.test.ts`, новый `catalog-reader.native.integration.test.ts`; итоговые checks/commit/rereview не подтверждены. `.Codex/` и `stderr` сохранены. Продолжение — после нового указания пользователя, с узким объёмом и явным бюджетом; никаких фоновых повторных запусков не настроено.
+
+
 Пользователь явно изменил порядок работ: **продолжать только AI Aggregator; Arena и Agents Market дорабатывать позже**. Использовать максимальную полезную параллельность, Superpowers, независимые проверки и документирование. Этот порядок заменяет прежний приоритет полного Agents Market Web в handoff от08.09.
 
 Активный canonical root: `/home/bob/Projects/ai-aggregator`, ветка `feat/three-projects-completion`. Допущение для исполнения: закрывать оставшиеся локальные implementation/acceptance gates принятой product programme; production deploy, реальные платные вызовы, signer/funds и mainnet сохраняют отдельные release gates. Архивный cwd не является исходным продуктом. Один heavy build/test/index под `/tmp/ai-ecosystem-build.lock`.
