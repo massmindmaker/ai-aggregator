@@ -1,0 +1,272 @@
+{
+  "evidenceClass": "sanitized_real_provider_response",
+  "realProvider": true,
+  "providerId": "toncenter-v3-testnet",
+  "origin": "https://testnet.toncenter.com",
+  "network": "tvm:-3",
+  "capturedAt": "2026-09-13T12:37:04Z",
+  "method": "GET",
+  "endpointPath": "/api/v3/traces",
+  "query": {
+    "trace_id": "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=",
+    "include_actions": "true",
+    "limit": "1"
+  },
+  "contentType": "application/json",
+  "rawResponsePersisted": false,
+  "redactions": [
+    "response.address_book",
+    "response.metadata",
+    "trace.contract_info",
+    "transaction.account_state_before",
+    "transaction.account_state_after",
+    "message.init_state",
+    "message.message_content.body",
+    "external_message.message_content.decoded"
+  ],
+  "body": {
+    "traces": [
+      {
+        "trace_id": "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=",
+        "external_hash": "UAPAM6knImM6QxpdvzCN9o49Ijw24aUN9FpKcfUVYNc=",
+        "is_incomplete": false,
+        "mc_seqno_start": "84537751",
+        "mc_seqno_end": "84537751",
+        "start_lt": "96307052000003",
+        "end_lt": "96307052000005",
+        "start_utime": 1789302959,
+        "end_utime": 1789302959,
+        "transactions_order": [
+          "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=",
+          "nr6KZdblc7PLJ3JQ4cjR4swdFTJSQuOxI4CMx6QOBMg="
+        ],
+        "trace": {
+          "tx_hash": "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=",
+          "in_msg_hash": "UAPAM6knImM6QxpdvzCN9o49Ijw24aUN9FpKcfUVYNc=",
+          "children": [
+            {
+              "tx_hash": "nr6KZdblc7PLJ3JQ4cjR4swdFTJSQuOxI4CMx6QOBMg=",
+              "in_msg_hash": "bDclnklgF8+DWtfz3voo5YucDAN0QtWrI6/Q3yQUo4s=",
+              "children": []
+            }
+          ]
+        },
+        "trace_info": {
+          "trace_state": "complete",
+          "messages": 2,
+          "transactions": 2,
+          "pending_messages": 0,
+          "classification_state": "unclassified"
+        },
+        "transactions": {
+          "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=": {
+            "account": "0:872A129C8A6A631858D40280AC9A0D114CA1D6F1CFBB7886B3BAFAFEBDBE43BA",
+            "hash": "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=",
+            "lt": "96307052000003",
+            "now": 1789302959,
+            "mc_block_seqno": 84537751,
+            "trace_id": "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=",
+            "emulated": false,
+            "finality": "finalized",
+            "block_ref": {
+              "workchain": 0,
+              "shard": "8000000000000000",
+              "seqno": 89770771
+            },
+            "description": {
+              "type": "ord",
+              "aborted": false,
+              "destroyed": false,
+              "compute_ph": {
+                "skipped": false,
+                "success": true,
+                "exit_code": 0,
+                "reason": null
+              },
+              "action": {
+                "success": true,
+                "valid": true,
+                "result_code": 0,
+                "no_funds": false
+              },
+              "bounce": null
+            },
+            "in_msg": {
+              "hash": "UAPAM6knImM6QxpdvzCN9o49Ijw24aUN9FpKcfUVYNc=",
+              "source": null,
+              "destination": "0:872A129C8A6A631858D40280AC9A0D114CA1D6F1CFBB7886B3BAFAFEBDBE43BA",
+              "value": null,
+              "opcode": "0x0880000a",
+              "decoded_opcode": null,
+              "bounce": null,
+              "bounced": null,
+              "created_lt": null,
+              "created_at": null,
+              "message_content": {
+                "hash": "7HMvd0EajNZvo3h/ow1MXZaBN9AVs02gk1cfn6HvauY="
+              }
+            },
+            "out_msgs": [
+              {
+                "hash": "bDclnklgF8+DWtfz3voo5YucDAN0QtWrI6/Q3yQUo4s=",
+                "source": "0:872A129C8A6A631858D40280AC9A0D114CA1D6F1CFBB7886B3BAFAFEBDBE43BA",
+                "destination": "0:203BB83B9B6EFADCEB8FF8069354E6558448E0E7363208A0C5EBAD10CC9A7BD4",
+                "value": "10252729",
+                "opcode": "0x00000000",
+                "decoded_opcode": "text_comment",
+                "bounce": true,
+                "bounced": false,
+                "created_lt": "96307052000004",
+                "created_at": "1789302959",
+                "message_content": {
+                  "hash": "rQ7E2cJw/4yECiA1ogr9Le7atwm+9rdJbUGfSy/8bUQ=",
+                  "decoded": {
+                    "@type": "text_comment",
+                    "comment": "ORDER_GAMENO_2_252729",
+                    "type": "text_comment"
+                  }
+                }
+              }
+            ]
+          },
+          "nr6KZdblc7PLJ3JQ4cjR4swdFTJSQuOxI4CMx6QOBMg=": {
+            "account": "0:203BB83B9B6EFADCEB8FF8069354E6558448E0E7363208A0C5EBAD10CC9A7BD4",
+            "hash": "nr6KZdblc7PLJ3JQ4cjR4swdFTJSQuOxI4CMx6QOBMg=",
+            "lt": "96307052000005",
+            "now": 1789302959,
+            "mc_block_seqno": 84537751,
+            "trace_id": "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=",
+            "emulated": false,
+            "finality": "finalized",
+            "block_ref": {
+              "workchain": 0,
+              "shard": "8000000000000000",
+              "seqno": 89770771
+            },
+            "description": {
+              "type": "ord",
+              "aborted": false,
+              "destroyed": false,
+              "compute_ph": {
+                "skipped": false,
+                "success": true,
+                "exit_code": 0,
+                "reason": null
+              },
+              "action": {
+                "success": true,
+                "valid": true,
+                "result_code": 0,
+                "no_funds": false
+              },
+              "bounce": null
+            },
+            "in_msg": {
+              "hash": "bDclnklgF8+DWtfz3voo5YucDAN0QtWrI6/Q3yQUo4s=",
+              "source": "0:872A129C8A6A631858D40280AC9A0D114CA1D6F1CFBB7886B3BAFAFEBDBE43BA",
+              "destination": "0:203BB83B9B6EFADCEB8FF8069354E6558448E0E7363208A0C5EBAD10CC9A7BD4",
+              "value": "10252729",
+              "opcode": "0x00000000",
+              "decoded_opcode": "text_comment",
+              "bounce": true,
+              "bounced": false,
+              "created_lt": "96307052000004",
+              "created_at": "1789302959",
+              "message_content": {
+                "hash": "rQ7E2cJw/4yECiA1ogr9Le7atwm+9rdJbUGfSy/8bUQ=",
+                "decoded": {
+                  "@type": "text_comment",
+                  "comment": "ORDER_GAMENO_2_252729",
+                  "type": "text_comment"
+                }
+              }
+            },
+            "out_msgs": []
+          }
+        },
+        "actions": [
+          {
+            "type": "ton_transfer",
+            "success": true,
+            "action_id": "oY+HYHD+dLLh9PnZg7mywK6JT/YvRCJ+mW88DSFv8Sw=",
+            "start_lt": "96307052000004",
+            "end_lt": "96307052000005",
+            "start_utime": 1789302959,
+            "end_utime": 1789302959,
+            "trace_id": "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=",
+            "trace_mc_seqno_end": 84537751,
+            "transactions": [
+              "nr6KZdblc7PLJ3JQ4cjR4swdFTJSQuOxI4CMx6QOBMg=",
+              "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8="
+            ],
+            "details": {
+              "source": "0:872A129C8A6A631858D40280AC9A0D114CA1D6F1CFBB7886B3BAFAFEBDBE43BA",
+              "destination": "0:203BB83B9B6EFADCEB8FF8069354E6558448E0E7363208A0C5EBAD10CC9A7BD4",
+              "value": "10252729",
+              "value_extra_currencies": {},
+              "comment": "ORDER_GAMENO_2_252729",
+              "encrypted": false
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "supportingResponses": [
+    {
+      "capturedAt": "2026-09-13T12:37:22Z",
+      "method": "GET",
+      "endpointPath": "/api/v3/blocks",
+      "query": {
+        "workchain": "0",
+        "shard": "8000000000000000",
+        "seqno": "89770771",
+        "limit": "2"
+      },
+      "contentType": "application/json",
+      "body": {
+        "blocks": [
+          {
+            "workchain": 0,
+            "shard": "8000000000000000",
+            "seqno": 89770771,
+            "root_hash": "lOuE/tCSnDbHh9xxHdWXlEK86wdhrzF7iVROg5UzfVM=",
+            "file_hash": "bvew3X4cV2A5J3HHAV+j39fEZ9zd/PlcGezPEMsBSBY=",
+            "masterchain_block_ref": {
+              "workchain": -1,
+              "shard": "8000000000000000",
+              "seqno": 84537751
+            },
+            "start_lt": "96307052000000",
+            "end_lt": "96307052000006",
+            "gen_utime": "1789302959",
+            "tx_count": 4
+          }
+        ]
+      }
+    },
+    {
+      "capturedAt": "2026-09-13T12:43:51Z",
+      "method": "GET",
+      "endpointPath": "/api/v3/masterchainInfo",
+      "query": {},
+      "contentType": "application/json",
+      "body": {
+        "first": {
+          "workchain": -1,
+          "shard": "8000000000000000",
+          "seqno": 1,
+          "root_hash": "HBZqdwFA3MSjq0O8ntk6gX1Sibnw7cbWwEjKZt3JJpQ=",
+          "file_hash": "eocxdO1VHjKnalajy5t+bM/X7A+rdMMX3Lj2VRRNtFs="
+        },
+        "last": {
+          "workchain": -1,
+          "shard": "8000000000000000",
+          "seqno": 84538908,
+          "root_hash": "/RkaSpSVny45USAEv8xdqDVC+YXb2UjH/mz/jYzXSn4=",
+          "file_hash": "M6/pqxDWpt8iWU1RKtwsCo1Oms8Uidz5/7CU3VTPweM="
+        }
+      }
+    }
+  ]
+}

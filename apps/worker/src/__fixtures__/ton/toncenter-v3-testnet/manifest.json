@@ -1,0 +1,628 @@
+{
+  "schemaVersion": 1,
+  "status": "READY_FOR_MANIFEST_REVIEW",
+  "provider": {
+    "providerId": "toncenter-v3-testnet",
+    "origin": "https://testnet.toncenter.com",
+    "baseUrl": "https://testnet.toncenter.com/api/v3",
+    "network": "tvm:-3",
+    "evidenceModel": "server_trusted_indexer",
+    "authenticationDuringCapture": "none",
+    "unauthenticatedRateLimit": "1 request per second",
+    "expectedSuccessContentType": "application/json"
+  },
+  "capturePolicy": {
+    "capturedFrom": "2026-09-13T12:34:52Z",
+    "capturedThrough": "2026-09-13T12:46:32Z",
+    "publicApiRequestBudget": 20,
+    "publicApiRequestsUsed": 19,
+    "timeoutMs": 8000,
+    "maximumBodyBytes": 1048576,
+    "maximumRedirects": 0,
+    "authorizationSent": false,
+    "apiKeySent": false,
+    "rawResponsePersisted": false,
+    "remoteWrites": false,
+    "mainnetRequests": false
+  },
+  "captureRequestLog": [
+    {
+      "order": 1,
+      "path": "/api/v3/masterchainInfo",
+      "query": {},
+      "purpose": "initial indexed-head and response-shape probe"
+    },
+    {
+      "order": 2,
+      "path": "/api/v3/transactions",
+      "query": {
+        "limit": "8",
+        "offset": "0",
+        "sort": "desc"
+      },
+      "purpose": "bounded schema and candidate discovery"
+    },
+    {
+      "order": 3,
+      "path": "/api/v3/actions",
+      "query": {
+        "limit": "8",
+        "offset": "0",
+        "sort": "desc",
+        "include_accounts": "true",
+        "include_transactions": "false"
+      },
+      "purpose": "native candidate discovery"
+    },
+    {
+      "order": 4,
+      "path": "/api/v3/messages",
+      "query": {
+        "opcode": "0x00000000",
+        "limit": "8",
+        "offset": "0",
+        "sort": "desc"
+      },
+      "purpose": "text-comment message discovery"
+    },
+    {
+      "order": 5,
+      "path": "/api/v3/traces",
+      "query": {
+        "msg_hash": "bDclnklgF8+DWtfz3voo5YucDAN0QtWrI6/Q3yQUo4s=",
+        "include_actions": "true",
+        "limit": "1",
+        "offset": "0"
+      },
+      "purpose": "trace lookup by message hash and top-level shape probe"
+    },
+    {
+      "order": 6,
+      "path": "/api/v3/traces",
+      "query": {
+        "trace_id": "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=",
+        "include_actions": "true",
+        "limit": "1"
+      },
+      "purpose": "sanitized complete native-success capture"
+    },
+    {
+      "order": 7,
+      "path": "/api/v3/blocks",
+      "query": {
+        "workchain": "0",
+        "shard": "8000000000000000",
+        "seqno": "89770771",
+        "limit": "2"
+      },
+      "purpose": "native-success block-anchor capture"
+    },
+    {
+      "order": 8,
+      "path": "/api/v3/actions",
+      "query": {
+        "limit": "50",
+        "offset": "0",
+        "sort": "desc",
+        "include_accounts": "false",
+        "include_transactions": "false"
+      },
+      "purpose": "bounded failure discovery"
+    },
+    {
+      "order": 9,
+      "path": "/api/v3/transactions",
+      "query": {
+        "limit": "20",
+        "offset": "8",
+        "sort": "desc"
+      },
+      "purpose": "bounded aborted and bounced discovery"
+    },
+    {
+      "order": 10,
+      "path": "/api/v3/actions",
+      "query": {
+        "limit": "50",
+        "offset": "500",
+        "sort": "desc",
+        "include_accounts": "false",
+        "include_transactions": "false"
+      },
+      "purpose": "bounded older failure discovery"
+    },
+    {
+      "order": 11,
+      "path": "/api/v3/traces",
+      "query": {
+        "trace_id": "YYo0s1yF+8xjzkjzJTCTVrVBjRV0SC676T+eE0rJNcg=",
+        "include_actions": "true",
+        "limit": "1"
+      },
+      "purpose": "sanitized complete aborted-and-bounced trace capture"
+    },
+    {
+      "order": 12,
+      "path": "/api/v3/blocks",
+      "query": {
+        "workchain": "0",
+        "shard": "8000000000000000",
+        "seqno": "89770661",
+        "limit": "2"
+      },
+      "purpose": "failure block-anchor capture"
+    },
+    {
+      "order": 13,
+      "path": "/api/v3/masterchainInfo",
+      "query": {},
+      "purpose": "final indexed-head capture"
+    },
+    {
+      "order": 14,
+      "path": "/api/v3/transactions",
+      "query": {
+        "account": "0:203BB83B9B6EFADCEB8FF8069354E6558448E0E7363208A0C5EBAD10CC9A7BD4",
+        "limit": "8",
+        "offset": "0",
+        "sort": "desc"
+      },
+      "purpose": "account-scoped LT page 1"
+    },
+    {
+      "order": 15,
+      "path": "/api/v3/transactions",
+      "query": {
+        "account": "0:203BB83B9B6EFADCEB8FF8069354E6558448E0E7363208A0C5EBAD10CC9A7BD4",
+        "end_lt": "96307655000006",
+        "limit": "8",
+        "offset": "0",
+        "sort": "desc"
+      },
+      "purpose": "account-scoped inclusive-overlap LT page 2"
+    },
+    {
+      "order": 16,
+      "path": "/api/v3/jetton/transfers",
+      "query": {
+        "limit": "8",
+        "offset": "0",
+        "sort": "desc"
+      },
+      "purpose": "bounded jetton candidate discovery"
+    },
+    {
+      "order": 17,
+      "path": "/api/v3/jetton/wallets",
+      "query": {
+        "owner_address": "0:CCA3DC4922DEAA32160983996E8482B5F179112552943DE3A0AC0D0E449A1381",
+        "jetton_address": "0:C52992C516D880A097AF5EED587F261002E585AF2838EC45C3D5BB763364DB5F",
+        "exclude_zero_balance": "false",
+        "limit": "2",
+        "offset": "0"
+      },
+      "purpose": "source owner+master wallet lookup"
+    },
+    {
+      "order": 18,
+      "path": "/api/v3/traces",
+      "query": {
+        "trace_id": "1TeVwjRitep0lNfBfGb66FjGb6kGI/BsltnxDlu+EAM=",
+        "include_actions": "true",
+        "limit": "1"
+      },
+      "purpose": "jetton candidate qualification; rejected because notification recipient transaction aborted"
+    },
+    {
+      "order": 19,
+      "path": "/api/v3/jetton/wallets",
+      "query": {
+        "owner_address": "0:FA6BEBB28E2017F20466B4F8B6CED75E044962C3A1AB05AE9D40178CF309507C",
+        "jetton_address": "0:C52992C516D880A097AF5EED587F261002E585AF2838EC45C3D5BB763364DB5F",
+        "exclude_zero_balance": "false",
+        "limit": "2",
+        "offset": "0"
+      },
+      "purpose": "destination owner+master wallet lookup"
+    }
+  ],
+  "officialSources": [
+    {
+      "topic": "API v3 overview and exact testnet base URL",
+      "url": "https://docs.ton.org/api/v3/overview"
+    },
+    {
+      "topic": "API authentication and unauthenticated rate limit",
+      "url": "https://docs.ton.org/api/v3/authentication"
+    },
+    {
+      "topic": "transactions endpoint",
+      "url": "https://docs.ton.org/api/v3/blockchain-data/get-transactions"
+    },
+    {
+      "topic": "traces endpoint",
+      "url": "https://docs.ton.org/api/v3/actions-and-traces/get-traces"
+    },
+    {
+      "topic": "blocks endpoint",
+      "url": "https://docs.ton.org/api/v3/blockchain-data/get-blocks"
+    },
+    {
+      "topic": "masterchain indexed head",
+      "url": "https://docs.ton.org/api/v3/blockchain-data/get-masterchain-info"
+    },
+    {
+      "topic": "offset pagination and logical-time sorting",
+      "url": "https://docs.ton.org/api/v3/pagination"
+    },
+    {
+      "topic": "jetton wallets index lookup",
+      "url": "https://docs.ton.org/api/v3/jettons/get-jetton-wallets"
+    },
+    {
+      "topic": "canonical jetton get_wallet_address derivation method",
+      "url": "https://docs.ton.org/contracts/standard/tokens/jettons/find"
+    }
+  ],
+  "requestOrder": {
+    "native": [
+      "GET /api/v3/transactions for the canonical recipient, newest to oldest",
+      "GET /api/v3/traces for a candidate tx_hash or msg_hash",
+      "GET /api/v3/blocks once for every distinct transaction block coordinate",
+      "GET /api/v3/masterchainInfo after all trace and block reads"
+    ],
+    "jetton": [
+      "GET /api/v3/jetton/wallets for the exact owner_address and pinned jetton_address",
+      "GET /api/v3/transactions for the returned jetton wallet, newest to oldest",
+      "GET /api/v3/traces for a candidate tx_hash or msg_hash",
+      "GET /api/v3/blocks once for every distinct transaction block coordinate",
+      "GET /api/v3/masterchainInfo after all trace and block reads"
+    ]
+  },
+  "endpoints": {
+    "transactions": {
+      "method": "GET",
+      "path": "/api/v3/transactions",
+      "successContentType": "application/json",
+      "query": {
+        "account": {
+          "type": "repeated string",
+          "requiredByAdapter": true,
+          "value": "one canonical raw recipient or derived jetton-wallet address"
+        },
+        "start_utime": {
+          "type": "nonnegative int32 seconds",
+          "requiredByAdapter": false,
+          "use": "inclusive scan floor when representable"
+        },
+        "end_utime": {
+          "type": "nonnegative int32 seconds",
+          "requiredByAdapter": false,
+          "use": "inclusive scan ceiling when pinned"
+        },
+        "start_lt": {
+          "type": "nonnegative int64 decimal",
+          "requiredByAdapter": false,
+          "use": "inclusive lower LT bound"
+        },
+        "end_lt": {
+          "type": "nonnegative int64 decimal",
+          "requiredByAdapter": false,
+          "use": "inclusive upper LT bound; wire representation of internal beforeLt"
+        },
+        "limit": {
+          "type": "int32",
+          "constant": "8"
+        },
+        "offset": {
+          "type": "int32",
+          "constant": "0",
+          "reason": "LT cursor supplies the next page boundary"
+        },
+        "sort": {
+          "type": "enum asc|desc",
+          "constant": "desc"
+        }
+      },
+      "pagination": {
+        "direction": "newest_to_oldest_by_transaction_lt",
+        "pageSize": 8,
+        "maximumPagesPerSourcePerRun": 4,
+        "wireCursorParameter": "end_lt",
+        "internalCursorField": "beforeLt",
+        "inclusive": true,
+        "nextBeforeLt": "LT of the final new transaction remaining after the exact overlap row is removed",
+        "overlap": "for every page after the first, the first row must exactly equal the previous page's final row by account+transaction hash+LT; remove that one row before processing",
+        "cycleUpperLt": "LT of the first row from the first page; later rows are deferred to the next cycle",
+        "dedupeIdentity": [
+          "account",
+          "transaction hash",
+          "candidate message hash"
+        ],
+        "terminalBoundary": "an empty raw page ends the cycle; a page containing only the exact overlap row also ends the cycle because end_lt is inclusive and another identical request cannot make progress",
+        "floorBoundary": "after removing the exact overlap, stop before processing rows older than scanFloorTimeMs; reaching the floor ends the cycle",
+        "cursorOnEnd": "reset to null according to the recovery contract so a later cycle intentionally rescans bounded history",
+        "regressionRule": "pagination_regressed if a non-first non-empty page does not begin with the exact overlap identity, if any retained row has LT greater than or equal to beforeLt, or if retained LTs are not strictly descending; the overlap-only terminal page is endReached, not regression",
+        "providerOffsetPagination": "officially supported but not used for the recovery cursor because inserts can shift offsets"
+      },
+      "responseSchema": {
+        "response.transactions": "required array; may be empty",
+        "transaction.account": "required non-null string address",
+        "transaction.hash": "required non-null standard-base64 32-byte hash string",
+        "transaction.lt": "required non-null decimal string",
+        "transaction.now": "required non-null integer seconds",
+        "transaction.mc_block_seqno": "required non-null integer",
+        "transaction.trace_id": "required non-null standard-base64 32-byte hash string",
+        "transaction.emulated": "required boolean",
+        "transaction.finality": "required provider string fact; never sufficient for credit",
+        "transaction.block_ref": "required non-null object",
+        "transaction.block_ref.workchain": "required integer",
+        "transaction.block_ref.shard": "required 16-hex-character string",
+        "transaction.block_ref.seqno": "required integer",
+        "transaction.in_msg": "required non-null object for a mapped candidate",
+        "transaction.in_msg.hash": "required standard-base64 32-byte hash string",
+        "transaction.in_msg.source": "nullable address string",
+        "transaction.in_msg.destination": "required address string for a mapped candidate",
+        "transaction.in_msg.value": "nullable decimal string",
+        "transaction.in_msg.opcode": "nullable 0x-prefixed 8-hex string",
+        "transaction.in_msg.decoded_opcode": "nullable string",
+        "transaction.in_msg.bounce": "nullable boolean",
+        "transaction.in_msg.bounced": "nullable boolean",
+        "transaction.in_msg.created_lt": "nullable decimal string",
+        "transaction.in_msg.created_at": "nullable decimal-seconds string",
+        "transaction.out_msgs": "required array"
+      }
+    },
+    "traces": {
+      "method": "GET",
+      "path": "/api/v3/traces",
+      "successContentType": "application/json",
+      "query": {
+        "selector": "exactly one of trace_id, tx_hash, or msg_hash; tx_hash/msg_hash are preferred from a scan candidate",
+        "trace_id": "repeated standard-base64 hash string",
+        "tx_hash": "repeated standard-base64 hash string",
+        "msg_hash": "repeated standard-base64 hash string",
+        "include_actions": "true",
+        "limit": "1",
+        "offset": "0"
+      },
+      "responseSchema": {
+        "response.traces": "required array; exactly one exact selector match for a mapped candidate",
+        "trace.trace_id": "required non-null standard-base64 32-byte hash string",
+        "trace.external_hash": "nullable standard-base64 32-byte hash string",
+        "trace.is_incomplete": "required boolean",
+        "trace.mc_seqno_start": "required non-null decimal string",
+        "trace.mc_seqno_end": "required non-null decimal string",
+        "trace.start_lt": "required non-null decimal string",
+        "trace.end_lt": "required non-null decimal string",
+        "trace.start_utime": "required integer seconds",
+        "trace.end_utime": "required integer seconds",
+        "trace.transactions_order": "required array of standard-base64 transaction hashes",
+        "trace.transactions": "required object keyed by the same standard-base64 transaction hashes",
+        "trace.trace": "required non-null tree; every node has tx_hash, in_msg_hash, and children array",
+        "trace.trace_info.trace_state": "required string and must equal complete for credit",
+        "trace.trace_info.messages": "required nonnegative integer",
+        "trace.trace_info.transactions": "required nonnegative integer",
+        "trace.trace_info.pending_messages": "required nonnegative integer and must equal zero for credit",
+        "transaction.description.aborted": "required boolean",
+        "transaction.description.compute_ph": "nullable object; skipped execution exposes null success/exit_code and a reason string",
+        "transaction.description.action": "nullable object; when present success and valid are booleans and result_code is integer",
+        "transaction.description.bounce": "nullable object with type string",
+        "message.message_content": "nullable object",
+        "message.message_content.decoded": "nullable object; only allowlisted decoded fields are retained"
+      }
+    },
+    "blocks": {
+      "method": "GET",
+      "path": "/api/v3/blocks",
+      "successContentType": "application/json",
+      "query": {
+        "workchain": "exact transaction.block_ref.workchain integer",
+        "shard": "exact transaction.block_ref.shard string",
+        "seqno": "exact transaction.block_ref.seqno integer",
+        "limit": "2"
+      },
+      "responseSchema": {
+        "response.blocks": "required array with exactly one exact-coordinate match",
+        "block.workchain": "required integer",
+        "block.shard": "required 16-hex-character string",
+        "block.seqno": "required integer",
+        "block.root_hash": "required standard-base64 32-byte hash string",
+        "block.file_hash": "required standard-base64 32-byte hash string",
+        "block.masterchain_block_ref.workchain": "required integer and must equal -1",
+        "block.masterchain_block_ref.shard": "required 16-hex-character string",
+        "block.masterchain_block_ref.seqno": "required integer",
+        "block.start_lt": "required decimal string",
+        "block.end_lt": "required decimal string",
+        "block.gen_utime": "required decimal-seconds string",
+        "block.tx_count": "required nonnegative integer"
+      }
+    },
+    "masterchainInfo": {
+      "method": "GET",
+      "path": "/api/v3/masterchainInfo",
+      "successContentType": "application/json",
+      "query": {},
+      "responseSchema": {
+        "response.first": "required block object",
+        "response.last": "required block object and treated as latest indexed masterchain head",
+        "last.workchain": "required integer and must equal -1",
+        "last.shard": "required 16-hex-character string",
+        "last.seqno": "required integer",
+        "last.root_hash": "required standard-base64 32-byte hash string",
+        "last.file_hash": "required standard-base64 32-byte hash string"
+      },
+      "finalityUse": "latest indexed head depth is last.seqno minus trace.mc_seqno_end; transaction.finality is not a substitute"
+    },
+    "jettonWallets": {
+      "method": "GET",
+      "path": "/api/v3/jetton/wallets",
+      "successContentType": "application/json",
+      "query": {
+        "owner_address": "exact canonical invoice recipient address",
+        "jetton_address": "exact pinned canonical jetton master address",
+        "exclude_zero_balance": "false",
+        "limit": "2",
+        "offset": "0"
+      },
+      "responseSchema": {
+        "response.jetton_wallets": "required array",
+        "wallet.address": "required non-null address string",
+        "wallet.owner": "required non-null address string and must exactly match owner_address",
+        "wallet.jetton": "required non-null address string and must exactly match jetton_address",
+        "wallet.balance": "required decimal string",
+        "wallet.last_transaction_lt": "required decimal string",
+        "wallet.code_hash": "required standard-base64 32-byte hash string",
+        "wallet.data_hash": "required standard-base64 32-byte hash string",
+        "wallet.mintless_info": "nullable object"
+      },
+      "selectionRule": "exactly one exact owner+master match is required; zero or multiple exact matches fail closed",
+      "trustBoundary": "this is provider-attested indexed lookup, not execution of the master contract get_wallet_address method",
+      "undeployedWalletCaveat": "an owner wallet absent from the provider index cannot be derived by this endpoint"
+    },
+    "jettonTransfersDiscoveryOnly": {
+      "method": "GET",
+      "path": "/api/v3/jetton/transfers",
+      "runtimeMapping": false,
+      "purpose": "bounded fixture discovery only",
+      "query": {
+        "limit": "8",
+        "offset": "0",
+        "sort": "desc"
+      }
+    }
+  },
+  "normalizationRules": {
+    "hashes": "decode standard base64 strictly to exactly 32 bytes, then encode lowercase 64-character hex; reject malformed, non-canonical, or wrong-length input",
+    "addresses": "accept only raw 0:<64 hex> or -1:<64 hex>, then lowercase; no friendly-address inference",
+    "logicalTimesAndAmounts": "retain canonical unsigned decimal strings with at most 78 digits",
+    "timestamps": "convert provider seconds to safe-integer milliseconds exactly; reject overflow, negative, fractional, or inconsistent values",
+    "opcodes": "retain lowercase 0x-prefixed eight-hex strings or null only where the manifest allows null",
+    "messageIndexes": "map in_msg to index 0 and out_msgs to their zero-based provider array positions",
+    "externalInputNulls": "map null source as null, null value as canonical 0, and null bounced as false only for an external root input whose source, created_lt, and created_at are all null; reject those nulls on internal messages",
+    "executionFlags": "description.aborted maps directly; compute_ph.success=true and skipped=false are required for computeSuccess=true; a missing/null action or any action.success/action.valid value other than true maps actionSuccess=false",
+    "traceTransactions": "walk transactions_order and look up each exact key in the transactions object; reject missing, extra, duplicate, or reordered identities",
+    "messageLinkage": "match every retained output hash to exactly one later input hash and require all mapped message facts to agree",
+    "blockAnchor": "join every transaction.block_ref coordinate to one exact /blocks result and attach decoded root_hash, file_hash, and masterchain_block_ref.seqno",
+    "traceCompleteness": "require is_incomplete=false, trace_info.trace_state=complete, pending_messages=0, and counts consistent with retained arrays",
+    "decodedPayloadAllowlist": "retain only fields needed for text_comment, jetton_transfer, jetton_internal_transfer, and jetton_notify; omit all BOCs, signatures, code, data, and unknown decoded subtrees",
+    "unknownFields": "ignore only after the bounded transport has enforced the 1 MiB limit; any required missing or null field fails closed"
+  },
+  "observedProbes": {
+    "ltPagination": {
+      "account": "0:203BB83B9B6EFADCEB8FF8069354E6558448E0E7363208A0C5EBAD10CC9A7BD4",
+      "firstPageQuery": {
+        "limit": "8",
+        "offset": "0",
+        "sort": "desc"
+      },
+      "firstPageLts": [
+        "96308311000001",
+        "96308239000003",
+        "96308106000001",
+        "96308046000003",
+        "96307916000001",
+        "96307846000003",
+        "96307713000001",
+        "96307655000006"
+      ],
+      "secondPageQuery": {
+        "end_lt": "96307655000006",
+        "limit": "8",
+        "offset": "0",
+        "sort": "desc"
+      },
+      "secondPageFirstLt": "96307655000006",
+      "inclusiveOverlapObserved": true,
+      "strictlyDescendingAfterOverlapObserved": true
+    },
+    "nativeSuccess": {
+      "traceId": "VMZIdve2niD2bmK0DdpnFEO/zNIqhfkJZfFo3/8CyE8=",
+      "candidateMessageHash": "bDclnklgF8+DWtfz3voo5YucDAN0QtWrI6/Q3yQUo4s=",
+      "recipientTransactionHash": "nr6KZdblc7PLJ3JQ4cjR4swdFTJSQuOxI4CMx6QOBMg=",
+      "traceMasterchainSeqno": 84537751,
+      "latestIndexedMasterchainSeqno": 84538908,
+      "indexedDepthAtHeadCapture": 1157,
+      "blockCoordinate": {
+        "workchain": 0,
+        "shard": "8000000000000000",
+        "seqno": 89770771
+      }
+    },
+    "nativeFailure": {
+      "traceId": "YYo0s1yF+8xjzkjzJTCTVrVBjRV0SC676T+eE0rJNcg=",
+      "traceComplete": true,
+      "abortedTransactionHash": "r2gVUukAiEDo1c5Z6tGeYK/vJyvebagHV6jGJYgqldE=",
+      "abortReason": "no_state",
+      "bounceMessageHash": "WJYCeBruoEKBBJxx3TZ7B1VN8EsFN8rt+zFiiF5OlVI=",
+      "bounceTransactionHash": "WmjF8zruTo8EP4KTeDR3sfoDcOLAAjZWx4absPw1ZuQ=",
+      "blockCoordinate": {
+        "workchain": 0,
+        "shard": "8000000000000000",
+        "seqno": 89770661
+      }
+    },
+    "jettonWalletLookup": {
+      "master": "0:C52992C516D880A097AF5EED587F261002E585AF2838EC45C3D5BB763364DB5F",
+      "sourceOwner": "0:CCA3DC4922DEAA32160983996E8482B5F179112552943DE3A0AC0D0E449A1381",
+      "sourceWallet": "0:6EBDB5829EBC8FA6BCCB7F0E06D8689EF2FBCCF964F03896319E5606C6EC65D4",
+      "destinationOwner": "0:FA6BEBB28E2017F20466B4F8B6CED75E044962C3A1AB05AE9D40178CF309507C",
+      "destinationWallet": "0:9371AE155A0E3CA5D1D05433099349D8C34DE208EB95E3674F37C8C70D69BBD6",
+      "exactOwnerAndMasterFiltersObserved": true,
+      "cryptographicGetWalletAddressExecuted": false
+    },
+    "nonqualifyingJettonTrace": {
+      "traceId": "1TeVwjRitep0lNfBfGb66FjGb6kGI/BsltnxDlu+EAM=",
+      "isIncomplete": false,
+      "traceState": "complete",
+      "actionSuccess": true,
+      "creditWalletTransactionHash": "ELuKstKYXlnT/zFgURE170Hl+LP99VCyeVm0ZWy8GA0=",
+      "notificationMessageHash": "/lSP9dXH2Vns22DqhMSY5mpOl61DubWuckTlGo7ncn0=",
+      "notificationRecipientTransactionHash": "qZ2mDDD90ZQkDvUosVjvd43zo8Uqh24FwuxDKYxAQXE=",
+      "notificationRecipientAborted": true,
+      "notificationRecipientComputeReason": "no_gas",
+      "qualifiesForJettonSuccessFixture": false
+    }
+  },
+  "fixtures": {
+    "nativeSuccess": {
+      "path": "native-success.sanitized.json",
+      "sha256": "f5746910883f1225a6d8dc920c56f1998cb7ce2632b8f63a0da09a856b4ced3c",
+      "bytes": 9513,
+      "status": "captured"
+    },
+    "nativeAborted": {
+      "path": "native-aborted.sanitized.json",
+      "sha256": "0a364221c4f00343a6dda68168a296d3528c74e9ae27dfa09a6e293e093213d6",
+      "bytes": 10690,
+      "status": "captured"
+    },
+    "nativeBounced": {
+      "path": "native-bounced.sanitized.json",
+      "sha256": "891a106a937012a7c5ebb4427cf143e3111e5059a68f92ea90adc8727af05cc1",
+      "bytes": 10825,
+      "status": "captured",
+      "sharesProviderTraceWith": "nativeAborted"
+    },
+    "jettonSuccess": {
+      "path": "jetton-success.sanitized.json",
+      "sha256": null,
+      "bytes": null,
+      "status": "not_created",
+      "reason": "No captured trace satisfied the full policy: the candidate notification recipient transaction was aborted with compute reason no_gas. Provider action success was not promoted over the failed transaction."
+    }
+  },
+  "gates": {
+    "nativeFixtureGate": "satisfied for manifest and sanitized historical fixture review; no adapter or runtime capability exists in this slice",
+    "abortedAndBouncedFailureGate": "satisfied by one complete real trace represented by two assertion-focused sanitized fixtures",
+    "jettonAutoCreditGate": "closed",
+    "jettonAutoCreditBlockers": [
+      "no sanitized full-path jetton success fixture whose complete transaction set is non-emulated, non-aborted, non-bounced, compute-successful, and action-successful",
+      "/api/v3/jetton/wallets attests an indexed owner+master mapping but does not execute or cryptographically prove the master contract get_wallet_address derivation",
+      "an undeployed recipient jetton wallet cannot be resolved through the indexed wallet lookup"
+    ],
+    "adapterRuntimeGate": "not_part_of_this_discovery_slice",
+    "merchantAcceptanceGate": "not_satisfied_by_public_historical_fixtures",
+    "proofClaim": "These fixtures prove only the observed sanitized TON Center testnet schema and negative/positive historical shapes. They are not proof of a merchant payment, production readiness, or permission to settle."
+  }
+}
