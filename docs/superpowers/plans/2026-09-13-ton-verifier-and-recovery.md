@@ -552,8 +552,16 @@ Shutdown never treats an already-started DB promise as cancelled or rolled back.
 
 ## Task 3: append-only observations and durable lease/cursor
 
+### Local migration correction ruling — 13 September
+
+Task3 applied0074 only to the guarded local test database after two fully rolled-back syntax/extension-resolution attempts. Native execution then found that embedded JSON `providerCursor:null` was rejected as `TON_INVALID_OBJECT` despite the accepted nullable cursor contract. The failing disposable database was removed with zero sessions; the shared guarded database remains at74. Applied0074 SHA-256 is `27320ece76b3119e40691db74bf6716833e81a2f071ef0a7eeaab017c5663ed9` and must remain unchanged.
+
+Controller allocates previously free0075 to this Task3 owner for the minimal additive function correction. This implements the already accepted nullable-cursor semantics; it does not widen the financial or runtime design. No historical migration rewrite, shared database reset or external action is authorized. Cost: one additional migration retained in history. Final focused wrapper/native tests and manifest75 fresh-apply/no-op proof, then independent SQL/security/TypeScript review, must cover both0074 and0075 before Task3 acceptance. Other broad baseline runs remain gated on that review.
+
+
 **Files:**
 - Create: `packages/database/migrations/0074_ton_reconciliation.sql` after confirming reserved catalog `0073` ownership and rechecking the manifest; if `0074` is occupied, stop and update this plan to the actual next ID before implementation and independent review.
+- Create: `packages/database/migrations/0075_ton_reconciliation_json_null.sql` as the controller-allocated additive correction after local application of0074 exposed SQL NULL versus JSON `null` cursor validation. Preserve applied0074 byte-for-byte;0075 only corrects the existing accepted nullable-cursor semantics, without changing observation/lease/financial contracts. Recheck that0075 is still free before creation.
 - Modify: `packages/database/src/schema/ton-payments.ts`
 - Modify: `packages/database/src/ton-payment-types.ts`
 - Modify: `packages/database/src/ton-payments.ts`
@@ -562,7 +570,7 @@ Shutdown never treats an already-started DB promise as cancelled or rolled back.
 - Modify: `packages/database/package.json`
 - Create: `packages/database/src/__tests__/ton-reconciliation.test.ts`
 - Create: `packages/database/scripts/__tests__/ton-reconciliation.native.integration.test.ts`
-- Modify: `packages/database/scripts/__tests__/native-migrate.test.ts` only for manifest length73→74 and final migration filename0074; preserve all other assertions.
+- Modify: `packages/database/scripts/__tests__/native-migrate.test.ts` only for final manifest length73→75 and final migration filename0075; preserve all other assertions. The initial74 expectation is superseded by the additive correction below.
 
 **Interfaces:**
 - Consumes: persistence contract above; accepted TON2 `TonPaymentDatabase` and invoice JSON projection.
