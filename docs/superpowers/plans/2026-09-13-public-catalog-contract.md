@@ -1,6 +1,6 @@
 # AG-P2: public catalog contract Implementation Plan
 
-> **Status:** APPROVED_FOR_IMPLEMENTATION13.09 — independent scoped design review accepted `229a83f`; all two Critical, five Important and two minor findings addressed. Shared Task1 source `5466c34` + `a502f4c` is independently accepted. Task2 may proceed after migration-number preflight; runtime and full AG-P2 acceptance remain open.
+> **Status:** APPROVED_FOR_IMPLEMENTATION13.09 — independent scoped design review accepted `229a83f`; all two Critical, five Important and two minor findings addressed. Shared Task1 source `5466c34` + `a502f4c` is independently accepted. Task2 durable revision `78f7e38` + `665a43b` is independently accepted, including guarded pristine73 migration proof and native22 checks. Task3 may proceed; runtime and full AG-P2 acceptance remain open.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use Superpowers `executing-plans` or the controller-approved `subagent-driven-development` workflow. Execute one task at a time, keep exclusive file ownership, and obtain an independent review before each scoped commit.
 
@@ -351,15 +351,15 @@ Steps:
 
 **Exclusive files:**
 
-- `packages/database/migrations/<actual-next>_gateway_catalog_revision.sql` (new; resolve exact number immediately before work)
+- `packages/database/migrations/0073_gateway_catalog_revision.sql` (new; resolve exact number immediately before work)
 - `packages/database/scripts/__tests__/gateway-catalog-revision.native.integration.test.ts` (new)
 - `packages/database/scripts/__tests__/native-migrate.test.ts` (only manifest length and final filename expectations for the newly allocated migration)
 
 Steps:
 
-- [ ] RED on a disposable database: missing singleton/revision; insert/update/delete of relevant model/upstream/candidate facts fail to advance exactly once per statement; rollback incorrectly advances; zero-row update advances; unrelated table change advances; or overflow/corrupt singleton incorrectly permits a catalog read.
-- [ ] Add idempotent singleton table, positive revision constraint, guarded bump function and statement triggers. Mutation rollback must roll back the bump. Missing/duplicate/corrupt singleton makes the catalog query fail closed.
-- [ ] Prove price, status, enabled/binding/residency/config and deletion invalidation. Execute the real admin catalog apply transaction and prove the statement trigger is the sole bump owner on commit, rollback, conflict/no-op and zero-row behavior; admin code must not manually bump. Prove an unrelated ledger/key telemetry update does not bump the DB revision; key policy remains covered by its request hash.
+- [x] RED on a disposable database: missing singleton/revision; insert/update/delete of relevant model/upstream/candidate facts fail to advance exactly once per statement; rollback incorrectly advances; zero-row update advances; unrelated table change advances; or overflow/corrupt singleton incorrectly permits a catalog read.
+- [x] Add idempotent singleton table, positive revision constraint, guarded bump function and statement triggers. Mutation rollback must roll back the bump. Missing/duplicate/corrupt singleton makes the catalog query fail closed.
+- [x] Prove price, status, enabled/binding/residency/config and deletion invalidation. Execute the real admin catalog apply transaction and prove the statement trigger is the sole bump owner on commit, rollback, conflict/no-op and zero-row behavior; admin code must not manually bump. Prove an unrelated ledger/key telemetry update does not bump the DB revision; key policy remains covered by its request hash.
 
 **Focused acceptance:** fresh migration plus no-op rerun on the task database, focused native revision test under `flock`, migration manifest check, applicable type/lint and diff check. This does not authorize a production migration.
 

@@ -6,6 +6,12 @@
 
 Проверки: focused7; source и отдельные strict test types; shared build, явный package subpath import и emitted declaration assertions; применимый lint и diff-check — PASS. Рецензент дополнительно проверил cursor mismatch/underfilled контрпримеры, declarations и отсутствие запрещённых раскрываемых полей. Это source/fixture acceptance, не live provider evidence.
 
+## Принятый локальный шаг: durable DB revision
+
+`78f7e38` + `665a43b` приняты после независимого SQL/TypeScript PASS / APPROVE. Миграция0073 задаёт singleton/read authority и statement triggers; native-проверки подтверждают commit/rollback/no-op/concurrency, overflow/corruption, реальный admin apply и отсутствие влияния несвязанных операций. Cleanup выдерживает частичный post-commit сбой, сохраняет foreign sentinel, восстанавливает env и закрывает оба клиента.
+
+Проверки: native9 + manifest13 =22, strict test types, database types, lint, formatting и diff-check — PASS. Финальный manifest применён на новой guarded loopback БД из `template0`:73 applied, затем0 applied/73 skipped; собственная БД удалена, общая test DB не сбрасывалась. Это локальная migration/source приёмка, не production.
+
 ## Открытые шаги
 
-[Owner plan](../../superpowers/plans/2026-09-13-public-catalog-contract.md): Task2 durable DB revision, Task3 exact retail/availability projection, Task4 HTTP route/errors и Task5 AG-owned consumer/native acceptance ещё не приняты. `/v1/models` сохранён. Реальный Agents Market consumer и AG→AM integration остаются UNVERIFIED, пока Market на паузе. Production, платные upstream и новые runtime settings не проверялись и не включались.
+[Owner plan](../../superpowers/plans/2026-09-13-public-catalog-contract.md): Task3 exact retail/availability projection, Task4 HTTP route/errors и Task5 AG-owned consumer/native acceptance ещё не приняты. `/v1/models` сохранён. Реальный Agents Market consumer и AG→AM integration остаются UNVERIFIED, пока Market на паузе. Production, платные upstream и новые runtime settings не проверялись и не включались.
