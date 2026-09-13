@@ -18,7 +18,7 @@ Source anchors: `packages/api-gateway/src/server.ts`, `routes/v1/{stored-chat,ch
 
 ## Следующий локальный этап
 
-[Bounded settlement recovery](../../superpowers/plans/2026-09-13-gateway-settlement-recovery-runner.md) — **design candidate**, ожидает независимого financial/spec review. Принятая `recoverGatewayHttpSettlement` пока не имеет нетестового callsite. Новый runner должен восстанавливать только `outcome_recorded` с уже сохранёнными и проверяемыми HTTP/quota facts; никаких повторных inference, новых outcomes или угаданных списаний.
+[Bounded settlement recovery](../../superpowers/plans/2026-09-13-gateway-settlement-recovery-runner.md) — **дизайн принят**: `ecfa54e`, независимый financial/spec и design-quality APPROVE, все I1–I6 закрыты. Следующий шаг — Task1 pure loop; реализация ещё не принята. Принятая `recoverGatewayHttpSettlement` пока не имеет нетестового callsite. Новый runner должен восстанавливать только `outcome_recorded` с уже сохранёнными и проверяемыми HTTP/quota facts; никаких повторных inference, новых outcomes или угаданных списаний.
 
 Accepted refund DB primitives (`e5ca6dd`, migration0066 и `apps/web/src/lib/payments/topup-refund.ts`) сохраняются. Их не нужно писать заново. Actual Tinkoff confirmation, admin refund, webhook и billing summary ещё требуют Tasks3–5 binding amendments. До activation нужны deployment-wide drain legacy writers и авторитетные quota opening balances/policies. Один флаг одного процесса эти условия не доказывает.
 

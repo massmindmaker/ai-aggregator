@@ -10,7 +10,7 @@
 
 **Spec:** [gateway admission](2026-09-07-gateway-charge-admission.md), [mounted stored-chat acceptance](2026-09-08-stored-chat-public-cutover.md), [terminal recovery](2026-09-08-http-terminal-recovery.md), [programme](2026-09-07-production-continuation.md), and final migration `packages/database/migrations/0071_gateway_http_recovery_validation.sql`.
 
-**Design gate:** Amendment of candidate `96a1792` after independent review findings I1-I6. Implementation remains blocked until one independent financial/spec re-review approves the whole amended plan.
+**Design gate: APPROVED_FOR_IMPLEMENTATION.** Candidate `ecfa54e` passed independent financial/spec and design-quality re-review: I1-I6 addressed, zero Critical/Important findings. Implement Tasks 1-3 in order with independent source review after each; runtime activation remains outside this approval.
 
 ## Global Constraints
 
