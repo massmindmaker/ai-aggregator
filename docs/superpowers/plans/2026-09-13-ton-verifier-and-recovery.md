@@ -558,10 +558,13 @@ Task3 applied0074 only to the guarded local test database after two fully rolled
 
 Controller allocates previously free0075 to this Task3 owner for the minimal additive function correction. This implements the already accepted nullable-cursor semantics; it does not widen the financial or runtime design. No historical migration rewrite, shared database reset or external action is authorized. Cost: one additional migration retained in history. Final focused wrapper/native tests and manifest75 fresh-apply/no-op proof, then independent SQL/security/TypeScript review, must cover both0074 and0075 before Task3 acceptance. Other broad baseline runs remain gated on that review.
 
+**Independent review correction:** candidate `a598d01` requires six fixes: single-clock/locked-row CAS classification, cursor DELETE protection, deadline-aware transaction facade with no late query/client retention, strict invoice result parsing, real restart/CAS/backoff evidence, and failure-safe owned DB teardown. Controller allocates free0076 to the same Task3 owner for the two SQL corrections;0074 and0075 hashes stay fixed. This enforces already accepted contracts without authorizing new runtime behavior. The final manifest is76; native fresh76/no-op76 and covering static tests precede a scoped re-review. Cost: one additional additive migration. Guarded apply0076 waits for the active recovery native rerun/cleanup handoff; no shared database reset is allowed.
+
 
 **Files:**
 - Create: `packages/database/migrations/0074_ton_reconciliation.sql` after confirming reserved catalog `0073` ownership and rechecking the manifest; if `0074` is occupied, stop and update this plan to the actual next ID before implementation and independent review.
 - Create: `packages/database/migrations/0075_ton_reconciliation_json_null.sql` as the controller-allocated additive correction after local application of0074 exposed SQL NULL versus JSON `null` cursor validation. Preserve applied0074 byte-for-byte;0075 only corrects the existing accepted nullable-cursor semantics, without changing observation/lease/financial contracts. Recheck that0075 is still free before creation.
+- Create: `packages/database/migrations/0076_ton_reconciliation_cas_guards.sql` for the independent Task3 review corrections: one locked row/DB clock for CAS mutation and classification, and immutable cursor DELETE protection. Preserve applied0074/0075 byte-for-byte; recheck0076 is free. Existing accepted interfaces, observation semantics and financial authority remain unchanged.
 - Modify: `packages/database/src/schema/ton-payments.ts`
 - Modify: `packages/database/src/ton-payment-types.ts`
 - Modify: `packages/database/src/ton-payments.ts`
@@ -570,7 +573,7 @@ Controller allocates previously free0075 to this Task3 owner for the minimal add
 - Modify: `packages/database/package.json`
 - Create: `packages/database/src/__tests__/ton-reconciliation.test.ts`
 - Create: `packages/database/scripts/__tests__/ton-reconciliation.native.integration.test.ts`
-- Modify: `packages/database/scripts/__tests__/native-migrate.test.ts` only for final manifest length73→75 and final migration filename0075; preserve all other assertions. The initial74 expectation is superseded by the additive correction below.
+- Modify: `packages/database/scripts/__tests__/native-migrate.test.ts` only for final manifest length73→76 and final migration filename0076; preserve all other assertions. Initial74/75 expectations are superseded by the additive review corrections.
 
 **Interfaces:**
 - Consumes: persistence contract above; accepted TON2 `TonPaymentDatabase` and invoice JSON projection.
