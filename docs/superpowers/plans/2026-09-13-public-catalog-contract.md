@@ -353,6 +353,7 @@ Steps:
 
 - `packages/database/migrations/<actual-next>_gateway_catalog_revision.sql` (new; resolve exact number immediately before work)
 - `packages/database/scripts/__tests__/gateway-catalog-revision.native.integration.test.ts` (new)
+- `packages/database/scripts/__tests__/native-migrate.test.ts` (only manifest length and final filename expectations for the newly allocated migration)
 
 Steps:
 
