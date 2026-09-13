@@ -1,0 +1,37 @@
+# Приоритет 13.09: завершить AI Aggregator
+
+Пользователь явно изменил порядок работ: **продолжать только AI Aggregator; Arena и Agents Market дорабатывать позже**. Использовать максимальную полезную параллельность, Superpowers, независимые проверки и документирование. Этот порядок заменяет прежний приоритет полного Agents Market Web в handoff от08.09.
+
+Активный canonical root: `/home/bob/Projects/ai-aggregator`, ветка `feat/three-projects-completion`. Допущение для исполнения: закрывать оставшиеся локальные implementation/acceptance gates принятой product programme; production deploy, реальные платные вызовы, signer/funds и mainnet сохраняют отдельные release gates. Архивный cwd не является исходным продуктом. Один heavy build/test/index под `/tmp/ai-ecosystem-build.lock`.
+
+## AI Aggregator — продолжать
+
+- Канон: [entrypoint](../DEVELOPMENT-ENTRYPOINT.md), [production continuation](../superpowers/plans/2026-09-07-production-continuation.md), [TON3 plan](../superpowers/plans/2026-09-13-ton-verifier-and-recovery.md).
+- TON3 Task1 pure verifier принят: `f46386c` + `b17603e`, scoped independent APPROVE; final46 focused/types/applicable lint/import-boundary PASS. Только synthetic behavior.
+- Task2 manifest/real historical fixtures candidate `d74f469` получил BLOCK; fixwave1 выполняется только в четырёх JSON под `apps/worker/src/__fixtures__/ton/toncenter-v3-testnet/`. Замечания: обязательные поля и indexed-head в negative fixtures; точное отображение comment/path/block anchors; ownership курсора на terminal/cap. Повторное review обязательно до mapping code.
+- Исходный public testnet capture budget:20 requests, использовано19 на snapshot. Последний запрос допустим только для восстановления недостающих exact facts в уже разрешённом capture, без auth/redirects/raw BOC persistence. Новый provider/mainnet не разрешён этим gate.
+- Native-only adapter требует принятого manifest и явного native sub-gate. Jetton остаётся закрыт: indexed wallet lookup не заменяет master `get_wallet_address`, подходящей полной success fixture нет. Tasks1–6 максимум disabled/observe; settlement требует отдельного worker-only DB principal/ACL gate.
+- Параллельно выполняется read-only inventory оставшихся Aggregator tracks по canonical programme. Текущие `.Codex/` и `stderr` untracked сохранены; не чистить и не включать случайно в commits.
+
+## Agents Market — остановлен, сохранить
+
+Root `/home/bob/Projects/agents-market`, ветка `feat/standalone-agents-market`, HEAD на момент остановки `09e3c60`.
+
+- T2.1 foundation, T2.2 UUID schema/backfill и T2.3a trust core ранее приняты. Canonical local DB после принятого cutover:10 migrations applied/0 pending, backfill repeated as already-applied, readiness checker true. Общий TMA/Web/worker stack после cutover **не запускался**: activation остаётся после полногоT2.5.
+- T2.3c UI source `733093f` + `deaeccf`, shell `f00f1e8`: React и TypeScript final scoped APPROVE. Focused UI2 и Web types/lint PASS. Это source review, не browser/integration acceptance.
+- Common DTO `b849eed` + `ce8d2b2`, root wiring `6ff45f3`, TMA dependency `0d5888e`, Web unit runner `9e0f4f0` сохранены.
+- T2.3b HTTP candidate `09e3c60` и core preauth seam `50d88e7` **ещё не прошли независимое TS/security review**. Owner evidence: common36/build/types, accounts4/types, TMA HTTP6/types/focused lint, Web auth20/types/focused lint; guarded native actual auth-only HTTP2 PASS на disposable DB, включая0009 compatibility и0010/backfill full flows, Origin/CSRF/replay/conflict/rate429/DB503/unavailable delivery. Это reported focused evidence, не production или browser acceptance.
+- Подробные private reports/briefs/reviews находятся в ignored `.superpowers/sdd/2026-09-08-native-account-principal/`; root browser checklist и T2.4 preflight сохранены. Не загружать session scratch в shared memory.
+- **Незавершённый root WIP, не запускать:** изменён `apps/web/package.json`; untracked `apps/web/scripts/auth-browser-fixture.ts` и `apps/web/tsconfig.auth-fixture.json`. Launcher не проверен, не собран и не запускался. Его package-lock delta ещё не выполнен. Перед возобновлением нужны typed/security review, доказательство принадлежности preview до HTTP probe, failure/cleanup sequencing и приватный outbox lifecycle; затем guarded browser gate. Не считать его готовым launcher и не удалять.
+- Следующее после возобновления: independent HTTP/security review → завершить/review browser launcher → auth-only browser acceptance. T2.4/T2.5 domain/worker/commerce cutover и full Web остаются открыты. Сейчас их не выполнять.
+
+## AI Arena — остановлена, сохранить
+
+Root `/home/bob/Projects/aiarena`, ветка `feat/arena-foundation-reviewed`, HEAD `f2a7d1b` (уточнение документальной истории паузы).
+
+- Последний accepted code: PE-T1 pure prediction contract/scorer до `f61b51d`; независимый TS/spec APPROVE, final focused17/types/lint PASS. DB jobs/runner/UI/evaluator не приняты.
+- PE-T2 designer остановлен после read-only inventory: новый `2026-09-13-prediction-opt-in-binding.md` не создан, source/DB/runtime edits отсутствуют. Root private `task-2-preflight.md` сохранён в соответствующем ignored SDD workspace.
+- Открытые architecture prerequisites: реальный deterministic executable scorer bundle SHA до первого v3 binding freeze; preallocated policy/binding IDs и concrete FK/transaction order; typed v2/v3 terms и fresh consent, включая team/invitation paths. Старые v1/v2 snapshots/digests/receipts не переписывать.
+- Исторические untracked документы и Graphify outputs сохранены. Дизайн/реализацию продолжать только после возвращения пользователя к Arena.
+
+Состояния внешней памяти/индексов фиксируются отдельно в [MEMORY-STATUS.md](MEMORY-STATUS.md). Owner docs и текущий Git важнее старых locator summaries; никакой новый release PASS из этого handoff не следует.
