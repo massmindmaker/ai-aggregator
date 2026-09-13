@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "object": "catalog.list",
+  "catalogRevision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "data": [
+    {
+      "object": "catalog.model",
+      "model": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "slug": "synthetic-stored-chat",
+        "type": "chat",
+        "artifact": {
+          "attestation": "unattested",
+          "version": null,
+          "digest": null
+        }
+      },
+      "availability": {
+        "state": "available",
+        "scope": "advertised_contract",
+        "reason": null,
+        "liveUpstreamHealthChecked": false
+      },
+      "deployment": {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "configurationRevision": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "contract": "stored-plaintext-chat-v1"
+      },
+      "invocation": {
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "authorization": "bearer_api_key",
+        "contentType": "application/json",
+        "maxBodyBytes": 262144,
+        "requestBody": {
+          "unknownFields": "reject",
+          "unknownMessageFields": "reject",
+          "unsupportedExecutionFields": [
+            "tools",
+            "functions",
+            "tool_choice",
+            "modalities",
+            "audio",
+            "input_audio"
+          ],
+          "multimodalMessageContent": "reject"
+        },
+        "headers": {
+          "idempotencyKey": {
+            "name": "Idempotency-Key",
+            "required": true,
+            "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+          },
+          "sessionId": {
+            "name": "X-AIAG-Session-Id",
+            "required": false,
+            "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+          },
+          "upstreamKey": {
+            "name": "X-Upstream-Key",
+            "allowed": false,
+            "rejection": "UNSUPPORTED_EXECUTION_CONTRACT"
+          }
+        },
+        "parameters": {
+          "model": { "required": true, "const": "synthetic-stored-chat" },
+          "messages": {
+            "required": true,
+            "minItems": 1,
+            "roles": ["system", "user", "assistant"],
+            "content": "nonempty_string"
+          },
+          "stream": {
+            "required": false,
+            "const": false,
+            "normalizedDefault": false
+          },
+          "max_tokens": {
+            "required": false,
+            "type": "integer",
+            "minimum": 1,
+            "acceptedMaximum": 9007199254740991,
+            "effectiveMaximum": 4096,
+            "configuredDefault": 8192,
+            "defaultApplied": 4096,
+            "normalization": "clamp_to_effective_max"
+          },
+          "aiag_mode": {
+            "required": false,
+            "values": ["auto", "fastest", "cheapest", "balanced", "ru-only"],
+            "availableValues": ["auto", "ru-only"],
+            "defaultRequested": "auto",
+            "effectiveDefault": "auto",
+            "requiresExplicitAvailableValue": false
+          }
+        }
+      },
+      "capabilities": [
+        {
+          "id": "chat.completions.stored.plaintext.v1",
+          "inputModalities": ["text"],
+          "outputModalities": ["text"],
+          "streaming": false,
+          "toolCalling": false,
+          "structuredOutput": false,
+          "asynchronous": false,
+          "storedResult": true,
+          "usageReceipt": true,
+          "requestDependentRestrictions": ["pii_transborder"],
+          "contextWindowTokens": 8192,
+          "maxOutputTokens": 4096
+        }
+      ],
+      "pricing": {
+        "revision": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "currency": "USD",
+        "settlementUnit": "microcredit",
+        "microcreditsPerUsdCent": "1000",
+        "rates": {
+          "input": { "amount": "0.125", "unit": "microcredit_per_token" },
+          "output": { "amount": "0.5", "unit": "microcredit_per_token" }
+        },
+        "actualCharge": {
+          "formulaVersion": "db-input-output-cents-per-1k-legacy-whole-cache-v1",
+          "cachePolicy": {
+            "scope": "whole_input_plus_output_cost",
+            "multiplier": "0.5",
+            "factorFormula": "prompt=0?1:((prompt-cached)+cached*multiplier)/prompt"
+          },
+          "rounding": "nearest_nonnegative_half_up_once_to_microcredit"
+        },
+        "maximumAuthorization": {
+          "formula": "input_rate*context+max(output_rate-input_rate,0)*max_output",
+          "rounding": "ceil_once_to_microcredit"
+        },
+        "quoteSemantics": "terms_only_quote_created_at_admission"
+      }
+    },
+    {
+      "object": "catalog.model",
+      "model": {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "slug": "synthetic-unavailable-chat",
+        "type": "chat",
+        "artifact": {
+          "attestation": "unattested",
+          "version": null,
+          "digest": null
+        }
+      },
+      "availability": {
+        "state": "unavailable",
+        "scope": "advertised_contract",
+        "reason": "runtime_contract_unavailable",
+        "liveUpstreamHealthChecked": false
+      },
+      "deployment": null,
+      "invocation": null,
+      "capabilities": [],
+      "pricing": null
+    }
+  ],
+  "page": {
+    "limit": 20,
+    "nextCursor": "eyJzY2hlbWFWZXJzaW9uIjoxLCJjYXRhbG9nUmV2aXNpb24iOiJzaGEyNTY6MTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMSIsImFmdGVyIjp7InNsdWciOiJzeW50aGV0aWMtc3RvcmVkLWNoYXQiLCJtb2RlbElkIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIn19"
+  }
+}

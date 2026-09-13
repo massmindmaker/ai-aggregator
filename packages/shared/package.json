@@ -25,6 +25,10 @@
     "./ton-payment-contract": {
       "types": "./dist/ton-payment-contract.d.ts",
       "import": "./dist/ton-payment-contract.js"
+    },
+    "./catalog-contract": {
+      "types": "./dist/catalog-contract.d.ts",
+      "import": "./dist/catalog-contract.js"
     }
   },
   "scripts": {
