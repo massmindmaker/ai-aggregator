@@ -1,5 +1,10 @@
 # Статус developer memory
 
+## AG TON3 pure source refresh — 13.09.2026
+
+Existing Serena AG locator updated/readback to Task1 ownerf7fa163, sourcef46386c+b17603e. Provider manifest/fixtures remain candidate. No new Graphify rebuild during active provider work; stable LightRAG/Brain navigation not duplicated.
+
+
 ## AM auth core refresh — 13.09.2026
 
 Existing Serena AM locator updated/readback to accepted owner42387bc, preserving schema10/0 and stopped-stack constraint. T2.3b HTTP remains candidate. Graphify deferred during active HTTP source work; stable LightRAG/Brain navigation not duplicated.
