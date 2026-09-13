@@ -531,7 +531,7 @@
     "externalInputNulls": "map null source as null, null value as canonical 0, and null bounced as false only for an external root input whose source, created_lt, and created_at are all null; reject those nulls on internal messages",
     "executionFlags": "description.aborted maps directly; compute_ph.success=true and skipped=false are required for computeSuccess=true; a missing/null action or any action.success/action.valid value other than true maps actionSuccess=false",
     "traceTransactions": "walk transactions_order and look up each exact key in the transactions object; reject missing, extra, duplicate, or reordered identities",
-    "messageLinkage": "match every retained output hash to exactly one later input hash and require all mapped message facts to agree",
+    "messageLinkage": "match every retained output hash to exactly one later input hash and require every mapped message content fact except contextual index to agree; validate input index 0 and each output zero-based position independently, retaining index in normalized evidence and digests",
     "blockAnchor": "join every transaction.block_ref coordinate to one exact /blocks result and attach decoded root_hash, file_hash, and masterchain_block_ref.seqno",
     "traceCompleteness": "require is_incomplete=false, trace_info.trace_state=complete, pending_messages=0, and counts consistent with retained arrays",
     "decodedPayloadAllowlist": "retain only fields needed for text_comment, jetton_transfer, jetton_internal_transfer, and jetton_notify; omit all BOCs, signatures, code, data, and unknown decoded subtrees",
