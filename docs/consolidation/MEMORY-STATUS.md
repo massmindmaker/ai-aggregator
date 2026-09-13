@@ -15,6 +15,7 @@ Owner acceptance `21bf66a`, source `724a031`: [TON2 plan](../superpowers/plans/2
 - LightRAG MCP callable: hybrid context прочитан; точный `get_documents_paginated` readback подтвердил `doc-365591f10b64a84274fc6ed561d9de74`, `processed`. Точечный naive context также вернул содержимое stable locator с canonical continuation и всеми тремя entrypoints. Повторной записи нет. Semantic recall не заменяет текущие исходники.
 - Serena MCP callable: instructions, activation canonical Agents Market и чтение existing `ai-hub/development-entrypoint` выполнены. Locator ведёт к owner entrypoint/continuation и прежней принятой asset isolation `ac313e8`; новых code capabilities не подтверждает.
 - Graphify JSON readback: AG `fbccc4fc2fa9afda1b0fb6d6f485a506a6103da1` (9710 nodes/14836 links), Arena `7dcf5bd21f8c5c1e92b96f53e7bfb2b96a6e2631` (2107/3156), AM `dca7746a7d454777953d42bbe8be9ca99484f55a` (1714/2466). Это прежние snapshots, не текущая полная индексация; refresh после принятия новых source, под shared lock.
+- Serena Arena existing locator также прочитан supported MCP: он ведёт к accepted AR-P2.3/source807fc7c и честно не заявляет evaluator. Candidate PE-T1 не добавлен как принятый.
 - Brain `/home/bob/brain/Projects/AI-Hub/README.md` прочитан: ссылки на все три owner entrypoints, MEMORY-STATUS и continuation существуют. Изменений нет.
 - Memory Graph остаётся read-only, запись не выполнялась.
 - Конфигурация Codex прочитана: `[features.context_management] experimental_mode = true`. Это подтверждение настройки, не доказательство поведенческого эффекта.

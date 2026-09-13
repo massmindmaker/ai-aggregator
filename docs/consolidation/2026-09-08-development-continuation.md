@@ -38,4 +38,12 @@ AM [статический inventory bridge](/home/bob/Projects/agents-market/do
 
 ## Текущая волна Web и Arena
 
-AM Web Task1 public shell прошёл read-only prerequisites review и реализуется. Task2 требует конкретного account UUID/session/backfill/backend+worker subplan; private API и полезный Web run ещё не приняты. Arena PE-T1 реализуется в рамках approved pure architecture, без DB/runner/UI. Новые source проходят свои тесты и независимые reviews перед acceptance.
+AM Web Task1 public shell прошёл read-only prerequisites review и реализуется. Task2 получил [конкретный account UUID/session/backfill/backend+worker subplan](/home/bob/Projects/agents-market/docs/superpowers/plans/2026-09-08-native-account-principal.md), commit `3bb2ddc`; T2.1 isolated auth foundation реализуется, private API и полезный Web run ещё не приняты. Arena PE-T1 реализуется в рамках approved pure architecture, без DB/runner/UI. Новые source проходят свои тесты и независимые reviews перед acceptance.
+
+**Непринятые кандидаты текущей волны:** Web shell `2070f85` прошёл проверки исполнителя, но независимый React review нашёл a11y/spec/filter issues; TS review ещё идёт. Arena pure scorer `eae437f` прошёл focused13/units34+49/types/lint, но TS/spec review BLOCK по полноте manifest/tests и runtime invariants; начат единый fix wave. Эти commits не являются новой acceptance и пока не индексируются как принятые.
+
+## Возобновление 13.09.2026
+
+После прерывания активных исполнителей нет; сохранённые незакоммиченные Web fixes и T2.1 foundation переданы отдельным владельцам. Arena d466e5a остаётся кандидатом: scoped review закрыл3из5замечаний; wave2 исправляет production hash-binding test и bounded runtime dataset validation. TON2 acceptance280ea5f сохраняется; повторный baseline не требуется. Все проверки новых кандидатов под общим flock.
+
+Guarded runtime13.09 восстановлен из существующего `/home/bob/.cache/ai-ecosystem-test-runtime`: PG15432/Redis16379 только loopback, прежний pgdata без reset; восстановлены compatibility symlinks. Read-only AM db:status: applied8/pending1. Candidate0009 остаётся вне canonical schema до независимого review.
