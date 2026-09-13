@@ -1,5 +1,5 @@
 import type { TonInvoice } from '@aiag/database';
-import { safeFetch } from '@aiag/shared/server';
+import { safeFetch, SsrfError } from '@aiag/shared/server';
 
 import {
   normalizeCanonicalTonEvidence,
@@ -18,8 +18,10 @@ export type TonSourceErrorCode =
 
 export interface TonProviderCursor {
   schemaVersion: 1;
-  beforeLt: string | null;
-  cycleUpperLt: string | null;
+  /** All cursor fields are present for a continuation; cycle reset uses outer null. */
+  beforeLt: string;
+  beforeTransactionHash: string;
+  cycleUpperLt: string;
 }
 
 export type TonProviderResult =
@@ -90,6 +92,10 @@ function decimal(value: unknown): string {
   const result = string(value);
   if (result.length > 78 || !DECIMAL.test(result)) throw new ProviderFailure('provider_schema_invalid');
   return result;
+}
+
+function isBoundedDecimal(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 78 && DECIMAL.test(value);
 }
 
 function address(value: unknown): string {
@@ -164,6 +170,18 @@ async function jsonBody(response: Response): Promise<unknown> {
   try { return JSON.parse(new TextDecoder().decode(Buffer.concat(chunks))); } catch { throw new ProviderFailure('provider_schema_invalid'); }
 }
 
+function validateTraceTree(value: unknown, transactionHashes: Set<string>, messageHashes: Set<string>): void {
+  const node = object(value);
+  const transactionHash = base64Hash(node.tx_hash);
+  const messageHash = base64Hash(node.in_msg_hash);
+  if (!transactionHashes.delete(transactionHash) || !messageHashes.has(messageHash)) {
+    throw new ProviderFailure('provider_schema_invalid');
+  }
+  const children = node.children;
+  if (!Array.isArray(children)) throw new ProviderFailure('provider_schema_invalid');
+  for (const child of children) validateTraceTree(child, transactionHashes, messageHashes);
+}
+
 function message(raw: unknown, index: number, externalAllowed: boolean): Record<string, unknown> {
   const item = object(raw);
   const source = item.source;
@@ -195,11 +213,26 @@ function mapTrace(traceBody: unknown, scan: Record<string, unknown>, blocks: Map
   if (traceId !== base64Hash(scan.trace_id) || bool(trace.is_incomplete)) throw new ProviderFailure('provider_schema_invalid');
   const startMc = decimal(trace.mc_seqno_start); const endMc = decimal(trace.mc_seqno_end);
   if (BigInt(startMc) > BigInt(endMc) || BigInt(endMc) > BigInt(Number.MAX_SAFE_INTEGER)) throw new ProviderFailure('provider_schema_invalid');
+  const startLt = decimal(trace.start_lt); const endLt = decimal(trace.end_lt);
+  const startUtime = secondsToMs(trace.start_utime); const endUtime = secondsToMs(trace.end_utime);
+  if (BigInt(startLt) > BigInt(endLt) || startUtime > endUtime) throw new ProviderFailure('provider_schema_invalid');
   const info = object(trace.trace_info);
   if (info.trace_state !== 'complete' || integer(info.pending_messages) !== 0) throw new ProviderFailure('provider_schema_invalid');
   const order = trace.transactions_order;
   const transactions = object(trace.transactions);
-  if (!Array.isArray(order) || order.length === 0 || order.length > TON_EVIDENCE_LIMITS.maxTraceTransactions || Object.keys(transactions).length !== order.length) throw new ProviderFailure('provider_schema_invalid');
+  if (!Array.isArray(order) || order.length === 0 || order.length > TON_EVIDENCE_LIMITS.maxTraceTransactions || Object.keys(transactions).length !== order.length || integer(info.transactions) !== order.length) throw new ProviderFailure('provider_schema_invalid');
+  const expectedTransactions = new Set(order.map((hash) => base64Hash(hash)));
+  const traceMessageHashes = new Set<string>();
+  for (const rawHash of order) {
+    const transaction = object(transactions[string(rawHash)]);
+    traceMessageHashes.add(base64Hash(object(transaction.in_msg).hash));
+    const outMessages = transaction.out_msgs;
+    if (!Array.isArray(outMessages)) throw new ProviderFailure('provider_schema_invalid');
+    for (const rawMessage of outMessages) traceMessageHashes.add(base64Hash(object(rawMessage).hash));
+  }
+  if (integer(info.messages) !== traceMessageHashes.size) throw new ProviderFailure('provider_schema_invalid');
+  validateTraceTree(trace.trace, expectedTransactions, traceMessageHashes);
+  if (expectedTransactions.size !== 0) throw new ProviderFailure('provider_schema_invalid');
   const mapped = order.map((rawHash, index) => {
     const rawHashText = string(rawHash); const tx = object(transactions[rawHashText]);
     const txHash = base64Hash(tx.hash);
@@ -211,14 +244,16 @@ function mapTrace(traceBody: unknown, scan: Record<string, unknown>, blocks: Map
     const description = object(tx.description); const compute = description.compute_ph === null ? null : object(description.compute_ph); const action = description.action === null ? null : object(description.action);
     const inMessage = message(tx.in_msg, 0, true); const outs = tx.out_msgs;
     if (!Array.isArray(outs) || outs.length + 1 > TON_EVIDENCE_LIMITS.maxMessagesPerTransaction) throw new ProviderFailure('provider_schema_invalid');
-    return { account: address(tx.account), hash: txHash, lt: decimal(tx.lt), chainTimeMs: secondsToMs(tx.now), emulated: bool(tx.emulated), aborted: bool(description.aborted), computeSuccess: compute !== null && compute.skipped === false && compute.success === true, actionSuccess: action !== null && action.success === true && action.valid === true, blockRef: { workchain: integer(block.workchain), shard: string(block.shard).toLowerCase(), seqno: integer(block.seqno), rootHash: base64Hash(anchor.root_hash), fileHash: base64Hash(anchor.file_hash), masterchainSeqno: integer(mcRef.seqno) }, inMessage, outMessages: outs.map((entry, outIndex) => message(entry, outIndex + 1, false)) };
+    return { account: address(tx.account), hash: txHash, lt: decimal(tx.lt), chainTimeMs: secondsToMs(tx.now), emulated: bool(tx.emulated), aborted: bool(description.aborted), computeSuccess: compute !== null && compute.skipped === false && compute.success === true, actionSuccess: action !== null && action.success === true && action.valid === true, blockRef: { workchain: integer(block.workchain), shard: string(block.shard).toLowerCase(), seqno: integer(block.seqno), rootHash: base64Hash(anchor.root_hash), fileHash: base64Hash(anchor.file_hash), masterchainSeqno: integer(mcRef.seqno) }, inMessage, outMessages: outs.map((entry, outIndex) => message(entry, outIndex, false)) };
   });
   const scanHash = base64Hash(scan.hash); const scanMessageHash = base64Hash(object(scan.in_msg).hash);
   const selected = mapped.filter((tx) => tx.account === recipient && tx.hash === scanHash && tx.lt === decimal(scan.lt) && tx.inMessage.hash === scanMessageHash);
   const selectedTransaction = selected[0];
   if (!selectedTransaction || selected.length !== 1 || object(selectedTransaction.inMessage.decodedPayload).kind !== 'native_comment') throw new ProviderFailure('provider_schema_invalid');
-  const last = object(object(headBody).last);
-  if (last.workchain !== -1) throw new ProviderFailure('provider_schema_invalid');
+  const head = object(headBody);
+  const firstHead = object(head.first);
+  const last = object(head.last);
+  if (last.workchain !== -1 || firstHead.workchain !== -1 || !/^[0-9a-fA-F]{16}$/.test(string(last.shard)) || !/^[0-9a-fA-F]{16}$/.test(string(firstHead.shard))) throw new ProviderFailure('provider_schema_invalid');
   const canonical = { schemaVersion: 1 as const, source: { providerId: TON_PROVIDER_ID, origin: TON_PROVIDER_ORIGIN, evidenceModel: TON_EVIDENCE_MODEL, fetchedAtMs }, network: 'tvm:-3', asset: { network: 'tvm:-3' as const, kind: 'native' as const, decimals: 9 }, trace: { id: traceId, complete: true, masterchainSeqno: Number(endMc), orderedTransactionHashes: mapped.map((tx) => tx.hash) }, latestIndexedMasterchain: { seqno: integer(last.seqno), rootHash: base64Hash(last.root_hash), fileHash: base64Hash(last.file_hash) }, transactions: mapped, creditPath: { kind: 'native' as const, recipientTransactionHash: scanHash, creditMessageHash: scanMessageHash } };
   const normalized = normalizeCanonicalTonEvidence(canonical, TON_EVIDENCE_LIMITS);
   if ('kind' in normalized) throw new ProviderFailure(normalized.code);
@@ -230,14 +265,20 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
   const fetchImpl = config.fetchImpl ?? safeFetch;
   const nowMs = config.nowMs ?? Date.now;
   const request = async (path: string, query: URLSearchParams, signal: AbortSignal): Promise<unknown> => {
-    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    const abort = () => controller.abort(); signal.addEventListener('abort', abort, { once: true });
+    // A cancellation already observed by the runner is a terminal operational
+    // boundary for this request: do not start a new provider call.
+    if (signal.aborted) throw new ProviderFailure('timeout');
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    signal.addEventListener('abort', abort, { once: true });
     try {
       const response = await fetchImpl(`https://testnet.toncenter.com${path}?${query.toString()}`, { method: 'GET', signal: controller.signal, maxRedirects: 0 });
       const problem = statusFailure(response); if (problem) throw problem;
       return await jsonBody(response);
     } catch (error) {
       if (error instanceof ProviderFailure) throw error;
+      if (error instanceof SsrfError && (error as SsrfError & { reason?: string }).reason === 'redirect_limit') throw new ProviderFailure('redirect_rejected');
       if (controller.signal.aborted) throw new ProviderFailure('timeout');
       throw new ProviderFailure('provider_schema_invalid');
     } finally { clearTimeout(timer); signal.removeEventListener('abort', abort); }
@@ -249,9 +290,15 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
     },
     async scanAccountPage(recipientAccount, cursor, signal) {
       try {
-        const account = address(recipientAccount); if (cursor && (cursor.schemaVersion !== 1 || cursor.beforeLt === null || !DECIMAL.test(cursor.beforeLt) || (cursor.cycleUpperLt !== null && !DECIMAL.test(cursor.cycleUpperLt)))) throw new ProviderFailure('pagination_regressed');
+        const account = address(recipientAccount);
+        if (cursor && (cursor.schemaVersion !== 1
+          || !isBoundedDecimal(cursor.beforeLt)
+          || !/^[0-9a-f]{64}$/.test(cursor.beforeTransactionHash)
+          || !isBoundedDecimal(cursor.cycleUpperLt)
+          || BigInt(cursor.beforeLt) > BigInt(cursor.cycleUpperLt))) {
+          throw new ProviderFailure('pagination_regressed');
+        }
         const beforeLt = cursor?.beforeLt;
-        if (cursor && beforeLt === null) throw new ProviderFailure('pagination_regressed');
         const query = new URLSearchParams({ account, limit: String(PAGE_SIZE), offset: '0', sort: 'desc' }); if (beforeLt !== null && beforeLt !== undefined) query.set('end_lt', beforeLt);
         const page = object(await request('/api/v3/transactions', query, signal)); const rows = page.transactions;
         if (!Array.isArray(rows) || rows.length > PAGE_SIZE) throw new ProviderFailure('provider_schema_invalid');
@@ -259,7 +306,7 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
         const first = object(rows[0]); let retained = rows.map(object);
         if (cursor) {
           const overlap = object(rows[0]);
-          if (address(overlap.account) !== account || decimal(overlap.lt) !== cursor.beforeLt) throw new ProviderFailure('pagination_regressed');
+          if (address(overlap.account) !== account || decimal(overlap.lt) !== cursor.beforeLt || base64Hash(overlap.hash) !== cursor.beforeTransactionHash) throw new ProviderFailure('pagination_regressed');
           retained = retained.slice(1); if (retained.length === 0) return { kind: 'page', evidence: [], nextCursor: null, exhausted: true };
         }
         let previous: bigint | null = null;
@@ -269,13 +316,19 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
         for (const row of retained) {
           const trace = await request('/api/v3/traces', new URLSearchParams({ tx_hash: string(row.hash), include_actions: 'true', limit: '1', offset: '0' }), signal);
           const traceRows = object(trace).traces; if (!Array.isArray(traceRows) || traceRows.length !== 1) throw new ProviderFailure('provider_schema_invalid');
-          for (const tx of Object.values(object(object(traceRows[0]).transactions))) { const block = object(object(tx).block_ref); const key = `${block.workchain}:${block.shard}:${block.seqno}`; if (!blocks.has(key)) { const response = object(await request('/api/v3/blocks', new URLSearchParams({ workchain: String(block.workchain), shard: string(block.shard), seqno: String(block.seqno), limit: '2' }), signal)); const matches = (response.blocks as unknown[] | undefined)?.filter((candidate) => { const item = object(candidate); return item.workchain === block.workchain && item.shard === block.shard && item.seqno === block.seqno; }); if (!matches || matches.length !== 1) throw new ProviderFailure('provider_schema_invalid'); blocks.set(key, object(matches[0])); } }
+          for (const tx of Object.values(object(object(traceRows[0]).transactions))) { const block = object(object(tx).block_ref); const key = `${block.workchain}:${block.shard}:${block.seqno}`; if (!blocks.has(key)) { const response = object(await request('/api/v3/blocks', new URLSearchParams({ workchain: String(block.workchain), shard: string(block.shard), seqno: String(block.seqno), limit: '2' }), signal)); const matches = (response.blocks as unknown[] | undefined)?.filter((candidate) => { const item = object(candidate); return item.workchain === block.workchain && item.shard === block.shard && item.seqno === block.seqno; }); if (!matches || matches.length !== 1) throw new ProviderFailure('provider_schema_invalid');
+              const anchor = object(matches[0]); const masterchain = object(anchor.masterchain_block_ref);
+              if (!/^[0-9a-fA-F]{16}$/.test(string(anchor.shard)) || !/^[0-9a-fA-F]{16}$/.test(string(masterchain.shard)) || masterchain.workchain !== -1) throw new ProviderFailure('provider_schema_invalid');
+              decimal(anchor.start_lt); decimal(anchor.end_lt); decimal(anchor.gen_utime); integer(anchor.tx_count);
+              base64Hash(anchor.root_hash); base64Hash(anchor.file_hash);
+              blocks.set(key, anchor); } }
           traced.push({ row, trace });
         }
         const head = await request('/api/v3/masterchainInfo', new URLSearchParams(), signal);
         const evidence = traced.map(({ row, trace }) => mapTrace(trace, row, blocks, head, account, nowMs()));
-        const finalLt = decimal(retained[retained.length - 1]!.lt); const cycleUpperLt = cursor?.cycleUpperLt ?? decimal(first.lt);
-        return { kind: 'page', evidence, nextCursor: { schemaVersion: 1, beforeLt: finalLt, cycleUpperLt }, exhausted: false };
+        const finalRow = retained[retained.length - 1]!;
+        const finalLt = decimal(finalRow.lt); const cycleUpperLt = cursor?.cycleUpperLt ?? decimal(first.lt);
+        return { kind: 'page', evidence, nextCursor: { schemaVersion: 1, beforeLt: finalLt, beforeTransactionHash: base64Hash(finalRow.hash), cycleUpperLt }, exhausted: false };
       } catch (error) { return failure(error instanceof ProviderFailure ? error.code : 'provider_schema_invalid', error instanceof ProviderFailure ? error.retryAfterMs : null); }
     },
   };

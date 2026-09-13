@@ -110,7 +110,13 @@ function sameAsset(first: TonInvoice['asset'], second: TonInvoice['asset']): boo
 }
 
 function sameMessage(first: NormalizedTonMessage, second: NormalizedTonMessage): boolean {
-  return stableJson(first) === stableJson(second);
+  // Position belongs to the containing transaction: an outgoing slot can only
+  // become the zero-indexed input of a later transaction. Validate each
+  // position independently during normalization, but do not require equality
+  // across that transaction boundary.
+  const { index: _firstIndex, ...firstFacts } = first;
+  const { index: _secondIndex, ...secondFacts } = second;
+  return stableJson(firstFacts) === stableJson(secondFacts);
 }
 
 function traceLinkageIsValid(evidence: NormalizedTonEvidence): boolean {

@@ -338,6 +338,24 @@ describe('verifyChainCredit', () => {
     });
   });
 
+  it('links cross-transaction messages when their contextual indexes differ', () => {
+    const evidence = changeEvidence(jetton, (value) => {
+      value.transactions[0]!.outMessages[0]!.index = 1;
+      value.transactions[1]!.inMessage.index = 0;
+    });
+    expect(verifyChainCredit(jettonInvoice, evidence, TON_VERIFIER_POLICY)).toMatchObject({ kind: 'verified' });
+  });
+
+  it('rejects a mutated message fact even when contextual indexes differ', () => {
+    const evidence = changeEvidence(jetton, (value) => {
+      value.transactions[0]!.outMessages[0]!.index = 1;
+      value.transactions[1]!.inMessage.amountAtomic = '999';
+    });
+    expect(verifyChainCredit(jettonInvoice, evidence, TON_VERIFIER_POLICY)).toMatchObject({
+      kind: 'review_required', reason: 'message_linkage_invalid',
+    });
+  });
+
   it('never promotes missing full-path or provider-attested finality', () => {
     expect(verifyChainCredit(nativeInvoice, changeEvidence(native, (value) => {
       value.trace.complete = false;

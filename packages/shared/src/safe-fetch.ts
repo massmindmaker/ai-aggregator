@@ -104,8 +104,10 @@ export function unregisterEgressExecutor(): void {
   egressExecutor = null;
 }
 
+export type SsrfErrorReason = 'policy_blocked' | 'redirect_limit';
+
 export class SsrfError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly reason: SsrfErrorReason = 'policy_blocked') {
     super(message);
     this.name = 'SsrfError';
   }
@@ -371,7 +373,7 @@ export async function safeFetch(
     if (!location) return res; // redirect without target — hand back as-is
 
     if (hop === maxRedirects) {
-      throw new SsrfError(`too many redirects (>${maxRedirects})`);
+      throw new SsrfError(`too many redirects (>${maxRedirects})`, 'redirect_limit');
     }
 
     // Resolve relative redirects against the current URL, then re-vet next loop.
