@@ -1,8 +1,4 @@
-Canonical development entrypoint: docs/DEVELOPMENT-ENTRYPOINT.md
-Canonical continuation and accepted evidence: docs/consolidation/2026-09-08-development-continuation.md
-Functional map: docs/product/functional-map.md
-Canonical active-product boundaries: docs/consolidation/ACTIVE-PROJECTS.md
-Memory freshness and readback: docs/consolidation/MEMORY-STATUS.md
-Read current code, owner acceptance and git before work. Historical project memories remain provenance.
-
-TON2 source724a031 remains locally accepted by21bf66a, docs/superpowers/plans/2026-09-08-ton-invoice-core.md and docs/product/acceptance/AG-P1.md. Baseline12/322 and exact native58 evidence remain in owner docs; do not rerun them or rewrite0072 for later slices. AG-TON3 architecture accepted13.09 by4143110 after independent financial re-review of4eaa44d: docs/superpowers/plans/2026-09-13-ton-verifier-and-recovery.md. Task1 pure synthetic verifier f46386c+b17603e acceptedf7fa163 after independent TS/security review, focused46/types/applicable lint/boundary PASS. Task2 exact testnet response manifest and sanitized public fixtures are being investigated; no provider/runtime/chain acceptance. Tasks1–6 runtime is at most disabled/observe; settlement needs a separate worker-only DB principal/ACL gate. Real provider fixtures, live testnet transfers, checkout/login/mainnet and production remain unaccepted. Earlier MC1–4/TON1 evidence remains in the entrypoint. Full Agents Market Web remains priority; its current UUID backfill/auth status is in its owner entrypoint and shared continuation. This locator is navigation, not a scorecard, full index refresh or duplicate acceptance record.
+Canonical priority handoff: docs/consolidation/2026-09-13-aggregator-only-handoff.md (snapshot b4f22c1).
+Continue only AI Aggregator. AI Arena and Agents Market are paused; their source and prior evidence are not newly accepted by this priority change.
+For current implementation, read docs/DEVELOPMENT-ENTRYPOINT.md, the priority handoff, owner acceptance, and git. Current derived-memory freshness is docs/consolidation/MEMORY-STATUS.md.
+AG TON3 Task1 pure synthetic verifier remains accepted; provider manifest/fixture work and all runtime/provider/mainnet paths remain unaccepted. This locator is navigation only, not a scorecard or full index refresh.
