@@ -15,6 +15,8 @@
 - [Карта денежных маршрутов](../product/acceptance/AG-P1-route-coverage.md) уточняет оставшийся объём. [Settlement recovery runner](../superpowers/plans/2026-09-13-gateway-settlement-recovery-runner.md) — дизайн `ecfa54e` принят после независимого financial/spec и design-quality APPROVE: I1–I6 закрыты. Task1 pure loop принят (`a8a297f` + `6355185` + `ee2332b`, independent TS/spec APPROVE, focused40/types/lint PASS). Следующий этап — Task2 native capability; runtime activation отсутствует. Pure/DB refund primitives уже приняты; runtime Tasks3–5 ещё не включены.
 - Дизайн нового rich `/v1/catalog` принят в `1bc46f2` после `229a83f` и независимого повторного APPROVE. Task1 shared schema/fixture/export принят в `5466c34` + `a502f4c` после independent TS/spec APPROVE; focused7/types/build/declarations/import/lint PASS. Следующий шаг — Task2 durable DB revision; projection и HTTP ещё не приняты. Существующий `/v1/models` сохраняется. Текущие `.Codex/` и `stderr` untracked сохранены; не чистить и не включать случайно в commits.
 
+- Известный BYOK credential defect legacy completions исправлен и принят в `e5614e2`: independent TS/security/admission-boundary APPROVE, focused24/types/lint PASS. Только локальный route/adapter/mock transport proof; сам маршрут остаётся non-admitted, restricted501 и registry coupling сохранены.
+
 ## Agents Market — остановлен, сохранить
 
 Root `/home/bob/Projects/agents-market`, ветка `feat/standalone-agents-market`, HEAD на момент остановки `09e3c60`.

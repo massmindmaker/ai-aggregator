@@ -1,5 +1,7 @@
 # Legacy completions BYOK credential propagation
 
+**Status:** Source accepted at `e5614e2` after independent TypeScript/security/admission-boundary PASS / APPROVE. Focused24, gateway source/test types, lint and diff checks PASS. Programme-wide final review and route admission remain separate gates.
+
 **Goal:** Correct the existing credential propagation defect in legacy `/v1/completions`: a request classified and charged as header-BYOK must give the selected adapter that same caller key.
 
 **Workflow:** Superpowers subagent-driven-development, one bounded task with independent TypeScript/admission-boundary review. This fixes a known defect in [route coverage](../../product/acceptance/AG-P1-route-coverage.md), not a new admission design.
@@ -19,10 +21,10 @@
 - `packages/api-gateway/src/routes/v1/completions.ts`
 - `packages/api-gateway/src/__tests__/completions-byok.test.ts` (new)
 
-- [ ] RED: invoke the actual legacy Hono completions route with a synthetic `x-upstream-key`, two available candidates and a distinct synthetic platform key. Mock resolver/billing/counters/logging seams; run the real OpenRouter adapter against mocked `fetchUpstream`, with zero network/DB. Assert caller key in adapter input and transport authorization, one dispatch, no platform preflight, exactly `calcByokFeeCredits()` settlement and counters `byok:true`/`upstreamCents:0`. Add failing-provider case proving one attempt and zero settlement/counter calls. The missing-field defect must make the success regression fail before source change.
-- [ ] Implement only the header retention (`byokKey`), BYOK classification from that value, and propagation of that field into the existing adapter request DTO.
-- [ ] GREEN: run focused `completions-byok.test.ts`, existing `openrouter-admitted-chat.test.ts` and `spend-counters.test.ts` through Node Vitest under the lock. Run gateway production and test tsconfigs, scoped ESLint on the two owned files, and `git diff --check`. Use existing test config; do not change compiler settings to pass.
-- [ ] Inspect diff to confirm registry/admission/server/failover/pricing/DB and all other routes are unchanged. Report actual command/results, RED counterexample and evidence limits in the ignored task report.
-- [ ] Commit only the two owned files as `fix(gateway): pass BYOK credentials to legacy completions`; obtain independent TypeScript/security and admission-boundary review. Controller updates the route-coverage defect status only after APPROVE.
+- [x] RED: invoke the actual legacy Hono completions route with a synthetic `x-upstream-key`, two available candidates and a distinct synthetic platform key. Mock resolver/billing/counters/logging seams; run the real OpenRouter adapter against mocked `fetchUpstream`, with zero network/DB. Assert caller key in adapter input and transport authorization, one dispatch, no platform preflight, exactly `calcByokFeeCredits()` settlement and counters `byok:true`/`upstreamCents:0`. Add failing-provider case proving one attempt and zero settlement/counter calls. The missing-field defect must make the success regression fail before source change.
+- [x] Implement only the header retention (`byokKey`), BYOK classification from that value, and propagation of that field into the existing adapter request DTO.
+- [x] GREEN: run focused `completions-byok.test.ts`, existing `openrouter-admitted-chat.test.ts` and `spend-counters.test.ts` through Node Vitest under the lock. Run gateway production and test tsconfigs, scoped ESLint on the two owned files, and `git diff --check`. Use existing test config; do not change compiler settings to pass.
+- [x] Inspect diff to confirm registry/admission/server/failover/pricing/DB and all other routes are unchanged. Report actual command/results, RED counterexample and evidence limits in the ignored task report.
+- [x] Commit only the two owned files as `fix(gateway): pass BYOK credentials to legacy completions`; obtain independent TypeScript/security and admission-boundary review. Controller updates the route-coverage defect status only after APPROVE.
 
 **Acceptance:** Caller-supplied key reaches real selected adapter transport instead of the configured platform key in a local regression; failure charges nothing, restricted mode stays unchanged. No live provider/production or admitted-route acceptance is implied.
