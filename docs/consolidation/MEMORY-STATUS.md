@@ -1,5 +1,9 @@
 # Статус developer memory
 
+## AI Aggregator-only priority locator — 13.09.2026
+
+Canonical navigation now starts at [the Aggregator-only handoff](2026-09-13-aggregator-only-handoff.md): continue **only AI Aggregator**. AI Arena and Agents Market are preserved as paused work; their source and prior evidence are not newly accepted by this priority decision. LightRAG and Serena were not mutated in this refresh: their existing stable locators must be deduplicated and read back through a callable MCP before any update. Brain was updated as a navigation link only. Graphify was intentionally not rebuilt; its snapshots remain source-only and may be stale. Memory Graph remains read-only until its namespace and lock contract are verified.
+
 ## AG TON3 pure source refresh — 13.09.2026
 
 Existing Serena AG locator updated/readback to Task1 ownerf7fa163, sourcef46386c+b17603e. Provider manifest/fixtures remain candidate. No new Graphify rebuild during active provider work; stable LightRAG/Brain navigation not duplicated.
