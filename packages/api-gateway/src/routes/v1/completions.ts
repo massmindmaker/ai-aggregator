@@ -28,7 +28,8 @@ completions.post('/', async (c) => {
   const body: CompletionBody = bodyRaw ?? ((await c.req.json()) as CompletionBody);
   const key = c.get('apiKey' as never) as AuthenticatedApiKey;
   const requestId = c.get('requestId' as never) as string;
-  const byok = Boolean(c.req.header('x-upstream-key'));
+  const byokKey = c.req.header('x-upstream-key');
+  const byok = Boolean(byokKey);
   const policies = (key.policies ?? {}) as ApiKeyPolicies;
 
   if (!body?.model || body.prompt == null) {
@@ -57,6 +58,7 @@ completions.post('/', async (c) => {
       getUpstream(u.provider).chat({
         modelId: u.upstream_model_id,
         messages: [{ role: 'user', content: promptText }],
+        byokKey,
         egressProxyUrl: u.egress_proxy ?? undefined,
       }),
     failoverOpts,
