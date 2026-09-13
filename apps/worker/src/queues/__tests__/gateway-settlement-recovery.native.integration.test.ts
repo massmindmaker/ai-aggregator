@@ -15,6 +15,15 @@ const marker = "ai-aggregator:test-database:v1";
 const modelSlug = "openai/gpt-4o-mini";
 const nativeTestTimeoutMs = 40_000;
 
+type TeardownStep =
+  | "recovery-resources"
+  | "fixture-rows"
+  | "foreign-sentinel-verified"
+  | "foreign-sentinel-deleted"
+  | "primary-client-closed"
+  | "secondary-client-closed"
+  | "api-gateway-singleton-closed";
+
 function digest(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -31,6 +40,7 @@ function deferred<T>() {
 
 async function guardedRun(
   run: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>,
+  onTeardownStep?: (step: TeardownStep) => void,
 ) {
   await withGuardedTestDatabase(
     process.env,
@@ -45,12 +55,33 @@ async function guardedRun(
       // Production database modules are loaded only after environment, connected
       // identity, and marker checks have all succeeded.
       const { default: postgres } = await import("postgres");
-      const client: SqlClient = postgres(process.env.TEST_DATABASE_URL!, { max: 4, onnotice: () => {} });
-      const other: SqlClient = postgres(process.env.TEST_DATABASE_URL!, { max: 4, onnotice: () => {} });
       const foreignUser = randomUUID();
       const foreignOrg = randomUUID();
+      const sentinel = [{ id: foreignOrg, owner_id: foreignUser, payg_credits: "777777" }];
+      const teardownFailures: Error[] = [];
+      let primaryFailure: { error: unknown } | undefined;
+      let client: SqlClient | undefined;
+      let other: SqlClient | undefined;
       let fixture: Awaited<ReturnType<typeof createFixture>> | undefined;
+      let foreignSentinelCreated = false;
+
+      async function teardown(step: TeardownStep, action: () => Promise<unknown>) {
+        try {
+          await action();
+        } catch (error) {
+          teardownFailures.push(new Error(`guarded native teardown failed: ${step}`, { cause: error }));
+        } finally {
+          try {
+            onTeardownStep?.(step);
+          } catch (error) {
+            teardownFailures.push(new Error(`guarded native teardown observer failed: ${step}`, { cause: error }));
+          }
+        }
+      }
+
       try {
+        client = postgres(process.env.TEST_DATABASE_URL!, { max: 4, onnotice: () => {} });
+        other = postgres(process.env.TEST_DATABASE_URL!, { max: 4, onnotice: () => {} });
         for (const connection of [client, other]) {
           expect((await connection`
             SELECT current_database() AS name, marker
@@ -62,33 +93,50 @@ async function guardedRun(
           await tx`INSERT INTO users(id,email) VALUES(${foreignUser}::uuid,${`recovery-foreign-${foreignUser}@example.test`})`;
           await tx`INSERT INTO organizations(id,slug,name,owner_id,payg_credits) VALUES(${foreignOrg}::uuid,${foreignOrg},'recovery foreign sentinel',${foreignUser}::uuid,777777)`;
         });
-        const sentinel = await other`
-          SELECT id::text,owner_id::text,payg_credits::text
-          FROM organizations WHERE id=${foreignOrg}::uuid
-        `;
-        expect(sentinel).toHaveLength(1);
-        fixture = await createFixture(client, other, foreignOrg);
-        await run(fixture);
-        await fixture.cleanup();
-        fixture = undefined;
+        foreignSentinelCreated = true;
         expect(await other`
           SELECT id::text,owner_id::text,payg_credits::text
           FROM organizations WHERE id=${foreignOrg}::uuid
         `).toEqual(sentinel);
+        fixture = await createFixture(client, other, foreignOrg);
+        await run(fixture);
+      } catch (error) {
+        primaryFailure = { error };
       } finally {
-        if (fixture !== undefined) await fixture.cleanup();
-        await other.begin(async (tx) => {
-          const owner = await tx`SELECT owner_id::text FROM organizations WHERE id=${foreignOrg}::uuid FOR UPDATE`;
-          if (owner.length > 0) {
-            expect(owner[0]?.owner_id).toBe(foreignUser);
+        if (fixture !== undefined) {
+          await teardown("recovery-resources", () => fixture!.closeOwnedRecoveryResources());
+          await teardown("fixture-rows", () => fixture!.cleanup());
+        }
+        if (other !== undefined && foreignSentinelCreated) {
+          await teardown("foreign-sentinel-verified", async () => {
+            expect(await other!`
+              SELECT id::text,owner_id::text,payg_credits::text
+              FROM organizations WHERE id=${foreignOrg}::uuid
+            `).toEqual(sentinel);
+          });
+          await teardown("foreign-sentinel-deleted", () => other!.begin(async (tx) => {
+            expect(await tx`
+              SELECT id::text,owner_id::text,payg_credits::text
+              FROM organizations WHERE id=${foreignOrg}::uuid FOR UPDATE
+            `).toEqual(sentinel);
             await tx`DELETE FROM organizations WHERE id=${foreignOrg}::uuid`;
             await tx`DELETE FROM users WHERE id=${foreignUser}::uuid`;
-          }
+          }));
+        }
+        if (client !== undefined) await teardown("primary-client-closed", () => client!.end());
+        if (other !== undefined) await teardown("secondary-client-closed", () => other!.end());
+        await teardown("api-gateway-singleton-closed", async () => {
+          const { sql } = await import("../../../../../packages/api-gateway/src/lib/db.js");
+          await sql.end();
         });
-        await client.end();
-        await other.end();
-        const { sql } = await import("../../../../../packages/api-gateway/src/lib/db.js");
-        await sql.end();
+      }
+
+      if (primaryFailure !== undefined && teardownFailures.length === 0) throw primaryFailure.error;
+      if (primaryFailure !== undefined || teardownFailures.length > 0) {
+        throw new AggregateError(
+          [...(primaryFailure === undefined ? [] : [primaryFailure.error]), ...teardownFailures],
+          "guarded native recovery run failed",
+        );
       }
     },
   );
@@ -108,6 +156,7 @@ async function createFixture(client: SqlClient, other: SqlClient, foreignOrg: st
   const keys: string[] = [];
   const ownedFunctions = new Set<string>();
   const ownedTriggers = new Set<string>();
+  const ownedRecoveryResources: Array<Readonly<{ close(): Promise<void> }>> = [];
   await client.begin(async (tx) => {
     await tx`INSERT INTO users(id,email) VALUES(${user}::uuid,${`recovery-${user}@example.test`})`;
     await tx`INSERT INTO organizations(id,slug,name,owner_id,payg_credits) VALUES(${org}::uuid,${org},'recovery owned fixture',${user}::uuid,1000000000)`;
@@ -119,6 +168,31 @@ async function createFixture(client: SqlClient, other: SqlClient, foreignOrg: st
     await client`INSERT INTO gateway_api_keys(id,org_id,name,key_hash,key_prefix,cost_limit_monthly_rub) VALUES(${key}::uuid,${org}::uuid,'recovery owned key',${randomUUID()},${key.slice(0, 16)},1000000)`;
     keys.push(key);
     return key;
+  }
+
+  function ownRecoveryResource<T extends Readonly<{ close(): Promise<void> }>>(resource: T): T {
+    ownedRecoveryResources.push(resource);
+    return resource;
+  }
+
+  function createRecoveryDb() {
+    return ownRecoveryResource(dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!));
+  }
+
+  function startRecovery(input: Parameters<typeof recovery.startGatewaySettlementRecovery>[0]) {
+    return ownRecoveryResource(recovery.startGatewaySettlementRecovery(input));
+  }
+
+  async function closeOwnedRecoveryResources() {
+    const failures: unknown[] = [];
+    for (const resource of ownedRecoveryResources.splice(0).reverse()) {
+      try {
+        await resource.close();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length > 0) throw new AggregateError(failures, "owned recovery resource cleanup failed");
   }
 
   type Stage = "held" | "dispatched" | "outcome" | "settled";
@@ -362,18 +436,82 @@ async function createFixture(client: SqlClient, other: SqlClient, foreignOrg: st
   return {
     client, other, org, foreignOrg, http, terminal, admission, dbModule, recovery,
     createKey, createAttempt, createRejected, hintFor, settlementFacts,
-    installSettlementFailure, cleanup,
+    installSettlementFailure, ownRecoveryResource, createRecoveryDb, startRecovery,
+    closeOwnedRecoveryResources, cleanup,
   };
 }
 
 describe.skipIf(!enabled)("guarded native gateway settlement recovery", () => {
+  it("runs every teardown step after a primary assertion and resource-close failure", async () => {
+    const teardownSteps: TeardownStep[] = [];
+    const callbacks: Array<() => void> = [];
+    const clearTimeout = vi.fn();
+    const failingClose = vi.fn(async () => {
+      throw new Error("injected owned resource close failure");
+    });
+    let acquiredDb: Readonly<{ captureCycle(): Promise<unknown> }> | undefined;
+    let observedFailure: unknown;
+
+    try {
+      await guardedRun(async (f) => {
+        const tick = deferred<void>();
+        const db = f.createRecoveryDb();
+        acquiredDb = db;
+        f.startRecovery({
+          db,
+          scheduler: {
+            setTimeout(callback: () => void, delayMs: 60_000) {
+              expect(delayMs).toBe(60_000);
+              callbacks.push(callback);
+              return callbacks.length;
+            },
+            clearTimeout,
+          },
+          onTick() {
+            tick.resolve();
+          },
+        });
+        await tick.promise;
+        expect(callbacks).toHaveLength(1);
+        f.ownRecoveryResource({ close: failingClose });
+        throw new Error("injected primary scenario failure");
+      }, (step) => teardownSteps.push(step));
+    } catch (error) {
+      observedFailure = error;
+    }
+
+    expect(observedFailure).toBeInstanceOf(AggregateError);
+    const failures = (observedFailure as AggregateError).errors;
+    expect(failures).toHaveLength(2);
+    expect(failures[0]).toMatchObject({ message: "injected primary scenario failure" });
+    expect(failures[1]).toMatchObject({ message: "guarded native teardown failed: recovery-resources" });
+    const resourceFailure = (failures[1] as Error & { cause?: unknown }).cause;
+    expect(resourceFailure).toBeInstanceOf(AggregateError);
+    expect((resourceFailure as AggregateError).errors).toEqual([
+      expect.objectContaining({ message: "injected owned resource close failure" }),
+    ]);
+    expect(failingClose).toHaveBeenCalledTimes(1);
+    expect(clearTimeout).toHaveBeenCalledTimes(1);
+    if (acquiredDb === undefined) throw new Error("recovery DB was not acquired");
+    await expect(acquiredDb.captureCycle()).rejects.toThrow("gateway settlement recovery database is closing");
+    expect(teardownSteps).toEqual([
+      "recovery-resources",
+      "fixture-rows",
+      "foreign-sentinel-verified",
+      "foreign-sentinel-deleted",
+      "primary-client-closed",
+      "secondary-client-closed",
+      "api-gateway-singleton-closed",
+    ]);
+  }, nativeTestTimeoutMs);
+
   it("settles through the scheduled loop, races two pools once, and replays a lost ACK with one financial effect", async () =>
     guardedRun(async (f) => {
       const scheduled = await f.createAttempt("outcome");
-      const scheduledDb = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
+      const scheduledDb = f.createRecoveryDb();
       const callbacks: Array<() => void> = [];
       const tick = deferred<void>();
-      const handle = f.recovery.startGatewaySettlementRecovery({
+      const handle = f.startRecovery({
         db: scheduledDb,
         scheduler: {
           setTimeout(callback: () => void, delayMs: 60_000) {
@@ -400,8 +538,8 @@ describe.skipIf(!enabled)("guarded native gateway settlement recovery", () => {
       expect(scheduledFacts.quotaSettlements).toHaveLength(2);
 
       const raced = await f.createAttempt("outcome");
-      const firstDb = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
-      const secondDb = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
+      const firstDb = f.createRecoveryDb();
+      const secondDb = f.createRecoveryDb();
       const [first, second] = await Promise.all([
         f.recovery.createGatewaySettlementRecoveryLoop(firstDb).runTick(() => false),
         f.recovery.createGatewaySettlementRecoveryLoop(secondDb).runTick(() => false),
@@ -416,8 +554,8 @@ describe.skipIf(!enabled)("guarded native gateway settlement recovery", () => {
 
       const lost = await f.createAttempt("outcome");
       const lostHint = await f.hintFor(lost.billingRequestId);
-      const native = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
-      const lostAckDb = {
+      const native = f.createRecoveryDb();
+      const lostAckDb = f.ownRecoveryResource({
         captureCycle: () => native.captureCycle(),
         selectPage: (input: Parameters<typeof native.selectPage>[0]) => native.selectPage(input),
         async recover(input: Parameters<typeof native.recover>[0]) {
@@ -425,12 +563,12 @@ describe.skipIf(!enabled)("guarded native gateway settlement recovery", () => {
           throw new Error("application lost committed acknowledgement");
         },
         close: () => native.close(),
-      };
+      });
       const lostResult = await f.recovery.createGatewaySettlementRecoveryLoop(lostAckDb).runTick(() => false);
       expect(lostResult).toMatchObject({ classification: "partial_unconfirmed", selected: 1, attempted: 1, settled: 0, unconfirmed: 1 });
       await lostAckDb.close();
       const afterLost = await f.settlementFacts(lost.billingRequestId);
-      const replayDb = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
+      const replayDb = f.createRecoveryDb();
       await expect(replayDb.recover(lostHint)).resolves.toMatchObject({ state: "settled", billingRequestId: lost.billingRequestId });
       await replayDb.close();
       expect(await f.settlementFacts(lost.billingRequestId)).toEqual(afterLost);
@@ -471,7 +609,7 @@ describe.skipIf(!enabled)("guarded native gateway settlement recovery", () => {
       `;
       expect(tombstoneBefore[0]?.response_body).toBeNull();
 
-      const db = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
+      const db = f.createRecoveryDb();
       const capture = await db.captureCycle();
       expect(capture).not.toBeNull();
       const page = await db.selectPage({
@@ -511,7 +649,7 @@ describe.skipIf(!enabled)("guarded native gateway settlement recovery", () => {
       await f.client`DELETE FROM gateway_charge_quota_reservations WHERE billing_request_id=${missingQuota.billingRequestId}::uuid`;
       await f.client`DELETE FROM gateway_charge_quota_contexts WHERE billing_request_id=${missingQuota.billingRequestId}::uuid`;
 
-      const selector = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
+      const selector = f.createRecoveryDb();
       await expect(selector.captureCycle()).resolves.toBeNull();
       await expect(selector.recover({
         ...(await f.hintFor(missingResult.billingRequestId)),
@@ -529,14 +667,14 @@ describe.skipIf(!enabled)("guarded native gateway settlement recovery", () => {
       const failedPrefix = await f.createAttempt("outcome");
       const later = await f.createAttempt("outcome");
       const removeFailure = await f.installSettlementFailure(failedPrefix.billingRequestId);
-      const db = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
+      const db = f.createRecoveryDb();
       const first = await f.recovery.createGatewaySettlementRecoveryLoop(db).runTick(() => false);
       expect(first).toMatchObject({ classification: "partial_unconfirmed", selected: 2, attempted: 2, settled: 1, unconfirmed: 1 });
       expect((await f.settlementFacts(failedPrefix.billingRequestId)).admission[0]?.state).toBe("outcome_recorded");
       expect((await f.settlementFacts(later.billingRequestId)).admission[0]?.state).toBe("settled");
       await db.close();
       await removeFailure();
-      const retryDb = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
+      const retryDb = f.createRecoveryDb();
       const retry = await f.recovery.createGatewaySettlementRecoveryLoop(retryDb).runTick(() => false);
       expect(retry).toMatchObject({ classification: "complete", selected: 1, attempted: 1, settled: 1, unconfirmed: 0 });
       await retryDb.close();
@@ -567,10 +705,10 @@ describe.skipIf(!enabled)("guarded native gateway settlement recovery", () => {
         postWritten.resolve(written.outcomeRecordedAt);
         await postCommit.promise;
       });
-      let cutoffDb: ReturnType<typeof f.dbModule.createGatewaySettlementRecoveryDb> | undefined;
+      let cutoffDb: ReturnType<typeof f.createRecoveryDb> | undefined;
       try {
         await transactionStarted.promise;
-        cutoffDb = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
+        cutoffDb = f.createRecoveryDb();
         const captured = await cutoffDb.captureCycle();
         expect(captured).not.toBeNull();
         writeGate.resolve();
@@ -610,7 +748,7 @@ describe.skipIf(!enabled)("guarded native gateway settlement recovery", () => {
         // supplies the visible upper bound without weakening that lock or backdating.
         upperFixture = await createFixture(f.other, f.other, f.foreignOrg);
         const upperAnchor = await upperFixture.createAttempt("outcome");
-        const boundedDb = f.dbModule.createGatewaySettlementRecoveryDb(process.env.TEST_DATABASE_URL!);
+        const boundedDb = f.createRecoveryDb();
         const boundedCapture = await boundedDb.captureCycle();
         expect(boundedCapture).not.toBeNull();
         expect(boundedCapture!.upper.billingRequestId).toBe(upperAnchor.billingRequestId);
