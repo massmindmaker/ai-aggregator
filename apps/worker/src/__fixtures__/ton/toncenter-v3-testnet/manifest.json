@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "READY_FOR_MANIFEST_REVIEW",
+  "status": "READY_FOR_SCOPED_NATIVE_MANIFEST_REVIEW",
   "provider": {
     "providerId": "toncenter-v3-testnet",
     "origin": "https://testnet.toncenter.com",
@@ -13,9 +13,9 @@
   },
   "capturePolicy": {
     "capturedFrom": "2026-09-13T12:34:52Z",
-    "capturedThrough": "2026-09-13T12:46:32Z",
+    "capturedThrough": "2026-09-13T13:19:39Z",
     "publicApiRequestBudget": 20,
-    "publicApiRequestsUsed": 19,
+    "publicApiRequestsUsed": 20,
     "timeoutMs": 8000,
     "maximumBodyBytes": 1048576,
     "maximumRedirects": 0,
@@ -224,6 +224,16 @@
         "offset": "0"
       },
       "purpose": "destination owner+master wallet lookup"
+    },
+    {
+      "order": 20,
+      "path": "/api/v3/traces",
+      "query": {
+        "trace_id": "YYo0s1yF+8xjzkjzJTCTVrVBjRV0SC676T+eE0rJNcg=",
+        "include_actions": "true",
+        "limit": "1"
+      },
+      "purpose": "exact recovery of required failure-trace range fields and transaction trace_id values"
     }
   ],
   "officialSources": [
@@ -327,7 +337,11 @@
       "pagination": {
         "direction": "newest_to_oldest_by_transaction_lt",
         "pageSize": 8,
-        "maximumPagesPerSourcePerRun": 4,
+        "maximumPagesPerSourcePerRun": {
+          "value": 4,
+          "owner": "runner",
+          "rule": "after processing and durably recording the fourth non-terminal provider page, stop this run and persist that page non-null provider nextCursor unchanged for continuation"
+        },
         "wireCursorParameter": "end_lt",
         "internalCursorField": "beforeLt",
         "inclusive": true,
@@ -340,10 +354,20 @@
           "candidate message hash"
         ],
         "terminalBoundary": "an empty raw page ends the cycle; a page containing only the exact overlap row also ends the cycle because end_lt is inclusive and another identical request cannot make progress",
-        "floorBoundary": "after removing the exact overlap, stop before processing rows older than scanFloorTimeMs; reaching the floor ends the cycle",
-        "cursorOnEnd": "reset to null according to the recovery contract so a later cycle intentionally rescans bounded history",
+        "floorBoundary": "runner owns scanFloorTimeMs; after processing and durably recording eligible rows before the first older row, runner ends the cycle and persists a null cursor",
+        "cursorOnEnd": "runner persists null only when provider exhausted=true or the runner reached scanFloorTimeMs; a run stopping at the four-page cap persists the provider non-null nextCursor",
         "regressionRule": "pagination_regressed if a non-first non-empty page does not begin with the exact overlap identity, if any retained row has LT greater than or equal to beforeLt, or if retained LTs are not strictly descending; the overlap-only terminal page is endReached, not regression",
-        "providerOffsetPagination": "officially supported but not used for the recovery cursor because inserts can shift offsets"
+        "providerOffsetPagination": "officially supported but not used for the recovery cursor because inserts can shift offsets",
+        "ownership": {
+          "providerInput": "scanAccountPage receives recipientAccount plus TonProviderCursor|null only; it does not receive scanFloorTimeMs or a page counter",
+          "providerOutput": "TonProviderResult.exhausted is the provider endReached signal; there is no separate endReached field",
+          "normalPage": "after exact overlap removal, a page with at least one new row returns exhausted=false and nextCursor={schemaVersion:1,beforeLt:<final new row LT>,cycleUpperLt:<first raw row LT from page 1>}",
+          "emptyPage": "an empty raw page returns evidence=[], exhausted=true, nextCursor=null",
+          "overlapOnlyPage": "a page containing only the one exact expected overlap returns evidence=[], exhausted=true, nextCursor=null and is not pagination_regressed",
+          "floorCrossing": "provider returns its normal page and non-null nextCursor because it has no floor; runner processes only eligible rows through the floor boundary, durably records them, then persists null and ends the cycle",
+          "fourthNonTerminalPage": "provider returns exhausted=false and non-null nextCursor; runner durably processes the page, persists that exact cursor, and stops the run without resetting the cycle",
+          "persistenceOwner": "runner persists or resets TonSweepCursor only after all observations for the accepted part of a page are durable"
+        }
       },
       "responseSchema": {
         "response.transactions": "required array; may be empty",
@@ -409,7 +433,11 @@
         "transaction.description.action": "nullable object; when present success and valid are booleans and result_code is integer",
         "transaction.description.bounce": "nullable object with type string",
         "message.message_content": "nullable object",
-        "message.message_content.decoded": "nullable object; only allowlisted decoded fields are retained"
+        "message.message_content.decoded": "nullable object; only allowlisted decoded fields are retained",
+        "transaction.trace_id": "required non-null standard-base64 32-byte hash string and must exactly equal trace.trace_id for every transaction",
+        "message.message_content.decoded.@type": "required non-null string equal to text_comment when mapping a native comment",
+        "message.message_content.decoded.type": "required non-null string equal to text_comment when mapping a native comment",
+        "message.message_content.decoded.comment": "required non-null string of 1..96 characters, with no leading/trailing whitespace or ASCII control characters, when mapping a native comment"
       }
     },
     "blocks": {
@@ -506,7 +534,34 @@
     "blockAnchor": "join every transaction.block_ref coordinate to one exact /blocks result and attach decoded root_hash, file_hash, and masterchain_block_ref.seqno",
     "traceCompleteness": "require is_incomplete=false, trace_info.trace_state=complete, pending_messages=0, and counts consistent with retained arrays",
     "decodedPayloadAllowlist": "retain only fields needed for text_comment, jetton_transfer, jetton_internal_transfer, and jetton_notify; omit all BOCs, signatures, code, data, and unknown decoded subtrees",
-    "unknownFields": "ignore only after the bounded transport has enforced the 1 MiB limit; any required missing or null field fails closed"
+    "unknownFields": "ignore only after the bounded transport has enforced the 1 MiB limit; any required missing or null field fails closed",
+    "nativeCommentMapping": {
+      "sourcePath": "matched recipient trace transaction.in_msg.message_content.decoded",
+      "requiredFacts": {
+        "in_msg.opcode": "0x00000000",
+        "in_msg.decoded_opcode": "text_comment",
+        "decoded.@type": "text_comment",
+        "decoded.type": "text_comment",
+        "decoded.comment": "non-null string of 1..96 characters, equal to trim(comment), with no U+0000..U+001F or U+007F"
+      },
+      "canonicalResult": "decodedPayload={kind:'native_comment',reference:decoded.comment}",
+      "conflictRule": "missing, null, differently typed, or mutually conflicting opcode/decoded_opcode/@type/type/comment facts fail closed as provider_schema_invalid; no discriminator or reference fallback is allowed"
+    },
+    "scanCandidateBinding": {
+      "requiredEquality": "the scanned recipient transaction account, hash, lt, trace_id, and in_msg.hash must each exactly equal the corresponding fields of one and only one selected transaction in the returned trace before canonical mapping",
+      "traceIdentity": "the matched transaction.trace_id must equal the enclosing trace.trace_id and the trace selected by tx_hash or msg_hash must contain that exact match",
+      "creditPath": "creditPath.recipientTransactionHash is decoded from the exact matched transaction.hash; creditPath.creditMessageHash is decoded from that exact matched transaction.in_msg.hash",
+      "failureRule": "zero matches, multiple matches, or any conflicting field fails closed as provider_schema_invalid"
+    },
+    "traceAndBlockAnchorEquations": {
+      "traceRange": "numeric(trace.mc_seqno_start) <= numeric(trace.mc_seqno_end)",
+      "canonicalTraceMasterchain": "trace.masterchainSeqno = numeric(trace.mc_seqno_end)",
+      "transactionRange": "for every trace transaction, numeric(trace.mc_seqno_start) <= transaction.mc_block_seqno <= numeric(trace.mc_seqno_end)",
+      "exactBlockJoin": "for every trace transaction, exactly one /blocks row must equal transaction.block_ref.workchain+shard+seqno and transaction.mc_block_seqno must equal that row.masterchain_block_ref.seqno",
+      "canonicalBlockRef": "transaction.blockRef workchain/shard/seqno come from transaction.block_ref; rootHash/fileHash come only from that exact-coordinate /blocks row after strict base64-to-lowercase-hex decoding",
+      "canonicalLatestIndexedMasterchain": "latestIndexedMasterchain seqno/rootHash/fileHash come only from masterchainInfo.last after requiring workchain=-1 and strict schema/hash validation",
+      "failureRule": "an invalid range, missing or non-unique join, unequal masterchain seqno, or conflicting block identity fails closed as provider_schema_invalid or canonical inclusion_mismatch; provider-attested data is not described as cryptographic proof"
+    }
   },
   "observedProbes": {
     "ltPagination": {
@@ -593,14 +648,14 @@
     },
     "nativeAborted": {
       "path": "native-aborted.sanitized.json",
-      "sha256": "0a364221c4f00343a6dda68168a296d3528c74e9ae27dfa09a6e293e093213d6",
-      "bytes": 10690,
+      "sha256": "5b88a1277560c304c62b07157b94ac41aebbe945de6e7e2112f9af96d3dc55fc",
+      "bytes": 12656,
       "status": "captured"
     },
     "nativeBounced": {
       "path": "native-bounced.sanitized.json",
-      "sha256": "891a106a937012a7c5ebb4427cf143e3111e5059a68f92ea90adc8727af05cc1",
-      "bytes": 10825,
+      "sha256": "beabc0ee38f35303d79d0a21dc138b542af0086919493001948416b94ffda044",
+      "bytes": 12791,
       "status": "captured",
       "sharesProviderTraceWith": "nativeAborted"
     },
@@ -613,9 +668,9 @@
     }
   },
   "gates": {
-    "nativeFixtureGate": "satisfied for manifest and sanitized historical fixture review; no adapter or runtime capability exists in this slice",
-    "abortedAndBouncedFailureGate": "satisfied by one complete real trace represented by two assertion-focused sanitized fixtures",
-    "jettonAutoCreditGate": "closed",
+    "nativeFixtureGate": "ready_for_scoped_native_manifest_re_review; historical fixtures and manifest only, with no adapter or runtime capability in this slice",
+    "abortedAndBouncedFailureGate": "satisfied by one complete real trace represented by two required-schema sanitized fixtures with distinct negative-test purposes",
+    "jettonAutoCreditGate": "OPEN_NOT_SATISFIED_AND_DISABLED",
     "jettonAutoCreditBlockers": [
       "no sanitized full-path jetton success fixture whose complete transaction set is non-emulated, non-aborted, non-bounced, compute-successful, and action-successful",
       "/api/v3/jetton/wallets attests an indexed owner+master mapping but does not execute or cryptographically prove the master contract get_wallet_address derivation",
@@ -623,6 +678,14 @@
     ],
     "adapterRuntimeGate": "not_part_of_this_discovery_slice",
     "merchantAcceptanceGate": "not_satisfied_by_public_historical_fixtures",
-    "proofClaim": "These fixtures prove only the observed sanitized TON Center testnet schema and negative/positive historical shapes. They are not proof of a merchant payment, production readiness, or permission to settle."
+    "proofClaim": "These fixtures prove only the observed sanitized TON Center testnet schema and negative/positive historical shapes. They are not proof of a merchant payment, production readiness, or permission to settle.",
+    "nativeOnlyImplementationSubGate": {
+      "status": "candidate_open_after_scoped_manifest_acceptance",
+      "acceptedAssetKind": "native",
+      "resolutionRule": "resolveRecipientAccount returns the canonical native owner address without network access",
+      "jettonRule": "resolveRecipientAccount must return source_error code unsupported_asset before invoking fetchImpl or any provider/network operation when source.asset.kind='jetton'",
+      "requiredContractChange": "add unsupported_asset to TonSourceErrorCode before native-only adapter implementation; do not encode this boundary as provider_schema_invalid"
+    },
+    "fullTask2Gate": "OPEN_NOT_SATISFIED"
   }
 }

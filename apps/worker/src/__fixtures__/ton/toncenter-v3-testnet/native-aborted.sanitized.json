@@ -14,7 +14,29 @@
   },
   "contentType": "application/json",
   "rawResponsePersisted": false,
+  "supplementalCaptures": [
+    {
+      "capturedAt": "2026-09-13T13:19:39Z",
+      "method": "GET",
+      "endpointPath": "/api/v3/traces",
+      "query": {
+        "trace_id": "YYo0s1yF+8xjzkjzJTCTVrVBjRV0SC676T+eE0rJNcg=",
+        "include_actions": "true",
+        "limit": "1"
+      },
+      "purpose": "exact recovery of required trace range fields and per-transaction trace_id omitted by the original sanitized projection",
+      "fieldsRestored": [
+        "body.traces[].start_lt",
+        "body.traces[].end_lt",
+        "body.traces[].start_utime",
+        "body.traces[].end_utime",
+        "body.traces[].transactions.*.trace_id"
+      ],
+      "rawResponsePersisted": false
+    }
+  ],
   "fixturePurpose": "complete trace containing an aborted destination transaction",
+  "projectionDescription": "required trace range, transaction identity, block-anchor, and indexed-head fields are retained; only the paths named in redactions are omitted",
   "selectedEvidence": {
     "transaction_hash": "r2gVUukAiEDo1c5Z6tGeYK/vJyvebagHV6jGJYgqldE=",
     "aborted": true,
@@ -35,6 +57,10 @@
     "traces": [
       {
         "trace_id": "YYo0s1yF+8xjzkjzJTCTVrVBjRV0SC676T+eE0rJNcg=",
+        "start_lt": "96306942000001",
+        "end_lt": "96306942000005",
+        "start_utime": 1789302915,
+        "end_utime": 1789302915,
         "is_incomplete": false,
         "mc_seqno_start": "84537641",
         "mc_seqno_end": "84537641",
@@ -72,6 +98,7 @@
             "account": "0:B111A976236E3B5E990A250406098BE60EA7C1A242CD4055A774B106DAB968E7",
             "hash": "YYo0s1yF+8xjzkjzJTCTVrVBjRV0SC676T+eE0rJNcg=",
             "lt": "96306942000001",
+            "trace_id": "YYo0s1yF+8xjzkjzJTCTVrVBjRV0SC676T+eE0rJNcg=",
             "now": 1789302915,
             "mc_block_seqno": 84537641,
             "emulated": false,
@@ -129,6 +156,7 @@
             "account": "0:6310C811117583FFE6FB8C69B9E7257EF587C326B8CBEA9BD8E58162AAD132BF",
             "hash": "r2gVUukAiEDo1c5Z6tGeYK/vJyvebagHV6jGJYgqldE=",
             "lt": "96306942000003",
+            "trace_id": "YYo0s1yF+8xjzkjzJTCTVrVBjRV0SC676T+eE0rJNcg=",
             "now": 1789302915,
             "mc_block_seqno": 84537641,
             "emulated": false,
@@ -183,6 +211,7 @@
             "account": "0:B111A976236E3B5E990A250406098BE60EA7C1A242CD4055A774B106DAB968E7",
             "hash": "WmjF8zruTo8EP4KTeDR3sfoDcOLAAjZWx4absPw1ZuQ=",
             "lt": "96306942000005",
+            "trace_id": "YYo0s1yF+8xjzkjzJTCTVrVBjRV0SC676T+eE0rJNcg=",
             "now": 1789302915,
             "mc_block_seqno": 84537641,
             "emulated": false,
@@ -292,6 +321,29 @@
             "tx_count": 3
           }
         ]
+      }
+    },
+    {
+      "capturedAt": "2026-09-13T12:43:51Z",
+      "method": "GET",
+      "endpointPath": "/api/v3/masterchainInfo",
+      "query": {},
+      "contentType": "application/json",
+      "body": {
+        "first": {
+          "workchain": -1,
+          "shard": "8000000000000000",
+          "seqno": 1,
+          "root_hash": "HBZqdwFA3MSjq0O8ntk6gX1Sibnw7cbWwEjKZt3JJpQ=",
+          "file_hash": "eocxdO1VHjKnalajy5t+bM/X7A+rdMMX3Lj2VRRNtFs="
+        },
+        "last": {
+          "workchain": -1,
+          "shard": "8000000000000000",
+          "seqno": 84538908,
+          "root_hash": "/RkaSpSVny45USAEv8xdqDVC+YXb2UjH/mz/jYzXSn4=",
+          "file_hash": "M6/pqxDWpt8iWU1RKtwsCo1Oms8Uidz5/7CU3VTPweM="
+        }
       }
     }
   ]
