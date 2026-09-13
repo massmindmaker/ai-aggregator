@@ -9,7 +9,10 @@
   },
   "include": [
     "src/queues/gateway-settlement-recovery.ts",
-    "src/queues/__tests__/gateway-settlement-recovery.test.ts"
+    "src/queues/gateway-settlement-recovery-db.ts",
+    "src/queues/__tests__/gateway-settlement-recovery.test.ts",
+    "src/queues/__tests__/gateway-settlement-recovery-db.test.ts",
+    "src/queues/__tests__/gateway-settlement-recovery.native.integration.test.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }
