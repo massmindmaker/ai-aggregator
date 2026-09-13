@@ -12,6 +12,12 @@
 
 Проверки: native9 + manifest13 =22, strict test types, database types, lint, formatting и diff-check — PASS. Финальный manifest применён на новой guarded loopback БД из `template0`:73 applied, затем0 applied/73 skipped; собственная БД удалена, общая test DB не сбрасывалась. Это локальная migration/source приёмка, не production.
 
+## Принятый локальный шаг: exact catalog projection
+
+`da0cb62` + `dd7f11e` приняты после independent financial/TypeScript PASS / APPROVE. Exact retail pricing, immutable runtime/key capture, revision/availability и strict policy seam используют принятую billing authority. Исправлены SQL-грамматика и ошибочная отдельная классификация нулевого тарифа.
+
+Проверки: initial124 focused; после исправления unit20 и guarded native reader1, source/strict test types/lint PASS. Native проверка исполняет настоящий default PostgreSQL reader с непустым списком моделей, только читает guarded test DB и закрывает оба клиента. Это не mounted HTTP или consumer acceptance.
+
 ## Открытые шаги
 
-[Owner plan](../../superpowers/plans/2026-09-13-public-catalog-contract.md): Task3 exact retail/availability projection, Task4 HTTP route/errors и Task5 AG-owned consumer/native acceptance ещё не приняты. `/v1/models` сохранён. Реальный Agents Market consumer и AG→AM integration остаются UNVERIFIED, пока Market на паузе. Production, платные upstream и новые runtime settings не проверялись и не включались.
+[Owner plan](../../superpowers/plans/2026-09-13-public-catalog-contract.md): Task4 HTTP route/errors и Task5 AG-owned consumer/native acceptance ещё не приняты. `/v1/models` сохранён. Реальный Agents Market consumer и AG→AM integration остаются UNVERIFIED, пока Market на паузе. Production, платные upstream и новые runtime settings не проверялись и не включались.
