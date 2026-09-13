@@ -11,7 +11,9 @@
 - Task2 manifest/native historical fixtures приняты после fixwave1 `744ac63` и independent scoped APPROVE: восстановлены обязательные negative facts/head, exact comment/path/block mapping и cursor ownership. Native-only test contract согласован в `68ddb93`, sub-gate APPROVE. Полный Task2 остаётся OPEN.
 - Public testnet capture budget исчерпан: **20/20 requests**. Дальнейшие adapter tests используют только checked-in fixtures и mocked transport; новые RPC не входят в текущий этап.
 - Native-only adapter Steps3–7 выполняется отдельным владельцем. Jetton возвращает `unsupported_asset` до сетевого вызова: indexed wallet lookup не заменяет master `get_wallet_address`, подходящей полной success fixture нет. Tasks1–6 максимум disabled/observe; settlement требует отдельного worker-only DB principal/ACL gate.
-- Параллельно выполняется read-only inventory оставшихся Aggregator tracks по canonical programme. Текущие `.Codex/` и `stderr` untracked сохранены; не чистить и не включать случайно в commits.
+- Catalog sync slice принят: `2fb0296` + `6d0ea97`/`750b04e`, independent spec/quality APPROVE; unit6/native2, fixture8/38 дважды, test-types/lint PASS. Native использует только собственные UUID-строки на guarded DB; fullT4 retries/admin diff/apply остаётся OPEN.
+- [Карта денежных маршрутов](../product/acceptance/AG-P1-route-coverage.md) уточняет оставшийся объём. [Settlement recovery runner](../superpowers/plans/2026-09-13-gateway-settlement-recovery-runner.md) — design candidate `96a1792`, review до реализации. Pure/DB refund primitives уже приняты; runtime Tasks3–5 ещё не включены.
+- Новый rich `/v1/catalog` получает отдельный focused design; существующий `/v1/models` сохраняется. Текущие `.Codex/` и `stderr` untracked сохранены; не чистить и не включать случайно в commits.
 
 ## Agents Market — остановлен, сохранить
 
