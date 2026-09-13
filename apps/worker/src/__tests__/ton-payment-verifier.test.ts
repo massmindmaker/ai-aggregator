@@ -177,7 +177,7 @@ describe('normalizeCanonicalTonEvidence', () => {
     });
   });
 
-  it('snapshots unknown input once before structural normalization', () => {
+  it('rejects accessor-backed unknown input without invoking the getter', () => {
     const input = clone(nativeFixture.evidence) as JsonObject;
     const transactions = input.transactions;
     let reads = 0;
@@ -191,8 +191,26 @@ describe('normalizeCanonicalTonEvidence', () => {
       },
     });
 
-    expect(normalizeCanonicalTonEvidence(input, TON_EVIDENCE_LIMITS)).not.toHaveProperty('kind');
-    expect(reads).toBe(1);
+    expect(normalizationFailure(input)).toEqual({
+      kind: 'source_error', code: 'provider_schema_invalid',
+    });
+    expect(reads).toBe(0);
+  });
+
+  it('stops at a low byte limit without invoking nested toJSON hooks', () => {
+    let calls = 0;
+    const input = Array.from({ length: 8 }, () => ({
+      toJSON: () => {
+        calls += 1;
+        return 0;
+      },
+    }));
+
+    expect(normalizeCanonicalTonEvidence(input, {
+      ...TON_EVIDENCE_LIMITS,
+      maxBundleBytes: 1,
+    })).toEqual({ kind: 'source_error', code: 'response_too_large' });
+    expect(calls).toBe(0);
   });
 
   it('accepts arrays at the configured bound and rejects bound plus one', () => {
@@ -332,6 +350,87 @@ describe('verifyChainCredit', () => {
     expect(verifyChainCredit(nativeInvoice, changeEvidence(native, (value) => {
       value.transactions[0]!.emulated = true;
     }), TON_VERIFIER_POLICY)).toMatchObject({ kind: 'review_required', reason: 'trace_emulated' });
+  });
+
+  it.each([
+    ['native dangling output', nativeInvoice, native, (value: NormalizedTonEvidence) => {
+      value.transactions[0]!.outMessages.push({
+        hash: '9'.repeat(64),
+        index: 0,
+        source: RECIPIENT,
+        destination: `0:${'9'.repeat(64)}`,
+        bounced: false,
+        opcode: null,
+        amountAtomic: '0',
+        decodedPayload: { kind: 'other' },
+      });
+    }],
+    ['native disconnected input', nativeInvoice, native, (value: NormalizedTonEvidence) => {
+      const transaction = clone(value.transactions[0]!);
+      transaction.hash = '9'.repeat(64);
+      transaction.inMessage.hash = '8'.repeat(64);
+      transaction.chainTimeMs += 1;
+      transaction.blockRef.seqno += 1;
+      value.transactions.push(transaction);
+      value.trace.orderedTransactionHashes.push(transaction.hash);
+    }],
+    ['jetton dangling output', jettonInvoice, jetton, (value: NormalizedTonEvidence) => {
+      value.transactions[2]!.outMessages.push({
+        hash: '9'.repeat(64),
+        index: 0,
+        source: RECIPIENT,
+        destination: `0:${'9'.repeat(64)}`,
+        bounced: false,
+        opcode: null,
+        amountAtomic: '0',
+        decodedPayload: { kind: 'other' },
+      });
+    }],
+    ['jetton disconnected input', jettonInvoice, jetton, (value: NormalizedTonEvidence) => {
+      const transaction = clone(value.transactions[2]!);
+      transaction.hash = '9'.repeat(64);
+      transaction.inMessage.hash = '8'.repeat(64);
+      transaction.chainTimeMs += 1;
+      transaction.blockRef.seqno += 1;
+      value.transactions.push(transaction);
+      value.trace.orderedTransactionHashes.push(transaction.hash);
+    }],
+  ])('rejects %s from a trace marked complete', (_name, invoice, base, mutate) => {
+    const evidence = changeEvidence(base, mutate);
+    expect(verifyChainCredit(invoice, evidence, TON_VERIFIER_POLICY)).toMatchObject({
+      kind: 'review_required', reason: 'message_linkage_invalid',
+    });
+  });
+
+  it('rejects conflicting hashes for the same connected block coordinate', () => {
+    const evidence = changeEvidence(native, (value) => {
+      const message = {
+        hash: '9'.repeat(64),
+        index: 0,
+        source: RECIPIENT,
+        destination: `0:${'9'.repeat(64)}`,
+        bounced: false,
+        opcode: null,
+        amountAtomic: '0',
+        decodedPayload: { kind: 'other' as const },
+      };
+      value.transactions[0]!.outMessages.push(message);
+      const transaction = clone(value.transactions[0]!);
+      transaction.account = message.destination;
+      transaction.hash = 'b'.repeat(64);
+      transaction.lt = '1001';
+      transaction.chainTimeMs += 1;
+      transaction.inMessage = clone(message);
+      transaction.outMessages = [];
+      transaction.blockRef.rootHash = 'b'.repeat(64);
+      transaction.blockRef.fileHash = 'c'.repeat(64);
+      value.transactions.push(transaction);
+      value.trace.orderedTransactionHashes.push(transaction.hash);
+    });
+
+    expect(verifyChainCredit(nativeInvoice, evidence, TON_VERIFIER_POLICY)).toMatchObject({
+      kind: 'review_required', reason: 'inclusion_mismatch',
+    });
   });
 
   it('applies network and immutable policy pins before later evidence defects', () => {

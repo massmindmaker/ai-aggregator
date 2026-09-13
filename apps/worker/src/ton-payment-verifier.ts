@@ -137,8 +137,18 @@ function traceLinkageIsValid(evidence: NormalizedTonEvidence): boolean {
   for (const [messageHash, sent] of outgoing) {
     const received = incoming.get(messageHash);
     if (
-      received
-      && (sent.transactionIndex >= received.transactionIndex || !sameMessage(sent.message, received.message))
+      !received
+      || sent.transactionIndex >= received.transactionIndex
+      || !sameMessage(sent.message, received.message)
+    ) return false;
+  }
+  for (const [messageHash, received] of incoming) {
+    if (received.transactionIndex === 0) continue;
+    const sent = outgoing.get(messageHash);
+    if (
+      !sent
+      || sent.transactionIndex >= received.transactionIndex
+      || !sameMessage(sent.message, received.message)
     ) return false;
   }
   return true;
@@ -150,8 +160,20 @@ function inclusionIsValid(evidence: NormalizedTonEvidence): boolean {
     return false;
   }
   const blockSeqnos = evidence.transactions.map((entry) => entry.blockRef.masterchainSeqno);
-  return blockSeqnos.every((seqno) => seqno <= evidence.trace.masterchainSeqno)
-    && blockSeqnos.some((seqno) => seqno === evidence.trace.masterchainSeqno);
+  if (
+    !blockSeqnos.every((seqno) => seqno <= evidence.trace.masterchainSeqno)
+    || !blockSeqnos.some((seqno) => seqno === evidence.trace.masterchainSeqno)
+  ) return false;
+  const blockIdentities = new Map<string, string>();
+  for (const transaction of evidence.transactions) {
+    const block = transaction.blockRef;
+    const coordinate = `${block.workchain}:${block.shard}:${block.seqno}`;
+    const identity = `${block.rootHash}:${block.fileHash}`;
+    const knownIdentity = blockIdentities.get(coordinate);
+    if (knownIdentity !== undefined && knownIdentity !== identity) return false;
+    blockIdentities.set(coordinate, identity);
+  }
+  return true;
 }
 
 type Candidate = {

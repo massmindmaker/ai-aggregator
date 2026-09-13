@@ -99,6 +99,130 @@ const OPCODE = /^0[xX][0-9a-fA-F]{8}$/;
 const SHARD = /^[0-9a-fA-F]{16}$/;
 
 class InvalidEvidence extends Error {}
+class EvidenceLimitExceeded extends Error {}
+
+const MAX_SNAPSHOT_NODES = 262_144;
+const MAX_SNAPSHOT_DEPTH = 64;
+
+class SnapshotBudget {
+  private bytes = 0;
+  private nodes = 0;
+
+  constructor(private readonly maxBytes: number) {}
+
+  addBytes(count: number): void {
+    this.bytes += count;
+    if (this.bytes > this.maxBytes) throw new EvidenceLimitExceeded();
+  }
+
+  ensureBytes(count: number): void {
+    if (count > this.maxBytes - this.bytes) throw new EvidenceLimitExceeded();
+  }
+
+  enter(depth: number): void {
+    this.nodes += 1;
+    if (this.nodes > MAX_SNAPSHOT_NODES || depth > MAX_SNAPSHOT_DEPTH) {
+      throw new EvidenceLimitExceeded();
+    }
+  }
+}
+
+function addJsonStringBytes(value: string, budget: SnapshotBudget): void {
+  budget.addBytes(2);
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code === 0x22 || code === 0x5c || [0x08, 0x09, 0x0a, 0x0c, 0x0d].includes(code)) {
+      budget.addBytes(2);
+    } else if (code <= 0x1f || (code >= 0xd800 && code <= 0xdfff
+      && !(code <= 0xdbff && index + 1 < value.length
+        && value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff))) {
+      budget.addBytes(6);
+    } else if (code <= 0x7f) {
+      budget.addBytes(1);
+    } else if (code <= 0x7ff) {
+      budget.addBytes(2);
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      budget.addBytes(4);
+      index += 1;
+    } else {
+      budget.addBytes(3);
+    }
+  }
+}
+
+function boundedSnapshot(input: unknown, maxBytes: number): unknown {
+  const budget = new SnapshotBudget(maxBytes);
+  const visit = (value: unknown, depth: number): unknown => {
+    budget.enter(depth);
+    if (value === null) {
+      budget.addBytes(4);
+      return null;
+    }
+    if (typeof value === 'string') {
+      addJsonStringBytes(value, budget);
+      return value;
+    }
+    if (typeof value === 'boolean') {
+      budget.addBytes(value ? 4 : 5);
+      return value;
+    }
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) throw new InvalidEvidence();
+      const text = Object.is(value, -0) ? '0' : String(value);
+      budget.addBytes(text.length);
+      return value;
+    }
+    if (typeof value !== 'object') throw new InvalidEvidence();
+
+    if (Array.isArray(value)) {
+      if (Object.getPrototypeOf(value) !== Array.prototype) throw new InvalidEvidence();
+      budget.addBytes(2);
+      const length = value.length;
+      if (length > 0) {
+        budget.addBytes(length - 1);
+        budget.ensureBytes(length);
+      }
+      if (Object.getOwnPropertySymbols(value).length !== 0) throw new InvalidEvidence();
+      const output: unknown[] = [];
+      for (let index = 0; index < length; index += 1) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+        if (!descriptor || !('value' in descriptor)) throw new InvalidEvidence();
+        output.push(visit(descriptor.value, depth + 1));
+      }
+      for (const key in value) {
+        if (!Object.prototype.hasOwnProperty.call(value, key)) throw new InvalidEvidence();
+        const index = Number(key);
+        if (!Number.isSafeInteger(index) || index < 0 || String(index) !== key || index >= length) {
+          throw new InvalidEvidence();
+        }
+      }
+      return output;
+    }
+
+    if (Object.getPrototypeOf(value) !== Object.prototype) throw new InvalidEvidence();
+    budget.addBytes(2);
+    if (Object.getOwnPropertySymbols(value).length !== 0) throw new InvalidEvidence();
+    const output: Record<string, unknown> = {};
+    let propertyCount = 0;
+    for (const key in value as Record<string, unknown>) {
+      if (!Object.prototype.hasOwnProperty.call(value, key)) throw new InvalidEvidence();
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !('value' in descriptor)) throw new InvalidEvidence();
+      if (propertyCount > 0) budget.addBytes(1);
+      addJsonStringBytes(key, budget);
+      budget.addBytes(1);
+      Object.defineProperty(output, key, {
+        value: visit(descriptor.value, depth + 1),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+      propertyCount += 1;
+    }
+    return output;
+  };
+  return visit(input, 0);
+}
 
 function plainObject(value: unknown): Record<string, unknown> {
   if (
@@ -330,20 +454,18 @@ export function normalizeCanonicalTonEvidence(
 ): NormalizedTonEvidence | TonNormalizationFailure {
   if (!validLimits(limits)) return { kind: 'source_error', code: 'provider_schema_invalid' };
 
-  let serialized: string;
+  let snapshot: unknown;
   try {
-    const candidate = JSON.stringify(input);
-    if (candidate === undefined) throw new InvalidEvidence();
-    serialized = candidate;
-  } catch {
+    snapshot = boundedSnapshot(input, limits.maxBundleBytes);
+  } catch (error) {
+    if (error instanceof EvidenceLimitExceeded) {
+      return { kind: 'source_error', code: 'response_too_large' };
+    }
     return { kind: 'source_error', code: 'provider_schema_invalid' };
-  }
-  if (Buffer.byteLength(serialized) > limits.maxBundleBytes) {
-    return { kind: 'source_error', code: 'response_too_large' };
   }
 
   try {
-    const evidence = plainObject(JSON.parse(serialized) as unknown);
+    const evidence = plainObject(snapshot);
     exactKeys(evidence, [
       'schemaVersion', 'source', 'network', 'asset', 'trace',
       'latestIndexedMasterchain', 'transactions', 'creditPath',
