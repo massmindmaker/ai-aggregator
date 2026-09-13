@@ -49,3 +49,5 @@ Aggregator владеет Web, gateway, model catalog, consumer/author money и 
 **TON:** [AG-TON1 pure contract](superpowers/plans/2026-09-07-ton-payments.md) `a5731d4` и [AG-TON2 invoice core](superpowers/plans/2026-09-08-ton-invoice-core.md) `c62ce98` + `724a031` приняты локально. TON2 подтверждён независимым financial/TS re-review и baseline12/322 с mandatory isolated native58; это не приёмка verifier, checkout, wallet login, testnet/mainnet или production payment.
 
 **Следующий финансовый этап:** AG-TON3 trusted verifier: серверное full-trace/inclusion/finality подтверждение, import boundary и recovery queue для уже принятого invoice core. Сохраняются совместимость RUB refund, PAYG ceiling и отдельный mainnet/release gate; публичный checkout, wallet login и mainnet не входят в TON2.
+
+**TON3 source grounding13.09:** [официальные источники и граница REST/proof](research/2026-09-13-ton-verifier-source-boundary.md). Это подготовка architecture gate, без RPC fixtures, новой settlement capability или повторного TON2 baseline.
