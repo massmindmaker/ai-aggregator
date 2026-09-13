@@ -69,7 +69,7 @@ function strings(value: unknown): string[] {
   }
   return Object.freeze(copy) as unknown as string[];
 }
-function decode(
+export function normalizeStoredChatFreshPolicy(
   key: AuthenticatedApiKey,
 ): Readonly<{
   policy: Readonly<ApiKeyPolicies>;
@@ -127,7 +127,7 @@ export function prepareStoredChatFreshPolicy(
   policy: Readonly<ApiKeyPolicies>;
   requestedMode: Mode;
 }> {
-  const { policy, whitelist } = decode(args.key);
+  const { policy, whitelist } = normalizeStoredChatFreshPolicy(args.key);
   const slug = args.identity.attemptBody.model;
   if (whitelist.length && !whitelist.includes(slug))
     throw new StoredChatFreshPolicyError('model_not_allowed');

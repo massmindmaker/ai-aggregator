@@ -1,7 +1,10 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock('../lib/db', () => ({ sql: query }));
-import { prepareStoredChatFreshPolicy } from '../billing/stored-chat-fresh-policy';
+import {
+  normalizeStoredChatFreshPolicy,
+  prepareStoredChatFreshPolicy,
+} from '../billing/stored-chat-fresh-policy';
 import { captureStoredChatHttpIdentity } from '../billing/stored-chat-http-identity';
 import type { AuthenticatedApiKey } from '../middleware/auth-plan04';
 import type { ResolvedModel } from '../routing/resolver';
@@ -50,6 +53,30 @@ const prepare = (k = key(), text = 'hi', m = model()) =>
   });
 beforeEach(() => {
   query.mockReset().mockResolvedValue([]);
+});
+it('exports the same strict detached policy seam used by request preparation', () => {
+  const policies = {
+    default_mode: 'cheapest',
+    allowed_providers: ['foreign'],
+    forbid_non_ru: false,
+  };
+  const source = key(policies);
+  const normalized = normalizeStoredChatFreshPolicy(source);
+  policies.allowed_providers.push('ru');
+  source.model_whitelist!.push('other');
+  expect(normalized).toEqual({
+    policy: {
+      default_mode: 'cheapest',
+      allowed_providers: ['foreign'],
+      forbid_non_ru: false,
+    },
+    whitelist: [],
+  });
+  expect(Object.isFrozen(normalized)).toBe(true);
+  expect(Object.isFrozen(normalized.policy.allowed_providers)).toBe(true);
+  expect(prepare(key({ default_mode: 'cheapest' })).requestedMode).toBe(
+    normalized.policy.default_mode,
+  );
 });
 it('defaults auto, detached frozen policy and nullable session remain valid', () => {
   const result = prepare();
