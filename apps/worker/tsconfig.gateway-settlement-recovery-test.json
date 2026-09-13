@@ -8,6 +8,9 @@
     "types": ["node", "vitest/globals"]
   },
   "include": [
+    "src/gateway-settlement-recovery-bootstrap.ts",
+    "src/index.ts",
+    "src/__tests__/gateway-settlement-recovery-bootstrap.test.ts",
     "src/queues/gateway-settlement-recovery.ts",
     "src/queues/gateway-settlement-recovery-db.ts",
     "src/queues/__tests__/gateway-settlement-recovery.test.ts",

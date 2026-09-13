@@ -12,6 +12,10 @@
 import { createServer } from 'node:http';
 import { loadSharedEnv } from './env.js';
 import { logger } from './logger.js';
+import {
+  logGatewaySettlementRecoveryBoundaryFailure,
+  startGatewaySettlementRecoveryFromEnv,
+} from './gateway-settlement-recovery-bootstrap.js';
 import { createRedisConnection } from './redis.js';
 import { startUpstreamPollWorker } from './queues/upstream-poll.js';
 import { startContestEvalWorker } from './queues/contest-eval.js';
@@ -25,6 +29,10 @@ import { startCatalogSyncCron } from './catalog/sync-cron.js';
 
 async function main(): Promise<void> {
   loadSharedEnv();
+  const gatewaySettlementRecovery = await startGatewaySettlementRecoveryFromEnv({
+    env: process.env,
+    logger,
+  });
 
   const connection = createRedisConnection();
   logger.info('redis connected');
@@ -87,7 +95,15 @@ async function main(): Promise<void> {
     },
   });
 
-  const workers = [upstreamPoll, contestEval, webhookRetry, emailSend, closeContests, finalizeEarnings];
+  const workers = [
+    upstreamPoll,
+    contestEval,
+    webhookRetry,
+    emailSend,
+    closeContests,
+    finalizeEarnings,
+    ...(gatewaySettlementRecovery === null ? [] : [gatewaySettlementRecovery]),
+  ];
 
   // ---------------------------------------------------------------------------
   // Probes
@@ -149,6 +165,8 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  logger.fatal({ err }, 'worker bootstrap failed');
+  if (!logGatewaySettlementRecoveryBoundaryFailure(logger, err)) {
+    logger.fatal({ err }, 'worker bootstrap failed');
+  }
   process.exit(1);
 });
