@@ -1,5 +1,10 @@
 # Статус developer memory
 
+## AM auth core refresh — 13.09.2026
+
+Existing Serena AM locator updated/readback to accepted owner42387bc, preserving schema10/0 and stopped-stack constraint. T2.3b HTTP remains candidate. Graphify deferred during active HTTP source work; stable LightRAG/Brain navigation not duplicated.
+
+
 ## AG TON3 architecture refresh — 13.09.2026
 
 Existing Serena locator updated/readback to architecture owner4143110, preserving TON2 evidence and next runtime authorization gate. Task1 pure verifier remains candidate; no Graphify rebuild of unaccepted code, stable LightRAG/Brain locators not duplicated. Shared continuation links owner evidence.
