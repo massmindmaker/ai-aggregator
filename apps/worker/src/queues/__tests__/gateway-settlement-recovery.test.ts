@@ -56,6 +56,11 @@ describe("gateway settlement recovery parsers", () => {
     expect(parseGatewaySettlementRecoveryDatabaseUrl(raw)).toBe(raw);
   });
 
+  it("accepts an exact postgres URL without rewriting it", () => {
+    const raw = "postgres://user:secret@db.example.test:5432/recovery?application_name=worker";
+    expect(parseGatewaySettlementRecoveryDatabaseUrl(raw)).toBe(raw);
+  });
+
   it.each([
     "", " postgres://db/recovery", "postgres://db", "postgresql://db?application_name=worker", "postgres://db/", "https://db/recovery", "postgres:///recovery",
     "postgres://db/recovery#fragment", "postgres://db/recovery?statement_timeout=1",
@@ -73,6 +78,16 @@ describe("gateway settlement recovery parsers", () => {
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toBe("invalid gateway settlement recovery database URL");
     }
+  });
+
+  it("rejects a decoded encoded forbidden database URL key", () => {
+    expect(() => parseGatewaySettlementRecoveryDatabaseUrl("postgres://db/recovery?%73tatement_timeout=1"))
+      .toThrow("invalid gateway settlement recovery database URL");
+  });
+
+  it("rejects every duplicate case-variant forbidden URL key occurrence", () => {
+    expect(() => parseGatewaySettlementRecoveryDatabaseUrl("postgres://db/recovery?statement_timeout=1&STATEMENT_TIMEOUT=1"))
+      .toThrow("invalid gateway settlement recovery database URL");
   });
 });
 
