@@ -13,6 +13,10 @@
     "./schema": {
       "import": "./dist/schema/index.js",
       "types": "./dist/schema/index.d.ts"
+    },
+    "./ton-reconciliation-internal": {
+      "import": "./dist/ton-reconciliation-internal.js",
+      "types": "./dist/ton-reconciliation-internal.d.ts"
     }
   },
   "scripts": {

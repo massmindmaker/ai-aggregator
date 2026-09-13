@@ -14,6 +14,13 @@ import type {
   TonInvoice,
   VerifiedChainCredit,
   TonSettlementResult,
+  TonSourceErrorCode,
+  TonProviderCursor,
+  TonSweepCursor,
+  TonRecipientBinding,
+  TonReconciliationSource,
+  TonObservationInput,
+  TonObservationResult,
 } from "./ton-payment-types";
 const full = (pattern: string) => new RegExp(`^(?:${pattern})(?![\\s\\S])`);
 const UUID = full(
@@ -341,5 +348,625 @@ export async function settleTonInvoice(
           values: [invoice, stable(c)],
         })
       ).rows[0]!.result,
+  );
+}
+
+const TON_PROVIDER_ID = "toncenter-v3-testnet" as const;
+const TON_EVIDENCE_MODEL = "server_trusted_indexer" as const;
+const SOURCE_ID = full("[0-9a-f]{64}");
+const CANONICAL_REFERENCE = full(
+  "aiag-ton:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+);
+const SOURCE_ERRORS = new Set<TonSourceErrorCode>([
+  "origin_mismatch",
+  "redirect_rejected",
+  "response_too_large",
+  "http_unauthorized",
+  "rate_limited",
+  "timeout",
+  "upstream_5xx",
+  "provider_schema_invalid",
+  "pagination_regressed",
+  "recipient_binding_changed",
+  "unsupported_asset",
+]);
+const OBSERVED_REASONS = new Set([
+  "candidate_not_found",
+  "trace_incomplete",
+  "finality_pending",
+]);
+const REVIEW_REASONS = new Set([
+  "network_mismatch",
+  "policy_mismatch",
+  "trace_oversized",
+  "trace_emulated",
+  "trace_aborted",
+  "trace_bounced",
+  "trace_failed",
+  "message_linkage_invalid",
+  "inclusion_mismatch",
+  "asset_mismatch",
+  "recipient_mismatch",
+  "sender_mismatch",
+  "reference_mismatch",
+  "amount_mismatch",
+  "jetton_master_mismatch",
+  "jetton_wallet_mismatch",
+  "jetton_notification_invalid",
+  "settlement_evidence_conflict",
+]);
+const INVOICE_STATUSES = new Set<TonInvoice["status"]>([
+  "pending",
+  "observed",
+  "confirmed",
+  "settled",
+  "expired",
+  "review_required",
+]);
+
+function canonicalId(value: unknown): string {
+  const result = id(value);
+  if (result !== value) throw new Error("TON_INVALID_ID");
+  return result;
+}
+
+function canonicalAddress(value: unknown): string {
+  const result = address(value);
+  if (result !== value) throw new Error("TON_INVALID_ADDRESS");
+  return result;
+}
+
+function lowerHash(value: unknown, code = "TON_INVALID_HASH"): string {
+  if (typeof value !== "string" || !SOURCE_ID.test(value))
+    throw new Error(code);
+  return value;
+}
+
+function canonicalJson(value: unknown): string {
+  const visit = (current: unknown): string => {
+    if (current === null) return "null";
+    if (typeof current === "string" || typeof current === "boolean")
+      return JSON.stringify(current);
+    if (typeof current === "number") {
+      if (!Number.isFinite(current)) throw new Error("TON_INVALID_JSON");
+      return JSON.stringify(current);
+    }
+    if (Array.isArray(current)) return `[${current.map(visit).join(",")}]`;
+    if (
+      typeof current !== "object" ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(current))
+    )
+      throw new Error("TON_INVALID_JSON");
+    const record = current as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${visit(record[key])}`)
+      .join(",")}}`;
+  };
+  return visit(value);
+}
+
+function normalizeCursor(value: unknown): TonProviderCursor {
+  const raw = object(value);
+  keys(raw, [
+    "schemaVersion",
+    "beforeLt",
+    "beforeTransactionHash",
+    "cycleUpperLt",
+  ]);
+  if (raw.schemaVersion !== 1) throw new Error("TON_INVALID_CURSOR");
+  const beforeLt = atomic(raw.beforeLt, true, true);
+  const cycleUpperLt = atomic(raw.cycleUpperLt, true, true);
+  if (BigInt(beforeLt) > BigInt(cycleUpperLt))
+    throw new Error("TON_INVALID_CURSOR");
+  return {
+    schemaVersion: 1,
+    beforeLt,
+    beforeTransactionHash: lowerHash(
+      raw.beforeTransactionHash,
+      "TON_INVALID_CURSOR",
+    ),
+    cycleUpperLt,
+  };
+}
+
+function nullableCursor(value: unknown): TonProviderCursor | null {
+  return value === null ? null : normalizeCursor(value);
+}
+
+function normalizeSource(value: unknown): TonReconciliationSource {
+  const raw = object(value);
+  keys(raw, [
+    "sourceId",
+    "network",
+    "asset",
+    "invoiceRecipient",
+    "scanFloorTimeMs",
+  ]);
+  if (raw.network !== "tvm:-3") throw new Error("TON_INVALID_NETWORK");
+  const rawAsset = object(raw.asset);
+  keys(rawAsset, ["decimals", "kind", "network"]);
+  if (
+    rawAsset.network !== "tvm:-3" ||
+    rawAsset.kind !== "native" ||
+    rawAsset.decimals !== 9
+  )
+    throw new Error("TON_INVALID_ASSET");
+  const invoiceRecipient = canonicalAddress(raw.invoiceRecipient);
+  const sourceId = lowerHash(raw.sourceId, "TON_INVALID_SOURCE");
+  const expected = createHash("sha256")
+    .update(
+      `${TON_PROVIDER_ID}\0{"decimals":9,"kind":"native","network":"tvm:-3"}\0${invoiceRecipient}`,
+    )
+    .digest("hex");
+  if (sourceId !== expected) throw new Error("TON_INVALID_SOURCE");
+  return {
+    sourceId,
+    network: "tvm:-3",
+    asset: { decimals: 9, kind: "native", network: "tvm:-3" },
+    invoiceRecipient,
+    scanFloorTimeMs: time(raw.scanFloorTimeMs),
+  };
+}
+
+function normalizeBinding(
+  value: unknown,
+  source: TonReconciliationSource,
+): TonRecipientBinding {
+  const raw = object(value);
+  keys(raw, ["recipientAccount", "derivation"]);
+  const derivation = object(raw.derivation);
+  keys(derivation, ["kind", "ownerAddress"]);
+  if (derivation.kind !== "native") throw new Error("TON_INVALID_BINDING");
+  const recipientAccount = canonicalAddress(raw.recipientAccount);
+  const ownerAddress = canonicalAddress(derivation.ownerAddress);
+  if (
+    recipientAccount !== source.invoiceRecipient ||
+    ownerAddress !== source.invoiceRecipient
+  )
+    throw new Error("TON_INVALID_BINDING");
+  return {
+    recipientAccount,
+    derivation: { kind: "native", ownerAddress },
+  };
+}
+
+function normalizeObservation(value: TonObservationInput): TonObservationInput {
+  const raw = object(value);
+  keys(raw, [
+    "schemaVersion",
+    "invoiceId",
+    "sourceId",
+    "recipientAccount",
+    "eventIdentity",
+    "providerId",
+    "evidenceModel",
+    "result",
+    "providerCursor",
+    "snapshot",
+    "observedAtMs",
+  ]);
+  if (
+    raw.schemaVersion !== 1 ||
+    raw.providerId !== TON_PROVIDER_ID ||
+    raw.evidenceModel !== TON_EVIDENCE_MODEL
+  )
+    throw new Error("TON_INVALID_OBSERVATION");
+  const result = object(raw.result);
+  keys(result, ["kind", "reason", "evidenceDigest"]);
+  const kind = result.kind;
+  const reason = result.reason;
+  const digest = result.evidenceDigest;
+  if (
+    (kind === "source_error" &&
+      (!SOURCE_ERRORS.has(reason as TonSourceErrorCode) || digest !== null)) ||
+    (kind === "observed" &&
+      (!OBSERVED_REASONS.has(reason as string) ||
+        (digest !== null && !SOURCE_ID.test(String(digest))))) ||
+    (kind === "unmatched" &&
+      (reason !== "invoice_reference_not_found" ||
+        typeof digest !== "string" ||
+        !SOURCE_ID.test(digest))) ||
+    (kind === "verified_candidate" &&
+      (reason !== "verified_candidate" ||
+        typeof digest !== "string" ||
+        !SOURCE_ID.test(digest))) ||
+    (kind === "review_required" &&
+      (!REVIEW_REASONS.has(reason as string) ||
+        typeof digest !== "string" ||
+        !SOURCE_ID.test(digest))) ||
+    ![
+      "source_error",
+      "observed",
+      "unmatched",
+      "verified_candidate",
+      "review_required",
+    ].includes(kind as string)
+  )
+    throw new Error("TON_INVALID_OBSERVATION_RESULT");
+
+  const invoiceId =
+    raw.invoiceId === null ? null : canonicalId(raw.invoiceId);
+  let eventIdentity: TonObservationInput["eventIdentity"] = null;
+  if (raw.eventIdentity !== null) {
+    const event = object(raw.eventIdentity);
+    keys(event, ["txHash", "messageHash", "txLt"]);
+    eventIdentity = {
+      txHash: lowerHash(event.txHash),
+      messageHash: lowerHash(event.messageHash),
+      txLt: atomic(event.txLt, true, true),
+    };
+  }
+  const noCandidate =
+    kind === "source_error" ||
+    (kind === "observed" && reason === "candidate_not_found");
+  if (
+    (noCandidate && (invoiceId !== null || eventIdentity !== null)) ||
+    (kind === "unmatched" && (invoiceId !== null || eventIdentity === null)) ||
+    (!noCandidate && kind !== "unmatched" &&
+      (invoiceId === null || eventIdentity === null))
+  )
+    throw new Error("TON_INVALID_OBSERVATION_IDENTITY");
+
+  const snapshot = object(raw.snapshot);
+  if (invoiceId !== null) {
+    if (
+      typeof snapshot.reference !== "string" ||
+      !CANONICAL_REFERENCE.test(snapshot.reference)
+    )
+      throw new Error("TON_INVALID_REFERENCE");
+  }
+  const normalized = {
+    schemaVersion: 1,
+    invoiceId,
+    sourceId: lowerHash(raw.sourceId, "TON_INVALID_SOURCE"),
+    recipientAccount: canonicalAddress(raw.recipientAccount),
+    eventIdentity,
+    providerId: TON_PROVIDER_ID,
+    evidenceModel: TON_EVIDENCE_MODEL,
+    result: {
+      kind,
+      reason,
+      evidenceDigest: digest,
+    },
+    providerCursor: nullableCursor(raw.providerCursor),
+    snapshot,
+    observedAtMs: time(raw.observedAtMs),
+  } as TonObservationInput;
+  const serialized = canonicalJson(normalized.snapshot);
+  if (Buffer.byteLength(serialized) > 32_768)
+    throw new Error("TON_SNAPSHOT_TOO_LARGE");
+  return normalized;
+}
+
+function sourceJson(source: TonReconciliationSource): string {
+  return canonicalJson(source);
+}
+
+function requireResult<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+): T {
+  if (typeof value !== "string" || !allowed.includes(value as T))
+    throw new Error("TON_INVALID_DATABASE_RESULT");
+  return value as T;
+}
+
+export async function listTonReconciliationSources(
+  db: TonPaymentDatabase,
+  input: {
+    afterSourceId: string | null;
+    limit: number;
+    assetKind: "native";
+  },
+): Promise<readonly TonReconciliationSource[]> {
+  const raw = object(input);
+  keys(raw, ["afterSourceId", "limit", "assetKind"]);
+  if (
+    raw.assetKind !== "native" ||
+    !Number.isInteger(raw.limit) ||
+    (raw.limit as number) < 1 ||
+    (raw.limit as number) > 16
+  )
+    throw new Error("TON_INVALID_LIMIT");
+  const after =
+    raw.afterSourceId === null
+      ? null
+      : lowerHash(raw.afterSourceId, "TON_INVALID_SOURCE");
+  return db.transaction(async (tx) => {
+    const result = await tx.query<{ result: unknown }>({
+      text: "SELECT aiag_list_ton_reconciliation_sources_v1($1::text,$2::integer,$3::text) AS result",
+      values: [after, raw.limit, "native"],
+    });
+    const rows = result.rows[0]?.result;
+    if (!Array.isArray(rows) || rows.length > (raw.limit as number))
+      throw new Error("TON_INVALID_DATABASE_RESULT");
+    return rows.map(normalizeSource);
+  });
+}
+
+export async function findTonInvoicesForReconciliation(
+  db: TonPaymentDatabase,
+  input: {
+    source: TonReconciliationSource;
+    references: readonly string[];
+  },
+): Promise<readonly TonInvoice[]> {
+  const raw = object(input);
+  keys(raw, ["source", "references"]);
+  const source = normalizeSource(raw.source);
+  if (
+    !Array.isArray(raw.references) ||
+    raw.references.length > 8 ||
+    raw.references.some(
+      (reference) =>
+        typeof reference !== "string" || !CANONICAL_REFERENCE.test(reference),
+    ) ||
+    new Set(raw.references).size !== raw.references.length
+  )
+    throw new Error("TON_INVALID_REFERENCES");
+  if (raw.references.length === 0) return [];
+  return db.transaction(async (tx) => {
+    const result = await tx.query<{ result: unknown }>({
+      text: "SELECT aiag_find_ton_invoices_for_reconciliation_v1($1::jsonb,$2::text[]) AS result",
+      values: [sourceJson(source), raw.references],
+    });
+    if (!Array.isArray(result.rows[0]?.result))
+      throw new Error("TON_INVALID_DATABASE_RESULT");
+    return result.rows[0].result as TonInvoice[];
+  });
+}
+
+export async function getTonInvoiceForReconciliation(
+  db: TonPaymentDatabase,
+  invoiceId: string,
+): Promise<TonInvoice | null> {
+  const invoice = canonicalId(invoiceId);
+  return db.transaction(
+    async (tx) =>
+      (
+        await tx.query<{ result: TonInvoice | null }>({
+          text: "SELECT aiag_get_ton_invoice_for_reconciliation_v1($1::uuid) AS result",
+          values: [invoice],
+        })
+      ).rows[0]?.result ?? null,
+  );
+}
+
+export async function recordTonChainObservation(
+  db: TonPaymentDatabase,
+  input: TonObservationInput,
+): Promise<TonObservationResult> {
+  const normalized = normalizeObservation(input);
+  const serialized = canonicalJson(normalized);
+  if (Buffer.byteLength(serialized) > 65_536)
+    throw new Error("TON_OBSERVATION_TOO_LARGE");
+  return db.transaction(async (tx) => {
+    const value = (
+      await tx.query<{ result: unknown }>({
+        text: "SELECT aiag_record_ton_chain_observation_v1($1::jsonb) AS result",
+        values: [serialized],
+      })
+    ).rows[0]?.result;
+    const raw = object(value);
+    keys(raw, ["observationId", "outcome", "invoiceStatus"]);
+    const invoiceStatus =
+      raw.invoiceStatus === null && raw.invoiceStatus !== undefined
+        ? null
+        : requireResult(raw.invoiceStatus, [...INVOICE_STATUSES]);
+    return {
+      observationId: canonicalId(raw.observationId),
+      outcome: requireResult(raw.outcome, ["inserted", "already_recorded"]),
+      invoiceStatus,
+    };
+  });
+}
+
+export async function claimTonReconciliationLease(
+  db: TonPaymentDatabase,
+  input: {
+    source: TonReconciliationSource;
+    providerId: "toncenter-v3-testnet";
+    leaseOwner: string;
+    leaseMs: 90_000;
+  },
+): Promise<
+  | {
+      kind: "claimed";
+      cursor: TonSweepCursor | null;
+      binding: TonRecipientBinding | null;
+    }
+  | { kind: "busy" }
+  | { kind: "source_identity_mismatch" }
+> {
+  const raw = object(input);
+  keys(raw, ["source", "providerId", "leaseOwner", "leaseMs"]);
+  if (raw.providerId !== TON_PROVIDER_ID || raw.leaseMs !== 90_000)
+    throw new Error("TON_INVALID_LEASE");
+  const source = normalizeSource(raw.source);
+  const owner = canonicalId(raw.leaseOwner);
+  return db.transaction(async (tx) => {
+    const value = (
+      await tx.query<{ result: unknown }>({
+        text: "SELECT aiag_claim_ton_reconciliation_lease_v1($1::jsonb,$2::text,$3::uuid,$4::integer) AS result",
+        values: [sourceJson(source), TON_PROVIDER_ID, owner, 90_000],
+      })
+    ).rows[0]?.result;
+    const result = object(value);
+    if (result.kind === "busy" || result.kind === "source_identity_mismatch") {
+      keys(result, ["kind"]);
+      return { kind: result.kind };
+    }
+    keys(result, ["kind", "cursor", "binding"]);
+    if (result.kind !== "claimed")
+      throw new Error("TON_INVALID_DATABASE_RESULT");
+    const binding =
+      result.binding === null ? null : normalizeBinding(result.binding, source);
+    return {
+      kind: "claimed" as const,
+      cursor: nullableCursor(result.cursor),
+      binding,
+    };
+  });
+}
+
+export async function bindTonReconciliationRecipient(
+  db: TonPaymentDatabase,
+  input: {
+    source: TonReconciliationSource;
+    leaseOwner: string;
+    expected: TonSweepCursor | null;
+    binding: TonRecipientBinding;
+  },
+): Promise<
+  | "bound"
+  | "binding_mismatch"
+  | "lease_lost"
+  | "cursor_conflict"
+  | "source_identity_mismatch"
+> {
+  const raw = object(input);
+  keys(raw, ["source", "leaseOwner", "expected", "binding"]);
+  const source = normalizeSource(raw.source);
+  const owner = canonicalId(raw.leaseOwner);
+  const expected = nullableCursor(raw.expected);
+  const binding = normalizeBinding(raw.binding, source);
+  return db.transaction(async (tx) =>
+    requireResult(
+      (
+        await tx.query<{ result: unknown }>({
+          text: "SELECT aiag_bind_ton_reconciliation_recipient_v1($1::jsonb,$2::uuid,$3::jsonb,$4::jsonb) AS result",
+          values: [
+            sourceJson(source),
+            owner,
+            expected === null ? null : canonicalJson(expected),
+            canonicalJson(binding),
+          ],
+        })
+      ).rows[0]?.result,
+      [
+        "bound",
+        "binding_mismatch",
+        "lease_lost",
+        "cursor_conflict",
+        "source_identity_mismatch",
+      ] as const,
+    ),
+  );
+}
+
+export async function renewTonReconciliationLease(
+  db: TonPaymentDatabase,
+  input: {
+    sourceId: string;
+    leaseOwner: string;
+    expected: TonSweepCursor | null;
+    leaseMs: 90_000;
+  },
+): Promise<"renewed" | "lease_lost" | "cursor_conflict"> {
+  const raw = object(input);
+  keys(raw, ["sourceId", "leaseOwner", "expected", "leaseMs"]);
+  if (raw.leaseMs !== 90_000) throw new Error("TON_INVALID_LEASE");
+  const sourceId = lowerHash(raw.sourceId, "TON_INVALID_SOURCE");
+  const owner = canonicalId(raw.leaseOwner);
+  const expected = nullableCursor(raw.expected);
+  return db.transaction(async (tx) =>
+    requireResult(
+      (
+        await tx.query<{ result: unknown }>({
+          text: "SELECT aiag_renew_ton_reconciliation_lease_v1($1::text,$2::uuid,$3::jsonb,$4::integer) AS result",
+          values: [
+            sourceId,
+            owner,
+            expected === null ? null : canonicalJson(expected),
+            90_000,
+          ],
+        })
+      ).rows[0]?.result,
+      ["renewed", "lease_lost", "cursor_conflict"] as const,
+    ),
+  );
+}
+
+export async function advanceTonReconciliationCursor(
+  db: TonPaymentDatabase,
+  input: {
+    sourceId: string;
+    leaseOwner: string;
+    expected: TonSweepCursor | null;
+    next: TonSweepCursor | null;
+    outcome: "success" | "source_error";
+    retryAfterMs: number | null;
+    errorCode: TonSourceErrorCode | null;
+  },
+): Promise<"advanced" | "lease_lost" | "cursor_conflict"> {
+  const raw = object(input);
+  keys(raw, [
+    "sourceId",
+    "leaseOwner",
+    "expected",
+    "next",
+    "outcome",
+    "retryAfterMs",
+    "errorCode",
+  ]);
+  const sourceId = lowerHash(raw.sourceId, "TON_INVALID_SOURCE");
+  const owner = canonicalId(raw.leaseOwner);
+  const expected = nullableCursor(raw.expected);
+  const next = nullableCursor(raw.next);
+  if (
+    (raw.outcome !== "success" && raw.outcome !== "source_error") ||
+    (raw.retryAfterMs !== null &&
+      (!Number.isSafeInteger(raw.retryAfterMs) ||
+        (raw.retryAfterMs as number) < 0 ||
+        (raw.retryAfterMs as number) > 900_000)) ||
+    (raw.errorCode !== null &&
+      !SOURCE_ERRORS.has(raw.errorCode as TonSourceErrorCode)) ||
+    (raw.outcome === "success" &&
+      (raw.errorCode !== null || raw.retryAfterMs !== null)) ||
+    (raw.outcome === "source_error" &&
+      (raw.errorCode === null ||
+        canonicalJson(next) !== canonicalJson(expected))) ||
+    (raw.errorCode !== "rate_limited" && raw.retryAfterMs !== null)
+  )
+    throw new Error("TON_INVALID_ADVANCE");
+  return db.transaction(async (tx) =>
+    requireResult(
+      (
+        await tx.query<{ result: unknown }>({
+          text: "SELECT aiag_advance_ton_reconciliation_cursor_v1($1::text,$2::uuid,$3::jsonb,$4::jsonb,$5::text,$6::integer,$7::text) AS result",
+          values: [
+            sourceId,
+            owner,
+            expected === null ? null : canonicalJson(expected),
+            next === null ? null : canonicalJson(next),
+            raw.outcome,
+            raw.retryAfterMs,
+            raw.errorCode,
+          ],
+        })
+      ).rows[0]?.result,
+      ["advanced", "lease_lost", "cursor_conflict"] as const,
+    ),
+  );
+}
+
+export async function releaseTonReconciliationLease(
+  db: TonPaymentDatabase,
+  sourceId: string,
+  leaseOwner: string,
+): Promise<"released" | "lease_lost"> {
+  const source = lowerHash(sourceId, "TON_INVALID_SOURCE");
+  const owner = canonicalId(leaseOwner);
+  return db.transaction(async (tx) =>
+    requireResult(
+      (
+        await tx.query<{ result: unknown }>({
+          text: "SELECT aiag_release_ton_reconciliation_lease_v1($1::text,$2::uuid) AS result",
+          values: [source, owner],
+        })
+      ).rows[0]?.result,
+      ["released", "lease_lost"] as const,
+    ),
   );
 }

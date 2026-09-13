@@ -12,10 +12,15 @@ import {
   timestamp,
   uniqueIndex,
   index,
+  check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { TonQuote } from "@aiag/shared/ton-payment-contract";
+import type {
+  TonProviderCursor,
+  TonRecipientBinding,
+} from "../ton-payment-types";
 import { users } from "./users";
 import { organizations } from "./organizations";
 import { gatewayTransactions } from "./gateway";
@@ -121,6 +126,84 @@ export const tonInvoices = pgTable(
     pendingExpiry: index("ton_invoices_pending_expiry")
       .on(t.expiresAt, t.id)
       .where(sql`${t.status} IN ('pending','observed')`),
+    reconciliationSource: index("ton_invoices_reconciliation_source").on(
+      t.network,
+      t.assetKind,
+      t.masterAddress,
+      t.assetDecimals,
+      t.recipient,
+      t.createdAt,
+      t.id,
+    ),
+  }),
+);
+export const tonChainObservations = pgTable(
+  "ton_chain_observations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    invoiceId: uuid("invoice_id").references(() => tonInvoices.id, {
+      onDelete: "restrict",
+    }),
+    sourceId: varchar("source_id", { length: 96 }).notNull(),
+    recipientAccount: varchar("recipient_account", { length: 67 }).notNull(),
+    txHash: char("tx_hash", { length: 64 }),
+    messageHash: char("message_hash", { length: 64 }),
+    txLt: varchar("tx_lt", { length: 78 }),
+    providerId: varchar("provider_id", { length: 96 }).notNull(),
+    evidenceModel: text("evidence_model").notNull(),
+    resultKind: text("result_kind").notNull(),
+    reason: varchar("reason", { length: 64 }).notNull(),
+    observationKey: char("observation_key", { length: 64 }).notNull().unique(),
+    evidenceDigest: char("evidence_digest", { length: 64 }),
+    providerCursor: jsonb("provider_cursor").$type<TonProviderCursor | null>(),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => ({
+    invoiceCreated: index("ton_chain_observations_invoice_created").on(
+      t.invoiceId,
+      t.createdAt,
+      t.id,
+    ),
+    eventIdentity: check(
+      "ton_chain_observations_event_identity_check",
+      sql`((${t.txHash} IS NULL AND ${t.messageHash} IS NULL AND ${t.txLt} IS NULL) OR (${t.txHash} ~ '\\A[0-9a-f]{64}\\Z' AND ${t.messageHash} ~ '\\A[0-9a-f]{64}\\Z' AND ${t.txLt} ~ '\\A(0|[1-9][0-9]{0,77})\\Z'))`,
+    ),
+  }),
+);
+export const tonReconciliationCursors = pgTable(
+  "ton_reconciliation_cursors",
+  {
+    sourceId: varchar("source_id", { length: 96 }).primaryKey(),
+    schemaVersion: smallint("schema_version").notNull(),
+    network: text("network").notNull(),
+    providerId: varchar("provider_id", { length: 96 }).notNull(),
+    cursor: jsonb("cursor").$type<TonProviderCursor | null>(),
+    recipientAccount: varchar("recipient_account", { length: 67 }),
+    recipientBinding: jsonb("recipient_binding").$type<TonRecipientBinding | null>(),
+    leaseOwner: uuid("lease_owner"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    lastErrorCode: varchar("last_error_code", { length: 64 }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => ({
+    leasePair: check(
+      "ton_reconciliation_cursors_lease_pair_check",
+      sql`(${t.leaseOwner} IS NULL)=(${t.leaseExpiresAt} IS NULL)`,
+    ),
+    bindingPair: check(
+      "ton_reconciliation_cursors_binding_pair_check",
+      sql`(${t.recipientAccount} IS NULL)=(${t.recipientBinding} IS NULL)`,
+    ),
   }),
 );
 export const tonInvoiceEventDecisions = pgTable(

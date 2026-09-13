@@ -105,3 +105,128 @@ export interface TonSqlClient {
 export interface TonPaymentDatabase {
   transaction<T>(run: (tx: TonSqlClient) => Promise<T>): Promise<T>;
 }
+
+export type TonSourceErrorCode =
+  | "origin_mismatch"
+  | "redirect_rejected"
+  | "response_too_large"
+  | "http_unauthorized"
+  | "rate_limited"
+  | "timeout"
+  | "upstream_5xx"
+  | "provider_schema_invalid"
+  | "pagination_regressed"
+  | "recipient_binding_changed"
+  | "unsupported_asset";
+
+export type TonObservedReason =
+  | "candidate_not_found"
+  | "trace_incomplete"
+  | "finality_pending";
+
+export type TonReviewReason =
+  | "network_mismatch"
+  | "policy_mismatch"
+  | "trace_oversized"
+  | "trace_emulated"
+  | "trace_aborted"
+  | "trace_bounced"
+  | "trace_failed"
+  | "message_linkage_invalid"
+  | "inclusion_mismatch"
+  | "asset_mismatch"
+  | "recipient_mismatch"
+  | "sender_mismatch"
+  | "reference_mismatch"
+  | "amount_mismatch"
+  | "jetton_master_mismatch"
+  | "jetton_wallet_mismatch"
+  | "jetton_notification_invalid";
+
+export type TonSettlementObservationReason = "settlement_evidence_conflict";
+
+export interface TonProviderCursor {
+  schemaVersion: 1;
+  beforeLt: string;
+  beforeTransactionHash: string;
+  cycleUpperLt: string;
+}
+
+export type TonSweepCursor = TonProviderCursor;
+
+export type TonRecipientBinding = {
+  recipientAccount: string;
+  derivation:
+    | { kind: "native"; ownerAddress: string }
+    | {
+        kind: "jetton";
+        masterAddress: string;
+        ownerAddress: string;
+        walletAddress: string;
+      };
+};
+
+export interface TonReconciliationSource {
+  sourceId: string;
+  network: "tvm:-3";
+  asset: TonInvoice["asset"];
+  invoiceRecipient: string;
+  scanFloorTimeMs: number;
+}
+
+export type TonObservationInput = {
+  schemaVersion: 1;
+  invoiceId: string | null;
+  sourceId: string;
+  recipientAccount: string;
+  eventIdentity: null | {
+    txHash: string;
+    messageHash: string;
+    txLt: string;
+  };
+  providerId: "toncenter-v3-testnet";
+  evidenceModel: "server_trusted_indexer";
+  result:
+    | {
+        kind: "source_error";
+        reason: TonSourceErrorCode;
+        evidenceDigest: null;
+      }
+    | {
+        kind: "observed";
+        reason: TonObservedReason;
+        evidenceDigest: string | null;
+      }
+    | {
+        kind: "unmatched";
+        reason: "invoice_reference_not_found";
+        evidenceDigest: string;
+      }
+    | {
+        kind: "verified_candidate";
+        reason: "verified_candidate";
+        evidenceDigest: string;
+      }
+    | {
+        kind: "review_required";
+        reason: TonReviewReason | TonSettlementObservationReason;
+        evidenceDigest: string;
+      };
+  providerCursor: TonProviderCursor | null;
+  snapshot: Record<string, unknown>;
+  observedAtMs: number;
+};
+
+export type TonObservationResult = {
+  observationId: string;
+  outcome: "inserted" | "already_recorded";
+  invoiceStatus: TonInvoice["status"] | null;
+};
+
+export type TonDatabaseCloseResult =
+  | { kind: "closed" }
+  | { kind: "deadline_exceeded"; phase: "pool" };
+
+export interface CloseableTonWorkerDatabase extends TonPaymentDatabase {
+  close(): Promise<TonDatabaseCloseResult>;
+}
