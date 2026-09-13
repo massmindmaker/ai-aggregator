@@ -1,6 +1,6 @@
 # AG-P2: public catalog contract Implementation Plan
 
-> **Status:** APPROVED_FOR_IMPLEMENTATION13.09 — independent scoped design review accepted `229a83f`; all two Critical, five Important and two minor findings addressed. Root authorizes Task1 from this contract. This is design acceptance, not source, runtime or full AG-P2 acceptance.
+> **Status:** APPROVED_FOR_IMPLEMENTATION13.09 — independent scoped design review accepted `229a83f`; all two Critical, five Important and two minor findings addressed. Shared Task1 source `5466c34` + `a502f4c` is independently accepted. Task2 may proceed after migration-number preflight; runtime and full AG-P2 acceptance remain open.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use Superpowers `executing-plans` or the controller-approved `subagent-driven-development` workflow. Execute one task at a time, keep exclusive file ownership, and obtain an independent review before each scoped commit.
 
@@ -339,11 +339,11 @@ Every body in this matrix contains exactly `{error:{code,message}}` when it is a
 
 Steps:
 
-- [ ] RED: strict parser rejects unknown keys, invalid digest/UUID/decimal, overlong fields, more than 100 data items, unavailable items carrying price/capability data, available items missing unit/revision, unsupported capability marked available, malformed cursor, and invocation descriptors missing strict-field/BYOK rejection or any of the four distinct max-token values.
-- [ ] Implement the exact DTO/cursor schemas, types, bounded parser and canonical cursor codec as browser-safe code with no Node import.
-- [ ] Pin descriptor fixtures for absent `max_tokens`, `1`, exact effective cap, cap+1 and `Number.MAX_SAFE_INTEGER`, plus unknown-field, streaming, tools/functions/media, multimodal and BYOK rejection metadata. Task 3 proves parser/normalization parity and Task 4 proves mounted HTTP codes.
-- [ ] Add `@aiag/shared/catalog-contract` as an explicit build/export entry; do not expand the legacy root/client/server barrels.
-- [ ] Pin one available stored-chat item, one unavailable item and a next cursor in the fixture. Fixture values are synthetic and visibly named; they are not production/provider evidence.
+- [x] RED: strict parser rejects unknown keys, invalid digest/UUID/decimal, overlong fields, more than 100 data items, unavailable items carrying price/capability data, available items missing unit/revision, unsupported capability marked available, malformed cursor, and invocation descriptors missing strict-field/BYOK rejection or any of the four distinct max-token values.
+- [x] Implement the exact DTO/cursor schemas, types, bounded parser and canonical cursor codec as browser-safe code with no Node import.
+- [x] Pin descriptor fixtures for absent `max_tokens`, `1`, exact effective cap, cap+1 and `Number.MAX_SAFE_INTEGER`, plus unknown-field, streaming, tools/functions/media, multimodal and BYOK rejection metadata. Task 3 proves parser/normalization parity and Task 4 proves mounted HTTP codes.
+- [x] Add `@aiag/shared/catalog-contract` as an explicit build/export entry; do not expand the legacy root/client/server barrels.
+- [x] Pin one available stored-chat item, one unavailable item and a next cursor in the fixture. Fixture values are synthetic and visibly named; they are not production/provider evidence.
 
 **Focused acceptance:** shared contract tests, shared source/test typecheck, build export/import smoke, applicable lint, secret/provider-field negative scan, `git diff --check`.
 
