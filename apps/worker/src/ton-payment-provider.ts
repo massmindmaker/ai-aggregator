@@ -26,9 +26,19 @@ export type TonProviderResult =
   | { kind: 'page'; evidence: readonly NormalizedTonEvidence[]; nextCursor: TonProviderCursor | null; exhausted: boolean }
   | { kind: 'source_error'; code: TonSourceErrorCode; retryAfterMs: number | null };
 
+export type TonRecipientBinding = {
+  recipientAccount: string;
+  derivation:
+    | { kind: 'native'; ownerAddress: string }
+    | { kind: 'jetton'; masterAddress: string; ownerAddress: string; walletAddress: string };
+};
+
 export interface TonReconciliationSource {
-  recipient: string;
+  sourceId: string;
+  network: 'tvm:-3';
   asset: TonInvoice['asset'];
+  invoiceRecipient: string;
+  scanFloorTimeMs: number;
 }
 
 export interface TonEvidenceProvider {
@@ -235,7 +245,7 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
   return {
     async resolveRecipientAccount(source) {
       if (source.asset.kind === 'jetton') return failure('unsupported_asset');
-      try { return { kind: 'resolved', recipientAccount: address(source.recipient) }; } catch (error) { return failure(error instanceof ProviderFailure ? error.code : 'provider_schema_invalid'); }
+      try { return { kind: 'resolved', recipientAccount: address(source.invoiceRecipient) }; } catch (error) { return failure(error instanceof ProviderFailure ? error.code : 'provider_schema_invalid'); }
     },
     async scanAccountPage(recipientAccount, cursor, signal) {
       try {

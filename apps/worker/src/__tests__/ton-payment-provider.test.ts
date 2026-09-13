@@ -7,7 +7,10 @@ const JETTON_MASTER = `0:${'2'.repeat(64)}`;
 
 function source(kind: 'native' | 'jetton') {
   return {
-    recipient: RECIPIENT,
+    sourceId: 'source-native-test',
+    network: 'tvm:-3' as const,
+    invoiceRecipient: RECIPIENT,
+    scanFloorTimeMs: 1_700_000_000_000,
     asset: kind === 'native'
       ? { network: 'tvm:-3' as const, kind: 'native' as const, decimals: 9 }
       : { network: 'tvm:-3' as const, kind: 'jetton' as const, masterAddress: JETTON_MASTER, decimals: 6 },
