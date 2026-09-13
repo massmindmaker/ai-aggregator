@@ -1,5 +1,9 @@
 # Статус developer memory
 
+## AM foundation refresh — 13.09.2026
+
+Existing Serena locator updated/readback: accepted foundation645cbf7/sourcecaefcd6 и canonical guarded schema9/0. Public Web/TMA acceptance сохранена; следующие scopes/auth помечены как незавершённые. Graphify AM отложен: текущий tree уже принимает непринятый0010 от отдельного owner. Stable LightRAG/Brain ссылки не дублировались; Memory Graph без записи.
+
 ## Arena PE-T1 refresh — 13.09.2026
 
 Owner acceptanceaa70200/sourcef61b51d: existing Serena locator обновлён через MCP и прочитан обратно; pure scope/next gate подтверждены. Supported `graphify update .` exit0 под shared flock, AST-only/no LLM: graph.json readback `built_at_commit=aa702007704398da1f127a3e23f9c3d4abc1f3c1`,2202nodes/3357links,214communities,95prediction-evaluation nodes. Старые caches/backups сохранены. Это навигация, не DB/runner/UI acceptance.
