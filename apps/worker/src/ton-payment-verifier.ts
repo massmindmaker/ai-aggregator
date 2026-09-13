@@ -127,7 +127,12 @@ function traceLinkageIsValid(evidence: NormalizedTonEvidence): boolean {
   const outgoing = new Map<string, { message: NormalizedTonMessage; transactionIndex: number }>();
   for (let index = 0; index < evidence.transactions.length; index += 1) {
     const transaction = evidence.transactions[index]!;
-    if (ordered[index] !== transaction.hash || transaction.account !== transaction.inMessage.destination) {
+    if (
+      ordered[index] !== transaction.hash
+      || transaction.account !== transaction.inMessage.destination
+      || transaction.inMessage.index !== 0
+      || transaction.outMessages.some((message, messageIndex) => message.index !== messageIndex)
+    ) {
       return false;
     }
     if (index > 0 && transaction.chainTimeMs < evidence.transactions[index - 1]!.chainTimeMs) {

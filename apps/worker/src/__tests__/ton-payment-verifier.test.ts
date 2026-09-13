@@ -338,19 +338,44 @@ describe('verifyChainCredit', () => {
     });
   });
 
-  it('links cross-transaction messages when their contextual indexes differ', () => {
+  it('links a real multi-child output at slot 1 to its recipient input at slot 0', () => {
     const evidence = changeEvidence(jetton, (value) => {
-      value.transactions[0]!.outMessages[0]!.index = 1;
-      value.transactions[1]!.inMessage.index = 0;
+      const transferTransaction = value.transactions[0]!;
+      const linkedTransfer = transferTransaction.outMessages[0]!;
+      linkedTransfer.index = 1;
+      const siblingAccount = `0:${'6'.repeat(64)}`;
+      const siblingMessage = {
+        hash: '9'.repeat(64),
+        index: 0,
+        source: transferTransaction.account,
+        destination: siblingAccount,
+        bounced: false,
+        opcode: null,
+        amountAtomic: '1',
+        decodedPayload: { kind: 'other' as const },
+      };
+      transferTransaction.outMessages.unshift(siblingMessage);
+
+      const siblingTransaction = clone(value.transactions[2]!);
+      siblingTransaction.account = siblingAccount;
+      siblingTransaction.hash = '8'.repeat(64);
+      siblingTransaction.lt = '1003';
+      siblingTransaction.chainTimeMs += 1;
+      siblingTransaction.blockRef.seqno += 1;
+      siblingTransaction.inMessage = { ...siblingMessage, index: 0 };
+      siblingTransaction.outMessages = [];
+      value.transactions.push(siblingTransaction);
+      value.trace.orderedTransactionHashes.push(siblingTransaction.hash);
     });
     expect(verifyChainCredit(jettonInvoice, evidence, TON_VERIFIER_POLICY)).toMatchObject({ kind: 'verified' });
   });
 
-  it('rejects a mutated message fact even when contextual indexes differ', () => {
-    const evidence = changeEvidence(jetton, (value) => {
-      value.transactions[0]!.outMessages[0]!.index = 1;
-      value.transactions[1]!.inMessage.amountAtomic = '999';
-    });
+  it.each([
+    ['inbound position', (value: NormalizedTonEvidence) => { value.transactions[1]!.inMessage.index = 1; }],
+    ['outbound position', (value: NormalizedTonEvidence) => { value.transactions[0]!.outMessages[0]!.index = 1; }],
+    ['linked content', (value: NormalizedTonEvidence) => { value.transactions[1]!.inMessage.amountAtomic = '999'; }],
+  ])('rejects a mutated %s independently', (_label, mutate) => {
+    const evidence = changeEvidence(jetton, mutate);
     expect(verifyChainCredit(jettonInvoice, evidence, TON_VERIFIER_POLICY)).toMatchObject({
       kind: 'review_required', reason: 'message_linkage_invalid',
     });
