@@ -99,14 +99,16 @@ export type TonProviderResult =
 
 export interface TonProviderCursor {
   schemaVersion: 1;
-  beforeLt: string | null;
-  cycleUpperLt: string | null;
+  beforeLt: string;
+  beforeTransactionHash: string;
+  cycleUpperLt: string;
 }
 
 export interface TonSweepCursor {
   schemaVersion: 1;
-  beforeLt: string | null;
-  cycleUpperLt: string | null;
+  beforeLt: string;
+  beforeTransactionHash: string;
+  cycleUpperLt: string;
 }
 
 export type TonRecipientBinding = {
@@ -384,7 +386,15 @@ it('never promotes missing full-path or provider-attested finality', () => {
 - Consumes: chosen constants, `safeFetch` from `@aiag/shared/server`, injected `fetchImpl` in tests.
 - Produces: `createToncenterV3Provider(config): TonEvidenceProvider`; `resolveRecipientAccount(source,signal)` and `scanAccountPage(recipientAccount,cursor,signal): Promise<TonProviderResult>`.
 
-**Native-only sub-gate (amendment13.09, pending scoped review):** после принятия provider manifest Steps3–7 могут реализовать только `source.asset.kind='native'`. `resolveRecipientAccount` возвращает canonical native owner address без сети. Для `source.asset.kind='jetton'` он обязан вернуть `{kind:'source_error',code:'unsupported_asset',retryAfterMs:null}` до `fetchImpl` или любой provider/network операции. Это ограничение не маскируется `provider_schema_invalid`. Sub-gate не закрывает Gate2: полный Task2 и jetton auto-credit остаются OPEN до reviewed wallet-derivation mechanism и sanitized complete policy-qualifying jetton success fixture. Native historical provider acceptance не является merchant payment/runtime/settlement acceptance.
+**Native-only sub-gate (accepted68ddb93 after scoped review):** после принятия provider manifest Steps3–7 могут реализовать только `source.asset.kind='native'`. `resolveRecipientAccount` возвращает canonical native owner address без сети. Для `source.asset.kind='jetton'` он обязан вернуть `{kind:'source_error',code:'unsupported_asset',retryAfterMs:null}` до `fetchImpl` или любой provider/network операции. Это ограничение не маскируется `provider_schema_invalid`. Sub-gate не закрывает Gate2: полный Task2 и jetton auto-credit остаются OPEN до reviewed wallet-derivation mechanism и sanitized complete policy-qualifying jetton success fixture. Native historical provider acceptance не является merchant payment/runtime/settlement acceptance.
+
+**Adapter review amendment13.09 — pending independent review before fixwave1:**
+
+1. Every non-null provider/sweep cursor has all four fields above: bounded canonical decimal `beforeLt` and `cycleUpperLt` (at most78 digits, `beforeLt <= cycleUpperLt`), canonical lowercase64-hex `beforeTransactionHash`, schemaVersion1. Only outer null starts a new cycle. `beforeTransactionHash` pins the final new row of the prior page; compare the next nonempty page's first row to `(recipientAccount,beforeTransactionHash,beforeLt)` before any trace lookup. Whole malformed cursor fails before provider/network. Persist/CAS the entire cursor including hash in Tasks3–4. There is no deployed cursor compatibility to migrate at this local stage.
+2. Message `index` is contextual: inbound index0; outgoing index equals zero-based position in its own transaction array. Pure verifier checks this positional invariant and compares cross-transaction messages by every normalized message content field EXCEPT contextual index. Keep index in normalized evidence/digests and candidate receipt identity. A link to the second outgoing message therefore pairs outgoing index1 with recipient inbound index0; duplicate/hash/content/source/destination/opcode/value/reference checks remain mandatory. Add synthetic multi-child proof and mutated content/index rejection tests. This is a correctness fix to the unused v1 verifier, not a relaxation of identity or a new runtime policy.
+3. Task2 fixwave ownership expands narrowly to `ton-payment-verifier.ts` and its test for that positional/linkage correction, plus `packages/shared/src/safe-fetch.ts` and a focused test for additive typed redirect classification. `SsrfError` gains optional second constructor reason with default `policy_blocked` and explicit `redirect_limit`; existing one-argument callers/message/name remain compatible. Only the existing maxRedirects exhaustion throw receives `redirect_limit`. TON maps that typed reason to `redirect_rejected`, never error-message text. Other SSRF failures remain fail-closed; no bypass/allowlist or redirect behavior change. Test mocked DNS/fetch through the actual safeFetch branch as well as the adapter seam.
+4. A pre-aborted caller signal returns `source_error/timeout` with null retryAfterMs and zero fetch calls; a later abort cancels the internal signal and maps to the same code. Timeout is an operational source-read classification, not a proof of payment failure. This explicitly chooses cancellation behavior without adding a settlement/no-effect meaning.
+5. Endpoint validators must enforce EVERY required type/nullability/cross-link in the accepted manifest before setting complete=true, including trace tree/counts/LT/time range and required block/head facts. New required-field mutation tests and checked-in real native success/abort/bounce mapping tests are mandatory. Synthetic mutation derivatives stay in test memory with explicit labels and cannot replace real fixtures. Fixture-backed provider→pure-verifier tests must distinguish structural mapping success from live merchant acceptance.
 
 - [ ] **Step 1: freeze the response manifest before mapping code.** Record exact endpoint paths/query parameters, request order, required fields/types, nullability, pagination direction, content types and fixture SHA-256. At minimum cover transactions by recipient account/time/LT, trace by tx/message hash, masterchain info and jetton master wallet derivation. Store no Authorization header/query secret and no unsanitized raw BOC.
 - [ ] **Step 2: enforce evidence labels.** Real files contain `evidenceClass:'sanitized_real_provider_response'`, `providerId`, exact origin, network, `capturedAt`, endpoint path, redactions list and sanitized body. Synthetic files cannot be placed in this directory. A test rejects `evidenceClass:'synthetic'` when loading the real-fixture suite.

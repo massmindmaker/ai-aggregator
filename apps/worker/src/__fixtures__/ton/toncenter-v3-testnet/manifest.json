@@ -361,13 +361,14 @@
         "ownership": {
           "providerInput": "scanAccountPage receives recipientAccount plus TonProviderCursor|null only; it does not receive scanFloorTimeMs or a page counter",
           "providerOutput": "TonProviderResult.exhausted is the provider endReached signal; there is no separate endReached field",
-          "normalPage": "after exact overlap removal, a page with at least one new row returns exhausted=false and nextCursor={schemaVersion:1,beforeLt:<final new row LT>,cycleUpperLt:<first raw row LT from page 1>}",
+          "normalPage": "after exact overlap removal, a page with at least one new row returns exhausted=false and nextCursor={schemaVersion:1,beforeLt:<final new row LT>,beforeTransactionHash:<final new row canonical lowercase hex transaction hash>,cycleUpperLt:<first raw row LT from page 1>}",
           "emptyPage": "an empty raw page returns evidence=[], exhausted=true, nextCursor=null",
           "overlapOnlyPage": "a page containing only the one exact expected overlap returns evidence=[], exhausted=true, nextCursor=null and is not pagination_regressed",
           "floorCrossing": "provider returns its normal page and non-null nextCursor because it has no floor; runner processes only eligible rows through the floor boundary, durably records them, then persists null and ends the cycle",
           "fourthNonTerminalPage": "provider returns exhausted=false and non-null nextCursor; runner durably processes the page, persists that exact cursor, and stops the run without resetting the cycle",
           "persistenceOwner": "runner persists or resets TonSweepCursor only after all observations for the accepted part of a page are durable"
-        }
+        },
+        "internalOverlapHashField": "beforeTransactionHash: lowercase 64-hex hash of the previous final new transaction; non-null alongside bounded beforeLt/cycleUpperLt in every continuation cursor"
       },
       "responseSchema": {
         "response.transactions": "required array; may be empty",
