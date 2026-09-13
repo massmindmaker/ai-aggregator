@@ -210,11 +210,21 @@ describe('public catalog projector', () => {
     ['whitelist', { ...key(), model_whitelist: ['other'] } as AuthenticatedApiKey, runtime(), model(), candidate(), 'key_policy_excludes_model'],
     ['unconfigured', key(), runtime({ getAdapter: () => ({ chat: adapter().chat }) }), model(), candidate(), 'service_configuration_unavailable'],
     ['unreviewed', key(), runtime(), model(), candidate({ upstream_model_id: 'invented/from-metadata' }), 'no_admitted_deployment'],
-    ['zero retail', key(), runtime(), model(), candidate({ price_per_1k_input: '0', price_per_1k_output: '0' }), 'retail_pricing_unavailable'],
+    ['all-zero shared quote', key(), runtime(), model(), candidate({ price_per_1k_input: '0', price_per_1k_output: '0' }), 'no_admitted_deployment'],
     ['maximum overflow', key(), runtime(), model(), candidate({ price_per_1k_input: '1000000000000000' }), 'retail_pricing_unavailable'],
   ] as const)('%s uses fixed reason precedence', async (_name, apiKey, capture, modelRow, candidateRow, reason) => {
     const result = await read({ key: apiKey, runtime: capture, transaction: runner({ models: [modelRow], candidates: [candidateRow] }) });
     expect(result.data[0]!.availability).toMatchObject({ state: 'unavailable', reason });
+  });
+
+  it.each([
+    { price_per_1k_input: '0', price_per_1k_output: '0.6' },
+    { price_per_1k_input: '0.15', price_per_1k_output: '0' },
+  ])('keeps an individually zero rate available when the shared maximum is positive: %j', async (prices) => {
+    const result = await read({
+      transaction: runner({ candidates: [candidate(prices)] }),
+    });
+    expect(result.data[0]!.availability.state).toBe('available');
   });
 
   it('runtime readiness and force-mock alter revision, secret rotation does not', async () => {

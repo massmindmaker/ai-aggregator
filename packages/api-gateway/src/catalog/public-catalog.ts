@@ -228,7 +228,7 @@ function defaultTransactionRunner<T>(work: (reader: CatalogReader) => Promise<T>
                WHERE mu.model_id = selected.model_id
                ORDER BY mu.id ASC
                LIMIT ${CATALOG_MAX_CANDIDATES_PER_MODEL + 1}
-            ) AS candidate ON TRUE
+            ) AS candidate
            ORDER BY candidate.model_id ASC, candidate.model_upstream_id ASC
            LIMIT ${CATALOG_MAX_CANDIDATES_PER_PAGE + 1}
         `;
@@ -405,7 +405,7 @@ function projectModel(
   for (const { candidate, profile } of configured) {
     try {
       projectCatalogRetailTokenPricing(candidate.prices, runtime.cachingMultiplier);
-      const maximum = quoteChatMaximum(
+      quoteChatMaximum(
         candidate.prices,
         profile.contextWindowTokens,
         Math.min(
@@ -414,8 +414,6 @@ function projectModel(
           profile.maxOutputTokens,
         ),
       );
-      if (maximum === 0n)
-        return unavailable(model, 'retail_pricing_unavailable');
     } catch {
       return unavailable(model, 'retail_pricing_unavailable');
     }
