@@ -1,5 +1,9 @@
 # Статус developer memory
 
+## Web public shell refresh — 13.09.2026
+
+AM owner acceptance `1f4820d` (source2070f85+c322303) отражена в существующем Serena `ai-hub/development-entrypoint` через supported MCP; readback подтвердил ссылки и границы. Native foundation пока BLOCK на security/spec review и исправляется;0009 вне canonical test DB. Graphify AM не обновлялся: HEAD содержит непринятую foundation. Stable LightRAG/Brain locator продолжает вести к canonical continuation; новой загрузки нет, readback LightRAG относится к08.09. Memory Graph без записи.
+
 ## TON2 accepted-stage refresh — 08.09.2026
 
 Owner acceptance `21bf66a`, source `724a031`: [TON2 plan](../superpowers/plans/2026-09-08-ton-invoice-core.md) и [AG-P1](../product/acceptance/AG-P1.md) фиксируют local PASS и предел сохранённых доказательств. Полный baseline12/322 взят из canonical handoff, dedicated native58 evidence прочитан отдельно. Миграция0072 уже применена; verifier/checkout/login/mainnet открыты.

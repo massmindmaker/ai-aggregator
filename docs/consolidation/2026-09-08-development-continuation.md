@@ -47,3 +47,7 @@ AM Web Task1 public shell прошёл read-only prerequisites review и реа�
 После прерывания активных исполнителей нет; сохранённые незакоммиченные Web fixes и T2.1 foundation переданы отдельным владельцам. Arena d466e5a остаётся кандидатом: scoped review закрыл3из5замечаний; wave2 исправляет production hash-binding test и bounded runtime dataset validation. TON2 acceptance280ea5f сохраняется; повторный baseline не требуется. Все проверки новых кандидатов под общим flock.
 
 Guarded runtime13.09 восстановлен из существующего `/home/bob/.cache/ai-ecosystem-test-runtime`: PG15432/Redis16379 только loopback, прежний pgdata без reset; восстановлены compatibility symlinks. Read-only AM db:status: applied8/pending1. Candidate0009 остаётся вне canonical schema до независимого review.
+
+При resume также обнаружен отдельный commit `2fb0296` (models.dev catalog sync и tests), появившийся после прошлого checkpoint280ea5f. Его исходники сохранены; текущая волна не повторяла его тесты и не выводит acceptance из commit message. TON2 evidence относится к своему зафиксированному срезу.
+
+**Приёмка Web public shell13.09:** AM `2070f85` + `c322303`, React и TS/SQL re-review APPROVE. Common48/types/lint, TMA+Web builds и guarded three-state smoke PASS/cleanup0. Автор detail, фильтр category, smoke mode validation и a11y findings закрыты. Native account foundation ещё на security review; private Web и полезный run не приняты. Arena wave2 закрыла прежние два замечания, но нашла shared-reference regression; wave3 исправляет только её.
