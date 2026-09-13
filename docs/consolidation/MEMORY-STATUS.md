@@ -8,6 +8,10 @@ Canonical navigation now starts at [the Aggregator-only handoff](2026-09-13-aggr
 
 Canonical accepted checkpoint is `571ccb1`: catalog design `229a83f`/`1bc46f2`, shared catalog Task1 `5466c34` + `a502f4c` (root `8a24356`), and historical native TON adapter `76ff70c` are accepted within their documented local scopes. Catalog Task2 durable DB revision (reserved `0073`), full catalog projection/HTTP, TON jetton/Tasks3–6/runtime/settlement, and recovery Task2/activation remain open. Recovery pure Task1 `a8a297f` + `6355185` is under independent review, not accepted. Serena `ai-hub/development-entrypoint` was refreshed and read back. LightRAG exact query did not prove a current checkpoint locator beyond the already processed stable continuation, so no upload was made and its current-checkpoint coverage is **UNVERIFIED**. Brain navigation was refreshed. No Graphify rebuild or Memory Graph mutation occurred.
 
+## Aggregator checkpoint refresh — 13.09.2026
+
+Canonical accepted checkpoint is `0cc6d95`. Recovery pure Task1 `a8a297f` + `6355185` + `ee2332b` (root `0aeb0bc`) and legacy-completions BYOK defect fix `e5614e2` are accepted only in their documented local scopes. Recovery Task2 is uncommitted partial WIP; no native evidence or activation follows. Catalog Task2 `78f7e38` + `665a43b` and TON continuation `522ac7c` + `5a39f64` remain under review, not accepted. Existing LightRAG stable locator was found by exact hybrid query, so no duplicate upload was made; it does not prove this checkpoint. Serena locator was updated and read back; Brain navigation was refreshed. Graphify and Memory Graph remain unchanged.
+
 ## AG TON3 pure source refresh — 13.09.2026
 
 Existing Serena AG locator updated/readback to Task1 ownerf7fa163, sourcef46386c+b17603e. Provider manifest/fixtures remain candidate. No new Graphify rebuild during active provider work; stable LightRAG/Brain navigation not duplicated.
