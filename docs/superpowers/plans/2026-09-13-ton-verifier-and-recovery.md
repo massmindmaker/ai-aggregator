@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Только `tvm:-3`; mainnet, production migration/deploy, push, новые keys/signers/funds, broadcast и платные provider calls не входят в этот план.
-- `0072_ton_invoice_core.sql` и `packages/database/src/functions/ton-invoice-core.sql` неизменяемы. На design snapshot следующий свободный номер — `0073`; исполнитель обязан повторно прочитать manifest непосредственно перед созданием migration и взять фактический следующий свободный номер.
+- `0072_ton_invoice_core.sql` и `packages/database/src/functions/ton-invoice-core.sql` неизменяемы. Catalog Task 2 эксклюзивно владеет `0073_gateway_catalog_revision.sql`, независимо от того, отсутствует ли файл, находится в WIP или уже принят; TON reconciliation получает ожидаемый номер `0074_ton_reconciliation.sql`. Исполнитель TON обязан непосредственно перед созданием migration повторно прочитать manifest и controller ownership ledger. Если `0074` уже занят, он останавливается для ещё одной plan-only поправки и независимого review; переименовывать существующую или применённую migration нельзя.
 - Не повторять уже принятую TON2 приёмку `12 suites / 322 tests`, native `58 PASS` или clean migration72 только ради AG-TON3. Новая работа получает свои focused unit/native checks.
 - Immutable invoice pins `verifierVersion` и `finalityPolicyId` не переопределяются текущей конфигурацией. Несовпадение ведёт в durable review, а не в fallback policy.
 - Full trace, message linkage, inclusion anchor и finality/stability evidence обязательны. Missing, emulated, aborted, bounced или incomplete evidence не создаёт `VerifiedChainCredit`.
@@ -291,7 +291,7 @@ CREATE TABLE ton_reconciliation_cursors (
 
 Для observation с non-null invoice SQL сначала читает org hint без lock, затем соблюдает TON2 порядок `organization FOR UPDATE → invoice FOR UPDATE`, повторно сверяет invoice/source network+asset+recipient и exact reference из snapshot. Только после этого вставляет observation и делает допустимый status CAS; race с settlement не может вернуть terminal invoice в observed/review. Для `unmatched` invoice ID обязан быть null, status mutation отсутствует, а unique observation key строится без invoice ID.
 
-Discovery выполняется по chain credit account, не отдельно для каждой invoice. Native source сканирует immutable invoice recipient; jetton source сначала получает provider-derived wallet для пары `(allowlisted master, invoice recipient owner)`, затем сканирует этот merchant jetton wallet. Source ID детерминирован из provider/network/asset/owner и не зависит от ответа provider. Перед первым scan runner под действующей lease атомарно закрепляет `TonRecipientBinding` (resolved recipient account и native owner либо jetton master+owner+wallet) в source cursor row. Source network/provider/asset/owner сверяются с binding. Повторная resolution должна точно совпасть с persisted binding прежде чем использовать LT cursor. Mismatch даёт durable source error `recipient_binding_changed`, оставляет старые mapping и cursor неизменными и не сканирует новый account stream. Исторические invoices продолжают ссылаться на прежний source/binding; автоматическая замена/reset mapping запрещена. Новый binding/migration требует отдельной reviewed recovery процедуры. Native recipient также закрепляется явно.
+Полный будущий discovery contract выполняется по chain credit account, не отдельно для каждой invoice. Native source сканирует immutable invoice recipient; jetton source после отдельного Gate 2 сначала должен получить provider-derived wallet для пары `(allowlisted master, invoice recipient owner)`, затем сканировать этот merchant jetton wallet. Source ID детерминирован из provider/network/asset/owner и не зависит от ответа provider. Перед первым scan runner под действующей lease атомарно закрепляет `TonRecipientBinding` (resolved recipient account и native owner либо, только после полного Gate 2, jetton master+owner+wallet) в source cursor row. Source network/provider/asset/owner сверяются с binding. Повторная resolution должна точно совпасть с persisted binding прежде чем использовать LT cursor. Mismatch даёт durable source error `recipient_binding_changed`, оставляет старые mapping и cursor неизменными и не сканирует новый account stream. Исторические invoices продолжают ссылаться на прежний source/binding; автоматическая замена/reset mapping запрещена. Новый binding/migration требует отдельной reviewed recovery процедуры. Native recipient также закрепляется явно.
 
 Exact decoded reference связывается с глобально unique `ton_invoices.reference`; неизвестная/неправильная reference сохраняется один раз как `unmatched` с `invoice_id=NULL` и никогда не переводит случайную invoice в review. После exact reference binding pure verifier проверяет остальные invoice facts, включая совпадение derived/factually credited jetton wallet.
 
@@ -303,13 +303,19 @@ export interface CloseableTonWorkerDatabase extends TonPaymentDatabase {
 }
 export function createTonWorkerDatabase(connectionString: string): CloseableTonWorkerDatabase;
 export function claimTonReconciliationLease(db: TonPaymentDatabase, input: {
-  sourceId: string; leaseOwner: string; leaseMs: 90_000;
-}): Promise<{ kind:'claimed'; cursor:TonSweepCursor|null; binding:TonRecipientBinding|null } | { kind:'busy' }>;
+  source:TonReconciliationSource; providerId:'toncenter-v3-testnet';
+  leaseOwner:string; leaseMs:90_000;
+}): Promise<
+  | {kind:'claimed';cursor:TonSweepCursor|null;binding:TonRecipientBinding|null}
+  | {kind:'busy'}
+  | {kind:'source_identity_mismatch'}
+>;
 export function bindTonReconciliationRecipient(db: TonPaymentDatabase, input: {
-  sourceId:string; leaseOwner:string; binding:TonRecipientBinding;
-}): Promise<'bound'|'binding_mismatch'|'lease_lost'>;
+  source:TonReconciliationSource; leaseOwner:string;
+  expected:TonSweepCursor|null; binding:TonRecipientBinding;
+}): Promise<'bound'|'binding_mismatch'|'lease_lost'|'cursor_conflict'|'source_identity_mismatch'>;
 export function listTonReconciliationSources(db: TonPaymentDatabase, input: {
-  afterSourceId:string|null; limit:number;
+  afterSourceId:string|null; limit:number; assetKind:'native';
 }): Promise<readonly TonReconciliationSource[]>;
 export function findTonInvoicesForReconciliation(db: TonPaymentDatabase, input: {
   source:TonReconciliationSource; references:readonly string[];
@@ -318,6 +324,10 @@ export function getTonInvoiceForReconciliation(db: TonPaymentDatabase,
   invoiceId:string): Promise<TonInvoice|null>;
 export function recordTonChainObservation(db: TonPaymentDatabase,
   input: TonObservationInput): Promise<TonObservationResult>;
+export function renewTonReconciliationLease(db: TonPaymentDatabase, input: {
+  sourceId:string; leaseOwner:string; expected:TonSweepCursor|null;
+  leaseMs:90_000;
+}): Promise<'renewed'|'lease_lost'|'cursor_conflict'>;
 export function advanceTonReconciliationCursor(db: TonPaymentDatabase, input: {
   sourceId:string; leaseOwner:string; expected:TonSweepCursor|null;
   next:TonSweepCursor|null; outcome:'success'|'source_error';
@@ -329,11 +339,15 @@ export function releaseTonReconciliationLease(db: TonPaymentDatabase,
 
 Task 3 создаёт этот subpath только с observation/recovery APIs. Task 5 атомарно удаляет `settleTonInvoice` из root export и добавляет его в этот explicit internal subpath после import-boundary RED; до этого не должно быть двух settlement entrypoints.
 
-`limit` допускает integer `1..16`. Source list выводит distinct `(network,asset,invoice recipient)` из immutable invoices, добавляет `scanFloorTimeMs=min(quoted_at)` и сортируется по `sourceId=sha256(providerId+'\0'+stableAssetJson+'\0'+recipient)`. Provider scan идёт newest→older по resolved credit-account LT с inclusive one-item overlap, максимум четыре страницы по восемь transactions на source за run и не идёт старше `scanFloorTimeMs`. `cycleUpperLt` фиксирует первый LT цикла: новые transactions выше него будут прочитаны в следующем цикле, а не потеряны посреди descending pagination. На empty page или достижении floor cursor сбрасывается в `null`, поэтому следующий cycle намеренно пересканирует bounded history и увидит поздно проиндексированный transfer; duplicates удаляются по `(account,txHash,messageHash)`. Это консервативный testnet v1 tradeoff; оптимизация high-water/retention требует отдельной policy и не может вводиться скрыто.
+`limit` допускает integer `1..16`. В native-only continuation source list принимает literal `assetKind:'native'`, выводит только distinct `(network,native asset,invoice recipient)` из immutable invoices, добавляет `scanFloorTimeMs=min(quoted_at)` и сортируется по `sourceId=sha256(providerId+'\0'+stableAssetJson+'\0'+recipient)`. Для native `stableAssetJson` — exact sorted-key bytes `{"decimals":9,"kind":"native","network":"tvm:-3"}`; recipient — canonical lowercase raw address. `claim` принимает весь source и exact provider ID: wrapper до SQL повторно вычисляет lowercase64-hex source ID и валидирует exact network/native asset/recipient/safe-integer floor; bind дополнительно требует `binding.derivation.kind==='native'`, а `ownerAddress` и `recipientAccount` должны быть равны source invoice recipient. SQL при первом claim сохраняет network/provider, а при конфликте требует их точного совпадения. `source_identity_mismatch` не выдаётся за busy и запрещает binding, provider call и cursor mutation. Jetton rows не выдаются и не получают cursor row до отдельного принятия полного Task 2. Provider scan идёт newest→older по resolved credit-account LT с inclusive one-item overlap, максимум четыре страницы по восемь transactions на source за run и не идёт старше `scanFloorTimeMs`. `cycleUpperLt` фиксирует первый LT цикла: новые transactions выше него будут прочитаны в следующем цикле, а не потеряны посреди descending pagination. На empty page или достижении floor cursor сбрасывается в `null`, поэтому следующий cycle намеренно пересканирует bounded history и увидит поздно проиндексированный transfer; duplicates удаляются по `(account,txHash,messageHash)`. Это консервативный testnet v1 tradeoff; оптимизация high-water/retention требует отдельной policy и не может вводиться скрыто.
 
 **Разделение provider/runner cursor:** `scanAccountPage` владеет одной provider page, проверкой inclusive overlap и возвращает `TonProviderResult.nextCursor/exhausted` (`exhausted` — сигнал endReached). Empty и exact-overlap-only raw pages возвращают `evidence=[]`, `nextCursor=null`, `exhausted=true`; overlap-only не является `pagination_regressed`. Provider не получает `scanFloorTimeMs` или счётчик страниц. Runner владеет floor, четырьмя страницами за run и durable `TonSweepCursor`. При пересечении floor runner сохраняет допустимые observations, затем cursor=null и завершает цикл. После четвёртой non-terminal page он сохраняет observations и точный non-null nextCursor provider, завершает run, но не сбрасывает цикл. Любое продвижение/reset cursor допускается только после durable observations всей принятой части страницы.
 
-Lease не держит SQL transaction во время RPC. После каждой полностью обработанной provider page runner renew/advance делает compare-and-set по `sourceId+leaseOwner+expected cursor`; loss останавливает текущий run. Backoff вычисляется атомарно в `advanceTonReconciliationCursor` по persisted consecutive_failures и DB clock, caller передаёт лишь bounded Retry-After, не следующий timestamp. Source-error advance обязан сохранять expected cursor как next; claim учитывает next_attempt_at, lease CAS проверяет owner и expiry, successful advance продлевает lease90s. Backoff: timeout/5xx — `min(5_000 * 2^(failures-1), 900_000)` ms; `Retry-After` для 429 clamp `1_000..900_000`; остальные source errors используют тот же bounded exponential fallback; successful bounded run сбрасывает failures. `bind` меняет NULL binding один раз под lease CAS; любой последующий отличный binding отвергается до scan. Immutable binding trigger запрещает менять уже установленную пару вне отдельного будущего reviewed recovery gate. Cursor двигается только после durable observations всей page и, в settle mode, после settlement result/ACK каждого связанного candidate.
+Lease не держит SQL transaction во время provider work. `claim`, `bind`, `renew`, observation и `advance` — отдельные завершённые DB операции; provider promise не вызывается из transaction callback. `bind` и `renew` делают CAS по `sourceId+leaseOwner+unexpired lease+expected cursor`; `advance` повторяет тот же fence. `bind` меняет NULL binding один раз; отличный binding, source identity или cursor отвергается до scan. Immutable binding trigger запрещает менять уже установленную пару вне отдельного будущего reviewed recovery gate. Cursor двигается только после durable observations всей принятой части page и, в fixture-only settle mode, после settlement result/ACK каждого связанного candidate.
+
+Все lease mutations используют один DB timestamp в statement (`WITH tick AS MATERIALIZED (SELECT clock_timestamp() AS now)`). `claim` вставляет новый source row или забирает только NULL/expired lease при `next_attempt_at<=tick.now`; existing network/provider mismatch возвращает `source_identity_mismatch`. `renew` выполняет `UPDATE ... SET lease_expires_at=tick.now + interval '90 seconds' WHERE source_id=$1 AND lease_owner=$2::uuid AND lease_expires_at>tick.now AND cursor IS NOT DISTINCT FROM $3::jsonb RETURNING`. Нулевой UPDATE классифицируется в том же prepared statement/transaction snapshot: отсутствующий/другой/expired owner → `lease_lost`, тот же current owner с другим cursor → `cursor_conflict`. `bind` использует тот же owner/expiry/expected-cursor predicate. `advance` применяет его перед изменением cursor/backoff и при success продлевает lease от `tick.now`; stale owner не может ни продвинуть, ни сбросить cursor. `release` очищает только exact current unexpired owner; после takeover/expiry возвращает `lease_lost`.
+
+Backoff вычисляется атомарно в `advanceTonReconciliationCursor` по persisted `consecutive_failures` и `tick.now`; caller передаёт лишь bounded Retry-After, не следующий timestamp. Source-error advance обязан передать `next===expected`, поэтому operational timeout никогда не перескакивает непрочитанную страницу; shutdown cancellation вообще не вызывает advance/backoff. Claim учитывает `next_attempt_at`. Backoff: timeout/5xx — `min(5_000 * 2^(failures-1), 900_000)` ms; `Retry-After` для 429 clamp `1_000..900_000`; остальные source errors используют тот же bounded exponential fallback; successful bounded run сбрасывает failures.
 
 ## Task 1: первый implementable slice — pure evidence verifier
 
@@ -408,10 +422,68 @@ it('never promotes missing full-path or provider-attested finality', () => {
 
 **Gate 2 result:** without at least one sanitized complete native success and one aborted/bounced failure from the real provider, this task is `BLOCKED_PROVIDER_FIXTURES`; generated example payloads do not satisfy it. Jetton auto-credit remains disabled until a sanitized complete jetton path and wallet-derivation fixture exists. A public historical trace may satisfy the provider-fixture gate; it does not satisfy live merchant testnet payment acceptance.
 
+## Native-only continuation gate for Tasks 3–6 (plan amendment 13.09)
+
+This gate becomes dispatchable only after independent review of this amendment. It relies on accepted native source `76ff70c`/owner checkpoint `571ccb1`, but **does not close full Task 2**: jetton wallet derivation, complete sanitized jetton fixture and jetton auto-credit remain OPEN. Tasks 3–6 may cover only `asset.kind='native'`; all data retains explicit asset identity, while source listing, provider calls, new reconciler candidates, fixture-only settlement and observe startup reject/omit jetton. Existing TON2 jetton invoice/settlement behavior is not rewritten or newly accepted. Tasks 1–6 still permit runtime at most `disabled|observe`; this amendment creates no env activation, provider call, DB execution or settlement capability. The authorized fixture-capture RPC budget remains exhausted at `20/20`; no new RPC/capture is added or implied.
+
+### Exact downstream produced/consumed boundary
+
+| Task | Consumes | Produces in this native-only continuation | Explicitly absent |
+|---|---|---|---|
+| 3 | accepted TON2 DB types/functions; frozen cursor/observation shapes; reserved migration allocation | `0074_ton_reconciliation.sql`, prepared observation/source/lease/binding/renew/advance APIs in `@aiag/database/ton-reconciliation-internal`; native-filtered source list | provider/network work; root settlement export move; runtime config |
+| 4 | accepted native provider/verifier; Task 3 internal APIs | observe-only runner with aggregate page deadline and fenced cursor; disabled/observe bootstrap kept outside worker index | jetton scan/candidate; settlement dependency; worker startup edit |
+| 5 | Task 4 native `verified_candidate`; accepted TON2 settlement wrapper | import fence plus native fixture-injected settlement/replay path | runtime `settle`; new money algorithm/SQL; jetton continuation claim |
+| 6 | accepted Tasks 1, native sub-gate, and independently reviewed Tasks 3–5 | one disabled-by-default native observation handle integrated after exclusive index handoff | env activation in this plan wave; jetton; merchant/live transfer; mainnet/production |
+
+### Lease and aggregate provider-page budget
+
+The fixed downstream constants are `TON_LEASE_MS=90_000` and `TON_PROVIDER_PAGE_DEADLINE_MS=60_000`; the accepted provider keeps its internal per-request `TIMEOUT_MS=8_000`. One source run keeps the existing maximum four pages and eight account candidates per page. The 60-second deadline bounds the **whole** `scanAccountPage` call, including transaction-list, all trace/block requests and indexed-head request; it does not multiply by request count. It leaves a nominal 30-second lease reserve, but safety never trusts that reserve: DB clock and post-page CAS decide ownership.
+
+For every page, including the first, runner uses this exact order:
+
+1. Finish claim/binding work, keep `expectedCursor` as the exact canonical cursor returned by claim or last successful advance, then call `renewLease({sourceId,leaseOwner,expected:expectedCursor,leaseMs:90_000})`. `lease_lost`/`cursor_conflict` stops the source before provider work.
+2. Create one page controller linked to shutdown signal and a 60-second timer. Race `provider.scanAccountPage(account,expectedCursor,pageSignal)` against that aggregate deadline; every provider request continues to have its own 8-second abort. Clear the timer/listener in `finally`. The runner race returns at the deadline even if an injected/nonconforming provider never settles after abort. It attaches both fulfillment and rejection suppression to that detached promise; any late value/error is consumed only to prevent unhandled completion and is discarded permanently, with no callback retaining DB dependencies.
+3. If shutdown is already true when the race result is classified, shutdown wins even when the deadline became ready in the same turn. Stop without a source-error observation and without advance/reset. Best-effort release may run, but cancellation means only that the local reader stopped; it never proves that no chain/payment event occurred. The unchanged cursor makes the next owner replay the page.
+4. If aggregate deadline won, abort the page controller and classify only the runner operation as `source_error/timeout`; do not wait for the provider promise. No candidate evidence from that call is observed or settled. When shutdown is still false, run a dedicated post-timeout `renewLease(expectedCursor)` and then `advanceCursor({expected:expectedCursor,next:expectedCursor,outcome:'source_error',errorCode:'timeout',retryAfterMs:null})` solely to persist DB-clock backoff. Loss/conflict stops without backoff. This timeout CAS never advances or resets pagination and is separate from candidate observations and the success-advance branch.
+5. If the provider call completed before the aggregate deadline (page or source error), call the same `renewLease` again with unchanged `expectedCursor` **before** writing any observation. On loss/conflict, discard the completed result and stop. This second renew starts a fresh 90-second DB-clock lease for durable result processing. A per-request timeout that completed through provider error uses the same dedicated source-error observation/backoff branch as other completed source errors, with `next===expected`.
+6. For a completed page, persist every accepted observation/result. Only after all writes (and Task 5 fixture-only settlement ACKs) call `advanceCursor` with exact `expectedCursor`. A successful page advances to its exact canonical next cursor or null end/floor reset. A completed source error may first persist its page-level source-error observation, then uses the separate `outcome:'source_error'` CAS with `next===expected`; it never enters success advance. `advance` is the final owner/expiry/cursor CAS and extends a successful lease.
+7. Runner rechecks the shared shutdown signal before every post-call renew and before either source-error or success advance. If shutdown arrives during observation writes, completed append-only inserts may survive but advance is skipped. If ownership expires during writes, observation dedup may likewise survive but `advance` returns `lease_lost`; replay starts from the prior durable cursor. No stale response, abort, release or local timestamp can advance/reset it.
+
+`close()` first aborts the shared shutdown signal and prevents new source/page work, then awaits the active runner only through its bounded page race, releases only the still-current lease and closes the pool once. It is idempotent. Provider cancellation is operational control over reads only; payment discovery remains replay-based and no cancellation result is interpreted as negative chain evidence.
+
+### Mandatory RED matrix before Task 4 implementation
+
+| RED case | Required observable result |
+|---|---|
+| malformed/noncanonical persisted cursor | rejected before renew/provider; cursor unchanged |
+| claim race by two lease UUIDs | exactly one `claimed`; only claimant may resolve/scan |
+| source ID/network/provider/native owner mismatch | `source_identity_mismatch`; no binding/provider/cursor mutation |
+| `next_attempt_at` not due | `busy`; zero provider calls |
+| pre-page renew sees expired/replaced owner | `lease_lost`; zero provider calls |
+| pre-page renew sees same owner but changed cursor | `cursor_conflict`; zero provider calls |
+| one request reaches its 8-second timeout | completed source-error observation/backoff only after post-call renew; `next===expected`, no success advance |
+| aggregate page exceeds 60 seconds across otherwise sub-8-second requests | runner returns without awaiting provider; no candidate observation; late value/error suppressed; dedicated timeout backoff CAS has `next===expected` |
+| shutdown before or during page | bounded return, no negative chain claim, no observation/advance, next owner replays expected cursor |
+| provider resolves after deadline/shutdown | late result cannot write observation, settle or cursor; no unhandled rejection |
+| provider result then lease takeover before post-page renew | page discarded; no cursor move/reset |
+| lease expires during page observation writes | inserted observations remain deduplicable; final advance=`lease_lost`; replay from old cursor |
+| crash after provider/before first observation | old cursor remains; replay reads the same page |
+| crash mid-page observations | old cursor remains; replay returns the same observation IDs for completed inserts |
+| crash after all observations/before advance commit | old cursor remains; page replay deduplicates all observations |
+| advance commit succeeds but client loses ACK | persisted new cursor/backoff is authoritative; retry with old expected gets `cursor_conflict` |
+| empty/exhausted or floor-crossing page | null reset only after all retained observations and successful final CAS |
+| fourth nonterminal page | exact non-null provider cursor persisted; cycle is not reset |
+| source error/429 Retry-After | DB-clock backoff applied; cursor byte-for-byte unchanged; clamp `1_000..900_000` |
+| inclusive overlap/new rows above `cycleUpperLt` | duplicate overlap removed, no gap; above-upper rows deferred to next null cycle |
+| injected jetton source/candidate | rejected before provider and DB status/cursor mutation; full Task 2 stays OPEN |
+| provider promise held at a test barrier | no checked-out SQL transaction remains open while it is pending |
+| fixture settlement crash after commit/before cursor ACK | replay receives accepted TON2 `already_settled`; one event/receipt/grant; cursor advances only after ACK |
+| repeated/concurrent `close()` | one abort/release/pool close, no new page and no late cursor write |
+
 ## Task 3: append-only observations and durable lease/cursor
 
 **Files:**
-- Create: `packages/database/migrations/0073_ton_reconciliation.sql` after recheck; if `0073` is occupied, update this plan to the actual next ID before implementation and review that plan-only change.
+- Create: `packages/database/migrations/0074_ton_reconciliation.sql` after confirming reserved catalog `0073` ownership and rechecking the manifest; if `0074` is occupied, stop and update this plan to the actual next ID before implementation and independent review.
 - Modify: `packages/database/src/schema/ton-payments.ts`
 - Modify: `packages/database/src/ton-payment-types.ts`
 - Modify: `packages/database/src/ton-payments.ts`
@@ -425,10 +497,10 @@ it('never promotes missing full-path or provider-attested finality', () => {
 - Consumes: persistence contract above; accepted TON2 `TonPaymentDatabase` and invoice JSON projection.
 - Produces: explicit internal subpath APIs above. `settleTonInvoice` moves off the root export in Task 5, not yet in this task.
 
-- [ ] **Step 1: recheck migration manifest.** Run `find packages/database/migrations -maxdepth 1 -type f -printf '%f\n' | sort | tail`; select next unused numeric ID. If another worker owns it, increment; never rename/rewrite an applied migration.
-- [ ] **Step 2: write RED wrapper/schema tests.** Test strict cursor/observation key sets, canonical UUID/address/hash/LT/time, limits before serialization and prepared `{text,values}` queries. Reject `limit=0|17`, forged result kind/reason pairing, non-null invoice on `unmatched`, missing event identity on candidate results and snapshot>32768 bytes before SQL.
-- [ ] **Step 3: write RED native concurrency/restart tests on an owned disposable loopback DB.** Two lease owners race: exactly one claims. Cover expired lease takeover, stale owner advance/release, expected-cursor CAS, cursor null wrap, deterministic source listing, LT overlap/no gap, exact unique reference binding across pending/observed/expired/settled/review invoices, unknown reference→one nullable-invoice observation с invoiceStatus:null, pinned wallet resolution mismatch→no scan/cursor reuse и прежний binding сохранён, DB-clock exponential backoff/Retry-After clamp и not-due lease denial, duplicate observation ID, immutable UPDATE/DELETE and allowed status transitions.
-- [ ] **Step 4: implement additive migration/functions.** Use the exact two-table schema above, a source-scan index on `ton_invoices(network,asset_kind,master_address,asset_decimals,recipient,created_at,id)` and observation index `(invoice_id,created_at,id)`, immutable trigger and prepared SQL functions. Observation insert+invoice status CAS is one transaction; lease/advance uses `UPDATE ... WHERE lease_owner=$n AND lease_expires_at>clock_timestamp() AND cursor IS NOT DISTINCT FROM $n RETURNING`. Function validation enforces the exact result-kind/reason unions and nullable invoice/event rules before casts.
+- [ ] **Step 1: recheck migration manifest and ownership.** Run `find packages/database/migrations -maxdepth 1 -type f -printf '%f\n' | sort | tail` and inspect controller ownership. Treat Catalog Task 2's `0073_gateway_catalog_revision.sql` as reserved even if not yet present; use `0074_ton_reconciliation.sql`. If `0074` is occupied/reserved, stop for plan-only renumbering and review; never rename/rewrite an applied or current catalog migration.
+- [ ] **Step 2: write RED wrapper/schema tests.** Test strict cursor/observation/source/binding key sets, canonical UUID/address/hash/LT/time, recomputed source ID, native-only list filter, limits before serialization and prepared `{text,values}` queries. Reject `limit=0|17`, forged result kind/reason pairing, non-null invoice on `unmatched`, missing event identity on candidate results and snapshot>32768 bytes before SQL. Cover claim identity mismatch plus bind/renew/advance exact expected-cursor validation.
+- [ ] **Step 3: write RED native concurrency/restart tests on an owned disposable loopback DB.** Implement the Task 4 RED matrix cases that belong to persistence: claim race, expired takeover, DB-clock renew, stale owner renew/advance/release, same-owner cursor conflict, null wrap, deterministic native-only source listing, exact unique reference binding across pending/observed/expired/settled/review invoices, unknown reference→one nullable-invoice observation с invoiceStatus:null, pinned recipient mismatch→no cursor reuse and old binding preserved, exponential backoff/Retry-After clamp and not-due denial, duplicate observation ID, immutable UPDATE/DELETE and allowed status transitions.
+- [ ] **Step 4: implement additive migration/functions.** Use the exact two-table schema above, a source-scan index on `ton_invoices(network,asset_kind,master_address,asset_decimals,recipient,created_at,id)` and observation index `(invoice_id,created_at,id)`, immutable trigger and prepared SQL functions. Observation insert+invoice status CAS is one transaction. Claim/bind/renew/advance/release follow the exact single-DB-clock and result-classification semantics in the native continuation gate; every mutation fences `sourceId+leaseOwner+unexpired lease`, and bind/renew/advance additionally fence the entire expected cursor with `IS NOT DISTINCT FROM`. Function validation enforces the exact result-kind/reason unions and nullable invoice/event rules before casts.
 - [ ] **Step 5: create closeable native DB adapter.** `createTonWorkerDatabase` uses one `pg.Pool`; every `transaction` checks out one client and runs BEGIN/COMMIT/ROLLBACK; `close()` ends the pool. Neon HTTP is rejected for this callback transaction boundary. Tests inject a fake pool; credentials are never logged.
 - [ ] **Step 6: add the explicit package entry.** Add `src/ton-reconciliation-internal.ts` to tsup entries and `./ton-reconciliation-internal` to package exports. Do not export it from `src/index.ts`.
 - [ ] **Step 7: run focused verification.** Run database wrapper tests, the new guarded native suite, database type-check and worker type-check. Do not invoke the old 322/native58/clean72 acceptance commands. Independent SQL/security review checks ACL, immutability, lock/CAS ordering and disposable DB cleanup.
@@ -444,29 +516,35 @@ it('never promotes missing full-path or provider-attested finality', () => {
 - Do not modify: `apps/worker/src/index.ts` in this task.
 
 **Interfaces:**
-- Consumes: provider, verifier and internal observation/lease/list/cursor APIs. Settlement dependency is deliberately absent.
-- Produces: `reconcileTonInvoice(...)`; `reconcileTonInvoices({cursor,limit},deps): Promise<{nextCursor,processed}>`; `startTonObservationFromEnv(deps): Promise<{close():Promise<void>}>` supporting only `disabled|observe`.
+- Consumes: accepted native provider/verifier and Task 3 internal native-source/observation/claim/bind/renew/advance/release APIs. Settlement dependency is deliberately absent.
+- Produces: `reconcileTonInvoice(...)`; `reconcileTonInvoices({source,cursor,limit,signal},deps): Promise<TonReconcileSourceResult>` with explicit completion/source-error/stop status; `startTonObservationFromEnv(deps): Promise<{close():Promise<void>}>` supporting only `disabled|observe`.
 
 ```ts
 export interface TonObserveReconcilerDeps {
   getInvoice(invoiceId:string):Promise<TonInvoice|null>;
-  listSources(input:{afterSourceId:string|null;limit:number}):
+  listSources(input:{afterSourceId:string|null;limit:number;assetKind:'native'}):
     Promise<readonly TonReconciliationSource[]>;
   findInvoices(input:{source:TonReconciliationSource;
     references:readonly string[]}):Promise<readonly TonInvoice[]>;
   provider:TonEvidenceProvider;
   recordObservation(input:TonObservationInput):Promise<TonObservationResult>;
-  claimLease(input:{sourceId:string;leaseOwner:string;leaseMs:90_000}):
-    Promise<{kind:'claimed';cursor:TonSweepCursor|null;binding:TonRecipientBinding|null}|{kind:'busy'}>;
-  bindRecipient(input:{sourceId:string;leaseOwner:string;binding:TonRecipientBinding}):
-    Promise<'bound'|'binding_mismatch'|'lease_lost'>;
+  claimLease(input:{source:TonReconciliationSource;
+    providerId:'toncenter-v3-testnet';leaseOwner:string;leaseMs:90_000}):Promise<
+      | {kind:'claimed';cursor:TonSweepCursor|null;binding:TonRecipientBinding|null}
+      | {kind:'busy'}
+      | {kind:'source_identity_mismatch'}>;
+  bindRecipient(input:{source:TonReconciliationSource;leaseOwner:string;
+    expected:TonSweepCursor|null;binding:TonRecipientBinding}):Promise<
+      'bound'|'binding_mismatch'|'lease_lost'|'cursor_conflict'|'source_identity_mismatch'>;
+  renewLease(input:{sourceId:string;leaseOwner:string;
+    expected:TonSweepCursor|null;leaseMs:90_000}):
+    Promise<'renewed'|'lease_lost'|'cursor_conflict'>;
   advanceCursor(input:{sourceId:string;leaseOwner:string;expected:TonSweepCursor|null;
     next:TonSweepCursor|null;outcome:'success'|'source_error';
     retryAfterMs:number|null;errorCode:TonSourceErrorCode|null}):
     Promise<'advanced'|'lease_lost'|'cursor_conflict'>;
   releaseLease(sourceId:string,leaseOwner:string):Promise<'released'|'lease_lost'>;
   newLeaseOwner():string;
-  nowMs():number;
 }
 export type TonReconcileItemResult =
   | { kind:'not_found' }
@@ -475,6 +553,13 @@ export type TonReconcileItemResult =
   | { kind:'observed'; reason:TonObservedReason }
   | { kind:'review_required'; reason:TonReviewReason }
   | { kind:'verified_candidate'; credit:VerifiedChainCredit };
+export type TonReconcileSourceResult =
+  | {kind:'completed';nextCursor:TonSweepCursor|null;processed:number}
+  | {kind:'source_error';code:TonSourceErrorCode;
+      nextCursor:TonSweepCursor|null;processed:0}
+  | {kind:'stopped';reason:
+      'busy'|'shutdown'|'lease_lost'|'cursor_conflict'|'source_identity_mismatch';
+      nextCursor:TonSweepCursor|null;processed:number};
 export function reconcileTonInvoice(
   input:{invoiceId:string;cursor:TonSweepCursor|null;limit:number;signal:AbortSignal},
   deps:TonObserveReconcilerDeps,
@@ -483,14 +568,16 @@ export function reconcileTonInvoices(
   input:{source:TonReconciliationSource;cursor:TonSweepCursor|null;
     limit:number;signal:AbortSignal},
   deps:TonObserveReconcilerDeps,
-):Promise<{nextCursor:TonSweepCursor|null;processed:number}>;
+):Promise<TonReconcileSourceResult>;
 ```
 
-- [ ] **Step 1: write RED orchestration tests.** Assert durable sequence `list sources → claim source → resolve native/jetton credit account outside transaction → bind/compare persisted recipient under lease CAS → scan pinned account outside transaction → exact-reference lookup → verify/unmatched → observation → advance`. Inject crash after provider, after observation and before/after cursor ACK; restart with a new reconciler uses persisted cursor/observation, does not lose a transfer and deduplicates replay.
-- [ ] **Step 2: cover result behavior.** Empty page/`candidate_not_found`, `trace_incomplete` and `finality_pending` remain retryable; deterministic verifier rejection records review; unknown reference records one `unmatched` observation with no invoice transition; source errors record no raw body and apply exact backoff. Out-of-order evidence, rows inserted above `cycleUpperLt`, page boundary overlap, end-of-cycle null wrap and signal abort preserve the last durable cursor.
-- [ ] **Step 3: cover concurrency.** Changing provider wallet resolution never applies the saved LT cursor to a different account; assert durable source error, unchanged binding/cursor and no scan. Two runners with different lease UUIDs process one source; only claimant calls provider. Lease loss after a provider response permits observation dedup but forbids cursor advance. No SQL transaction remains open while provider promise is pending.
-- [ ] **Step 4: implement observe-only reconciler.** `verified` produces `verified_candidate` observation only. No settlement function/dependency/import exists. Cap one source run at four provider pages of eight candidates and renew/check the 90-second lease after each page.
-- [ ] **Step 5: implement fail-closed bootstrap.** Unset/`disabled` returns a no-op handle before provider/DB factories. `observe` requires exact policy/version/source/origin and `DATABASE_URL`; unknown mode, including `settle`, throws before factories. Timer is unref'd, does not overlap its previous run, and `close()` aborts in-flight work, clears timer, releases lease and closes DB.
+For `source_error`, `nextCursor` equals the input/last ACKed `expectedCursor`; it reports the unchanged durable position only after the dedicated backoff CAS ACK. For `stopped`, `nextCursor` is merely the last cursor ACK already known to this runner and never claims a failed mutation. A completed page may return a different/null cursor only after the exact success `advanceCursor` ACK.
+
+- [ ] **Step 1: write RED orchestration tests.** Assert durable sequence `list native sources → claim exact source → resolve native account without network → bind/compare under expected-cursor lease CAS → pre-page renew → aggregate-bounded scan outside transaction → post-page renew → exact-reference lookup → verify/unmatched → durable observations → advance`. Inject every crash/ACK-loss point from the mandatory RED matrix; restart with a new owner uses persisted cursor/observation, does not lose a transfer and deduplicates replay.
+- [ ] **Step 2: cover complete result/deadline behavior.** Implement every non-concurrency row in the mandatory RED matrix with fake timers and deferred provider promises. Empty page/`candidate_not_found`, `trace_incomplete` and `finality_pending` remain retryable; deterministic verifier rejection records review; unknown reference records one `unmatched` observation with no invoice transition; source errors record no raw body and apply exact backoff. Out-of-order evidence, rows inserted above `cycleUpperLt`, page boundary overlap, end-of-cycle null wrap, per-request timeout, aggregate page deadline, late resolve and shutdown preserve the specified durable cursor. Tests state that abort is not negative chain/payment evidence.
+- [ ] **Step 3: cover concurrency and transaction boundary.** Implement every concurrency/crash/close row in the mandatory RED matrix. Two runners with different lease UUIDs process one source; only claimant calls provider. Post-page renewal loss discards the result; loss during observation permits deduped inserts but final advance must fail. Hold the provider promise at a barrier and assert the DB pool has no checked-out transaction/client from runner orchestration. Injected jetton source fails before provider and DB status/cursor mutation.
+- [ ] **Step 4: implement observe-only reconciler.** `verified` produces `verified_candidate` observation only. No settlement function/dependency/import exists. Apply the exact 90-second lease, 60-second aggregate page and existing 8-second request sequence above; cap one source run at four provider pages of eight candidates. A source-error advance always passes `next===expected`; only an ACKed final CAS changes the returned `nextCursor`.
+- [ ] **Step 5: implement fail-closed bootstrap.** Unset/`disabled` returns a no-op handle before provider/DB factories. `observe` requires exact native asset/policy/version/source/origin and `DATABASE_URL`; unknown mode, including `settle`, throws before factories. Timer is unref'd and never overlaps its previous run. `close()` follows the bounded idempotent shutdown sequence above; a late provider result has no DB consumer.
 - [ ] **Step 6: run PASS/review/commit.** Run reconciler/bootstrap/provider/verifier tests and worker type-check/lint. Assert disabled config makes zero TON provider, DB, timer and dynamic internal-package factory calls; existing Redis behavior is outside this assertion. Commit `feat(worker): add observe-only TON recovery sweep`.
 
 ## Task 5: source import fence and crash-safe settlement caller in fixtures
@@ -507,8 +594,8 @@ export function reconcileTonInvoices(
 - Keep `apps/worker/src/index.ts` unchanged.
 
 **Interfaces:**
-- Consumes: pure `verified` result and explicit `settleVerifiedCredit(invoiceId,credit)` dependency supplied only by isolated fixture harness in this task. Runtime bootstrap never supplies it before the separate authorization gate.
-- Produces: internal settlement path; runtime bootstrap supports only `disabled|observe`, including after Gate5 acceptance.
+- Consumes: pure native `verified` result and explicit `settleVerifiedCredit(invoiceId,credit)` dependency supplied only by isolated fixture harness in this task. Runtime bootstrap never supplies it before the separate authorization gate.
+- Produces: internal native fixture settlement path; runtime bootstrap supports only `disabled|observe`, including after Gate5 acceptance. The generic accepted TON2 wrapper remains capable of validating its existing asset contract, but no new jetton provider/reconciler acceptance follows from this task.
 
 - [ ] **Step 1: write RED import-boundary test.** Assert root `@aiag/database` declaration/export has no value export named `settleTonInvoice`. Its definition may remain in `packages/database/src/ton-payments.ts`; only `packages/database/src/ton-reconciliation-internal.ts` may re-export it, package tests/native fixtures may import it for accepted coverage, and only `apps/worker/src/ton-payment-bootstrap.ts` may consume the internal package subpath at runtime. Assert `apps/web` and `packages/api-gateway` contain neither internal subpath import nor `aiag_settle_ton_invoice_v1`.
 
@@ -519,8 +606,8 @@ expect(workerInternalImporters).toEqual(['apps/worker/src/ton-payment-bootstrap.
 ```
 
 - [ ] **Step 2: move root settlement export.** Remove only `settleTonInvoice` from `packages/database/src/index.ts`; preserve its type contracts. Export the value only from the explicit internal subpath. Update database tests/native fixtures to import that explicit source/subpath without weakening TON2 assertions.
-- [ ] **Step 3: inject settlement into reconciler.** In a fixture-injected `mode:'settle'` path (unreachable from runtime bootstrap), call only after `result.kind==='verified'` and durable `verified_candidate` observation. `observed`, `review_required` and `source_error` cannot reach the dependency by type switch and tests.
-- [ ] **Step 4: test crash/concurrency semantics.** Crash before settlement leaves no grant and cursor unchanged; crash after DB commit/before ACK retries and receives `already_settled`; concurrent on-demand/sweep candidates produce one TON event/receipt/grant through accepted TON2 DB guards. Evidence conflict/review does not advance as success until durable result is recorded.
+- [ ] **Step 3: inject native settlement into reconciler fixtures.** In a fixture-injected `mode:'settle'` path (unreachable from runtime bootstrap), reject non-native source/credit before the dependency and call only after native `result.kind==='verified'` plus durable `verified_candidate` observation. `observed`, `review_required`, `source_error` and jetton cannot reach the dependency by type switch and tests.
+- [ ] **Step 4: test crash/concurrency semantics.** Implement the fixture settlement rows of the mandatory RED matrix. Crash before settlement leaves no grant and cursor unchanged; crash after DB commit/before ACK retries and receives `already_settled`; concurrent on-demand/sweep native candidates produce one TON event/receipt/grant through accepted TON2 DB guards. Evidence conflict/review does not advance as success until durable result is recorded.
 - [ ] **Step 5: prove no forgery seam.** Tests pass malformed/fake user JSON, HTTP-style `{verified:true}`, raw BOC and provider `finalized:true`; none type-normalize into `VerifiedChainCredit` or call settlement. Future API may pass only `invoiceId` to `reconcileTonInvoice`; no HTTP handler receives credit/evidence.
 - [ ] **Step 6: focused PASS and two reviews.** Run database TON wrapper tests, worker verifier/reconciler/import-boundary tests, new native reconciliation suite and both package type-checks/lint. Require independent financial/security review of grant reachability and separate TS review of imports/restart behavior.
 - [ ] **Step 7: commit.** Commit `refactor(ton): fence settlement source imports`.
@@ -537,15 +624,15 @@ expect(workerInternalImporters).toEqual(['apps/worker/src/ton-payment-bootstrap.
 - Create: `docs/product/acceptance/ton-verifier-testnet.md`
 
 **Interfaces:**
-- Consumes: accepted Gate 5 source/reviews and exact provider/policy constants.
-- Produces: `startTonReconciliationFromEnv()` with `disabled|observe`; worker graceful-close handle. `settle` always fails closed in this task.
+- Consumes: accepted native Gate 5 source/reviews, exact provider/policy constants and exclusive ownership of `apps/worker/src/index.ts` after Recovery Task 3 releases it.
+- Produces: `startTonReconciliationFromEnv()` with native `disabled|observe`; worker graceful-close handle. `settle` and jetton always fail closed in this task.
 
-- [ ] **Step 1: hard prerequisite check.** Do not start this task unless Tasks 1-5 commits, sanitized provider fixtures, fresh focused/native results, independent financial/security + TS reviews and import-boundary test are all recorded. Otherwise report `BLOCKED_OBSERVATION_STARTUP` and stop without editing startup.
-- [ ] **Step 2: write RED startup tests.** Unset/`disabled` performs zero TON DB/provider/timer calls. Unknown mode and `settle` fail closed before factories. `observe` cannot receive settlement dependency and requires exact provider origin/network/policy/version/source ID and database URL before constructing resources; mismatch fails before network/DB. `close()` aborts, waits boundedly, releases lease and closes pool once.
+- [ ] **Step 1: hard prerequisite and index-ownership check.** Do not start this task unless Tasks 1 and native-only 2–5 commits, native sanitized provider fixtures, fresh focused/native results, independent financial/security + TS reviews and import-boundary test are all recorded. Recovery Task 3 owns the shared worker index first; controller must record its accepted commit and release of `apps/worker/src/index.ts`, then assign that whole file exclusively to TON Task 6. If either prerequisite or exclusive handoff is absent, report `BLOCKED_OBSERVATION_STARTUP` or `BLOCKED_WORKER_INDEX_OWNERSHIP` and stop without editing startup. Do not wait for full jetton Task 2 to run native observe mode, and do not describe jetton as accepted.
+- [ ] **Step 2: write RED startup tests.** Unset/`disabled` performs zero TON DB/provider/timer calls. Unknown mode, `settle` and any jetton asset mode fail closed before factories. Native `observe` cannot receive settlement dependency and requires exact provider origin/network/policy/version/source ID and database URL before constructing resources; mismatch fails before network/DB. `close()` passes the repeated/concurrent shutdown rows in the mandatory RED matrix.
 - [ ] **Step 3: wire observe mode behind exact config.** The bootstrap dynamically imports observation/recovery APIs from `@aiag/database/ton-reconciliation-internal` only after validation and never injects settlement in this task. No default API key is invented; an optional existing secret is passed only as a header and never logged/persisted. Default remains `disabled`.
-- [ ] **Step 4: wire index minimally.** After `loadSharedEnv()`, create one TON handle through the bootstrap and include its `close()` in existing graceful shutdown. Do not reuse Redis/BullMQ for the TON cursor and do not change old cron behavior. If TON startup fails in enabled mode, worker fails closed and closes already-created TON resources.
+- [ ] **Step 4: wire index minimally under serialized ownership.** Re-read `apps/worker/src/index.ts` at the accepted Recovery Task 3 commit after its owner releases the file. With TON holding exclusive whole-file ownership, add one bootstrap call after `loadSharedEnv()` and include its `close()` in existing graceful shutdown; do not overlap edits with Recovery Task 3. Run a final integration diff/review against both accepted commits before release. Do not reuse Redis/BullMQ for the TON cursor and do not change old cron behavior. If TON startup fails in enabled mode, worker fails closed and closes already-created TON resources.
 - [ ] **Step 5: prove controlled behavior.** Run worker bootstrap/import-boundary/reconciler/provider/verifier tests plus worker type-check/lint. A source-level test confirms `index.ts` has one TON bootstrap call and no direct provider/DB/settlement import. Disabled test distinguishes “zero TON calls” from the worker's existing Redis/network behavior.
-- [ ] **Step 6: run observe-only real-provider evidence check.** With explicit authorization and no signer/funds, run one bounded read-only testnet provider observation against the pinned origin; save only sanitized request manifest/result/check time. It may validate retrieval and restart, not payment ownership or live transfer.
+- [ ] **Step 6: run observe-only real-provider evidence check.** This remains a later explicit-authorization gate and is not activated by the plan amendment. With explicit authorization and no signer/funds, run one bounded read-only testnet provider observation against the pinned origin; save only sanitized request manifest/result/check time. It may validate retrieval and restart, not payment ownership or live transfer.
 - [ ] **Step 7: preserve the live testnet gate.** The acceptance document must list successful/aborted/bounced/late native and jetton transfer evidence, restart/replay and one-credit conservation as unverified until an isolated signer/test assets/funds are separately authorized. Synthetic and historical provider fixtures cannot mark these PASS. Mainnet and production remain blocked.
 - [ ] **Step 8: final review/commit.** Independent review confirms default disabled, exact pinning, loopback/redirect guard, cleanup and no Web/API route. Commit `feat(worker): gate TON reconciliation startup`.
 
