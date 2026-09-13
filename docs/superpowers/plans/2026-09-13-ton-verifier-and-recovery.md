@@ -562,6 +562,7 @@ Shutdown never treats an already-started DB promise as cancelled or rolled back.
 - Modify: `packages/database/package.json`
 - Create: `packages/database/src/__tests__/ton-reconciliation.test.ts`
 - Create: `packages/database/scripts/__tests__/ton-reconciliation.native.integration.test.ts`
+- Modify: `packages/database/scripts/__tests__/native-migrate.test.ts` only for manifest length73→74 and final migration filename0074; preserve all other assertions.
 
 **Interfaces:**
 - Consumes: persistence contract above; accepted TON2 `TonPaymentDatabase` and invoice JSON projection.
