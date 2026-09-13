@@ -13,12 +13,64 @@ import {
 } from "../test-db-guard";
 
 const RUN_INTEGRATION = process.env.RUN_NATIVE_DB_INTEGRATION === "1";
+const MUTATED_ENV_KEYS = [
+  "AIAG_ADMIN_KEY",
+  "AIAG_ADMIN_RATE_LIMIT",
+  "LOG_LEVEL",
+] as const;
+type MutatedEnvKey = (typeof MUTATED_ENV_KEYS)[number];
+type EnvironmentSnapshot = Record<
+  MutatedEnvKey,
+  { present: boolean; value: string | undefined }
+>;
 
 // This pure loopback/identity check runs before createPgTestClient can import pg
 // or any gateway module can construct its postgres.js client.
 if (RUN_INTEGRATION) assertTestDatabaseEnvironment(process.env);
 
+function snapshotEnvironment(
+  env: Record<string, string | undefined>,
+): EnvironmentSnapshot {
+  return Object.fromEntries(
+    MUTATED_ENV_KEYS.map((key) => [
+      key,
+      {
+        present: Object.prototype.hasOwnProperty.call(env, key),
+        value: env[key],
+      },
+    ]),
+  ) as EnvironmentSnapshot;
+}
+
+function restoreEnvironment(
+  env: Record<string, string | undefined>,
+  snapshot: EnvironmentSnapshot,
+) {
+  for (const key of MUTATED_ENV_KEYS) {
+    const saved = snapshot[key];
+    if (saved.present) env[key] = saved.value;
+    else delete env[key];
+  }
+}
+
+async function closeBothPreservingFirstError(
+  closeGateway: (() => Promise<void>) | undefined,
+  closeDatabase: (() => Promise<void>) | undefined,
+) {
+  let firstError: unknown;
+  for (const close of [closeGateway, closeDatabase]) {
+    if (!close) continue;
+    try {
+      await close();
+    } catch (error) {
+      firstError ??= error;
+    }
+  }
+  if (firstError) throw firstError;
+}
+
 type OwnedRows = {
+  adminModelSlugs: string[];
   candidates: string[];
   drafts: string[];
   keys: string[];
@@ -31,6 +83,7 @@ type OwnedRows = {
 
 function ownedRows(): OwnedRows {
   return {
+    adminModelSlugs: [],
     candidates: [],
     drafts: [],
     keys: [],
@@ -50,6 +103,7 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway catalog revision", () => {
     | ((request: Request) => Response | Promise<Response>)
     | undefined;
   let foreignUpstream: { id: string; row: string } | undefined;
+  let environmentBeforeSuite: EnvironmentSnapshot | undefined;
   let owned = ownedRows();
 
   const query = <Row extends Record<string, unknown>>(
@@ -158,6 +212,35 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway catalog revision", () => {
     );
   }
 
+  async function discoverAppliedAdminRows(
+    modelSlug: string,
+    upstreamId: string,
+    candidateLookup?: () => Promise<{ rows: Array<{ id: string }> }>,
+  ) {
+    const modelRows = await query<{ id: string }>(
+      "SELECT id::text AS id FROM models WHERE slug=$1",
+      [modelSlug],
+    );
+    for (const row of modelRows.rows) {
+      if (!owned.models.includes(row.id)) owned.models.push(row.id);
+    }
+
+    // Model UUID ownership is durable in memory before this next await can
+    // fail. The exact slug remains a second recovery identity for cleanup.
+    const candidateRows = candidateLookup
+      ? await candidateLookup()
+      : await query<{ id: string }>(
+          `SELECT mu.id::text AS id
+             FROM model_upstreams mu
+             JOIN models m ON m.id=mu.model_id
+            WHERE m.slug=$1 AND mu.upstream_id=$2`,
+          [modelSlug, upstreamId],
+        );
+    for (const row of candidateRows.rows) {
+      if (!owned.candidates.includes(row.id)) owned.candidates.push(row.id);
+    }
+  }
+
   async function openAdditionalGuardedClient() {
     let additional!: TestDatabaseClient;
     let close!: () => Promise<void>;
@@ -195,6 +278,79 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway catalog revision", () => {
     await query(text, [ids]);
   }
 
+  async function cleanupOwnedRows() {
+    const current = owned;
+    let firstError: unknown;
+    const attempt = async (operation: () => Promise<unknown>) => {
+      try {
+        await operation();
+      } catch (error) {
+        firstError ??= error;
+      }
+    };
+
+    if (current.adminModelSlugs.length > 0) {
+      await attempt(async () => {
+        const recovered = await query<{ id: string }>(
+          "SELECT id::text AS id FROM models WHERE slug=ANY($1::text[])",
+          [current.adminModelSlugs],
+        );
+        for (const row of recovered.rows) {
+          if (!current.models.includes(row.id)) current.models.push(row.id);
+        }
+      });
+    }
+
+    await attempt(() =>
+      deleteOwned(
+        "DELETE FROM model_catalog_drafts WHERE id=ANY($1::uuid[])",
+        current.drafts,
+      ),
+    );
+    await attempt(() =>
+      deleteOwned(
+        "DELETE FROM model_upstreams WHERE id=ANY($1::uuid[])",
+        current.candidates,
+      ),
+    );
+    await attempt(() =>
+      deleteOwned(
+        "DELETE FROM models WHERE id=ANY($1::uuid[])",
+        current.models,
+      ),
+    );
+    await attempt(() =>
+      deleteOwned(
+        "DELETE FROM upstreams WHERE id=ANY($1::text[])",
+        current.upstreams,
+      ),
+    );
+    await attempt(() =>
+      deleteOwned(
+        "DELETE FROM gateway_transactions WHERE id=ANY($1::uuid[])",
+        current.transactions,
+      ),
+    );
+    await attempt(() =>
+      deleteOwned(
+        "DELETE FROM gateway_api_keys WHERE id=ANY($1::uuid[])",
+        current.keys,
+      ),
+    );
+    await attempt(() =>
+      deleteOwned(
+        "DELETE FROM organizations WHERE id=ANY($1::uuid[])",
+        current.orgs,
+      ),
+    );
+    await attempt(() =>
+      deleteOwned("DELETE FROM users WHERE id=ANY($1::uuid[])", current.users),
+    );
+
+    if (firstError) throw firstError;
+    owned = ownedRows();
+  }
+
   beforeAll(async () => {
     await withGuardedTestDatabase(
       process.env,
@@ -219,6 +375,7 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway catalog revision", () => {
         foreignUpstream = sentinel.rows[0];
         expect(foreignUpstream).toBeDefined();
 
+        environmentBeforeSuite = snapshotEnvironment(process.env);
         process.env.AIAG_ADMIN_KEY = "catalog-native-admin-key";
         process.env.AIAG_ADMIN_RATE_LIMIT = "off";
         process.env.LOG_LEVEL = "silent";
@@ -243,43 +400,13 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway catalog revision", () => {
 
   afterEach(async () => {
     if (!client) return;
-    await deleteOwned(
-      "DELETE FROM model_catalog_drafts WHERE id=ANY($1::uuid[])",
-      owned.drafts,
-    );
-    await deleteOwned(
-      "DELETE FROM model_upstreams WHERE id=ANY($1::uuid[])",
-      owned.candidates,
-    );
-    await deleteOwned(
-      "DELETE FROM models WHERE id=ANY($1::uuid[])",
-      owned.models,
-    );
-    await deleteOwned(
-      "DELETE FROM upstreams WHERE id=ANY($1::text[])",
-      owned.upstreams,
-    );
-    await deleteOwned(
-      "DELETE FROM gateway_transactions WHERE id=ANY($1::uuid[])",
-      owned.transactions,
-    );
-    await deleteOwned(
-      "DELETE FROM gateway_api_keys WHERE id=ANY($1::uuid[])",
-      owned.keys,
-    );
-    await deleteOwned(
-      "DELETE FROM organizations WHERE id=ANY($1::uuid[])",
-      owned.orgs,
-    );
-    await deleteOwned(
-      "DELETE FROM users WHERE id=ANY($1::uuid[])",
-      owned.users,
-    );
-    owned = ownedRows();
+    await cleanupOwnedRows();
   });
 
   afterAll(async () => {
+    let firstError: unknown;
     try {
+      if (client) await cleanupOwnedRows();
       if (client && foreignUpstream) {
         const sentinel = await query<{ row: string }>(
           "SELECT to_jsonb(u)::text AS row FROM upstreams u WHERE id=$1",
@@ -287,12 +414,18 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway catalog revision", () => {
         );
         expect(sentinel.rows).toEqual([{ row: foreignUpstream.row }]);
       }
+    } catch (error) {
+      firstError = error;
     } finally {
-      delete process.env.AIAG_ADMIN_KEY;
-      delete process.env.AIAG_ADMIN_RATE_LIMIT;
-      await closeGatewaySql?.();
-      await closeClient?.();
+      if (environmentBeforeSuite)
+        restoreEnvironment(process.env, environmentBeforeSuite);
+      try {
+        await closeBothPreservingFirstError(closeGatewaySql, closeClient);
+      } catch (error) {
+        firstError ??= error;
+      }
     }
+    if (firstError) throw firstError;
   });
 
   it("registers exactly one guarded singleton and statement transition triggers", async () => {
@@ -635,23 +768,12 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway catalog revision", () => {
 
     const upstreamId = await insertUpstream();
     const modelSlug = `catalog-admin-${randomUUID()}`;
+    owned.adminModelSlugs.push(modelSlug);
     const draftId = await createDraft({ upstreamId, modelSlug });
 
     const beforeApply = await revision();
     const applyResponse = await applyDraft(draftId);
-    const modelRows = await query<{ id: string }>(
-      "SELECT id::text AS id FROM models WHERE slug=$1",
-      [modelSlug],
-    );
-    const candidateRows = await query<{ id: string }>(
-      `SELECT mu.id::text AS id
-         FROM model_upstreams mu
-         JOIN models m ON m.id=mu.model_id
-        WHERE m.slug=$1 AND mu.upstream_id=$2`,
-      [modelSlug, upstreamId],
-    );
-    if (modelRows.rows[0]) owned.models.push(modelRows.rows[0].id);
-    if (candidateRows.rows[0]) owned.candidates.push(candidateRows.rows[0].id);
+    await discoverAppliedAdminRows(modelSlug, upstreamId);
 
     expect(applyResponse.status).toBe(200);
     expect(await revision()).toBe(beforeApply + 2n);
@@ -687,6 +809,7 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway catalog revision", () => {
     expect(await revision()).toBe(beforeAlreadyApplied);
 
     const rollbackSlug = `catalog-rollback-${randomUUID()}`;
+    owned.adminModelSlugs.push(rollbackSlug);
     const rollbackDraft = await createDraft({
       upstreamId,
       modelSlug: rollbackSlug,
@@ -711,6 +834,82 @@ describe.skipIf(!RUN_INTEGRATION)("native gateway catalog revision", () => {
         )
       ).rows[0].status,
     ).toBe("draft");
+  });
+
+  it("cleans a partial admin discovery failure and restores every process boundary", async () => {
+    if (!foreignUpstream) throw new Error("foreign sentinel is unavailable");
+    const sentinelBefore = foreignUpstream;
+    const upstreamId = await insertUpstream();
+    const modelSlug = `catalog-partial-${randomUUID()}`;
+    owned.adminModelSlugs.push(modelSlug);
+    const draftId = await createDraft({ upstreamId, modelSlug });
+    expect((await applyDraft(draftId)).status).toBe(200);
+
+    const inducedDiscoveryFailure = new Error(
+      "induced candidate lookup failure",
+    );
+    await expect(
+      discoverAppliedAdminRows(modelSlug, upstreamId, async () => {
+        throw inducedDiscoveryFailure;
+      }),
+    ).rejects.toBe(inducedDiscoveryFailure);
+    expect(owned.models).toHaveLength(1);
+
+    await cleanupOwnedRows();
+    const residue = await query<{
+      candidates: string;
+      drafts: string;
+      models: string;
+      upstreams: string;
+    }>(
+      `SELECT
+         (SELECT count(*)::text FROM model_upstreams WHERE upstream_id=$2) AS candidates,
+         (SELECT count(*)::text FROM model_catalog_drafts WHERE id=$3::uuid) AS drafts,
+         (SELECT count(*)::text FROM models WHERE slug=$1) AS models,
+         (SELECT count(*)::text FROM upstreams WHERE id=$2) AS upstreams`,
+      [modelSlug, upstreamId, draftId],
+    );
+    expect(residue.rows[0]).toEqual({
+      candidates: "0",
+      drafts: "0",
+      models: "0",
+      upstreams: "0",
+    });
+    const sentinelAfter = await query<{ row: string }>(
+      "SELECT to_jsonb(u)::text AS row FROM upstreams u WHERE id=$1",
+      [sentinelBefore.id],
+    );
+    expect(sentinelAfter.rows).toEqual([{ row: sentinelBefore.row }]);
+
+    const suiteEnvironment = snapshotEnvironment(process.env);
+    try {
+      process.env.AIAG_ADMIN_KEY = "existing-admin";
+      delete process.env.AIAG_ADMIN_RATE_LIMIT;
+      process.env.LOG_LEVEL = "debug";
+      const expected = snapshotEnvironment(process.env);
+      process.env.AIAG_ADMIN_KEY = "mutated-admin";
+      process.env.AIAG_ADMIN_RATE_LIMIT = "mutated-rate";
+      delete process.env.LOG_LEVEL;
+      restoreEnvironment(process.env, expected);
+      expect(snapshotEnvironment(process.env)).toEqual(expected);
+    } finally {
+      restoreEnvironment(process.env, suiteEnvironment);
+    }
+
+    const firstCloseFailure = new Error("induced gateway close failure");
+    const closeCalls: string[] = [];
+    await expect(
+      closeBothPreservingFirstError(
+        async () => {
+          closeCalls.push("gateway");
+          throw firstCloseFailure;
+        },
+        async () => {
+          closeCalls.push("database");
+        },
+      ),
+    ).rejects.toBe(firstCloseFailure);
+    expect(closeCalls).toEqual(["gateway", "database"]);
   });
 
   it("does not bump for real key telemetry or ledger mutations", async () => {
