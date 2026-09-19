@@ -57,3 +57,7 @@ Aggregator владеет Web, gateway, model catalog, consumer/author money и 
 **AG-TON3 architecture13.09:** [verifier/recovery plan](superpowers/plans/2026-09-13-ton-verifier-and-recovery.md) принят независимым financial re-review после `4eaa44d`. Первый pure synthetic verifier реализуется отдельно; реальный provider fixture и runtime evidence ещё не приняты. Tasks1–6 максимум disabled/observe, settlement activation требует отдельного worker-only DB principal/ACL gate. TON2 source/evidence неизменны.
 
 **AG-TON3 Task1 принят13.09:** pure synthetic verifier `f46386c` + `b17603e`, independent TS/security APPROVE, focused46/types/applicable lint/boundary scans PASS. [Owner plan](superpowers/plans/2026-09-13-ton-verifier-and-recovery.md). Следующий gate — exact TON Center testnet manifest и sanitized real fixtures; real chain/provider/runtime/settlement ещё не приняты.
+
+## Latest continuation — 19 September 2026
+
+Read `docs/consolidation/2026-09-19-catalog-continuation.md` and `docs/superpowers/plans/2026-09-19-ai-hub-resume.md` before repeating catalogue work. Local consumer/134-test contract gate and4-test native smoke are verified; full native acceptance, legacy test failures, TON WIP and real AM integration remain open.
