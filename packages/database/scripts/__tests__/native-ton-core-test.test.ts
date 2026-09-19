@@ -218,6 +218,11 @@ describe("ton-core ownership protocol (recording clients, not native migration p
       first: { total: 72, applied: 72, skipped: 0 },
       rerun: { total: 72, applied: 0, skipped: 72 },
     });
+    const firstMigrations = s.migrate.mock.calls[0]![1];
+    expect(firstMigrations).toHaveLength(72);
+    expect(firstMigrations.at(-1)?.version).toBe("migrations/0072_ton_invoice_core.sql");
+    expect(firstMigrations.some((migration) => migration.version.includes("0073_"))).toBe(false);
+
     expect(s.target.closed).toBe(true);
     expect(s.canonical.closed).toBe(true);
     expect(

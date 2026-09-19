@@ -179,6 +179,16 @@ function assertInventory(migrations: NativeMigration[]) {
       throw new Error("frozen_history");
   }
 }
+function ton2MigrationInventory(discovered: NativeMigration[]): NativeMigration[] {
+  const cutoff = discovered.findIndex(
+    (migration) => migration.version === "migrations/0072_ton_invoice_core.sql",
+  );
+  if (cutoff !== 71) throw new Error("inventory");
+  const migrations = discovered.slice(0, cutoff + 1);
+  assertInventory(migrations);
+  return migrations;
+}
+
 async function verifyLedger(
   client: TestDatabaseClient,
   migrations: NativeMigration[],
@@ -283,8 +293,9 @@ export async function runCleanRehearsal(
           stage = "canonical_preflight";
           before = await canonicalSnapshot(canonical);
           stage = "inventory";
-          const migrations = await discoverNativeMigrations();
-          assertInventory(migrations);
+          const migrations = ton2MigrationInventory(
+            await discoverNativeMigrations(),
+          );
           // Prepare every migration before CREATE as well, catching adapter drift.
           migrations.forEach(prepareMigrationSql);
           stage = "create_rights";
