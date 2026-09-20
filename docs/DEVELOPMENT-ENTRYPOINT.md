@@ -2,6 +2,8 @@
 
 **Актуальный порядок20.09:** [сопоставленные планы, маршрутизация и текущий пакет](consolidation/2026-09-20-priorities-and-routing.md). Пользователь вернул в общую программу все три сервиса; первым выполняется Aggregator, затем Arena и Agents Market. Старые запреты на возобновление ниже описывают состояние13.09.
 
+**Принято20.09:** RUB/TON correction и stored embeddings lifecycle приняты локально; embeddings source `a587e88`, merge `4a5acdb`, native matrix341 совокупно + TON core58, итоговый financial/TS APPROVE. Runtime и production не включены. Следующий кодовый пакет — stored completions; точные остатки и evidence находятся в текущем checkpoint выше.
+
 **Приоритет пользователя13.09:** завершать только AI Aggregator; Arena и Agents Market отложены. [Точный текущий handoff, сохранённый WIP и границы приёмки](consolidation/2026-09-13-aggregator-only-handoff.md). Он заменяет прежний порядок работ от08.09; использовать Superpowers и независимых владельцев.
 
 **Историческая пауза и переоценка 08.09:** [срез F108](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-08-functional-checkpoint.md) сохраняет баллы и границы на момент паузы. Она заменена [актуальным handoff](/home/bob/Projects/ai-aggregator/docs/consolidation/2026-09-08-session-handoff.md): пользователь возобновил разработку; этот entrypoint фиксирует принятый TON2 baseline ниже.
