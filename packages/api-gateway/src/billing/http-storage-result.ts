@@ -6,6 +6,19 @@ type DeepReadonly<T> = T extends object
   ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
   : T;
 export type StoredHttpChatResponse = DeepReadonly<AdmittedChatResponse>;
+export type StoredHttpEmbeddingsResponse = DeepReadonly<{
+  object: "list";
+  model: string;
+  data: Array<{
+    object: "embedding";
+    index: number;
+    embedding: number[];
+  }>;
+  usage: {
+    prompt_tokens: number;
+    total_tokens: number;
+  };
+}>;
 function keys(
   value: unknown,
   expected: readonly string[],
@@ -80,4 +93,49 @@ export function parseStoredHttpChatResponse(
   )
     unavailable();
   return body as unknown as StoredHttpChatResponse;
+}
+
+/** Exact public embeddings DTO selected only from the trusted persisted route. */
+export function parseStoredHttpEmbeddingsResponse(
+  value: unknown,
+): StoredHttpEmbeddingsResponse {
+  let body: JsonObject;
+  try {
+    body = parseAdmissionJsonObject(value);
+  } catch {
+    unavailable();
+  }
+  keys(body, ["object", "model", "data", "usage"]);
+  if (
+    body.object !== "list" ||
+    typeof body.model !== "string" ||
+    !/^[A-Za-z0-9_./:@+-]{1,256}$/.test(body.model) ||
+    !Array.isArray(body.data) ||
+    body.data.length < 1 ||
+    body.data.length > 16
+  )
+    unavailable();
+  for (let index = 0; index < body.data.length; index += 1) {
+    const item = body.data[index];
+    keys(item, ["object", "index", "embedding"]);
+    if (
+      item.object !== "embedding" ||
+      count(item.index) !== index ||
+      !Array.isArray(item.embedding) ||
+      item.embedding.length !== 1536 ||
+      item.embedding.some(
+        (component) =>
+          typeof component !== "number" || !Number.isFinite(component),
+      )
+    )
+      unavailable();
+  }
+  keys(body.usage, ["prompt_tokens", "total_tokens"]);
+  const promptTokens = count(body.usage.prompt_tokens);
+  if (
+    count(body.usage.total_tokens) !== promptTokens ||
+    promptTokens > 8192 * body.data.length
+  )
+    unavailable();
+  return body as unknown as StoredHttpEmbeddingsResponse;
 }

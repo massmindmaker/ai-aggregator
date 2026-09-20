@@ -14,6 +14,11 @@ export type GatewaySettlementRecoveryStartupConfig =
       mode: "stored_chat_v1";
       httpExecutionMode: "stored_chat_only";
       databaseUrl: string;
+    }>
+  | Readonly<{
+      mode: "stored_chat_embeddings_v1";
+      httpExecutionMode: "stored_chat_embeddings";
+      databaseUrl: string;
     }>;
 
 export type GatewaySettlementRecoveryLogger = Pick<
@@ -41,7 +46,7 @@ function startupRefused(): GatewaySettlementRecoveryBoundaryError {
 export function parseGatewaySettlementRecoveryStartupConfig(
   env: Readonly<Record<string, string | undefined>>,
 ): GatewaySettlementRecoveryStartupConfig {
-  let mode: "disabled" | "stored_chat_v1";
+  let mode: "disabled" | "stored_chat_v1" | "stored_chat_embeddings_v1";
   try {
     mode = parseGatewaySettlementRecoveryMode(env.GATEWAY_SETTLEMENT_RECOVERY_MODE);
   } catch {
@@ -49,7 +54,9 @@ export function parseGatewaySettlementRecoveryStartupConfig(
   }
   if (mode === "disabled") return { mode: "disabled" };
 
-  if (env.GATEWAY_HTTP_EXECUTION_MODE !== "stored_chat_only") throw startupRefused();
+  const httpExecutionMode =
+    mode === "stored_chat_v1" ? "stored_chat_only" : "stored_chat_embeddings";
+  if (env.GATEWAY_HTTP_EXECUTION_MODE !== httpExecutionMode) throw startupRefused();
 
   let databaseUrl: string;
   try {
@@ -57,7 +64,9 @@ export function parseGatewaySettlementRecoveryStartupConfig(
   } catch {
     throw startupRefused();
   }
-  return { mode, httpExecutionMode: "stored_chat_only", databaseUrl };
+  return mode === "stored_chat_v1"
+    ? { mode, httpExecutionMode: "stored_chat_only", databaseUrl }
+    : { mode, httpExecutionMode: "stored_chat_embeddings", databaseUrl };
 }
 
 const nativeScheduler: GatewaySettlementRecoveryScheduler = {
@@ -69,9 +78,12 @@ const nativeScheduler: GatewaySettlementRecoveryScheduler = {
   },
 };
 
-async function loadGatewaySettlementRecoveryDb(databaseUrl: string): Promise<GatewaySettlementRecoveryDb> {
+async function loadGatewaySettlementRecoveryDb(
+  databaseUrl: string,
+  allowedRoutes: readonly ("chat" | "embeddings")[],
+): Promise<GatewaySettlementRecoveryDb> {
   const { createGatewaySettlementRecoveryDb } = await import("./queues/gateway-settlement-recovery-db.js");
-  return createGatewaySettlementRecoveryDb(databaseUrl);
+  return createGatewaySettlementRecoveryDb(databaseUrl, { allowedRoutes });
 }
 
 function logTick(logger: GatewaySettlementRecoveryLogger, tick: GatewaySettlementRecoveryTickResult): void {
@@ -127,7 +139,10 @@ export async function startGatewaySettlementRecoveryFromEnv(input: Readonly<{
   env: Readonly<Record<string, string | undefined>>;
   logger: GatewaySettlementRecoveryLogger;
   scheduler?: GatewaySettlementRecoveryScheduler;
-  loadDb?: (databaseUrl: string) => Promise<GatewaySettlementRecoveryDb>;
+  loadDb?: (
+    databaseUrl: string,
+    allowedRoutes: readonly ("chat" | "embeddings")[],
+  ) => Promise<GatewaySettlementRecoveryDb>;
 }>): Promise<GatewaySettlementRecoveryHandle | null> {
   const config = parseGatewaySettlementRecoveryStartupConfig(input.env);
   if (config.mode === "disabled") return null;
@@ -135,7 +150,10 @@ export async function startGatewaySettlementRecoveryFromEnv(input: Readonly<{
   let db: GatewaySettlementRecoveryDb | null = null;
   try {
     const loadDb = input.loadDb ?? loadGatewaySettlementRecoveryDb;
-    db = await loadDb(config.databaseUrl);
+    db = await loadDb(
+      config.databaseUrl,
+      config.mode === "stored_chat_v1" ? ["chat"] : ["chat", "embeddings"],
+    );
     const handle = startGatewaySettlementRecovery({
       db,
       scheduler: input.scheduler ?? nativeScheduler,

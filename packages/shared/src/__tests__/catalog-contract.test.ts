@@ -122,6 +122,47 @@ function isAvailableItem(item: CatalogItemV1): item is CatalogAvailableItemV1 {
 }
 
 describe("catalog contract v1", () => {
+  it("accepts the strict embeddings operation union without weakening chat", () => {
+    const candidate = cloneResponse();
+    const item = itemAt(candidate, 0);
+    objectAt(item, "model").type = "embedding";
+    objectAt(item, "model").slug = "openai/text-embedding-3-small";
+    objectAt(item, "deployment").contract = "stored-embeddings-v1";
+    const invocation = objectAt(item, "invocation");
+    invocation.path = "/v1/embeddings";
+    invocation.requestBody = { unknownFields: "reject" };
+    invocation.parameters = {
+      model: { required: true, const: "openai/text-embedding-3-small" },
+      input: { required: true, minItems: 1, maxItems: 16, item: "nonempty_utf8_string_max_8192_bytes" },
+      encoding_format: { required: false, const: "float", normalizedDefault: "float" },
+      dimensions: { required: false, const: 1536, normalizedDefault: 1536 },
+      aiag_mode: {
+        required: false, values: ["auto", "fastest", "cheapest", "balanced", "ru-only"],
+        availableValues: ["auto"], defaultRequested: "auto", effectiveDefault: "auto",
+        requiresExplicitAvailableValue: false,
+      },
+    };
+    item.capabilities = [{
+      id: "embeddings.stored.float.v1", inputModalities: ["text"], outputModalities: ["embedding"],
+      storedResult: true, usageReceipt: true, requestDependentRestrictions: ["pii_transborder"],
+      contextWindowTokensPerInput: 8192, maxInputs: 16, dimensions: 1536, encodingFormat: "float",
+    }];
+    const pricing = objectAt(item, "pricing");
+    pricing.actualCharge = {
+      formulaVersion: "db-input-output-cents-per-1k-legacy-whole-cache-v1",
+      cachePolicy: { scope: "none", multiplier: "1" },
+      rounding: "nearest_nonnegative_half_up_once_to_microcredit",
+    };
+    pricing.maximumAuthorization = {
+      formula: "input_rate*context*input_count", contextWindowTokens: 8192, maxInputs: 16,
+      rounding: "ceil_once_to_microcredit",
+    };
+    expect(parseCatalogResponseV1(candidate).data[0]!.model.type).toBe("embedding");
+    const wrong = structuredClone(candidate);
+    objectAt(itemAt(wrong, 0), "invocation", "parameters", "dimensions").const = 1024;
+    expect(() => parseCatalogResponseV1(wrong)).toThrow();
+  });
+
   it("pins a synthetic full page and a coherent canonical next cursor", () => {
     const parsed = parseFixture();
     expect(parsed.data).toHaveLength(parsed.page.limit);

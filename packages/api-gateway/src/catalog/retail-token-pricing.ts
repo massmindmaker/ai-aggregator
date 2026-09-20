@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import type { CatalogRetailTokenPricingV1 } from '@aiag/shared/catalog-contract';
+import type { CatalogRetailEmbeddingsPricingV1, CatalogRetailTokenPricingV1 } from '@aiag/shared/catalog-contract';
 import {
   calculateTokenCharge,
   quoteChatMaximum,
+  quoteEmbeddingMaximum,
   type TokenPrices,
 } from '../billing/token-quote';
 
@@ -23,6 +24,39 @@ function parseDecimal(value: string, positive: boolean): { digits: bigint; scale
   if (positive && digits === 0n)
     throw new RangeError('Exact pricing multiplier must be positive');
   return { digits, scale: fraction.length };
+}
+
+export function projectCatalogRetailEmbeddingsPricing(
+  prices: TokenPrices,
+): CatalogRetailEmbeddingsPricingV1 {
+  quoteEmbeddingMaximum(prices, 8192, 16);
+  calculateTokenCharge(
+    prices,
+    { promptTokens: 0, completionTokens: 0, cachedInputTokens: 0 },
+    '1',
+  );
+  const publicTerms = Object.freeze({
+    currency: 'USD' as const,
+    settlementUnit: 'microcredit' as const,
+    microcreditsPerUsdCent: '1000' as const,
+    rates: Object.freeze({
+      input: Object.freeze({ amount: normalizeProduct(prices.inputCentsPer1k, prices.markup), unit: 'microcredit_per_token' as const }),
+      output: Object.freeze({ amount: normalizeProduct(prices.outputCentsPer1k, prices.markup), unit: 'microcredit_per_token' as const }),
+    }),
+    actualCharge: Object.freeze({
+      formulaVersion: 'db-input-output-cents-per-1k-legacy-whole-cache-v1' as const,
+      cachePolicy: Object.freeze({ scope: 'none' as const, multiplier: '1' as const }),
+      rounding: 'nearest_nonnegative_half_up_once_to_microcredit' as const,
+    }),
+    maximumAuthorization: Object.freeze({
+      formula: 'input_rate*context*input_count' as const,
+      contextWindowTokens: 8192 as const,
+      maxInputs: 16 as const,
+      rounding: 'ceil_once_to_microcredit' as const,
+    }),
+    quoteSemantics: 'terms_only_quote_created_at_admission' as const,
+  });
+  return Object.freeze({ revision: revision(publicTerms), ...publicTerms });
 }
 
 function normalizeProduct(left: string, right: string): string {

@@ -24,6 +24,7 @@ import {
   parseGatewayHttpResultRows,
   type GatewayHttpIdentity,
   type GatewayHttpResult,
+  type GatewayHttpRouteKind,
 } from "./http-storage";
 
 const rejections = Object.freeze({
@@ -57,8 +58,10 @@ export type HttpTerminalRejection = Readonly<{
 export type HttpAdmissionResult =
   | Readonly<{ kind: "admitted"; admission: GatewayChargeAdmissionResult }>
   | HttpTerminalRejection;
-export type HttpResultV2 =
-  | GatewayHttpResult
+export type HttpResultV2<
+  Route extends GatewayHttpRouteKind = "chat",
+> =
+  | GatewayHttpResult<Route>
   | Readonly<{
       contractVersion: 1;
       status: "rejected";
@@ -82,10 +85,12 @@ function dataObject(value: unknown): asserts value is Record<string, unknown> {
   for (const d of Object.values(Object.getOwnPropertyDescriptors(value)))
     if (!d.enumerable || !("value" in d)) unavailable();
 }
-function identity(args: GatewayHttpIdentity): GatewayHttpIdentity {
+function identity<Route extends GatewayHttpRouteKind>(
+  args: GatewayHttpIdentity<Route>,
+): GatewayHttpIdentity<Route> {
   dataObject(args);
   if (
-    args.routeKind !== "chat" ||
+    !["chat", "embeddings"].includes(args.routeKind) ||
     args.billingMode !== "stored" ||
     args.contractVersion !== 1
   )
@@ -95,7 +100,7 @@ function identity(args: GatewayHttpIdentity): GatewayHttpIdentity {
   return Object.freeze({
     orgId: uuid(args.orgId),
     apiKeyId: uuid(args.apiKeyId),
-    routeKind: "chat",
+    routeKind: args.routeKind,
     billingMode: "stored",
     contractVersion: 1,
     idempotencyKeyDigest: args.idempotencyKeyDigest,
@@ -263,8 +268,10 @@ async function terminalQuery(
 }
 
 /** Server-only; default autocommit ACK is the grant boundary. Transaction clients must COMMIT first. */
-export async function admitGatewayHttpCharge(
-  args: GatewayHttpIdentity & AdmitGatewayChargeV2Args,
+export async function admitGatewayHttpCharge<
+  Route extends GatewayHttpRouteKind,
+>(
+  args: GatewayHttpIdentity<Route> & AdmitGatewayChargeV2Args,
   client: SqlClient = sql,
 ): Promise<HttpAdmissionResult> {
   try {
@@ -324,10 +331,12 @@ export async function rejectUnstartedGatewayHttpRequest(
     throw mapped(error);
   }
 }
-export async function readGatewayHttpResultV2(
-  args: GatewayHttpIdentity,
+export async function readGatewayHttpResultV2<
+  Route extends GatewayHttpRouteKind,
+>(
+  args: GatewayHttpIdentity<Route>,
   client: SqlClient = sql,
-): Promise<HttpResultV2> {
+): Promise<HttpResultV2<Route>> {
   try {
     const i = identity(args);
     const rows =
@@ -356,14 +365,19 @@ export async function readGatewayHttpResultV2(
     if (r.rejection_code !== null) unavailable();
     const old = { ...r };
     delete old.rejection_code;
-    return parseGatewayHttpResultRows([old]);
+    return parseGatewayHttpResultRows([old], i.routeKind);
   } catch (error) {
     throw mapped(error);
   }
 }
 /** Trusted owner accounting; key may be revoked. Never an execution/resume factory. */
 export async function recoverGatewayHttpSettlement(
-  args: Readonly<{ orgId: string; apiKeyId: string; billingRequestId: string }>,
+  args: Readonly<{
+    orgId: string;
+    apiKeyId: string;
+    billingRequestId: string;
+    routeKind?: GatewayHttpRouteKind;
+  }>,
   client: SqlClient = sql,
 ): Promise<GatewayChargeAdmissionResult> {
   try {
@@ -380,7 +394,8 @@ export async function recoverGatewayHttpSettlement(
       a.apiKeyId !== apiKeyId ||
       a.billingRequestId !== billingRequestId ||
       a.state !== "settled" ||
-      a.routeKind !== "chat" ||
+      !["chat", "embeddings"].includes(a.routeKind) ||
+      (args.routeKind !== undefined && a.routeKind !== args.routeKind) ||
       a.billingMode !== "stored" ||
       a.outcomeKind !== "success"
     )

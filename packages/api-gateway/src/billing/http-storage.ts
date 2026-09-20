@@ -17,7 +17,9 @@ import {
 } from "./admission-internal";
 import {
   parseStoredHttpChatResponse,
+  parseStoredHttpEmbeddingsResponse,
   type StoredHttpChatResponse,
+  type StoredHttpEmbeddingsResponse,
 } from "./http-storage-result";
 
 export class HttpStorageUnavailableError extends AiagError {
@@ -35,18 +37,29 @@ export class HttpStorageAccessError extends AiagError {
     super("HTTP_STORAGE_ACCESS_DENIED", 403, "HTTP storage access denied");
   }
 }
-export type GatewayHttpIdentity = Readonly<{
+export type GatewayHttpRouteKind = "chat" | "embeddings";
+export type GatewayHttpIdentity<
+  Route extends GatewayHttpRouteKind = GatewayHttpRouteKind,
+> = Readonly<{
   orgId: string;
   apiKeyId: string;
-  routeKind: "chat";
+  routeKind: Route;
   billingMode: "stored";
   contractVersion: 1;
   idempotencyKeyDigest: string;
   requestFingerprint: string;
 }>;
-export type GatewayHttpClaim = GatewayHttpIdentity &
+export type GatewayHttpClaim<
+  Route extends GatewayHttpRouteKind = GatewayHttpRouteKind,
+> = GatewayHttpIdentity<Route> &
   Readonly<{ billingRequestId: string; createdAt: string; didClaim: boolean }>;
-export type GatewayHttpResult =
+type StoredHttpResponseByRoute = Readonly<{
+  chat: StoredHttpChatResponse;
+  embeddings: StoredHttpEmbeddingsResponse;
+}>;
+export type GatewayHttpResult<
+  Route extends GatewayHttpRouteKind = "chat",
+> =
   | Readonly<{ contractVersion: 1; status: "not_found" }>
   | Readonly<{
       contractVersion: 1;
@@ -66,18 +79,20 @@ export type GatewayHttpResult =
       billingRequestId: string;
       httpStatus: 200;
       contentType: "application/json";
-      response: StoredHttpChatResponse;
+      response: StoredHttpResponseByRoute[Route];
       actualCostCredits: bigint;
       storedAt: string;
       expiresAt: string;
     }>;
-export type RecordGatewayHttpOutcomeArgs = Omit<
+export type RecordGatewayHttpOutcomeArgs<
+  Route extends GatewayHttpRouteKind = "chat",
+> = Omit<
   RecordGatewayChargeOutcomeArgs,
   "outcomeKind"
 > &
   Readonly<{
     outcomeKind: "success";
-    response: StoredHttpChatResponse;
+    response: StoredHttpResponseByRoute[Route];
     idempotencyKeyDigest: string;
     requestFingerprint: string;
   }>;
@@ -99,10 +114,12 @@ function dataObject(value: unknown): void {
     if (!d.enumerable || !("value" in d)) unavailable();
   }
 }
-function identity(args: GatewayHttpIdentity): GatewayHttpIdentity {
+function identity<Route extends GatewayHttpRouteKind>(
+  args: GatewayHttpIdentity<Route>,
+): GatewayHttpIdentity<Route> {
   dataObject(args);
   if (
-    args.routeKind !== "chat" ||
+    !["chat", "embeddings"].includes(args.routeKind) ||
     args.billingMode !== "stored" ||
     args.contractVersion !== 1
   )
@@ -110,7 +127,7 @@ function identity(args: GatewayHttpIdentity): GatewayHttpIdentity {
   return Object.freeze({
     orgId: uuid(args.orgId),
     apiKeyId: uuid(args.apiKeyId),
-    routeKind: "chat",
+    routeKind: args.routeKind,
     billingMode: "stored",
     contractVersion: 1,
     idempotencyKeyDigest: hash(args.idempotencyKeyDigest),
@@ -163,10 +180,12 @@ function mapped(error: unknown): AiagError {
  * Injected clients are trusted: a transaction claim must COMMIT before a caller grants execution.
  * UUID scope is not authentication; a future credential boundary must supply it. No provider is executed here.
  */
-export async function claimGatewayHttpRequest(
-  args: GatewayHttpIdentity & Readonly<{ billingRequestId: string }>,
+export async function claimGatewayHttpRequest<
+  Route extends GatewayHttpRouteKind,
+>(
+  args: GatewayHttpIdentity<Route> & Readonly<{ billingRequestId: string }>,
   client: SqlClient = sql,
-): Promise<GatewayHttpClaim> {
+): Promise<GatewayHttpClaim<Route>> {
   try {
     const i = identity(args),
       billingRequestId = uuid(args.billingRequestId);
@@ -212,10 +231,12 @@ export async function claimGatewayHttpRequest(
   }
 }
 /** Reads durable facts without re-quoting or re-evaluating model/policy limits. */
-export async function readGatewayHttpResult(
-  args: GatewayHttpIdentity,
+export async function readGatewayHttpResult<
+  Route extends GatewayHttpRouteKind,
+>(
+  args: GatewayHttpIdentity<Route>,
   client: SqlClient = sql,
-): Promise<GatewayHttpResult> {
+): Promise<GatewayHttpResult<Route>> {
   try {
     const i = identity(args);
     const rows =
@@ -225,13 +246,23 @@ export async function readGatewayHttpResult(
       to_char(r.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at
       FROM aiag_read_gateway_http_result_v1(${i.orgId}::uuid, ${i.apiKeyId}::uuid, ${i.routeKind}::varchar,
       ${i.billingMode}::varchar, ${i.idempotencyKeyDigest}::text, ${i.requestFingerprint}::text, ${i.contractVersion}::smallint) r`;
-    return parseGatewayHttpResultRows(rows);
+    return parseGatewayHttpResultRows(rows, i.routeKind);
   } catch (error) {
     throw mapped(error);
   }
 }
 /** Strict v1 projection parser shared by the additive v2 reader. */
-export function parseGatewayHttpResultRows(rows: unknown): GatewayHttpResult {
+export function parseGatewayHttpResultRows(
+  rows: unknown,
+): GatewayHttpResult<"chat">;
+export function parseGatewayHttpResultRows<Route extends GatewayHttpRouteKind>(
+  rows: unknown,
+  expectedRoute: Route,
+): GatewayHttpResult<Route>;
+export function parseGatewayHttpResultRows(
+  rows: unknown,
+  expectedRoute: GatewayHttpRouteKind = "chat",
+): GatewayHttpResult<GatewayHttpRouteKind> {
     const r = row(rows, [
       "contract_version",
       "status",
@@ -302,14 +333,19 @@ export function parseGatewayHttpResultRows(rows: unknown): GatewayHttpResult {
       billingRequestId,
       httpStatus: 200,
       contentType: "application/json",
-      response: parseStoredHttpChatResponse(r.response_body),
+      response:
+        expectedRoute === "chat"
+          ? parseStoredHttpChatResponse(r.response_body)
+          : parseStoredHttpEmbeddingsResponse(r.response_body),
       actualCostCredits: parseAdmissionBigint(r.actual_cost_credits),
       storedAt,
       expiresAt,
     });
 }
-export async function recordGatewayHttpOutcome(
-  args: RecordGatewayHttpOutcomeArgs,
+export async function recordGatewayHttpOutcome<
+  Route extends GatewayHttpRouteKind,
+>(
+  args: RecordGatewayHttpOutcomeArgs<Route>,
   client: SqlClient = sql,
 ): Promise<GatewayChargeAdmissionResult> {
   try {
@@ -317,14 +353,17 @@ export async function recordGatewayHttpOutcome(
     const captured = captureGatewayOutcome(args);
     const { before, actualCostCredits, usageSnapshot, outcomeKind } = captured;
     if (
-      before.routeKind !== "chat" ||
+      !["chat", "embeddings"].includes(before.routeKind) ||
       before.billingMode !== "stored" ||
       outcomeKind !== "success"
     )
       unavailable();
     const digest = hash(args.idempotencyKeyDigest),
       fingerprint = hash(args.requestFingerprint);
-    const response = parseStoredHttpChatResponse(args.response);
+    const response =
+      before.routeKind === "chat"
+        ? parseStoredHttpChatResponse(args.response)
+        : parseStoredHttpEmbeddingsResponse(args.response);
     const call = client<
       postgres.Row[]
     >`SELECT * FROM aiag_record_gateway_http_outcome_v1(

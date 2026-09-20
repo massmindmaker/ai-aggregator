@@ -8,6 +8,7 @@ import {
   type GatewaySettlementRecoveryDb,
   type GatewaySettlementRecoveryHint,
   type GatewaySettlementRecoveryPosition,
+  type GatewaySettlementRecoveryRoute,
   type GatewaySettlementRecoverySelectorPage,
 } from "./gateway-settlement-recovery.js";
 
@@ -37,14 +38,14 @@ CROSS JOIN LATERAL (
    AND quota.billing_request_id = admission.billing_request_id
   WHERE admission.state = 'outcome_recorded'
     AND admission.outcome_kind = 'success'
-    AND admission.route_kind = 'chat'
+    AND admission.route_kind = ANY($1::varchar[])
     AND admission.billing_mode = 'stored'
     AND admission.reconcile_after IS NOT NULL
     AND admission.reconcile_after <= cutoff.cycle_due_before
     AND admission.outcome_recorded_at IS NOT NULL
     AND admission.outcome_recorded_at <= cutoff.cycle_due_before
     AND request.contract_version = 1
-    AND request.route_kind = 'chat'
+    AND request.route_kind = admission.route_kind
     AND request.billing_mode = 'stored'
     AND http_result.contract_version = 1
     AND http_result.http_status = 200
@@ -83,14 +84,14 @@ JOIN gateway_charge_quota_contexts AS quota
  AND quota.billing_request_id = admission.billing_request_id
 WHERE admission.state = 'outcome_recorded'
   AND admission.outcome_kind = 'success'
-  AND admission.route_kind = 'chat'
+  AND admission.route_kind = ANY($1::varchar[])
   AND admission.billing_mode = 'stored'
   AND admission.reconcile_after IS NOT NULL
-  AND admission.reconcile_after <= $1::timestamptz
+  AND admission.reconcile_after <= $2::timestamptz
   AND admission.outcome_recorded_at IS NOT NULL
-  AND admission.outcome_recorded_at <= $1::timestamptz
+  AND admission.outcome_recorded_at <= $2::timestamptz
   AND request.contract_version = 1
-  AND request.route_kind = 'chat'
+  AND request.route_kind = admission.route_kind
   AND request.billing_mode = 'stored'
   AND http_result.contract_version = 1
   AND http_result.http_status = 200
@@ -104,17 +105,17 @@ WHERE admission.state = 'outcome_recorded'
       AND rejection.billing_request_id = admission.billing_request_id
   )
   AND (
-    $2::timestamptz IS NULL
+    $3::timestamptz IS NULL
     OR (
-      $3::uuid IS NOT NULL
+      $4::uuid IS NOT NULL
       AND (admission.reconcile_after, admission.billing_request_id)
-        > ($2::timestamptz, $3::uuid)
+        > ($3::timestamptz, $4::uuid)
     )
   )
   AND (admission.reconcile_after, admission.billing_request_id)
-    <= ($4::timestamptz, $5::uuid)
+    <= ($5::timestamptz, $6::uuid)
 ORDER BY admission.reconcile_after ASC, admission.billing_request_id ASC
-LIMIT $6::integer;
+LIMIT $7::integer;
 `;
 
 export const RECOVER_GATEWAY_HTTP_SETTLEMENT_SQL = `
@@ -225,14 +226,27 @@ function parseAcknowledgement(result: QueryResult<Record<string, unknown>>): Gat
   const apiKeyId = canonicalUuid(row.api_key_id);
   const billingRequestId = canonicalUuid(row.billing_request_id);
   if (orgId === null || apiKeyId === null || billingRequestId === null || row.state !== "settled"
-    || row.route_kind !== "chat" || row.billing_mode !== "stored" || row.outcome_kind !== "success") {
+    || (row.route_kind !== "chat" && row.route_kind !== "embeddings")
+    || row.billing_mode !== "stored" || row.outcome_kind !== "success") {
     throw new Error("invalid gateway settlement recovery acknowledgement");
   }
-  return { orgId, apiKeyId, billingRequestId, state: "settled", routeKind: "chat", billingMode: "stored", outcomeKind: "success" };
+  return { orgId, apiKeyId, billingRequestId, state: "settled", routeKind: row.route_kind, billingMode: "stored", outcomeKind: "success" };
 }
 
-export function createGatewaySettlementRecoveryDb(databaseUrl: string): GatewaySettlementRecoveryDb {
+export function createGatewaySettlementRecoveryDb(
+  databaseUrl: string,
+  options: Readonly<{ allowedRoutes?: readonly GatewaySettlementRecoveryRoute[] }> = {},
+): GatewaySettlementRecoveryDb {
   parseGatewaySettlementRecoveryDatabaseUrl(databaseUrl);
+  const allowedRoutes = [...(options.allowedRoutes ?? ["chat"])] as GatewaySettlementRecoveryRoute[];
+  if (
+    allowedRoutes.length < 1 ||
+    allowedRoutes.length > 2 ||
+    allowedRoutes.some((route) => route !== "chat" && route !== "embeddings") ||
+    new Set(allowedRoutes).size !== allowedRoutes.length
+  ) {
+    throw new Error("invalid gateway settlement recovery routes");
+  }
   const pool = new Pool({
     connectionString: databaseUrl,
     max: 1,
@@ -259,10 +273,11 @@ export function createGatewaySettlementRecoveryDb(databaseUrl: string): GatewayS
 
   return {
     captureCycle() {
-      return query(CAPTURE_GATEWAY_SETTLEMENT_RECOVERY_CYCLE_SQL, [], parseCapture);
+      return query(CAPTURE_GATEWAY_SETTLEMENT_RECOVERY_CYCLE_SQL, [allowedRoutes], parseCapture);
     },
     selectPage(input) {
       return query(SELECT_GATEWAY_SETTLEMENT_RECOVERY_PAGE_SQL, [
+        allowedRoutes,
         input.cycleDueBefore,
         input.after?.reconcileAt ?? null,
         input.after?.billingRequestId ?? null,

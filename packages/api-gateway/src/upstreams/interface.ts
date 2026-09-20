@@ -1,4 +1,5 @@
 import type { ReviewedChatProfile } from '../billing/reviewed-token-profiles';
+import type { ReviewedEmbeddingProfile } from '../billing/reviewed-embedding-profiles';
 
 /**
  * Upstream adapter interface (abstract). Plan 05 implements concrete
@@ -125,8 +126,36 @@ export type AdmittedChatMechanics = Readonly<{
   execute(req: AdmittedChatRequest): Promise<Readonly<{ response: AdmittedChatResponse; usage: AdmittedChatUsage }>>;
 }>;
 
+/**
+ * Stored embeddings trusted seam. `input` is the already-normalized ordered
+ * list; no BYOK key is admitted. The public DTO never carries a provider id —
+ * the adapter sanitizes it into trusted usage as `providerResponseId`.
+ */
+export type AdmittedEmbeddingsRequest = Readonly<{
+  modelId: string;
+  input: readonly string[];
+  endpointPolicy: ReviewedEmbeddingProfile['endpointPolicy'];
+  egressProxyUrl?: string | undefined;
+}>;
+export type AdmittedEmbeddingsResponse = Readonly<{
+  object: 'list';
+  model: string;
+  data: ReadonlyArray<Readonly<{ object: 'embedding'; index: number; embedding: readonly number[] }>>;
+  usage: Readonly<{ prompt_tokens: number; total_tokens: number }>;
+}>;
+export type AdmittedEmbeddingsUsage = Readonly<{
+  promptTokens: number;
+  totalTokens: number;
+  providerResponseId: string | null;
+}>;
+export type AdmittedEmbeddingsMechanics = Readonly<{
+  contract: ReviewedEmbeddingProfile['adapterContract'];
+  execute(req: AdmittedEmbeddingsRequest): Promise<Readonly<{ response: AdmittedEmbeddingsResponse; usage: AdmittedEmbeddingsUsage }>>;
+}>;
+
 export interface UpstreamAdapter {
   readonly admittedChat?: AdmittedChatMechanics;
+  readonly admittedEmbeddings?: AdmittedEmbeddingsMechanics;
   chat(req: ChatRequest): Promise<ChatResponse>;
   chatStream?(req: ChatRequest): AsyncIterable<unknown>;
   embeddings?(req: EmbeddingsRequest): Promise<EmbeddingsResponse>;

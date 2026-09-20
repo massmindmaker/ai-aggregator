@@ -149,14 +149,14 @@ describe("gateway settlement recovery SQL contract", () => {
          AND quota.billing_request_id = admission.billing_request_id
         WHERE admission.state = 'outcome_recorded'
           AND admission.outcome_kind = 'success'
-          AND admission.route_kind = 'chat'
+          AND admission.route_kind = ANY($1::varchar[])
           AND admission.billing_mode = 'stored'
           AND admission.reconcile_after IS NOT NULL
           AND admission.reconcile_after <= cutoff.cycle_due_before
           AND admission.outcome_recorded_at IS NOT NULL
           AND admission.outcome_recorded_at <= cutoff.cycle_due_before
           AND request.contract_version = 1
-          AND request.route_kind = 'chat'
+          AND request.route_kind = admission.route_kind
           AND request.billing_mode = 'stored'
           AND http_result.contract_version = 1
           AND http_result.http_status = 200
@@ -197,14 +197,14 @@ describe("gateway settlement recovery SQL contract", () => {
        AND quota.billing_request_id = admission.billing_request_id
       WHERE admission.state = 'outcome_recorded'
         AND admission.outcome_kind = 'success'
-        AND admission.route_kind = 'chat'
+        AND admission.route_kind = ANY($1::varchar[])
         AND admission.billing_mode = 'stored'
         AND admission.reconcile_after IS NOT NULL
-        AND admission.reconcile_after <= $1::timestamptz
+        AND admission.reconcile_after <= $2::timestamptz
         AND admission.outcome_recorded_at IS NOT NULL
-        AND admission.outcome_recorded_at <= $1::timestamptz
+        AND admission.outcome_recorded_at <= $2::timestamptz
         AND request.contract_version = 1
-        AND request.route_kind = 'chat'
+        AND request.route_kind = admission.route_kind
         AND request.billing_mode = 'stored'
         AND http_result.contract_version = 1
         AND http_result.http_status = 200
@@ -218,17 +218,17 @@ describe("gateway settlement recovery SQL contract", () => {
             AND rejection.billing_request_id = admission.billing_request_id
         )
         AND (
-          $2::timestamptz IS NULL
+          $3::timestamptz IS NULL
           OR (
-            $3::uuid IS NOT NULL
+            $4::uuid IS NOT NULL
             AND (admission.reconcile_after, admission.billing_request_id)
-              > ($2::timestamptz, $3::uuid)
+              > ($3::timestamptz, $4::uuid)
           )
         )
         AND (admission.reconcile_after, admission.billing_request_id)
-          <= ($4::timestamptz, $5::uuid)
+          <= ($5::timestamptz, $6::uuid)
       ORDER BY admission.reconcile_after ASC, admission.billing_request_id ASC
-      LIMIT $6::integer;
+      LIMIT $7::integer;
     `));
   });
 
@@ -267,7 +267,7 @@ describe("gateway settlement recovery row adapters", () => {
     });
     expect(pool().query).toHaveBeenLastCalledWith({
       text: CAPTURE_GATEWAY_SETTLEMENT_RECOVERY_CYCLE_SQL,
-      values: [],
+      values: [["chat"]],
     });
     expect(pool().connect).not.toHaveBeenCalled();
     await db.close();
@@ -303,7 +303,7 @@ describe("gateway settlement recovery row adapters", () => {
     })).resolves.toEqual({ hints: [{ orgId, apiKeyId, billingRequestId, reconcileAt: timestamp }] });
     expect(pool().query).toHaveBeenLastCalledWith({
       text: SELECT_GATEWAY_SETTLEMENT_RECOVERY_PAGE_SQL,
-      values: [cutoff, timestamp, billingRequestId, cutoff, billingRequestId, 20],
+      values: [["chat"], cutoff, timestamp, billingRequestId, cutoff, billingRequestId, 20],
     });
     await db.close();
   });
@@ -319,7 +319,7 @@ describe("gateway settlement recovery row adapters", () => {
     });
     expect(pool().query).toHaveBeenLastCalledWith({
       text: SELECT_GATEWAY_SETTLEMENT_RECOVERY_PAGE_SQL,
-      values: [cutoff, null, null, timestamp, billingRequestId, 20],
+      values: [["chat"], cutoff, null, null, timestamp, billingRequestId, 20],
     });
     const valid = { org_id: orgId, api_key_id: apiKeyId, billing_request_id: billingRequestId, reconcile_at: timestamp };
     for (const nativeResult of [
@@ -369,6 +369,31 @@ describe("gateway settlement recovery row adapters", () => {
         .rejects.toThrow("invalid gateway settlement recovery acknowledgement");
     }
     expect(pool().connect).not.toHaveBeenCalled();
+    await db.close();
+  });
+
+  it("uses explicit combined route filters and accepts an embeddings settlement ACK", async () => {
+    const db = createGatewaySettlementRecoveryDb(databaseUrl, {
+      allowedRoutes: ["chat", "embeddings"],
+    });
+    pgMock.queryImplementation = async () => result([]);
+    await db.captureCycle();
+    expect(pool().query).toHaveBeenLastCalledWith({
+      text: CAPTURE_GATEWAY_SETTLEMENT_RECOVERY_CYCLE_SQL,
+      values: [["chat", "embeddings"]],
+    });
+    pgMock.queryImplementation = async () => result([{
+      org_id: orgId,
+      api_key_id: apiKeyId,
+      billing_request_id: billingRequestId,
+      state: "settled",
+      route_kind: "embeddings",
+      billing_mode: "stored",
+      outcome_kind: "success",
+    }]);
+    await expect(
+      db.recover({ orgId, apiKeyId, billingRequestId, reconcileAt: timestamp }),
+    ).resolves.toMatchObject({ routeKind: "embeddings" });
     await db.close();
   });
 });

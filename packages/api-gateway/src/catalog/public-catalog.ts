@@ -5,6 +5,7 @@ import {
   catalogModes,
   encodeCatalogCursor,
   type CatalogAvailableItemV1,
+  type CatalogAvailableEmbeddingsItemV1,
   type CatalogCursorV1,
   type CatalogItemV1,
   type CatalogMode,
@@ -26,11 +27,15 @@ import type { ResolvedModel } from '../routing/resolver';
 import { getUpstream } from '../upstreams/registry';
 import type { UpstreamAdapter } from '../upstreams/interface';
 import { projectCatalogRetailTokenPricing } from './retail-token-pricing';
+import { projectCatalogRetailEmbeddingsPricing } from './retail-token-pricing';
+import { findReviewedEmbeddingProfile, reviewedEmbeddingProfiles } from '../billing/reviewed-embedding-profiles';
+import { prepareStoredEmbeddingQuote } from '../billing/embedding-candidate-quote';
+import { STORED_EMBEDDINGS_REQUEST_BODY_LIMIT_BYTES } from '../billing/stored-embeddings-http-contract';
 
 export const CATALOG_MAX_CANDIDATES_PER_MODEL = 16;
 export const CATALOG_MAX_CANDIDATES_PER_PAGE = 512;
 
-type ExecutionMode = 'legacy' | 'stored_chat_only';
+type ExecutionMode = 'legacy' | 'stored_chat_only' | 'stored_chat_embeddings';
 type MechanicsReadiness = Readonly<{
   profileId: string;
   profileRevision: number;
@@ -96,7 +101,8 @@ function positiveSafe(value: unknown): value is number {
 }
 
 function configuredMechanics(adapter: UpstreamAdapter, contract: string): boolean {
-  return adapter.admittedChat?.contract === contract && typeof adapter.admittedChat.execute === 'function';
+  return (adapter.admittedChat?.contract === contract && typeof adapter.admittedChat.execute === 'function') ||
+    (adapter.admittedEmbeddings?.contract === contract && typeof adapter.admittedEmbeddings.execute === 'function');
 }
 
 /** Captures every mutable process input once and retains no adapter or credential. */
@@ -113,7 +119,7 @@ export function capturePublicCatalogRuntime(source: Readonly<{
   const forceMock = source.forceMock ?? process.env.AIAG_FORCE_MOCK === '1';
   const resolveAdapter = source.getAdapter ?? getUpstream;
   if (
-    (executionMode !== 'legacy' && executionMode !== 'stored_chat_only') ||
+    !['legacy', 'stored_chat_only', 'stored_chat_embeddings'].includes(executionMode) ||
     !positiveSafe(configuredDefaultMaxOutputTokens)
   )
     throw new PublicCatalogError('catalog_unavailable');
@@ -125,7 +131,10 @@ export function capturePublicCatalogRuntime(source: Readonly<{
   );
 
   const mechanics = Object.freeze(
-    [...reviewedChatProfiles]
+    [
+      ...reviewedChatProfiles,
+      ...(executionMode === 'stored_chat_embeddings' ? reviewedEmbeddingProfiles : []),
+    ]
       .sort((a, b) => a.profileId.localeCompare(b.profileId))
       .map((profile) => {
         let configured = false;
@@ -347,13 +356,21 @@ function unavailable(model: ValidModel, reason: CatalogUnavailableReason): Catal
 function mechanicsAdapter(runtime: CatalogRuntimeCapture, profileId: string): UpstreamAdapter {
   const readiness = runtime.mechanics.find((item) => item.profileId === profileId);
   if (!readiness?.configured) return Object.freeze({ chat: async () => { throw new Error('unreachable'); } });
-  return Object.freeze({
+  const base: UpstreamAdapter = {
+    ...(readiness.adapterContract === 'openrouter-pinned-provider-embeddings-v1' ? {
+      admittedEmbeddings: Object.freeze({
+        contract: 'openrouter-pinned-provider-embeddings-v1' as const,
+        execute: async () => { throw new Error('unreachable'); },
+      }),
+    } : {
     admittedChat: Object.freeze({
       contract: readiness.adapterContract as 'openrouter-pinned-provider-chat-v1',
       execute: async () => { throw new Error('unreachable'); },
     }),
+    }),
     chat: async () => { throw new Error('unreachable'); },
-  });
+  };
+  return Object.freeze(base);
 }
 
 function configurationRevision(args: Readonly<{
@@ -375,6 +392,106 @@ function configurationRevision(args: Readonly<{
   });
 }
 
+function projectEmbeddingModel(
+  model: ValidModel,
+  rawCandidates: readonly CatalogCandidateRow[],
+  runtime: CatalogRuntimeCapture,
+  normalized: ReturnType<typeof normalizeStoredChatFreshPolicy>,
+): CatalogItemV1 {
+  if (runtime.executionMode !== 'stored_chat_embeddings')
+    return unavailable(model, 'runtime_contract_unavailable');
+  const candidates = rawCandidates.map(validateCandidate).filter((candidate): candidate is ValidCandidate => candidate !== null);
+  const reviewed = candidates.map((candidate) => ({
+    candidate,
+    profile: findReviewedEmbeddingProfile({
+      modelSlug: model.slug, modelType: 'embedding', upstreamId: candidate.adapterKey,
+      upstreamModelId: candidate.upstreamModelId, adapterKey: candidate.adapterKey,
+    }),
+  })).filter((entry): entry is { candidate: ValidCandidate; profile: NonNullable<typeof entry.profile> } => entry.profile !== null);
+  if (!reviewed.length) return unavailable(model, 'no_admitted_deployment');
+  const configured = reviewed.filter(({ profile }) => runtime.mechanics.some(
+    (item) => item.profileId === profile.profileId && item.configured,
+  ));
+  if (!configured.length) return unavailable(model, 'service_configuration_unavailable');
+
+  const resolved: ResolvedModel = {
+    slug: model.slug,
+    type: 'embedding',
+    candidates: configured.map(({ candidate }) => ({
+      id: candidate.adapterKey, upstream_id: candidate.adapterKey,
+      upstream_model_id: candidate.upstreamModelId, provider: candidate.provider,
+      ru_residency: candidate.ruResidency,
+      price_per_1k_input: Number(candidate.prices.inputCentsPer1k),
+      price_per_1k_output: Number(candidate.prices.outputCentsPer1k),
+      markup: Number(candidate.prices.markup), latency_p50_ms: candidate.latency,
+      uptime: candidate.uptime, egress_proxy: candidate.egressProxy, priority: candidate.priority,
+      billing: { modelUpstreamId: candidate.deploymentId, prices: candidate.prices },
+    })),
+  };
+  const ready: Array<{ mode: CatalogMode; quote: Extract<ReturnType<typeof prepareStoredEmbeddingQuote>, { status: 'ready' }> }> = [];
+  for (const mode of catalogModes) {
+    const quote = prepareStoredEmbeddingQuote({
+      model: resolved, requestedMode: mode, policy: normalized.policy, inputCount: 16,
+      getAdapter: (adapterKey) => {
+        const profile = configured.find((entry) => entry.candidate.adapterKey === adapterKey)?.profile;
+        return mechanicsAdapter(runtime, profile?.profileId ?? '');
+      },
+    });
+    if (quote.status === 'ready') ready.push({ mode, quote });
+  }
+  if (!ready.length) return unavailable(model, 'no_admitted_deployment');
+  const deploymentIds = new Set(ready.map(({ quote }) => quote.candidates[0].billing.modelUpstreamId));
+  if (deploymentIds.size !== 1) return unavailable(model, 'runtime_contract_unavailable');
+  const selected = configured.find((entry) => entry.candidate.deploymentId === [...deploymentIds][0])!;
+  let pricing: CatalogAvailableEmbeddingsItemV1['pricing'];
+  try { pricing = projectCatalogRetailEmbeddingsPricing(selected.candidate.prices); }
+  catch { return unavailable(model, 'retail_pricing_unavailable'); }
+  const availableValues = Object.freeze(ready.map(({ mode }) => mode));
+  const defaultRequested = normalized.policy.default_mode ?? 'auto';
+  const effectiveDefault = normalized.policy.forbid_non_ru ? 'ru-only' : defaultRequested;
+  const invocation: CatalogAvailableEmbeddingsItemV1['invocation'] = Object.freeze({
+    method: 'POST', path: '/v1/embeddings', authorization: 'bearer_api_key', contentType: 'application/json',
+    maxBodyBytes: STORED_EMBEDDINGS_REQUEST_BODY_LIMIT_BYTES,
+    requestBody: Object.freeze({ unknownFields: 'reject' }),
+    headers: Object.freeze({
+      idempotencyKey: Object.freeze({ name: 'Idempotency-Key', required: true, pattern: '^[A-Za-z0-9._:-]{1,128}$' }),
+      sessionId: Object.freeze({ name: 'X-AIAG-Session-Id', required: false, pattern: '^[A-Za-z0-9._:-]{1,128}$' }),
+      upstreamKey: Object.freeze({ name: 'X-Upstream-Key', allowed: false, rejection: 'UNSUPPORTED_EXECUTION_CONTRACT' }),
+    }),
+    parameters: Object.freeze({
+      model: Object.freeze({ required: true, const: model.slug }),
+      input: Object.freeze({ required: true, minItems: 1, maxItems: 16, item: 'nonempty_utf8_string_max_8192_bytes' }),
+      encoding_format: Object.freeze({ required: false, const: 'float', normalizedDefault: 'float' }),
+      dimensions: Object.freeze({ required: false, const: 1536, normalizedDefault: 1536 }),
+      aiag_mode: Object.freeze({
+        required: false, values: catalogModes, availableValues, defaultRequested, effectiveDefault,
+        requiresExplicitAvailableValue: !availableValues.includes(effectiveDefault),
+      }),
+    }),
+  });
+  const configurationRevisionValue = digest({
+    schemaVersion: 1, model: [model.id, model.slug, model.type], deploymentId: selected.candidate.deploymentId,
+    binding: [selected.candidate.adapterKey, selected.candidate.upstreamModelId, selected.candidate.provider],
+    executionConfiguration: [selected.candidate.ruResidency, selected.candidate.priority, selected.candidate.egressProxy !== null],
+    profile: [selected.profile.profileId, selected.profile.revision, selected.profile.adapterContract],
+    invocation: [STORED_EMBEDDINGS_REQUEST_BODY_LIMIT_BYTES, 8192, 16, 1536, 'float'],
+    runtime: [runtime.executionMode, true],
+  });
+  return Object.freeze({
+    object: 'catalog.model', model: modelIdentity(model),
+    availability: Object.freeze({ state: 'available', scope: 'advertised_contract', reason: null, liveUpstreamHealthChecked: false }),
+    deployment: Object.freeze({ id: selected.candidate.deploymentId, configurationRevision: configurationRevisionValue, contract: 'stored-embeddings-v1' }),
+    invocation,
+    capabilities: Object.freeze([Object.freeze({
+      id: 'embeddings.stored.float.v1', inputModalities: Object.freeze(['text'] as const),
+      outputModalities: Object.freeze(['embedding'] as const), storedResult: true, usageReceipt: true,
+      requestDependentRestrictions: Object.freeze(['pii_transborder'] as const), contextWindowTokensPerInput: 8192,
+      maxInputs: 16, dimensions: 1536, encodingFormat: 'float',
+    })] as const),
+    pricing,
+  });
+}
+
 function projectModel(
   model: ValidModel,
   rawCandidates: readonly CatalogCandidateRow[],
@@ -382,9 +499,10 @@ function projectModel(
   normalized: ReturnType<typeof normalizeStoredChatFreshPolicy>,
 ): CatalogItemV1 {
   if (model.status === 'frozen') return unavailable(model, 'model_frozen');
-  if (runtime.executionMode !== 'stored_chat_only') return unavailable(model, 'runtime_contract_unavailable');
   if (normalized.whitelist.length && !normalized.whitelist.includes(model.slug))
     return unavailable(model, 'key_policy_excludes_model');
+  if (model.type === 'embedding') return projectEmbeddingModel(model, rawCandidates, runtime, normalized);
+  if (runtime.executionMode === 'legacy') return unavailable(model, 'runtime_contract_unavailable');
   if (model.type !== 'chat') return unavailable(model, 'no_admitted_deployment');
 
   const candidates = rawCandidates.map(validateCandidate).filter((candidate): candidate is ValidCandidate => candidate !== null);

@@ -30,6 +30,13 @@ const adapter = (): UpstreamAdapter => ({
   },
   chat: async () => { throw new Error('must not execute'); },
 });
+const combinedAdapter = (): UpstreamAdapter => ({
+  ...adapter(),
+  admittedEmbeddings: {
+    contract: 'openrouter-pinned-provider-embeddings-v1',
+    execute: async () => { throw new Error('must not execute'); },
+  },
+});
 
 const runtime = (overrides: Parameters<typeof capturePublicCatalogRuntime>[0] = {}) =>
   capturePublicCatalogRuntime({
@@ -108,6 +115,39 @@ function assertAvailable(item: CatalogItemV1): asserts item is CatalogAvailableI
 }
 
 describe('public catalog projector', () => {
+  it('advertises the reviewed embeddings operation only in explicit combined mode', async () => {
+    const embeddingModel = model({ type: 'embedding', slug: 'openai/text-embedding-3-small' });
+    const embeddingCandidate = candidate({
+      upstream_model_id: 'openai/text-embedding-3-small',
+      price_per_1k_input: '0.002', price_per_1k_output: '0', markup: '1.25',
+    });
+    const combined = runtime({ executionMode: 'stored_chat_embeddings', getAdapter: () => combinedAdapter() });
+    const response = parseCatalogResponseV1(await read({
+      runtime: combined,
+      transaction: runner({ models: [embeddingModel], candidates: [embeddingCandidate] }),
+    }));
+    const item = response.data[0]!;
+    expect(item.availability.state).toBe('available');
+    if (
+      item.availability.state !== 'available' ||
+      item.invocation === null ||
+      item.pricing === null ||
+      item.invocation.path !== '/v1/embeddings'
+    )
+      throw new Error('expected embeddings operation');
+    expect(item.invocation.parameters).toMatchObject({
+      input: { minItems: 1, maxItems: 16 }, dimensions: { const: 1536 }, encoding_format: { const: 'float' },
+    });
+    expect(item.capabilities[0]).toMatchObject({ id: 'embeddings.stored.float.v1', contextWindowTokensPerInput: 8192 });
+    expect(item.pricing.rates.input.amount).toBe('0.0025');
+
+    const oldMode = await read({
+      runtime: runtime({ executionMode: 'stored_chat_only', getAdapter: () => combinedAdapter() }),
+      transaction: runner({ models: [embeddingModel], candidates: [embeddingCandidate] }),
+    });
+    expect(oldMode.data[0]!.availability).toMatchObject({ state: 'unavailable', reason: 'runtime_contract_unavailable' });
+  });
+
   it('projects one strict available unattested item through all five modes', async () => {
     const response = parseCatalogResponseV1(await read());
     expect(response.data).toHaveLength(1);

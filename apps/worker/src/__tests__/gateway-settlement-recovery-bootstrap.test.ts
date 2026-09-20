@@ -182,6 +182,31 @@ describe("gateway settlement recovery startup config", () => {
       DATABASE_URL: raw,
     })).toEqual({ mode: "stored_chat_v1", httpExecutionMode: "stored_chat_only", databaseUrl: raw });
   });
+
+  it("pairs combined execution with the explicit combined recovery mode", async () => {
+    expect(parseGatewaySettlementRecoveryStartupConfig({
+      GATEWAY_SETTLEMENT_RECOVERY_MODE: "stored_chat_embeddings_v1",
+      GATEWAY_HTTP_EXECUTION_MODE: "stored_chat_embeddings",
+      DATABASE_URL: databaseUrl,
+    })).toEqual({
+      mode: "stored_chat_embeddings_v1",
+      httpExecutionMode: "stored_chat_embeddings",
+      databaseUrl,
+    });
+    const db = database();
+    const loadDb = vi.fn(async () => db);
+    const handle = await startGatewaySettlementRecoveryFromEnv({
+      env: {
+        GATEWAY_SETTLEMENT_RECOVERY_MODE: "stored_chat_embeddings_v1",
+        GATEWAY_HTTP_EXECUTION_MODE: "stored_chat_embeddings",
+        DATABASE_URL: databaseUrl,
+      },
+      logger: capturedPino().logger,
+      loadDb,
+    });
+    expect(loadDb).toHaveBeenCalledWith(databaseUrl, ["chat", "embeddings"]);
+    await handle?.close();
+  });
 });
 
 describe("gateway settlement recovery bootstrap boundary", () => {
@@ -253,7 +278,7 @@ describe("gateway settlement recovery bootstrap boundary", () => {
     });
 
     expect(handle).not.toBeNull();
-    expect(loadDb).toHaveBeenCalledWith(databaseUrl);
+    expect(loadDb).toHaveBeenCalledWith(databaseUrl, ["chat"]);
     expect(db.captureCycle).toHaveBeenCalledTimes(1);
     expect(timers.setTimeout).not.toHaveBeenCalled();
     finishCapture?.();

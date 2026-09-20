@@ -1014,6 +1014,226 @@ describe.skipIf(!enabled)("native gateway HTTP storage", () => {
     );
   });
 
+  it("persists and settles the exact embeddings reserve, usage, response, and supplier amount", async () => {
+    const f = await fixture();
+    const candidate = {
+      modelSlug: "openai/text-embedding-3-small",
+      modelType: "embedding",
+      upstreamId: "openrouter",
+      upstreamModelId: "openai/text-embedding-3-small",
+      adapterKey: "openrouter",
+      modelUpstreamId: randomUUID(),
+      profileId: "openrouter-openai-text-embedding-3-small-embeddings-v1",
+      profileRevision: 1,
+      adapterContract: "openrouter-pinned-provider-embeddings-v1",
+      endpointPolicy: {
+        only: ["openai"],
+        allowFallbacks: false,
+        requireParameters: true,
+      },
+      contextWindowTokens: 8192,
+      inputCount: 2,
+      dimensions: 1536,
+      encodingFormat: "float",
+      prices: {
+        inputCentsPer1k: "0.002",
+        outputCentsPer1k: "0",
+        markup: "1.25",
+      },
+      maxCredits: "41",
+    };
+    const tokenQuote = {
+      version: 1,
+      formulaVersion: formula,
+      requestedMode: "auto",
+      effectiveMode: "auto",
+      authorizedMaxCredits: "41",
+      candidates: [candidate],
+    };
+    const quote = {
+      version: 1,
+      tokenQuote,
+      actualChargePolicy: { formulaVersion: formula, cachingDiscount: "1" },
+    };
+    const supplier = {
+      version: 2,
+      formulaVersion: "catalog-input-output-cents-per-1k-usd-micro-v2",
+      tokenQuote,
+    };
+    const billingRequestId = randomUUID();
+    const attemptId = randomUUID();
+    const digest = hash(randomUUID());
+    const fingerprint = hash("embeddings-client-payload");
+    const usageSnapshot = {
+      version: 1,
+      usageContract: candidate.adapterContract,
+      billingRequestId,
+      attemptId,
+      upstreamId: candidate.upstreamId,
+      upstreamModelId: candidate.upstreamModelId,
+      adapterKey: candidate.adapterKey,
+      modelSlug: candidate.modelSlug,
+      modelUpstreamId: candidate.modelUpstreamId,
+      profileId: candidate.profileId,
+      profileRevision: candidate.profileRevision,
+      providerResponseId: "emb-test",
+      reportedModel: candidate.modelSlug,
+      inputCount: 2,
+      dimensions: 1536,
+      encodingFormat: "float",
+      usage: {
+        promptTokens: 1000,
+        completionTokens: 0,
+        totalTokens: 1000,
+        cachedInputTokens: 0,
+      },
+      formulaVersion: formula,
+    };
+    const response = {
+      object: "list",
+      model: candidate.modelSlug,
+      data: [0, 1].map((index) => ({
+        object: "embedding",
+        index,
+        embedding: Array.from({ length: 1536 }, () => 0),
+      })),
+      usage: { prompt_tokens: 1000, total_tokens: 1000 },
+    };
+    await query(
+      "SELECT * FROM aiag_claim_gateway_http_request_v1($1,$2,$3,'embeddings','stored',$4,$5,1::smallint)",
+      [f.org, f.key, billingRequestId, digest, fingerprint],
+    );
+    await expect(
+      query(
+        "SELECT * FROM aiag_admit_gateway_charge_v2($1,$2,$3,'trace','chat','stored',$4,$5,$6,$7,'SID',$8)",
+        [
+          f.org,
+          billingRequestId,
+          f.key,
+          candidate.modelSlug,
+          "41",
+          JSON.stringify(quote),
+          new Date(Date.now() + 120000).toISOString(),
+          JSON.stringify(supplier),
+        ],
+      ),
+    ).rejects.toThrow("INVALID_SUPPLIER_QUOTE");
+    const admitted = await query(
+      "SELECT authorized_max_credits::text,state FROM aiag_admit_gateway_charge_v2($1,$2,$3,'trace','embeddings','stored',$4,$5,$6,$7,'SID',$8)",
+      [
+        f.org,
+        billingRequestId,
+        f.key,
+        candidate.modelSlug,
+        "41",
+        JSON.stringify(quote),
+        new Date(Date.now() + 120000).toISOString(),
+        JSON.stringify(supplier),
+      ],
+    );
+    expect(admitted.rows[0]).toEqual({
+      authorized_max_credits: "41",
+      state: "held",
+    });
+    expect(
+      (
+        await query(
+          "SELECT supplier_authorized_max_usd_micro::text AS supplier FROM gateway_charge_quota_contexts WHERE billing_request_id=$1",
+          [billingRequestId],
+        )
+      ).rows[0].supplier,
+    ).toBe("328");
+    await query(
+      "SELECT * FROM aiag_mark_gateway_charge_dispatched($1,$2,$3,'openrouter',$4)",
+      [
+        f.org,
+        billingRequestId,
+        attemptId,
+        JSON.stringify({ ...candidate, actualChargePolicy: quote.actualChargePolicy }),
+      ],
+    );
+    await expect(
+      query(
+        "SELECT * FROM aiag_record_gateway_http_outcome_v1($1,$2,$3,$4,$5,3,$6,'success',$7,1::smallint)",
+        [
+          f.org,
+          f.key,
+          billingRequestId,
+          digest,
+          fingerprint,
+          JSON.stringify({
+            ...usageSnapshot,
+            usage: { ...usageSnapshot.usage, totalTokens: 999 },
+          }),
+          JSON.stringify(response),
+        ],
+      ),
+    ).rejects.toThrow("HTTP_IDENTITY_CONFLICT");
+    await expect(
+      query(
+        "SELECT * FROM aiag_record_gateway_http_outcome_v1($1,$2,$3,$4,$5,3,$6,'success',$7,1::smallint)",
+        [
+          f.org,
+          f.key,
+          billingRequestId,
+          digest,
+          fingerprint,
+          JSON.stringify(usageSnapshot),
+          JSON.stringify({
+            ...response,
+            data: [{ ...response.data[0], embedding: [0] }, response.data[1]],
+          }),
+        ],
+      ),
+    ).rejects.toThrow("INVALID_HTTP_RESULT");
+    await query(
+      "SELECT * FROM aiag_record_gateway_http_outcome_v1($1,$2,$3,$4,$5,3,$6,'success',$7,1::smallint)",
+      [
+        f.org,
+        f.key,
+        billingRequestId,
+        digest,
+        fingerprint,
+        JSON.stringify(usageSnapshot),
+        JSON.stringify(response),
+      ],
+    );
+    const recorded = await query(
+      "SELECT a.state,a.actual_cost_credits::text,q.supplier_actual_usd_micro::text AS supplier_actual FROM gateway_charge_admissions a JOIN gateway_charge_quota_contexts q USING(billing_request_id) WHERE a.billing_request_id=$1",
+      [billingRequestId],
+    );
+    expect(recorded.rows[0]).toEqual({
+      state: "outcome_recorded",
+      actual_cost_credits: "3",
+      supplier_actual: "20",
+    });
+    await query("SELECT * FROM aiag_settle_admitted_gateway_charge($1,$2)", [
+      f.org,
+      billingRequestId,
+    ]);
+    const replay = await query(
+      "SELECT status,response_body,actual_cost_credits::text FROM aiag_read_gateway_http_result_v1($1,$2,'embeddings','stored',$3,$4,1::smallint)",
+      [f.org, f.key, digest, fingerprint],
+    );
+    expect(replay.rows[0]).toEqual({
+      status: "ready",
+      response_body: response,
+      actual_cost_credits: "3",
+    });
+    expect(
+      (
+        await query(
+          "SELECT array_agg(kind||':'||reserved_amount::text||':'||settled_amount::text ORDER BY kind) AS amounts FROM gateway_quota_buckets WHERE org_id=$1",
+          [f.org],
+        )
+      ).rows[0].amounts,
+    ).toEqual([
+      "key_month_charged_v2:0:3",
+      "key_session_charged_v2:0:3",
+      "org_day_supplier_v2:0:20",
+    ]);
+  });
+
   it("keeps key FOR SHARE until authenticated read commits", async () => {
     const r = request(await fixture());
     await claim(r);
@@ -1056,7 +1276,7 @@ describe.skipIf(!enabled)("native gateway HTTP storage", () => {
   it("rejects nonstored/unsupported version and null UUID inputs without a mapping", async () => {
     const r = request(await fixture());
     for (const [route, mode, version, id] of [
-      ["embeddings", "stored", 1, r.id],
+      ["audio", "stored", 1, r.id],
       ["chat", "byok_fee", 1, r.id],
       ["chat", "stored", 2, r.id],
       ["chat", "stored", 1, null],

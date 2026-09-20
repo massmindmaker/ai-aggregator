@@ -64,7 +64,7 @@ export const storedChat: Handler = async (c) => {
       );
     const key = c.get('apiKey' as never) as AuthenticatedApiKey;
     const { identity } = await captureStoredChatHttpRequest(c.req.raw);
-    const scope: GatewayHttpIdentity = Object.freeze({
+    const scope: GatewayHttpIdentity<'chat'> = Object.freeze({
       orgId: key.org_id,
       apiKeyId: key.id,
       routeKind: 'chat',

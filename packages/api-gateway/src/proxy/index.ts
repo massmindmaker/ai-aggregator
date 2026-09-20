@@ -160,6 +160,7 @@ function readRawResponse(
   method: string,
   cleanupExtra?: () => void,
   deadline: RawReadDeadline = { idleMs: DEFAULT_TUNNEL_TIMEOUT_MS },
+  maxBodyBytes: number = MAX_RESPONSE_BODY_BYTES,
 ): Promise<ParsedResponseHead & { body: Buffer }> {
   return new Promise((resolve, reject) => {
     let acc: Buffer = Buffer.alloc(0);
@@ -216,6 +217,12 @@ function readRawResponse(
     };
     const onData = (chunk: Buffer): void => {
       armIdle(); // data is flowing → restart the idle window
+      // Reject before copying/decoding/completing. Until the header is found,
+      // allow only the bounded header overhead in addition to the body cap.
+      if (acc.length + chunk.length > maxBodyBytes + (headParsed ? 0 : MAX_RESPONSE_HEADER_BYTES + 4)) {
+        fail(new Error('[proxy] response body exceeds configured buffer cap'));
+        return;
+      }
       acc = acc.length ? Buffer.concat([acc, chunk]) : chunk;
       if (!headParsed) {
         const idx = acc.indexOf('\r\n\r\n');
@@ -223,6 +230,10 @@ function readRawResponse(
           if (acc.length > MAX_RESPONSE_HEADER_BYTES) {
             fail(new Error('[proxy] upstream response headers exceed 64KB'));
           }
+          return;
+        }
+        if (idx > MAX_RESPONSE_HEADER_BYTES) {
+          fail(new Error('[proxy] upstream response headers exceed 64KB'));
           return;
         }
         const lines = acc.subarray(0, idx).toString('latin1').split('\r\n');
@@ -249,14 +260,22 @@ function readRawResponse(
         }
       }
       const h = head as ParsedResponseHead;
+      // The raw chunk framing counts toward this conservative proxy cap.
+      if (acc.length > maxBodyBytes) {
+        fail(new Error('[proxy] response body exceeds configured buffer cap'));
+        return;
+      }
       if ((h.headers['transfer-encoding'] ?? '').includes('chunked')) {
         if (chunkedComplete(acc)) complete(decodeChunked(acc));
       } else if (h.headers['content-length'] != null) {
         const n = Number(h.headers['content-length']);
+        if (Number.isFinite(n) && n > maxBodyBytes) {
+          fail(new Error('[proxy] response body exceeds configured buffer cap'));
+          return;
+        }
         if (Number.isFinite(n) && acc.length >= n && n >= 0) complete(acc.subarray(0, n));
       }
       // else: close-delimited body → resolved by onEnd()
-      if (acc.length > MAX_RESPONSE_BODY_BYTES) fail(new Error('[proxy] response body exceeds 64MB cap'));
     };
     const onError = (err: Error): void => fail(err);
     const onEnd = (): void => {
@@ -277,6 +296,8 @@ function readRawResponse(
 }
 
 export interface FetchViaProxyOptions {
+  /** Wire body cap including chunk framing, before buffering. Defaults to 64 MiB. */
+  maxBufferedResponseBytes?: number;
   /**
    * Address used for the CONNECT target instead of the URL hostname.
    * safeFetch passes the SSRF-vetted IP here so the anti-rebind guarantee
@@ -302,6 +323,10 @@ export async function fetchViaProxy(
   proxyUrl: string,
   opts: FetchViaProxyOptions = {},
 ): Promise<Response> {
+  const maxBodyBytes = opts.maxBufferedResponseBytes ?? MAX_RESPONSE_BODY_BYTES;
+  if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes < 1 || maxBodyBytes > MAX_RESPONSE_BODY_BYTES) {
+    throw new TypeError('[proxy] invalid response buffer cap');
+  }
   const target = new URL(url.toString());
   if (target.protocol !== 'https:' && target.protocol !== 'http:') {
     throw new Error(`[proxy] fetchViaProxy supports only http(s) targets, got ${target.protocol}`);
@@ -352,7 +377,7 @@ export async function fetchViaProxy(
       const res = await readRawResponse(wire, method, abortCleanup, {
         idleMs: opts.responseIdleTimeoutMs ?? DEFAULT_TUNNEL_TIMEOUT_MS,
         aborted: (): boolean => signal?.aborted ?? false,
-      });
+      }, maxBodyBytes);
 
       const respHeaders = new Headers();
       for (const [k, v] of Object.entries(res.headers)) {

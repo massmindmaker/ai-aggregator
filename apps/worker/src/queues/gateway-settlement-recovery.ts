@@ -1,7 +1,11 @@
 export type CanonicalRecoveryUuid = string;
 export type CanonicalRecoveryTimestamp = string;
 
-export type GatewaySettlementRecoveryMode = "disabled" | "stored_chat_v1";
+export type GatewaySettlementRecoveryMode =
+  | "disabled"
+  | "stored_chat_v1"
+  | "stored_chat_embeddings_v1";
+export type GatewaySettlementRecoveryRoute = "chat" | "embeddings";
 export type GatewaySettlementRecoveryTickClassification =
   | "complete"
   | "partial_unconfirmed"
@@ -33,7 +37,7 @@ export type GatewaySettlementRecoveryAck = Readonly<{
   apiKeyId: CanonicalRecoveryUuid;
   billingRequestId: CanonicalRecoveryUuid;
   state: "settled";
-  routeKind: "chat";
+  routeKind: GatewaySettlementRecoveryRoute;
   billingMode: "stored";
   outcomeKind: "success";
 }>;
@@ -169,7 +173,8 @@ function parseHint(value: unknown): GatewaySettlementRecoveryHint | null {
 function validAck(value: unknown, hint: GatewaySettlementRecoveryHint): boolean {
   return isPlainRecord(value) && hasExactKeys(value, ["orgId", "apiKeyId", "billingRequestId", "state", "routeKind", "billingMode", "outcomeKind"])
     && canonicalUuid(value.orgId) === hint.orgId && canonicalUuid(value.apiKeyId) === hint.apiKeyId && canonicalUuid(value.billingRequestId) === hint.billingRequestId
-    && value.state === "settled" && value.routeKind === "chat" && value.billingMode === "stored" && value.outcomeKind === "success";
+    && value.state === "settled" && (value.routeKind === "chat" || value.routeKind === "embeddings")
+    && value.billingMode === "stored" && value.outcomeKind === "success";
 }
 
 function result(
@@ -187,6 +192,7 @@ function result(
 export function parseGatewaySettlementRecoveryMode(raw: string | undefined): GatewaySettlementRecoveryMode {
   if (raw === undefined || raw === "disabled") return "disabled";
   if (raw === "stored_chat_v1") return "stored_chat_v1";
+  if (raw === "stored_chat_embeddings_v1") return "stored_chat_embeddings_v1";
   throw new Error("invalid gateway settlement recovery mode");
 }
 

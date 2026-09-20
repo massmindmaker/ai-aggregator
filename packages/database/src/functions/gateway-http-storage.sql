@@ -2,7 +2,7 @@
 CREATE OR REPLACE FUNCTION aiag_http_validate_identity(_org UUID,_key UUID,_route VARCHAR,_mode VARCHAR,_digest TEXT,_fingerprint TEXT,_version SMALLINT)
 RETURNS VOID LANGUAGE plpgsql IMMUTABLE AS $$
 BEGIN
- IF _org IS NULL OR _key IS NULL OR _route IS DISTINCT FROM 'chat' OR _mode IS DISTINCT FROM 'stored'
+ IF _org IS NULL OR _key IS NULL OR _route NOT IN('chat','embeddings') OR _mode IS DISTINCT FROM 'stored'
  OR _version IS DISTINCT FROM 1 OR _digest IS NULL OR length(_digest)<>64 OR _digest COLLATE "C" !~ '^[0-9a-f]{64}$'
  OR _fingerprint IS NULL OR length(_fingerprint)<>64 OR _fingerprint COLLATE "C" !~ '^[0-9a-f]{64}$'
  THEN RAISE EXCEPTION 'INVALID_HTTP_REQUEST' USING ERRCODE='P0001'; END IF;
@@ -19,14 +19,48 @@ BEGIN
 END $$;
 
 -- Exact public DTO, never a sanitizer for an arbitrary provider blob.
-CREATE OR REPLACE FUNCTION aiag_http_validate_response(_body JSONB,_usage JSONB)
+CREATE OR REPLACE FUNCTION aiag_http_validate_response(_route TEXT,_body JSONB,_usage JSONB)
 RETURNS TEXT LANGUAGE plpgsql IMMUTABLE AS $$
 DECLARE _choice JSONB; _u JSONB; _p NUMERIC; _c NUMERIC; _t NUMERIC; _cached NUMERIC;
+ _item JSONB; _component JSONB; _index INTEGER; _inputs NUMERIC;
 BEGIN
- IF NOT aiag_quota_keys(_body,ARRAY['id','object','created','model','choices','usage']) THEN
-  RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
  IF octet_length(convert_to(_body::text,'UTF8'))>1048576 THEN
   RAISE EXCEPTION 'HTTP_RESULT_TOO_LARGE' USING ERRCODE='P0001'; END IF;
+ IF _route='embeddings' THEN
+  IF NOT aiag_quota_keys(_body,ARRAY['object','model','data','usage'])
+  OR _body->'object' IS DISTINCT FROM '"list"'::jsonb
+  OR jsonb_typeof(_body->'model') IS DISTINCT FROM 'string' OR length(_body->>'model') NOT BETWEEN 1 AND 256
+  OR (_body->>'model') COLLATE "C" !~ '^[A-Za-z0-9_./:@+-]+$'
+  OR jsonb_typeof(_body->'data') IS DISTINCT FROM 'array'
+  OR jsonb_typeof(_usage) IS DISTINCT FROM 'object' THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+  _inputs:=aiag_quota_count(_usage->'inputCount',TRUE);
+  IF _inputs NOT BETWEEN 1 AND 16 OR jsonb_array_length(_body->'data')<>_inputs THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+  FOR _item,_index IN SELECT value,(ordinality-1)::integer FROM jsonb_array_elements(_body->'data') WITH ORDINALITY LOOP
+   IF NOT aiag_quota_keys(_item,ARRAY['object','index','embedding'])
+   OR _item->'object' IS DISTINCT FROM '"embedding"'::jsonb
+   OR aiag_quota_count(_item->'index')<>_index
+   OR jsonb_typeof(_item->'embedding') IS DISTINCT FROM 'array'
+   OR jsonb_array_length(_item->'embedding')<>1536 THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+   FOR _component IN SELECT value FROM jsonb_array_elements(_item->'embedding') LOOP
+    IF jsonb_typeof(_component) IS DISTINCT FROM 'number' THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+   END LOOP;
+  END LOOP;
+  _u:=_body->'usage';
+  IF NOT aiag_quota_keys(_u,ARRAY['prompt_tokens','total_tokens']) THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+  _p:=aiag_quota_count(_u->'prompt_tokens'); _t:=aiag_quota_count(_u->'total_tokens');
+  IF _t<>_p OR _p>8192*_inputs THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+  IF _body->'model' IS DISTINCT FROM _usage->'reportedModel'
+  OR _u->'prompt_tokens' IS DISTINCT FROM _usage->'usage'->'promptTokens'
+  OR _u->'total_tokens' IS DISTINCT FROM _usage->'usage'->'totalTokens'
+  OR _usage->'usage'->'completionTokens' IS DISTINCT FROM '0'::jsonb
+  OR _usage->'usage'->'cachedInputTokens' IS DISTINCT FROM '0'::jsonb
+  OR _usage->'dimensions' IS DISTINCT FROM '1536'::jsonb
+  OR _usage->'encodingFormat' IS DISTINCT FROM '"float"'::jsonb THEN RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
+  RETURN encode(sha256(convert_to(_body::text,'UTF8')),'hex');
+ END IF;
+ IF _route IS DISTINCT FROM 'chat' THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
+ IF NOT aiag_quota_keys(_body,ARRAY['id','object','created','model','choices','usage']) THEN
+  RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
  IF jsonb_typeof(_body->'id') IS DISTINCT FROM 'string' OR length(_body->>'id') NOT BETWEEN 1 AND 256
  OR (_body->>'id') COLLATE "C" !~ '^[A-Za-z0-9_-]+$'
  OR _body->'object' IS DISTINCT FROM '"chat.completion"'::jsonb
@@ -65,6 +99,12 @@ BEGIN
   RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
  RETURN encode(sha256(convert_to(_body::text,'UTF8')),'hex');
 END $$;
+
+-- Backward-compatible chat validator for established callers.
+CREATE OR REPLACE FUNCTION aiag_http_validate_response(_body JSONB,_usage JSONB)
+RETURNS TEXT LANGUAGE sql IMMUTABLE AS $$
+ SELECT aiag_http_validate_response('chat',_body,_usage)
+$$;
 
 CREATE OR REPLACE FUNCTION aiag_http_immutable_request()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
@@ -129,6 +169,7 @@ CREATE OR REPLACE FUNCTION aiag_record_gateway_http_outcome_v1(
 DECLARE _a gateway_charge_admissions%ROWTYPE; _r gateway_http_requests%ROWTYPE; _result gateway_http_results%ROWTYPE;
  _digest TEXT; _at TIMESTAMPTZ; _transition gateway_charge_admission_result; _has_result BOOLEAN;
 BEGIN
+ -- Route is loaded from the locked request below; this call validates the route-independent envelope.
  PERFORM aiag_http_validate_identity(_org_id,_api_key_id,'chat','stored',_idempotency_key_digest,_request_fingerprint,_contract_version);
  IF _billing_request_id IS NULL THEN RAISE EXCEPTION 'INVALID_HTTP_REQUEST' USING ERRCODE='P0001'; END IF;
  IF _outcome_kind IS DISTINCT FROM 'success' THEN RAISE EXCEPTION 'INVALID_HTTP_RESULT' USING ERRCODE='P0001'; END IF;
@@ -140,17 +181,19 @@ BEGIN
  IF _a.org_id IS DISTINCT FROM _org_id OR _a.api_key_id IS DISTINCT FROM _api_key_id THEN
   RAISE EXCEPTION 'HTTP_ACCESS_DENIED' USING ERRCODE='P0005'; END IF;
  SELECT * INTO _r FROM gateway_http_requests WHERE billing_request_id=_billing_request_id AND org_id=_org_id AND api_key_id=_api_key_id FOR UPDATE;
- IF NOT FOUND OR _r.idempotency_key_digest IS DISTINCT FROM _idempotency_key_digest OR _r.request_fingerprint IS DISTINCT FROM _request_fingerprint
- OR _r.contract_version<>_contract_version OR _r.route_kind<>'chat' OR _r.billing_mode<>'stored' THEN
+ IF NOT FOUND THEN RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
+ PERFORM aiag_http_validate_identity(_org_id,_api_key_id,_r.route_kind,'stored',_idempotency_key_digest,_request_fingerprint,_contract_version);
+ IF _r.idempotency_key_digest IS DISTINCT FROM _idempotency_key_digest OR _r.request_fingerprint IS DISTINCT FROM _request_fingerprint
+ OR _r.contract_version<>_contract_version OR _r.route_kind NOT IN('chat','embeddings') OR _r.billing_mode<>'stored' THEN
   RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
- IF _a.route_kind<>'chat' OR _a.billing_mode<>'stored' OR NOT EXISTS(SELECT 1 FROM gateway_charge_quota_contexts
+ IF _a.route_kind IS DISTINCT FROM _r.route_kind OR _a.billing_mode<>'stored' OR NOT EXISTS(SELECT 1 FROM gateway_charge_quota_contexts
  WHERE billing_request_id=_billing_request_id AND org_id=_org_id AND api_key_id=_api_key_id AND quota_version=2) THEN
   RAISE EXCEPTION 'HTTP_RESULT_STATE_CONFLICT' USING ERRCODE='P0005'; END IF;
  SELECT * INTO _result FROM gateway_http_results WHERE billing_request_id=_billing_request_id FOR UPDATE;
  _has_result:=FOUND;
  IF (_has_result AND _a.state NOT IN('outcome_recorded','settled')) OR (NOT _has_result AND _a.state<>'dispatched') THEN
   RAISE EXCEPTION 'HTTP_RESULT_STATE_CONFLICT' USING ERRCODE='P0005'; END IF;
- _digest:=aiag_http_validate_response(_response_body,_usage_snapshot);
+ _digest:=aiag_http_validate_response(_r.route_kind,_response_body,_usage_snapshot);
  IF _has_result AND (_result.response_digest IS DISTINCT FROM _digest
  OR (_result.response_body IS NOT NULL AND _result.response_body IS DISTINCT FROM _response_body)) THEN
   RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
@@ -185,6 +228,7 @@ BEGIN
  IF _id IS NULL THEN _out.status:='not_found'; RETURN NEXT _out; RETURN; END IF;
  SELECT * INTO _r FROM gateway_http_requests WHERE billing_request_id=_id FOR UPDATE;
  IF _r.org_id IS DISTINCT FROM _org_id OR _r.api_key_id IS DISTINCT FROM _api_key_id
+ OR _r.route_kind IS DISTINCT FROM _route_kind OR _r.billing_mode IS DISTINCT FROM _billing_mode
  OR _r.request_fingerprint IS DISTINCT FROM _request_fingerprint OR _r.contract_version<>_contract_version THEN
   RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
  _out.billing_request_id:=_id;
@@ -195,9 +239,9 @@ BEGIN
  ELSIF _a.state IS NULL OR _a.state IN('held','dispatched','outcome_recorded') THEN _out.status:='pending';
  ELSIF _a.state='cancelled' OR NOT _has_result THEN _out.status:='unavailable';
  ELSIF _a.state='settled' THEN
-  IF _a.org_id IS DISTINCT FROM _org_id OR _a.api_key_id IS DISTINCT FROM _api_key_id OR _a.route_kind<>'chat' OR _a.billing_mode<>'stored'
+  IF _a.org_id IS DISTINCT FROM _org_id OR _a.api_key_id IS DISTINCT FROM _api_key_id OR _a.route_kind IS DISTINCT FROM _r.route_kind OR _a.billing_mode<>'stored'
   OR _result.org_id IS DISTINCT FROM _org_id OR _result.api_key_id IS DISTINCT FROM _api_key_id
-  OR _result.response_digest IS DISTINCT FROM aiag_http_validate_response(_result.response_body,_a.usage_snapshot)
+  OR _result.response_digest IS DISTINCT FROM aiag_http_validate_response(_r.route_kind,_result.response_body,_a.usage_snapshot)
   THEN RAISE EXCEPTION 'HTTP_RESULT_STATE_CONFLICT' USING ERRCODE='P0005'; END IF;
   _out.status:='ready'; _out.http_status:=_result.http_status; _out.content_type:=_result.content_type;
   _out.response_body:=_result.response_body; _out.actual_cost_credits:=_a.actual_cost_credits;

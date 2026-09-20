@@ -49,27 +49,45 @@ END $$;
 -- Returns [charged maximum, supplier maximum]. Frozen metadata is evidence, never a live catalog lookup.
 CREATE OR REPLACE FUNCTION aiag_quota_candidate(_c JSONB,_model TEXT)
 RETURNS NUMERIC[] LANGUAGE plpgsql IMMUTABLE AS $$
-DECLARE _i NUMERIC; _o NUMERIC; _m NUMERIC; _context NUMERIC; _cap NUMERIC; _base NUMERIC; _k TEXT;
+DECLARE _i NUMERIC; _o NUMERIC; _m NUMERIC; _context NUMERIC; _cap NUMERIC; _inputs NUMERIC; _base NUMERIC; _k TEXT;
 BEGIN
- IF NOT aiag_quota_keys(_c,ARRAY['modelSlug','modelType','upstreamId','upstreamModelId','adapterKey','modelUpstreamId','profileId','profileRevision','adapterContract','endpointPolicy','contextWindowTokens','maxOutputTokens','prices','maxCredits'])
- OR (_c->>'modelSlug') IS DISTINCT FROM _model OR (_c->>'modelType') IS DISTINCT FROM 'chat'
- OR (_c->>'adapterContract') IS DISTINCT FROM 'openrouter-pinned-provider-chat-v1'
- OR NOT aiag_quota_keys(_c->'endpointPolicy',ARRAY['only','allowFallbacks','requireParameters'])
+ IF (_c->>'modelType')='embedding' THEN
+  IF NOT aiag_quota_keys(_c,ARRAY['modelSlug','modelType','upstreamId','upstreamModelId','adapterKey','modelUpstreamId','profileId','profileRevision','adapterContract','endpointPolicy','contextWindowTokens','inputCount','dimensions','encodingFormat','prices','maxCredits'])
+  OR (_c->>'modelSlug') IS DISTINCT FROM 'openai/text-embedding-3-small' OR (_c->>'modelSlug') IS DISTINCT FROM _model
+  OR (_c->>'upstreamId') IS DISTINCT FROM 'openrouter' OR (_c->>'upstreamModelId') IS DISTINCT FROM 'openai/text-embedding-3-small'
+  OR (_c->>'adapterKey') IS DISTINCT FROM 'openrouter' OR (_c->>'profileId') IS DISTINCT FROM 'openrouter-openai-text-embedding-3-small-embeddings-v1'
+  OR _c->'profileRevision' IS DISTINCT FROM '1'::jsonb OR (_c->>'adapterContract') IS DISTINCT FROM 'openrouter-pinned-provider-embeddings-v1'
+  OR _c->'contextWindowTokens' IS DISTINCT FROM '8192'::jsonb OR _c->'dimensions' IS DISTINCT FROM '1536'::jsonb
+  OR (_c->>'encodingFormat') IS DISTINCT FROM 'float' THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
+ ELSE
+  IF NOT aiag_quota_keys(_c,ARRAY['modelSlug','modelType','upstreamId','upstreamModelId','adapterKey','modelUpstreamId','profileId','profileRevision','adapterContract','endpointPolicy','contextWindowTokens','maxOutputTokens','prices','maxCredits'])
+  OR (_c->>'modelSlug') IS DISTINCT FROM _model OR (_c->>'modelType') IS DISTINCT FROM 'chat'
+  OR (_c->>'adapterContract') IS DISTINCT FROM 'openrouter-pinned-provider-chat-v1' THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
+ END IF;
+ IF NOT aiag_quota_keys(_c->'endpointPolicy',ARRAY['only','allowFallbacks','requireParameters'])
  OR _c->'endpointPolicy'->'allowFallbacks' IS DISTINCT FROM 'false'::jsonb
  OR _c->'endpointPolicy'->'requireParameters' IS DISTINCT FROM 'true'::jsonb
  OR jsonb_typeof(_c->'endpointPolicy'->'only') IS DISTINCT FROM 'array' THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
  IF jsonb_array_length(_c->'endpointPolicy'->'only')<>1 OR jsonb_typeof(_c->'endpointPolicy'->'only'->0) IS DISTINCT FROM 'string'
  OR (_c->'endpointPolicy'->'only'->>0) !~ '^[A-Za-z0-9._/-]{1,128}$' THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
+ IF (_c->>'modelType')='embedding' AND (_c->'endpointPolicy'->'only'->>0) IS DISTINCT FROM 'openai' THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
  FOREACH _k IN ARRAY ARRAY['modelSlug','upstreamId','upstreamModelId','adapterKey','modelUpstreamId','profileId'] LOOP
   IF jsonb_typeof(_c->_k) IS DISTINCT FROM 'string' OR (length(_c->>_k)>256 OR (_c->>_k) !~ '^[A-Za-z0-9_./:@+-]+$') THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
  END LOOP;
  PERFORM aiag_quota_count(_c->'profileRevision',TRUE);
- _context:=aiag_quota_count(_c->'contextWindowTokens',TRUE); _cap:=aiag_quota_count(_c->'maxOutputTokens',TRUE);
- IF _cap>_context OR NOT aiag_quota_keys(_c->'prices',ARRAY['inputCentsPer1k','outputCentsPer1k','markup']) THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
+ _context:=aiag_quota_count(_c->'contextWindowTokens',TRUE);
+ IF (_c->>'modelType')='embedding' THEN
+  _inputs:=aiag_quota_count(_c->'inputCount',TRUE);
+  IF _inputs>16 THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
+ ELSE
+  _cap:=aiag_quota_count(_c->'maxOutputTokens',TRUE);
+  IF _cap>_context THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
+ END IF;
+ IF NOT aiag_quota_keys(_c->'prices',ARRAY['inputCentsPer1k','outputCentsPer1k','markup']) THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
  _i:=aiag_quota_decimal(_c->'prices'->'inputCentsPer1k'); _o:=aiag_quota_decimal(_c->'prices'->'outputCentsPer1k'); _m:=aiag_quota_decimal(_c->'prices'->'markup');
  IF _m<=0 OR _i>=100000000 OR _o>=100000000
  OR length(split_part(_c->'prices'->>'inputCentsPer1k','.',2))>10 OR length(split_part(_c->'prices'->>'outputCentsPer1k','.',2))>10 THEN RAISE EXCEPTION 'INVALID_SUPPLIER_CANDIDATE'; END IF;
- _base:=_i*_context+greatest(_o-_i,0)*_cap;
+ _base:=CASE WHEN (_c->>'modelType')='embedding' THEN _i*_context*_inputs ELSE _i*_context+greatest(_o-_i,0)*_cap END;
  IF aiag_quota_money(aiag_quota_decimal(_c->'maxCredits',TRUE)) IS DISTINCT FROM aiag_quota_money(ceil(_base*_m)) OR ceil(_base*_m)<=0 THEN RAISE EXCEPTION 'INVALID_CHARGED_MAXIMUM'; END IF;
  RETURN ARRAY[ceil(_base*_m),aiag_quota_money(ceil(10*_base))::numeric];
 END $$;
@@ -96,6 +114,8 @@ BEGIN
  OR coalesce(_q->>'requestedMode','') NOT IN('auto','fastest','cheapest','balanced','ru-only') OR coalesce(_q->>'effectiveMode','') NOT IN('auto','fastest','cheapest','balanced','ru-only')
  OR jsonb_typeof(_q->'candidates') IS DISTINCT FROM 'array' THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
  IF jsonb_array_length(_q->'candidates') NOT BETWEEN 1 AND 64 THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(_q->'candidates') c WHERE c->>'modelType'='embedding')
+ AND (jsonb_array_length(_q->'candidates')<>1 OR _quote->'actualChargePolicy'->'cachingDiscount' IS DISTINCT FROM '"1"'::jsonb) THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
  FOR _c IN SELECT value FROM jsonb_array_elements(_q->'candidates') LOOP
   _v:=aiag_quota_candidate(_c,_model); _retail:=greatest(_retail,_v[1]); _s:=greatest(_s,_v[2]);
  END LOOP;
@@ -133,20 +153,36 @@ BEGIN
   OR _actual<>_a.authorized_max_credits THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
   RETURN 0;
  END IF;
+ _p:=_a.pricing_snapshot;
+ IF (_p->>'modelType')='embedding' THEN
+  IF NOT aiag_quota_keys(_usage,ARRAY['version','usageContract','billingRequestId','attemptId','upstreamId','upstreamModelId','adapterKey','modelSlug','modelUpstreamId','profileId','profileRevision','providerResponseId','reportedModel','inputCount','dimensions','encodingFormat','usage','formulaVersion'])
+  OR _usage->'version' IS DISTINCT FROM '1'::jsonb OR (_usage->>'formulaVersion') IS DISTINCT FROM 'db-input-output-cents-per-1k-legacy-whole-cache-v1'
+  OR (_usage->>'billingRequestId') IS DISTINCT FROM _a.billing_request_id::text OR (_usage->>'attemptId') IS DISTINCT FROM _a.attempt_id::text
+  OR (_usage->>'usageContract') IS DISTINCT FROM (_p->>'adapterContract')
+  OR jsonb_typeof(_usage->'providerResponseId') NOT IN('string','null')
+  OR (jsonb_typeof(_usage->'providerResponseId')='string' AND length(_usage->>'providerResponseId') NOT BETWEEN 1 AND 256)
+  OR _usage->'reportedModel' IS DISTINCT FROM _p->'modelSlug' OR _usage->'inputCount' IS DISTINCT FROM _p->'inputCount'
+  OR _usage->'dimensions' IS DISTINCT FROM _p->'dimensions' OR _usage->'encodingFormat' IS DISTINCT FROM _p->'encodingFormat'
+  THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
+ ELSE
  IF NOT aiag_quota_keys(_usage,ARRAY['version','usageContract','billingRequestId','attemptId','upstreamId','upstreamModelId','adapterKey','modelSlug','modelUpstreamId','profileId','profileRevision','completionId','reportedModel','usage','formulaVersion'])
  OR _usage->'version' IS DISTINCT FROM '1'::jsonb OR (_usage->>'formulaVersion') IS DISTINCT FROM 'db-input-output-cents-per-1k-legacy-whole-cache-v1'
  OR (_usage->>'billingRequestId') IS DISTINCT FROM _a.billing_request_id::text OR (_usage->>'attemptId') IS DISTINCT FROM _a.attempt_id::text
  OR (_usage->>'usageContract') IS DISTINCT FROM (_a.pricing_snapshot->>'adapterContract')
  OR jsonb_typeof(_usage->'completionId') IS DISTINCT FROM 'string' OR (length(_usage->>'completionId')>256 OR (_usage->>'completionId') !~ '^[A-Za-z0-9_-]+$')
  OR jsonb_typeof(_usage->'reportedModel') IS DISTINCT FROM 'string' OR (length(_usage->>'reportedModel')>256 OR (_usage->>'reportedModel') !~ '^[A-Za-z0-9_./:@+-]+$') THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
- _p:=_a.pricing_snapshot;
+ END IF;
  FOREACH _k IN ARRAY ARRAY['upstreamId','upstreamModelId','adapterKey','modelSlug','modelUpstreamId','profileId','profileRevision'] LOOP
   IF _usage->_k IS DISTINCT FROM _p->_k THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
  END LOOP;
  IF NOT aiag_quota_keys(_usage->'usage',ARRAY['promptTokens','completionTokens','totalTokens','cachedInputTokens']) THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
  _prompt:=aiag_quota_count(_usage->'usage'->'promptTokens'); _completion:=aiag_quota_count(_usage->'usage'->'completionTokens');
  _total:=aiag_quota_count(_usage->'usage'->'totalTokens'); _cached:=aiag_quota_count(_usage->'usage'->'cachedInputTokens');
- IF _total<>_prompt+_completion OR _cached>_prompt OR _total>aiag_quota_count(_p->'contextWindowTokens',TRUE) OR _completion>aiag_quota_count(_p->'maxOutputTokens',TRUE) THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
+ IF (_p->>'modelType')='embedding' THEN
+  IF _completion<>0 OR _cached<>0 OR _total<>_prompt OR _prompt>aiag_quota_count(_p->'contextWindowTokens',TRUE)*aiag_quota_count(_p->'inputCount',TRUE) THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
+ ELSE
+  IF _total<>_prompt+_completion OR _cached>_prompt OR _total>aiag_quota_count(_p->'contextWindowTokens',TRUE) OR _completion>aiag_quota_count(_p->'maxOutputTokens',TRUE) THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
+ END IF;
  _i:=aiag_quota_decimal(_p->'prices'->'inputCentsPer1k'); _o:=aiag_quota_decimal(_p->'prices'->'outputCentsPer1k'); _m:=aiag_quota_decimal(_p->'prices'->'markup');
  _d:=aiag_quota_decimal(_p->'actualChargePolicy'->'cachingDiscount'); _base:=_i*_prompt+_o*_completion;
  -- div avoids rounded numeric division immediately next to a half-credit boundary.
