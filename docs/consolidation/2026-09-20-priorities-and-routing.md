@@ -7,12 +7,12 @@
 | Очередь | Источник | Следующий результат |
 |---|---|---|
 | 1. Aggregator — каталог | 19.09 resume plan, 13.09 public catalog contract, AG-P2 | Довести сохранённый native matrix: bounds, lifecycle/readiness, stale cursor, advisory GET→POST и immutable financial snapshots; independent review |
-| 2. Aggregator — расчёты | AG-P1 route coverage, settlement recovery runner | Recovery composition, затем оставшиеся billable routes; не повторять принятые foundations |
+| 2. Aggregator — расчёты | AG-P1 route coverage, [stored embeddings lifecycle](../superpowers/plans/2026-09-20-stored-embeddings-lifecycle.md) | После итоговых RUB/TON проверок — mounted embeddings с admission, сохранённым результатом и recovery; уже принятый chat recovery не писать повторно |
 | 3. Aggregator — продукт | Production continuation AG-P3/P4/P5 | Авторская версия→доход, TON alongside RUB/login, modalities/UX и сквозная приёмка |
 | 4. Arena | Собственный entrypoint и prediction evaluation plan | Executable scorer/hash и opt-in binding→DB jobs→sandboxed evaluator→результат |
 | 5. Agents Market | Собственный native-account-principal/Web plan | HTTP/security review→guarded auth browser→UUID domain/worker→AG HTTP integration и independent Web/TMA acceptance |
 
-Зависимость: общий database/recovery baseline сейчас ждёт приёмки TON0076. После каталога сначала узко проверить сохранённую correction0076 и закрыть её HIGH findings; только затем запускать зависимый baseline. Это не требует включения TON или новых RPC.
+TON0076 прошла итоговое source-review: прежние шесть HIGH закрыты, в том числе получение времени после ожидания row lock; ошибка TypeScript исправлена. Native evidence: 14 существующих сценариев и новая группа expiry/takeover PASS. Это снимает блокировку общего database baseline, который поставлен в очередь после итоговой сборки; его результат пока не получен. Selector, pg adapter, bootstrap/index и replay settlement recovery уже реализованы и приняты — писать их повторно не требуется. Runtime recovery остаётся выключен; включение и проверка на стенде — отдельный operational шаг. Новых RPC не было.
 
 План19.09 — порядок ближайших пакетов, а не замена полной product programme07.09. В частности, авторский lifecycle AG-P3, остальные оплачиваемые маршруты AG-P1 и UX/release AG-P5 не исчезли из объёма. Исторические числовые оценки не являются сегодняшними процентами готовности.
 
@@ -41,6 +41,23 @@
 Контекст: профиль astra-complex уже содержал1000000/850000.20.09 эти requested limits добавлены в base config с backup. Текущий запущенный чат сообщает258400; свежий `codex debug models` подтверждает default272000/max872000/effective95%. Поэтому фактический1M в Desktop НЕ подтверждён; API-spec1.05M не доказывает доступность такого окна по этой подписке. Не менять catalog metadata ради искусственного подтверждения. Новая конфигурация требует повторного runtime readback после подхвата клиентом.
 
 ## Текущий пакет
+
+### Продолжение после каталогового пакета
+
+Запрос пользователя20.09: довести сервис, использовать Superpowers/Caveman и только необходимые reviews. Реализован связный пакет Tasks3–5 [RUB refund plan](../superpowers/plans/2026-09-06-topup-refund-clawback.md): атомарные confirmation snapshot/debt repayment, admin claim/dispatch/reconcile, подписанные refund notifications и объяснимые pending/debt состояния баланса. Итоговое focused financial/TypeScript review F1–F3 — APPROVE; React review исправленного UI — APPROVE. Возврат до первого подтверждения сохраняет durable marker и запрещает поздний grant, включая обе очередности гонки. Общие types/lint/build и native baseline ещё выполняются; это source-приёмка, не активация возвратов или production deploy.
+
+Оставшийся объём до полного сервиса:
+
+| Блок | Что ещё требуется | Граница готовности |
+|---|---|---|
+| Выполнение и учёт | Admission для stream/BYOK/completions/embeddings/media/batches; async ownership/deadlines; запуск recovery на стенде | Каждый включённый тип даёт результат и один подтверждённый расчёт, включая сбой/повтор |
+| RUB | Source Tasks3–5 реализован и reviewed; завершаются общие проверки. Saved-key operator retry и trusted non-Tinkoff identity остаются отдельными возможностями | Пополнение→вызов→возврат/долг, без повторного grant/refund; активация после общего admission boundary |
+| TON | Correction0076 source approved; завершаются общие проверки. Далее observe worker и integration/login/checkout по принятому плану | Local/native evidence отдельно от разрешённого mainnet rehearsal |
+| Автор | Immutable executable version, безопасная модерация endpoint, начисление дохода, payout/reversal | Независимый автор продаёт вызов и видит объяснимое начисление |
+| Продуктовые пути | Покупатель/автор/админ, все обязательные модальности, мобильный/desktop/error recovery | Сквозные сценарии; restricted501 не считается готовой возможностью |
+| Выпуск и интеграции | AG→AM, version-bound Arena evidence, backup/restore, metrics/runbooks, release parity | Проверенный релизный артефакт и окружение; локальные тесты не равны production приёмке |
+
+Процент и срок готовности не аттестованы. Много foundations уже принято, но оставшийся объём включает несколько функциональных подсистем, а не только тесты. Reviews объединяются вокруг законченного изменения после профильных проверок; принятые foundation-проверки не повторяются без причины.
 
 Каталоговый WIP сохранён перед правками. Владение: только catalog-mounted.native.integration.test.ts; controller — актуальные docs. Локальный native test increment принят после проверок и независимых reviews ниже; общий release и AG→AM остаются открытыми.
 
