@@ -16,7 +16,7 @@ const schema = z.object({
     .enum(["debug", "info", "warn", "error", "fatal", "silent"])
     .default("info"),
   GATEWAY_HTTP_EXECUTION_MODE: z
-    .enum(["legacy", "stored_chat_only"])
+    .enum(["legacy", "stored_chat_only", "stored_chat_embeddings"])
     .default("legacy"),
   // CBR endpoints (FIX H5/H6)
   CBR_URL: z.string().default("https://www.cbr.ru/scripts/XML_daily.asp"),
@@ -54,7 +54,7 @@ const parsed = schema.parse(process.env);
 // number remains untouched for existing pricing callers.
 const storedChatCachingDiscountExact = process.env.CACHING_DISCOUNT ?? "0.5";
 
-if (parsed.GATEWAY_HTTP_EXECUTION_MODE === "stored_chat_only") {
+if (parsed.GATEWAY_HTTP_EXECUTION_MODE !== "legacy") {
   // This calls the existing exact decimal parser/range contract without deriving
   // a second price source from the Number-coerced legacy value.
   calculateTokenCharge(

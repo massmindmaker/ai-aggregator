@@ -7,6 +7,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
+import net from 'node:net';
+import { registerGatewayEgressExecutor } from '../egress-executor';
 import {
   registerEgressExecutor,
   unregisterEgressExecutor,
@@ -121,6 +123,53 @@ afterEach(() => {
 });
 
 describe('fetchUpstream egress wiring', () => {
+  it.each([
+    ['content-length exact boundary', 'Content-Length: 16\r\n', 'x'.repeat(16), true],
+    ['oversized declared length before body', 'Content-Length: 17\r\n', '', false],
+    ['close-delimited overflow', '', 'x'.repeat(17), false],
+    ['completed chunked overflow', 'Transfer-Encoding: chunked\r\n', '11\r\n' + 'x'.repeat(17) + '\r\n0\r\n\r\n', false],
+    ['chunked under wire cap', 'Transfer-Encoding: chunked\r\n', '1\r\nx\r\n0\r\n\r\n', true],
+  ])('enforces the adapter cap through the real tunnel: %s', async (_name, headers, body, allowed) => {
+    const sockets = new Set<net.Socket>();
+    let connects = 0;
+    const server = net.createServer(socket => {
+      sockets.add(socket);
+      socket.on('error', () => {});
+      socket.on('close', () => sockets.delete(socket));
+      let connected = false;
+      let pending = '';
+      socket.on('data', chunk => {
+        pending += chunk.toString('latin1');
+        if (!pending.includes('\r\n\r\n')) return;
+        pending = '';
+        if (!connected) {
+          connected = true;
+          connects++;
+          socket.write('HTTP/1.1 200 Connection established\r\n\r\n');
+        } else {
+          socket.end(`HTTP/1.1 200 OK\r\n${headers}\r\n${body}`);
+        }
+      });
+    });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      registerGatewayEgressExecutor();
+      const result = fetchUpstream('http://gateway.internal/v1', {
+        allowlist: ['gateway.internal'], maxRedirects: 0, maxBufferedResponseBytes: 16,
+      }, `http://127.0.0.1:${(server.address() as net.AddressInfo).port}`);
+      if (allowed) {
+        const response = await result;
+        expect(await response.text()).toBe(headers.includes('chunked') ? 'x' : body);
+      } else {
+        await expect(result).rejects.toThrow('response body exceeds configured buffer cap');
+      }
+      expect(connects).toBe(1);
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  });
+
   it('column proxy reaches the executor; response passes through', async () => {
     const res = await fetchUpstream(
       'http://gateway.internal/v1',

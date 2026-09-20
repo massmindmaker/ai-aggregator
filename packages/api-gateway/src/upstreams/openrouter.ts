@@ -15,10 +15,13 @@ import type {
   EmbeddingsResponse,
   AdmittedChatMechanics,
   AdmittedChatRequest,
+  AdmittedEmbeddingsMechanics,
+  AdmittedEmbeddingsRequest,
 } from './interface';
 import { fetchUpstream } from './fetch-upstream';
 import { z } from 'zod';
 import { findReviewedChatProfile } from '../billing/reviewed-token-profiles';
+import { findReviewedEmbeddingProfile } from '../billing/reviewed-embedding-profiles';
 import { logger } from '../lib/logger';
 import { upstreamHttpError } from '../lib/client-errors';
 
@@ -34,6 +37,12 @@ export class AdmittedChatError extends Error {
   constructor(readonly code: 'INVALID_ADMITTED_REQUEST' | 'INVALID_ADMITTED_RESPONSE') {
     super(code === 'INVALID_ADMITTED_REQUEST' ? 'Invalid admitted chat request' : 'Invalid admitted chat response');
     this.name = 'AdmittedChatError';
+  }
+}
+export class AdmittedEmbeddingsError extends Error {
+  constructor(readonly code: 'INVALID_ADMITTED_REQUEST' | 'INVALID_ADMITTED_RESPONSE') {
+    super(code === 'INVALID_ADMITTED_REQUEST' ? 'Invalid admitted embeddings request' : 'Invalid admitted embeddings response');
+    this.name = 'AdmittedEmbeddingsError';
   }
 }
 const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -101,8 +110,163 @@ const admittedChat: AdmittedChatMechanics = Object.freeze({
   },
 });
 
+const EMBEDDINGS_RESPONSE_LIMIT_BYTES = 1_048_576;
+const wellFormed = (value: string): boolean => {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+      index += 1;
+    } else if (code >= 0xdc00 && code <= 0xdfff) return false;
+  }
+  return true;
+};
+const admittedEmbeddingInput = z.string().min(1)
+  .refine(wellFormed)
+  .refine(value => Buffer.byteLength(value, 'utf8') <= 8192);
+const admittedEmbeddingsRequest = z.object({
+  modelId: z.literal('openai/text-embedding-3-small'),
+  input: z.array(admittedEmbeddingInput).min(1).max(16),
+  endpointPolicy: z.object({
+    only: z.tuple([z.literal('openai')]),
+    allowFallbacks: z.literal(false),
+    requireParameters: z.literal(true),
+  }).strict(),
+  egressProxyUrl: z.string().optional(),
+}).strict();
+const admittedEmbeddingsResponse = z.object({
+  id: z.string().min(1).max(256).refine(wellFormed).optional(),
+  object: z.literal('list'),
+  model: z.literal('openai/text-embedding-3-small'),
+  data: z.array(z.object({
+    object: z.literal('embedding'),
+    index: count,
+    embedding: z.array(z.number().finite()).length(1536),
+  })).min(1).max(16),
+  usage: z.object({
+    prompt_tokens: count,
+    total_tokens: count,
+  }),
+});
+
+async function readBoundedJson(response: Response): Promise<unknown> {
+  const declared = response.headers.get('content-length');
+  if (declared !== null && /^[0-9]+$/.test(declared)
+    && BigInt(declared) > BigInt(EMBEDDINGS_RESPONSE_LIMIT_BYTES)) {
+    try { await response.body?.cancel(); } catch { /* classification is fixed */ }
+    throw new AdmittedEmbeddingsError('INVALID_ADMITTED_RESPONSE');
+  }
+  if (response.body === null) throw new AdmittedEmbeddingsError('INVALID_ADMITTED_RESPONSE');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value === undefined || size + value.byteLength > EMBEDDINGS_RESPONSE_LIMIT_BYTES) {
+        try { await reader.cancel(); } catch { /* byte bound remains authoritative */ }
+        throw new AdmittedEmbeddingsError('INVALID_ADMITTED_RESPONSE');
+      }
+      size += value.byteLength;
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  let text: string;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch { throw new AdmittedEmbeddingsError('INVALID_ADMITTED_RESPONSE'); }
+  try { return JSON.parse(text); }
+  catch { throw new AdmittedEmbeddingsError('INVALID_ADMITTED_RESPONSE'); }
+}
+
+const admittedEmbeddings: AdmittedEmbeddingsMechanics = Object.freeze({
+  contract: 'openrouter-pinned-provider-embeddings-v1',
+  async execute(input: AdmittedEmbeddingsRequest) {
+    const parsed = admittedEmbeddingsRequest.safeParse(input);
+    if (!parsed.success) throw new AdmittedEmbeddingsError('INVALID_ADMITTED_REQUEST');
+    const req = parsed.data;
+    const profile = findReviewedEmbeddingProfile({
+      modelSlug: req.modelId,
+      modelType: 'embedding',
+      upstreamId: 'openrouter',
+      upstreamModelId: req.modelId,
+      adapterKey: 'openrouter',
+    });
+    if (!profile || profile.adapterContract !== 'openrouter-pinned-provider-embeddings-v1'
+      || req.input.length > profile.maxInputs) {
+      throw new AdmittedEmbeddingsError('INVALID_ADMITTED_REQUEST');
+    }
+    const apiKey = selectKey();
+    if (!apiKey) throw new Error('model provider not configured');
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    };
+    if (process.env.OPENROUTER_APP_URL) headers['http-referer'] = process.env.OPENROUTER_APP_URL;
+    if (process.env.OPENROUTER_APP_NAME) headers['x-title'] = process.env.OPENROUTER_APP_NAME;
+    const res = await fetchUpstream(`${OPENROUTER_BASE}/embeddings`, {
+      method: 'POST',
+      headers,
+      allowlist: OPENROUTER_ALLOWLIST,
+      maxRedirects: 0,
+      maxBufferedResponseBytes: EMBEDDINGS_RESPONSE_LIMIT_BYTES,
+      body: JSON.stringify({
+        model: profile.upstreamModelId,
+        input: req.input,
+        encoding_format: 'float',
+        provider: {
+          only: profile.endpointPolicy.only,
+          allow_fallbacks: profile.endpointPolicy.allowFallbacks,
+          require_parameters: profile.endpointPolicy.requireParameters,
+        },
+      }),
+    }, req.egressProxyUrl);
+    if (!res.ok) throw upstreamHttpError(res.status);
+    const validated = admittedEmbeddingsResponse.safeParse(await readBoundedJson(res));
+    if (!validated.success) throw new AdmittedEmbeddingsError('INVALID_ADMITTED_RESPONSE');
+    const data = validated.data;
+    if (data.data.length !== req.input.length
+      || data.data.some((item, index) => item.index !== index)
+      || data.usage.total_tokens !== data.usage.prompt_tokens
+      || data.usage.prompt_tokens > profile.contextWindowTokens * req.input.length) {
+      throw new AdmittedEmbeddingsError('INVALID_ADMITTED_RESPONSE');
+    }
+    const usage = Object.freeze({
+      promptTokens: data.usage.prompt_tokens,
+      totalTokens: data.usage.total_tokens,
+      providerResponseId: data.id ?? null,
+    });
+    return Object.freeze({
+      response: Object.freeze({
+        object: 'list' as const,
+        model: data.model,
+        data: Object.freeze(data.data.map(item => Object.freeze({
+          object: 'embedding' as const,
+          index: item.index,
+          embedding: Object.freeze([...item.embedding]),
+        }))),
+        usage: Object.freeze({
+          prompt_tokens: usage.promptTokens,
+          total_tokens: usage.totalTokens,
+        }),
+      }),
+      usage,
+    });
+  },
+});
+
 export const openRouterUpstream: UpstreamAdapter = {
   admittedChat,
+  admittedEmbeddings,
   async chat(req: ChatRequest): Promise<ChatResponse> {
     const apiKey = selectKey(req.byokKey);
     if (!apiKey) {

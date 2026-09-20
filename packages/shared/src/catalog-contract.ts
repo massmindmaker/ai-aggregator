@@ -110,6 +110,23 @@ export interface CatalogInvocationV1 {
   }>;
 }
 
+export interface CatalogEmbeddingsInvocationV1 {
+  readonly method: "POST";
+  readonly path: "/v1/embeddings";
+  readonly authorization: "bearer_api_key";
+  readonly contentType: "application/json";
+  readonly maxBodyBytes: 262144;
+  readonly requestBody: Readonly<{ unknownFields: "reject" }>;
+  readonly headers: CatalogInvocationV1["headers"];
+  readonly parameters: Readonly<{
+    model: Readonly<{ required: true; const: string }>;
+    input: Readonly<{ required: true; minItems: 1; maxItems: 16; item: "nonempty_utf8_string_max_8192_bytes" }>;
+    encoding_format: Readonly<{ required: false; const: "float"; normalizedDefault: "float" }>;
+    dimensions: Readonly<{ required: false; const: 1536; normalizedDefault: 1536 }>;
+    aiag_mode: CatalogInvocationV1["parameters"]["aiag_mode"];
+  }>;
+}
+
 export interface CatalogRetailTokenPricingV1 {
   readonly revision: Sha256Revision;
   readonly currency: "USD";
@@ -133,6 +150,20 @@ export interface CatalogRetailTokenPricingV1 {
     rounding: "ceil_once_to_microcredit";
   }>;
   readonly quoteSemantics: "terms_only_quote_created_at_admission";
+}
+
+export interface CatalogRetailEmbeddingsPricingV1 extends Omit<CatalogRetailTokenPricingV1, "actualCharge" | "maximumAuthorization"> {
+  readonly actualCharge: Readonly<{
+    formulaVersion: "db-input-output-cents-per-1k-legacy-whole-cache-v1";
+    cachePolicy: Readonly<{ scope: "none"; multiplier: "1" }>;
+    rounding: "nearest_nonnegative_half_up_once_to_microcredit";
+  }>;
+  readonly maximumAuthorization: Readonly<{
+    formula: "input_rate*context*input_count";
+    contextWindowTokens: 8192;
+    maxInputs: 16;
+    rounding: "ceil_once_to_microcredit";
+  }>;
 }
 
 export interface CatalogUnavailableItemV1 {
@@ -184,7 +215,32 @@ export interface CatalogAvailableItemV1 {
   readonly pricing: CatalogRetailTokenPricingV1;
 }
 
-export type CatalogItemV1 = CatalogUnavailableItemV1 | CatalogAvailableItemV1;
+export interface CatalogAvailableEmbeddingsItemV1 {
+  readonly object: "catalog.model";
+  readonly model: CatalogModelIdentityV1;
+  readonly availability: CatalogAvailableItemV1["availability"];
+  readonly deployment: Readonly<{
+    id: Uuid;
+    configurationRevision: Sha256Revision;
+    contract: "stored-embeddings-v1";
+  }>;
+  readonly invocation: CatalogEmbeddingsInvocationV1;
+  readonly capabilities: readonly [Readonly<{
+    id: "embeddings.stored.float.v1";
+    inputModalities: readonly ["text"];
+    outputModalities: readonly ["embedding"];
+    storedResult: true;
+    usageReceipt: true;
+    requestDependentRestrictions: readonly ["pii_transborder"];
+    contextWindowTokensPerInput: 8192;
+    maxInputs: 16;
+    dimensions: 1536;
+    encodingFormat: "float";
+  }>];
+  readonly pricing: CatalogRetailEmbeddingsPricingV1;
+}
+
+export type CatalogItemV1 = CatalogUnavailableItemV1 | CatalogAvailableItemV1 | CatalogAvailableEmbeddingsItemV1;
 
 export interface CatalogResponseV1 {
   readonly schemaVersion: 1;
@@ -471,6 +527,61 @@ const pricingSchema = z
   })
   .strict();
 
+const embeddingsPricingSchema = z
+  .object({
+    revision: sha256RevisionSchema,
+    currency: z.literal("USD"),
+    settlementUnit: z.literal("microcredit"),
+    microcreditsPerUsdCent: z.literal("1000"),
+    rates: pricingSchema.shape.rates,
+    actualCharge: z.object({
+      formulaVersion: z.literal("db-input-output-cents-per-1k-legacy-whole-cache-v1"),
+      cachePolicy: z.object({ scope: z.literal("none"), multiplier: z.literal("1") }).strict(),
+      rounding: z.literal("nearest_nonnegative_half_up_once_to_microcredit"),
+    }).strict(),
+    maximumAuthorization: z.object({
+      formula: z.literal("input_rate*context*input_count"),
+      contextWindowTokens: z.literal(8192),
+      maxInputs: z.literal(16),
+      rounding: z.literal("ceil_once_to_microcredit"),
+    }).strict(),
+    quoteSemantics: z.literal("terms_only_quote_created_at_admission"),
+  })
+  .strict();
+
+const embeddingsInvocationSchema = z.object({
+  method: z.literal("POST"),
+  path: z.literal("/v1/embeddings"),
+  authorization: z.literal("bearer_api_key"),
+  contentType: z.literal("application/json"),
+  maxBodyBytes: z.literal(262144),
+  requestBody: z.object({ unknownFields: z.literal("reject") }).strict(),
+  headers: invocationSchema.shape.headers,
+  parameters: z.object({
+    model: z.object({ required: z.literal(true), const: boundedTextSchema }).strict(),
+    input: z.object({
+      required: z.literal(true), minItems: z.literal(1), maxItems: z.literal(16),
+      item: z.literal("nonempty_utf8_string_max_8192_bytes"),
+    }).strict(),
+    encoding_format: z.object({ required: z.literal(false), const: z.literal("float"), normalizedDefault: z.literal("float") }).strict(),
+    dimensions: z.object({ required: z.literal(false), const: z.literal(1536), normalizedDefault: z.literal(1536) }).strict(),
+    aiag_mode: invocationSchema.shape.parameters.shape.aiag_mode,
+  }).strict(),
+}).strict();
+
+const embeddingsCapabilitySchema = z.object({
+  id: z.literal("embeddings.stored.float.v1"),
+  inputModalities: z.tuple([z.literal("text")]),
+  outputModalities: z.tuple([z.literal("embedding")]),
+  storedResult: z.literal(true),
+  usageReceipt: z.literal(true),
+  requestDependentRestrictions: z.tuple([z.literal("pii_transborder")]),
+  contextWindowTokensPerInput: z.literal(8192),
+  maxInputs: z.literal(16),
+  dimensions: z.literal(1536),
+  encodingFormat: z.literal("float"),
+}).strict();
+
 const unavailableItemSchema = z
   .object({
     object: z.literal("catalog.model"),
@@ -520,9 +631,29 @@ const availableItemSchema = z
     }
   });
 
+const availableEmbeddingsItemSchema = z.object({
+  object: z.literal("catalog.model"),
+  model: modelSchema,
+  availability: availableAvailabilitySchema,
+  deployment: z.object({
+    id: uuidSchema,
+    configurationRevision: sha256RevisionSchema,
+    contract: z.literal("stored-embeddings-v1"),
+  }).strict(),
+  invocation: embeddingsInvocationSchema,
+  capabilities: z.tuple([embeddingsCapabilitySchema]),
+  pricing: embeddingsPricingSchema,
+}).strict().superRefine((value, context) => {
+  if (value.model.type !== "embedding")
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "embeddings item requires embedding model" });
+  if (value.invocation.parameters.model.const !== value.model.slug)
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "invocation model must match model slug" });
+});
+
 export const catalogItemV1Schema = z.union([
   unavailableItemSchema,
   availableItemSchema,
+  availableEmbeddingsItemSchema,
 ]);
 
 export const catalogResponseV1Schema = z

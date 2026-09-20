@@ -32,6 +32,7 @@ import { registerGatewayEgressExecutor } from './egress-executor';
 
 import { storedChat, respondStoredChat, unsupportedStoredExecution } from './routes/v1/stored-chat';
 import { fixedStoredChatHttpError } from './billing/stored-chat-http-contract';
+import { storedEmbeddings } from './routes/v1/stored-embeddings';
 
 // server-node.ts imports this module directly in production, so startup wiring
 // must live on this path rather than relying on the package barrel (index.ts).
@@ -77,7 +78,7 @@ app.get('/', (c) =>
 // fixed public error envelope while every other v1 route retains its own one.
 app.use('/v1/catalog', catalogHttpBoundary);
 app.use('/v1/catalog/', catalogHttpBoundary);
-if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_only') {
+if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
   // Early cache policy includes auth, RPM, unsupported routes and 404 responses.
   app.use('/v1/*', async (c, next) => {
     c.header('Cache-Control', 'private, no-store');
@@ -102,11 +103,17 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_only') {
   restricted.use('*', requireApiKey);
   const aliases = (path: string) => [path, `${path}/`];
   restricted.on('POST', aliases('/chat/completions'), rpmOnly, storedChat);
-  const unsupported = ['/completions', '/embeddings', '/images/generations', '/video/generations',
+  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings')
+    restricted.on('POST', aliases('/embeddings'), rpmOnly, storedEmbeddings);
+  const unsupported = ['/completions',
+    ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_only' ? ['/embeddings'] : []),
+    '/images/generations', '/video/generations',
     '/audio/speech', '/audio/transcriptions', '/batches'];
   for (const path of unsupported)
     restricted.on(['POST', 'PUT', 'PATCH', 'DELETE'], aliases(path), unsupportedStoredExecution);
   restricted.on(['PUT', 'PATCH', 'DELETE'], aliases('/chat/completions'), unsupportedStoredExecution);
+  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings')
+    restricted.on(['PUT', 'PATCH', 'DELETE'], aliases('/embeddings'), unsupportedStoredExecution);
 
   // Copy only the existing read handlers, with their existing operational guards.
   // Importing the batches module must never mount its POST/queue capability here.

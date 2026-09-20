@@ -52,6 +52,8 @@ export interface SafeFetchOptions extends RequestInit {
   allowlist?: string[];
   /** Override the redirect cap (default 5). */
   maxRedirects?: number;
+  /** Proxy wire-body buffer cap (including chunk framing); direct callers bound their reader. */
+  maxBufferedResponseBytes?: number;
   /**
    * Route this request's network egress through a SOCKS5 / HTTP-CONNECT proxy
    * (`socks5://[user:pass@]host:port` or `http://[user:pass@]host:port`).
@@ -90,6 +92,7 @@ export type EgressExecutor = (
   proxyUrl: string,
   /** Pre-validated destination address for the CONNECT target (anti-rebind). */
   connectAddr?: string,
+  maxBufferedResponseBytes?: number,
 ) => Promise<Response>;
 
 let egressExecutor: EgressExecutor | null = null;
@@ -325,6 +328,7 @@ export async function safeFetch(
     allowlist: allowArr,
     maxRedirects = MAX_REDIRECTS,
     egressProxyUrl,
+    maxBufferedResponseBytes,
     ...init
   } = options;
   const allowlist = new Set((allowArr ?? []).map((s) => s.toLowerCase()));
@@ -350,6 +354,7 @@ export async function safeFetch(
         { ...init, method, body, redirect: 'manual' },
         egressProxyUrl,
         pinnedIp ?? undefined,
+        maxBufferedResponseBytes,
       );
     } else {
       const dispatcher = pinnedIp ? await buildPinnedDispatcher(pinnedIp, family) : undefined;

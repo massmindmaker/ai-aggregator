@@ -130,7 +130,12 @@ BEGIN
   END LOOP;
   IF _key.id IS NULL OR _key.disabled_at IS NOT NULL OR _key.revoked_at IS NOT NULL THEN RAISE EXCEPTION 'API_KEY_ORG_MISMATCH' USING ERRCODE='P0005'; END IF;
   IF _quota_version=2 THEN
-   IF _billing_mode='stored' AND _route_kind IS DISTINCT FROM 'chat' THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
+   IF _billing_mode='stored' AND _route_kind NOT IN('chat','embeddings') THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
+   IF _billing_mode='stored' AND EXISTS(
+    SELECT 1 FROM jsonb_array_elements(_quote_snapshot->'tokenQuote'->'candidates') c
+    WHERE CASE _route_kind WHEN 'chat' THEN c->>'modelType' IS DISTINCT FROM 'chat'
+      WHEN 'embeddings' THEN c->>'modelType' IS DISTINCT FROM 'embedding' ELSE TRUE END
+   ) THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
    IF _key.cost_limit_monthly_rub IS NOT NULL THEN
     IF _key.cost_limit_monthly_rub::text !~ '^(0|[1-9][0-9]*)(\.[0-9]+)?$' THEN RAISE EXCEPTION 'INVALID_LEGACY_QUOTA_POLICY'; END IF;
     _monthly:=NULLIF(aiag_quota_money(_key.cost_limit_monthly_rub::numeric*1000),0);

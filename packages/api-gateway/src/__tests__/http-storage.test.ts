@@ -189,6 +189,20 @@ function response() {
     usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
   };
 }
+function embeddingsResponse() {
+  return {
+    object: "list" as const,
+    model: "openai/text-embedding-3-small",
+    data: [
+      {
+        object: "embedding" as const,
+        index: 0,
+        embedding: Array.from({ length: 1536 }, (_, index) => index / 1536),
+      },
+    ],
+    usage: { prompt_tokens: 17, total_tokens: 17 },
+  };
+}
 function readRow(overrides: Record<string, unknown> = {}) {
   return {
     contract_version: 1,
@@ -231,6 +245,20 @@ describe("HTTP storage transport contract", () => {
       response: response(),
     });
   });
+  it("selects the strict embeddings parser from the trusted identity route", async () => {
+    const db = createSqlStub();
+    const embeddingsIdentity = { ...identity, routeKind: "embeddings" as const };
+    db.returnRows([readRow({ response_body: embeddingsResponse() })]);
+    const result = await readGatewayHttpResult(embeddingsIdentity, db.client);
+    expect(result).toMatchObject({
+      status: "ready",
+      response: { object: "list", model: "openai/text-embedding-3-small" },
+    });
+    db.returnRows([readRow({ response_body: response() })]);
+    await expect(
+      readGatewayHttpResult(embeddingsIdentity, db.client),
+    ).rejects.toMatchObject(unavailable);
+  });
   it("expires only confirmed boolean", async () => {
     const db = createSqlStub();
     db.returnRows([{ did_expire: true }]);
@@ -250,7 +278,7 @@ describe("HTTP fails closed before and after transport", () => {
     { apiKeyId: "bad" },
     { billingRequestId: undefined },
     { contractVersion: "1" },
-    { routeKind: "embeddings" },
+    { routeKind: "audio" },
     { billingMode: "byok_fee" },
     { idempotencyKeyDigest: "A".repeat(64) },
     { requestFingerprint: "b".repeat(63) },

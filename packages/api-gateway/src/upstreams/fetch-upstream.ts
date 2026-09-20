@@ -62,6 +62,8 @@ export type FetchUpstreamInit = Omit<RequestInit, 'body'> & {
   allowlist?: string[];
   /** Admitted one-attempt calls disable every redirect hop. */
   maxRedirects?: number;
+  /** Limit the proxy buffer before a Response exists; direct reads are bounded by the adapter. */
+  maxBufferedResponseBytes?: number;
   /**
    * Marks an SSE/streaming request (`chatStream`). When an egress proxy
    * RESOLVES for the call, the request is rejected fail-loud with

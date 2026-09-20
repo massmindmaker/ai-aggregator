@@ -36,13 +36,14 @@ describe.skipIf(!RUN)("TON invoice native core", () => {
     return fixture;
   };
 
-  it("matches the canonical baseline inventory on the actual disposable manifest", async () => {
+  it("matches the historical TON core inventory on its disposable 0072 manifest", async () => {
     const f = await open();
-    const baseline = await readFile("packages/database/scripts/__tests__/native-baseline.integration.test.ts", "utf8");
-    const expected = Number(baseline.match(/table_count\)\)\.toBe\((\d+)\)/)?.[1]);
+    // The owned TON core database deliberately ends at0072; the head baseline
+    // includes later catalog/reconciliation tables and cannot be its oracle.
+    const manifest = await f.client.query({ text: "SELECT count(*)::int AS count,max(version) AS latest FROM schema_migrations", values: [] });
+    expect(manifest.rows).toEqual([{ count: 72, latest: 'migrations/0072_ton_invoice_core.sql' }]);
     const inventory = await f.client.query({ text: "SELECT count(*)::int AS count FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'", values: [] });
-    expect(inventory.rows).toEqual([{ count: expected }]);
-    expect(expected).toBe(110);
+    expect(inventory.rows).toEqual([{ count: 110 }]);
   });
 
   it("matches all 18 applied function bodies and denies PUBLIC EXECUTE", async () => {
