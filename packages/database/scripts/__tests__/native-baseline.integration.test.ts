@@ -161,7 +161,8 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(result.rows[0].dispatch_function).toContain(
       "aiag_mark_gateway_charge_dispatched",
     );
-    expect(Number(result.rows[0].table_count)).toBe(110);
+    // 0073 adds catalog revisions; 0074 adds observations and reconciliation cursors.
+    expect(Number(result.rows[0].table_count)).toBe(113);
   });
 
   it("verifies TON immutable schema, invoker entrypoints and exact mirror", async () => {
@@ -246,13 +247,13 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(migration).toContain(quotaMirror.trim());
   });
 
-  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 72 migrations", async () => {
+  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 76 migrations", async () => {
     const migration = await readFile(resolve("packages/database/migrations/0069_gateway_http_storage.sql"), "utf8");
     const mirror = await readFile(resolve("packages/database/src/functions/gateway-http-storage.sql"), "utf8");
     expect(migration).toContain(mirror.trim());
     const previous = await readFile(resolve("packages/database/migrations/0068_gateway_durable_spending_quotas.sql"));
     expect(createHash("sha256").update(previous).digest("hex")).toBe("b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6");
-    expect(await discoverNativeMigrations()).toHaveLength(72);
+    expect(await discoverNativeMigrations()).toHaveLength(76);
     const types = await client.query<{ name: string; fields: string[] }>({ text: `
       SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
       JOIN pg_attribute a ON a.attrelid=t.typrelid AND a.attnum>0 AND NOT a.attisdropped

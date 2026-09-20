@@ -12,7 +12,7 @@
 | 4. Arena | Собственный entrypoint и prediction evaluation plan | Executable scorer/hash и opt-in binding→DB jobs→sandboxed evaluator→результат |
 | 5. Agents Market | Собственный native-account-principal/Web plan | HTTP/security review→guarded auth browser→UUID domain/worker→AG HTTP integration и independent Web/TMA acceptance |
 
-TON0076 прошла итоговое source-review: прежние шесть HIGH закрыты, в том числе получение времени после ожидания row lock; ошибка TypeScript исправлена. Native evidence: 14 существующих сценариев и новая группа expiry/takeover PASS. Это снимает блокировку общего database baseline, который поставлен в очередь после итоговой сборки; его результат пока не получен. Selector, pg adapter, bootstrap/index и replay settlement recovery уже реализованы и приняты — писать их повторно не требуется. Runtime recovery остаётся выключен; включение и проверка на стенде — отдельный operational шаг. Новых RPC не было.
+TON0076 прошла итоговое source-review: прежние шесть HIGH закрыты, в том числе получение времени после ожидания row lock; ошибка TypeScript исправлена. Native evidence: 14 существующих сценариев и новая группа expiry/takeover PASS. Общий database baseline теперь подтверждён: 331 сценарий прошёл в полном запуске, три оставшихся — в точечных повторах после диагностики startup timeout и обновления двух устаревших schema/manifest ожиданий; итого334. TON core58 также PASS. Selector, pg adapter, bootstrap/index и replay settlement recovery уже реализованы и приняты — писать их повторно не требуется. Runtime recovery остаётся выключен; включение и проверка на стенде — отдельный operational шаг. Новых RPC не было.
 
 План19.09 — порядок ближайших пакетов, а не замена полной product programme07.09. В частности, авторский lifecycle AG-P3, остальные оплачиваемые маршруты AG-P1 и UX/release AG-P5 не исчезли из объёма. Исторические числовые оценки не являются сегодняшними процентами готовности.
 
@@ -24,7 +24,7 @@ TON0076 прошла итоговое source-review: прежние шесть H
 
 Источники: собственные production-continuation планы07.09 каждого репозитория; текущие owner checkpoints и AG-P1-route-coverage уточняют их старые checkbox-состояния. Общая cooperative-roadmap задаёт зависимость Aggregator→Arena→Market, но не заменяет индивидуальную приёмку.
 
-## Проверенный исходный срез
+## Исторический исходный срез перед каталоговым пакетом
 
 - Aggregator: c440ebb; prior c25cb8c catalog consumer contract134/native4 accepted locally. c440ebb исправляет исторический TON2 migration snapshot в тестовых orchestrators; проверка текущего результата выполняется отдельно.
 - Arena: c2f6559; accepted pure scorer, DB jobs/evaluator ещё открыты.
@@ -44,15 +44,15 @@ TON0076 прошла итоговое source-review: прежние шесть H
 
 ### Продолжение после каталогового пакета
 
-Запрос пользователя20.09: довести сервис, использовать Superpowers/Caveman и только необходимые reviews. Реализован связный пакет Tasks3–5 [RUB refund plan](../superpowers/plans/2026-09-06-topup-refund-clawback.md): атомарные confirmation snapshot/debt repayment, admin claim/dispatch/reconcile, подписанные refund notifications и объяснимые pending/debt состояния баланса. Итоговое focused financial/TypeScript review F1–F3 — APPROVE; React review исправленного UI — APPROVE. Возврат до первого подтверждения сохраняет durable marker и запрещает поздний grant, включая обе очередности гонки. Общие types/lint/build и native baseline ещё выполняются; это source-приёмка, не активация возвратов или production deploy.
+Запрос пользователя20.09: довести сервис, использовать Superpowers/Caveman и только необходимые reviews. Реализован связный пакет Tasks3–5 [RUB refund plan](../superpowers/plans/2026-09-06-topup-refund-clawback.md): атомарные confirmation snapshot/debt repayment, admin claim/dispatch/reconcile, подписанные refund notifications и объяснимые pending/debt состояния баланса. Итоговое focused financial/TypeScript review F1–F3 — APPROVE; React review исправленного UI — APPROVE. Возврат до первого подтверждения сохраняет durable marker и запрещает поздний grant, включая обе очередности гонки. Общие types/lint/build и native baseline подтверждены ниже; это локальная приёмка, не активация возвратов или production deploy.
 
 Оставшийся объём до полного сервиса:
 
 | Блок | Что ещё требуется | Граница готовности |
 |---|---|---|
 | Выполнение и учёт | Admission для stream/BYOK/completions/embeddings/media/batches; async ownership/deadlines; запуск recovery на стенде | Каждый включённый тип даёт результат и один подтверждённый расчёт, включая сбой/повтор |
-| RUB | Source Tasks3–5 реализован и reviewed; завершаются общие проверки. Saved-key operator retry и trusted non-Tinkoff identity остаются отдельными возможностями | Пополнение→вызов→возврат/долг, без повторного grant/refund; активация после общего admission boundary |
-| TON | Correction0076 source approved; завершаются общие проверки. Далее observe worker и integration/login/checkout по принятому плану | Local/native evidence отдельно от разрешённого mainnet rehearsal |
+| RUB | Tasks3–5 реализованы, reviewed и проверены локально. Saved-key operator retry и trusted non-Tinkoff identity остаются отдельными возможностями | Пополнение→вызов→возврат/долг, без повторного grant/refund; активация после общего admission boundary |
+| TON | Correction0076 принята локально после source-review и общих проверок. Далее observe worker и integration/login/checkout по принятому плану | Local/native evidence отдельно от разрешённого mainnet rehearsal |
 | Автор | Immutable executable version, безопасная модерация endpoint, начисление дохода, payout/reversal | Независимый автор продаёт вызов и видит объяснимое начисление |
 | Продуктовые пути | Покупатель/автор/админ, все обязательные модальности, мобильный/desktop/error recovery | Сквозные сценарии; restricted501 не считается готовой возможностью |
 | Выпуск и интеграции | AG→AM, version-bound Arena evidence, backup/restore, metrics/runbooks, release parity | Проверенный релизный артефакт и окружение; локальные тесты не равны production приёмке |
@@ -70,8 +70,18 @@ TON0076 прошла итоговое source-review: прежние шесть H
 - Финальные проверки на итоговом файле: native7/7 PASS, strict gateway test TypeScript exit0, scoped ESLint exit0, diff-check PASS. Root config discovery5/5 PASS.
 - Независимые TypeScript и native GLM reviews — APPROVE. Полный GLM review d7cb2029e24846a5bd538260839db606; focused SQL-fix re-review eeff17f4eb504f9aace767ae1ed06e7b; последнее cleanup re-review0cb8e061d34244e38beceb21edbded8b. Все завершились с observed_models GLM-5.3-Flash. Попытка resume57c3e6ef8b14471ab778b0348e546510 упала до нового turn и не считается review.
 - Закрыты findings: ledger selector по request_id, независимые денежные literals, точные quote/pricing/usage snapshots, typed prepared JSON parameters и сохранение обеих ошибок cleanup. Low-предложение сравнивать фиксированные catalog decimals строками отложено; текущие точные денежные суммы проверяются отдельными целыми literals.
-- Это локальная приёмка нового native matrix. Полный database baseline ждёт TON0076; source/release composition и реальный AG→AM consumer не объявлены принятыми.
+- Это локальная приёмка нового native matrix. На момент каталогового пакета database baseline ждал TON0076; этот локальный gate закрыт следующим платёжным checkpoint ниже. Runtime/release и реальный AG→AM consumer не объявлены принятыми.
 - Из14 сохранённых перед работой modified/untracked файлов изменён только каталоговый test; остальные13, включая TON0076 и финансовый WIP, совпали по SHA256. Root script и его config-test уже были WIP и сохранены без дополнительных изменений.
 - Восстановлены исчезнувший `/tmp/ai-ecosystem-run` и существующий owned local PostgreSQL15432/Redis16379; без install/reset/migrations.
 
 Маршрутизация проверена реальными запусками: Luna Low (узкая инвентаризация), native GLM (диагностика и implementation candidate), Sol Medium (финализация и независимое TS review). Первый GLM implementation достиг15min deadline после сохранения правок; этот результат завершён Sol, а не выдан за завершённый GLM job. Диагностический GLM job завершился с observed_models GLM-5.3-Flash; оба исторически падавших TON2 orchestration unit набора проходят наc440ebb. Это не приёмка TON0076 и не полный unit baseline.
+
+## Итоговый платёжный checkpoint20.09
+
+- `892a09d`: TON persistence correction, additive0076; `0074/0075` сохранены. Native14+expiry1, database types, scoped lint и independent focused review PASS/APPROVE.
+- `058ee97`: RUB Tasks3–5 — immutable grant/debt repayment, admin trusted-identity refund claims, signed webhook reconciliation, durable marker для refund-before-confirmation и truthful balance UI. Combined financial/TS fixes F1–F3 и React review закрыты. Focused24, native confirmation/refund19 в общем прогоне, balance12, payment compatibility26 подтверждены соответствующими пакетами.
+- Root build/types/lint: production Next build219pages, package builds, types и доступные lint scripts прошли. Общий процесс получил SIGTERM на последнем повторном worker build; завершён отдельно только worker build, exit0. Полный build заново не запускался.
+- Native root matrix334 подтверждена совокупно:331 PASS исходного запуска; startup child1 PASS отдельно за3.3s без изменения исходника; stale schema/manifest2 PASS после обновления110→113tables (catalog revision + TON observations/cursors) и72→76migrations. Checksums исторических migrations, mirrors и проекции не ослаблялись.
+- Отдельный обязательный TON core:58 PASS, fresh72/no-op72, rollback и cleanup targetSessions0 подтверждены helper; этот historical core gate не заменяет отдельные reconciliation15.
+- Evidence: `.superpowers/sdd/2026-09-06-topup-refund-clawback/final-{root-validation,worker-build,database-baseline,legacy-startup-focused,baseline-manifest-focused}.log` и TON workspace `final-{scoped-lint,ton-core-native}.log`. Нет production migrations/deploy, новых RPC или платных provider calls.
+- Следующая функция уже реализуется в изолированной ветке `feat/stored-embeddings-lifecycle`, worktree `/home/bob/Projects/.worktrees/ai-aggregator-stored-embeddings`, base `dd02f4c`. Это WIP по linked contract, не принятый embeddings lifecycle. Старый `stored_chat_only` и disabled recovery не активировались.
