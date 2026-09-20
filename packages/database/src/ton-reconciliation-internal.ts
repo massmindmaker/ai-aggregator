@@ -77,15 +77,17 @@ function operationDeadlineError(): Error {
   return new Error("TON_DB_OPERATION_DEADLINE_EXCEEDED");
 }
 
-function queryClient(client: PoolClient): TonSqlClient {
+function queryClient(client: PoolClient, isActive: () => boolean): TonSqlClient {
   return {
     async query<Row extends Record<string, unknown> = Record<string, unknown>>(
       config: { text: string; values: readonly unknown[] },
     ) {
+      if (!isActive()) throw operationDeadlineError();
       const result = await client.query<Row>({
         text: config.text,
         values: [...config.values],
       });
+      if (!isActive()) throw operationDeadlineError();
       return { rows: result.rows, rowCount: result.rowCount };
     },
   };
@@ -99,9 +101,15 @@ class NativeTonWorkerDatabase implements CloseableTonWorkerDatabase {
   transaction<T>(run: (tx: TonSqlClient) => Promise<T>): Promise<T> {
     let client: PoolClient | undefined;
     let transactionStarted = false;
-    let finished = false;
     let deadlineExceeded = false;
+    let released = false;
     let rollbackPromise: Promise<void> | undefined;
+
+    const releaseOnce = (destroy = false): void => {
+      if (!client || released) return;
+      released = true;
+      client.release(destroy || undefined);
+    };
 
     const rollbackOnce = (): Promise<void> => {
       if (!client || !transactionStarted) return Promise.resolve();
@@ -123,7 +131,9 @@ class NativeTonWorkerDatabase implements CloseableTonWorkerDatabase {
           await rollbackOnce();
           throw operationDeadlineError();
         }
-        const result = await run(queryClient(client));
+        const result = await run(
+          queryClient(client, () => !deadlineExceeded && !released),
+        );
         if (deadlineExceeded) {
           await rollbackOnce();
           throw operationDeadlineError();
@@ -132,17 +142,16 @@ class NativeTonWorkerDatabase implements CloseableTonWorkerDatabase {
         transactionStarted = false;
         return result;
       } catch (error) {
-        if (transactionStarted) {
+        if (transactionStarted && !deadlineExceeded) {
           try {
             await rollbackOnce();
           } catch {
             // The original failure or outer deadline remains authoritative.
           }
         }
-        throw error;
+        throw deadlineExceeded ? operationDeadlineError() : error;
       } finally {
-        finished = true;
-        client.release();
+        releaseOnce(deadlineExceeded);
       }
     })();
 
@@ -151,6 +160,7 @@ class NativeTonWorkerDatabase implements CloseableTonWorkerDatabase {
       const timer = setTimeout(() => {
         deadlineExceeded = true;
         if (client && transactionStarted) void rollbackOnce().catch(() => {});
+        releaseOnce(true);
         reject(operationDeadlineError());
       }, TON_DB_OPERATION_DEADLINE_MS);
       operation.then(
@@ -163,7 +173,6 @@ class NativeTonWorkerDatabase implements CloseableTonWorkerDatabase {
           if (!deadlineExceeded) reject(error);
         },
       );
-      if (finished) clearTimeout(timer);
     });
   }
 

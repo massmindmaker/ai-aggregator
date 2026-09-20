@@ -12,6 +12,7 @@ vi.mock("pg", () => ({
 }));
 
 import type {
+  TonInvoice,
   TonObservationInput,
   TonPaymentDatabase,
   TonReconciliationSource,
@@ -110,6 +111,56 @@ function observation(
     providerCursor: CURSOR,
     snapshot: { reference: "aiag-ton:00000000-0000-4000-8000-000000000003" },
     observedAtMs: 1_789_000_000_001,
+    ...patch,
+  };
+}
+
+function invoice(patch: Partial<TonInvoice> = {}): TonInvoice {
+  const asset = source().asset;
+  return {
+    schemaVersion: 1,
+    product: "aggregator",
+    purpose: "gateway_topup",
+    invoiceId: INVOICE,
+    ownerId: OWNER,
+    orgId: "00000000-0000-4000-8000-000000000003",
+    orderId: "00000000-0000-4000-8000-000000000004",
+    idempotencyKey: "reconciliation-result",
+    quoteId: "quote-reconciliation-result",
+    quote: {
+      schemaVersion: 1,
+      quoteId: "quote-reconciliation-result",
+      sourcePrice: { unit: "gateway_microcredits", amountAtomic: "10" },
+      asset,
+      fx: {
+        sourceUnit: "gateway_microcredits",
+        targetAsset: asset,
+        numerator: "1",
+        denominator: "1",
+        rounding: "floor",
+        source: "unit-fixture",
+        observedAtMs: 1_789_000_000_000,
+        expiresAtMs: 1_789_000_120_000,
+      },
+      additionalFeeAtomic: "1",
+      expiresAtMs: 1_789_000_120_000,
+      amountAtomic: "11",
+      quotedAtMs: 1_789_000_000_001,
+    },
+    grantMicrocredits: "10",
+    priceRevision: "unit-v1",
+    network: "tvm:-3",
+    asset,
+    amountAtomic: "11",
+    recipient: RECIPIENT,
+    reference: "aiag-ton:00000000-0000-4000-8000-000000000005",
+    expectedSender: null,
+    finalityPolicyId: "finality-v1",
+    verifierVersion: "verifier-v1",
+    expiresAt: "2026-09-13T18:02:00+00:00",
+    createdAt: "2026-09-13T18:00:00+00:00",
+    status: "pending",
+    reviewReason: null,
     ...patch,
   };
 }
@@ -321,6 +372,97 @@ describe("TON reconciliation wrapper validation", () => {
       }),
     ).rejects.toThrow("TON_INVALID_REFERENCES");
     expect(invalid.calls).toHaveLength(0);
+  });
+
+  it("parses the exact invoice projection in both reconciliation read wrappers", async () => {
+    const expected = invoice();
+    const listed = recordingDatabase([[expected]]);
+    await expect(
+      findTonInvoicesForReconciliation(listed.db, {
+        source: source(),
+        references: [expected.reference],
+      }),
+    ).resolves.toEqual([expected]);
+    const single = recordingDatabase([expected]);
+    await expect(
+      getTonInvoiceForReconciliation(single.db, expected.invoiceId),
+    ).resolves.toEqual(expected);
+  });
+
+  it("binds the single invoice result to the requested invoice ID", async () => {
+    const { db } = recordingDatabase([
+      invoice({ invoiceId: "00000000-0000-4000-8000-000000000006" }),
+    ]);
+    await expect(getTonInvoiceForReconciliation(db, INVOICE)).rejects.toThrow(
+      "TON_INVALID_DATABASE_RESULT",
+    );
+  });
+
+  it("preserves PostgreSQL timestamp offset and microsecond precision", async () => {
+    const expected = invoice({
+      createdAt: "2026-09-13T23:30:00.123456+05:30",
+      expiresAt: "2026-09-13T18:02:00.1+00:00",
+    });
+    const { db } = recordingDatabase([expected]);
+    await expect(
+      getTonInvoiceForReconciliation(db, expected.invoiceId),
+    ).resolves.toEqual(expected);
+  });
+
+  it.each([
+    ["extra key", { ...invoice(), legacy: true }],
+    [
+      "missing key",
+      Object.fromEntries(
+        Object.entries(invoice()).filter(([key]) => key !== "quoteId"),
+      ),
+    ],
+    ["invalid status", { ...invoice(), status: "paid" }],
+    ["noncanonical address", { ...invoice(), recipient: `0:${"A".repeat(64)}` }],
+    ["invalid time", { ...invoice(), createdAt: "yesterday" }],
+    ["non-PostgreSQL UTC suffix", { ...invoice(), createdAt: "2026-09-13T18:00:00Z" }],
+    ["noncanonical fraction", { ...invoice(), createdAt: "2026-09-13T18:00:00.120+00:00" }],
+    ["invalid calendar date", { ...invoice(), createdAt: "2026-02-29T18:00:00+00:00" }],
+  ])("rejects a %s from the invoice result boundary", async (_label, value) => {
+    const { db } = recordingDatabase([value]);
+    await expect(
+      getTonInvoiceForReconciliation(db, INVOICE),
+    ).rejects.toThrow("TON_INVALID_DATABASE_RESULT");
+  });
+
+  it.each([
+    [
+      "wrong recipient",
+      [{ ...invoice(), recipient: `0:${"6".repeat(64)}` }],
+    ],
+    [
+      "wrong asset",
+      [{ ...invoice(), asset: { network: "tvm:-3", kind: "native", decimals: 8 } }],
+    ],
+    [
+      "unrequested reference",
+      [
+        {
+          ...invoice(),
+          reference: "aiag-ton:00000000-0000-4000-8000-000000000006",
+        },
+      ],
+    ],
+    ["excess rows", [invoice(), invoice({ invoiceId: OWNER })]],
+    ["duplicate rows", [invoice(), invoice()]],
+  ])("rejects %s in an invoice list result", async (_label, rows) => {
+    const expected = invoice();
+    const secondReference = "aiag-ton:00000000-0000-4000-8000-000000000006";
+    const { db } = recordingDatabase([rows]);
+    await expect(
+      findTonInvoicesForReconciliation(db, {
+        source: source(),
+        references:
+          _label === "duplicate rows"
+            ? [expected.reference, secondReference]
+            : [expected.reference],
+      }),
+    ).rejects.toThrow("TON_INVALID_DATABASE_RESULT");
   });
 
   it("validates observation kind/reason/identity pairings before SQL", async () => {
@@ -563,6 +705,38 @@ describe("bounded TON native database adapter", () => {
       });
     },
   );
+
+  it("rejects every late callback query and releases once after the deadline", async () => {
+    vi.useFakeTimers();
+    const callbackGate = deferred<void>();
+    const fake = fakePool();
+    pgMock.createPool.mockReturnValue(fake.pool);
+    const db = createTonWorkerDatabase("postgresql://user:secret@db.test/db");
+    const operation = db.transaction(async (tx) => {
+      await callbackGate.promise;
+      await tx.query({ text: "MUTATE LATE", values: [] });
+      return "late";
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const assertion = expect(operation).rejects.toThrow(
+      "TON_DB_OPERATION_DEADLINE_EXCEEDED",
+    );
+    await vi.advanceTimersByTimeAsync(TON_DB_OPERATION_DEADLINE_MS);
+    await assertion;
+    expect(fake.client.query.mock.calls.map(([config]) => config.text)).toEqual([
+      "BEGIN",
+      "ROLLBACK",
+    ]);
+    expect(fake.client.release).toHaveBeenCalledOnce();
+
+    callbackGate.resolve();
+    await vi.runAllTimersAsync();
+    expect(fake.client.query).not.toHaveBeenCalledWith({
+      text: "MUTATE LATE",
+      values: [],
+    });
+    expect(fake.client.release).toHaveBeenCalledOnce();
+  });
 
   it("memoizes close and bounds a hung pool end", async () => {
     vi.useFakeTimers();

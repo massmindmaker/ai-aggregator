@@ -643,6 +643,159 @@ function sourceJson(source: TonReconciliationSource): string {
   return canonicalJson(source);
 }
 
+const INVOICE_KEYS = [
+  "schemaVersion",
+  "product",
+  "purpose",
+  "invoiceId",
+  "ownerId",
+  "orgId",
+  "orderId",
+  "idempotencyKey",
+  "quoteId",
+  "quote",
+  "grantMicrocredits",
+  "priceRevision",
+  "network",
+  "asset",
+  "amountAtomic",
+  "recipient",
+  "reference",
+  "expectedSender",
+  "finalityPolicyId",
+  "verifierVersion",
+  "expiresAt",
+  "createdAt",
+  "status",
+  "reviewReason",
+] as const;
+
+function exactInvoiceAsset(value: unknown): TonInvoice["asset"] {
+  const raw = object(value);
+  if (raw.kind === "native") keys(raw, ["network", "kind", "decimals"]);
+  else keys(raw, ["network", "kind", "masterAddress", "decimals"]);
+  const normalized = normalizeAsset(raw);
+  if (canonicalJson(normalized) !== canonicalJson(raw))
+    throw new Error("TON_INVALID_DATABASE_RESULT");
+  return normalized;
+}
+
+function invoiceTimestamp(value: unknown): string {
+  if (typeof value !== "string")
+    throw new Error("TON_INVALID_DATABASE_RESULT");
+  const match = full(
+    "([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\\.([0-9]{0,5}[1-9]))?([+-])([0-9]{2}):([0-9]{2})",
+  ).exec(value);
+  if (!match) throw new Error("TON_INVALID_DATABASE_RESULT");
+  const [, year, month, day, hour, minute, second, , sign, offsetHour, offsetMinute] =
+    match;
+  const yearNumber = Number(year);
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+  const offsetHourNumber = Number(offsetHour);
+  const offsetMinuteNumber = Number(offsetMinute);
+  const leapYear =
+    yearNumber % 4 === 0 &&
+    (yearNumber % 100 !== 0 || yearNumber % 400 === 0);
+  const daysInMonth = [
+    31,
+    leapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  if (
+    monthNumber < 1 ||
+    monthNumber > 12 ||
+    dayNumber < 1 ||
+    dayNumber > (daysInMonth[monthNumber - 1] ?? 0) ||
+    Number(hour) > 23 ||
+    Number(minute) > 59 ||
+    Number(second) > 59 ||
+    offsetHourNumber > 15 ||
+    offsetMinuteNumber > 59 ||
+    (sign === "-" && offsetHourNumber === 0 && offsetMinuteNumber === 0) ||
+    !Number.isFinite(Date.parse(value))
+  )
+    throw new Error("TON_INVALID_DATABASE_RESULT");
+  return value;
+}
+
+function parseTonInvoiceResult(value: unknown): TonInvoice {
+  try {
+    const raw = object(value);
+    keys(raw, [...INVOICE_KEYS]);
+    if (
+      raw.schemaVersion !== 1 ||
+      raw.product !== "aggregator" ||
+      raw.purpose !== "gateway_topup" ||
+      raw.network !== "tvm:-3" ||
+      typeof raw.idempotencyKey !== "string" ||
+      !full("[A-Za-z0-9_-]{1,96}").test(raw.idempotencyKey) ||
+      typeof raw.reference !== "string" ||
+      !CANONICAL_REFERENCE.test(raw.reference) ||
+      !INVOICE_STATUSES.has(raw.status as TonInvoice["status"])
+    )
+      throw new Error("TON_INVALID_DATABASE_RESULT");
+
+    const parsedQuote = quote(raw.quote);
+    const quoteRaw = object(raw.quote);
+    exactInvoiceAsset(quoteRaw.asset);
+    exactInvoiceAsset(object(quoteRaw.fx).targetAsset);
+    if (canonicalJson(parsedQuote) !== canonicalJson(quoteRaw))
+      throw new Error("TON_INVALID_DATABASE_RESULT");
+    const parsedAsset = exactInvoiceAsset(raw.asset);
+    const grantMicrocredits = atomic(raw.grantMicrocredits);
+    const amountAtomic = atomic(raw.amountAtomic);
+    const reviewReason = raw.reviewReason === null ? null : label(raw.reviewReason);
+    if (
+      raw.quoteId !== parsedQuote.quoteId ||
+      canonicalJson(parsedAsset) !== canonicalJson(parsedQuote.asset) ||
+      grantMicrocredits !== parsedQuote.sourcePrice.amountAtomic ||
+      amountAtomic !== parsedQuote.amountAtomic ||
+      ((raw.status === "review_required") !== (reviewReason !== null))
+    )
+      throw new Error("TON_INVALID_DATABASE_RESULT");
+
+    return {
+      schemaVersion: 1,
+      product: "aggregator",
+      purpose: "gateway_topup",
+      invoiceId: canonicalId(raw.invoiceId),
+      ownerId: canonicalId(raw.ownerId),
+      orgId: canonicalId(raw.orgId),
+      orderId: canonicalId(raw.orderId),
+      idempotencyKey: raw.idempotencyKey,
+      quoteId: label(raw.quoteId),
+      quote: parsedQuote,
+      grantMicrocredits,
+      priceRevision: label(raw.priceRevision),
+      network: "tvm:-3",
+      asset: parsedAsset,
+      amountAtomic,
+      recipient: canonicalAddress(raw.recipient),
+      reference: raw.reference,
+      expectedSender:
+        raw.expectedSender === null ? null : canonicalAddress(raw.expectedSender),
+      finalityPolicyId: label(raw.finalityPolicyId),
+      verifierVersion: label(raw.verifierVersion),
+      expiresAt: invoiceTimestamp(raw.expiresAt),
+      createdAt: invoiceTimestamp(raw.createdAt),
+      status: raw.status as TonInvoice["status"],
+      reviewReason,
+    };
+  } catch {
+    throw new Error("TON_INVALID_DATABASE_RESULT");
+  }
+}
+
 function requireResult<T extends string>(
   value: unknown,
   allowed: readonly T[],
@@ -705,15 +858,37 @@ export async function findTonInvoicesForReconciliation(
     new Set(raw.references).size !== raw.references.length
   )
     throw new Error("TON_INVALID_REFERENCES");
-  if (raw.references.length === 0) return [];
+  const requestedReferences = raw.references as readonly string[];
+  if (requestedReferences.length === 0) return [];
   return db.transaction(async (tx) => {
     const result = await tx.query<{ result: unknown }>({
       text: "SELECT aiag_find_ton_invoices_for_reconciliation_v1($1::jsonb,$2::text[]) AS result",
-      values: [sourceJson(source), raw.references],
+      values: [sourceJson(source), requestedReferences],
     });
-    if (!Array.isArray(result.rows[0]?.result))
+    if (result.rows.length !== 1 || !Array.isArray(result.rows[0]?.result))
       throw new Error("TON_INVALID_DATABASE_RESULT");
-    return result.rows[0].result as TonInvoice[];
+    const rows = result.rows[0].result;
+    if (rows.length > requestedReferences.length)
+      throw new Error("TON_INVALID_DATABASE_RESULT");
+    const references = new Set(requestedReferences);
+    const seenReferences = new Set<string>();
+    const seenInvoices = new Set<string>();
+    return rows.map((value) => {
+      const invoice = parseTonInvoiceResult(value);
+      if (
+        !references.has(invoice.reference) ||
+        seenReferences.has(invoice.reference) ||
+        seenInvoices.has(invoice.invoiceId) ||
+        invoice.network !== "tvm:-3" ||
+        invoice.asset.kind !== "native" ||
+        invoice.asset.decimals !== 9 ||
+        invoice.recipient !== source.invoiceRecipient
+      )
+        throw new Error("TON_INVALID_DATABASE_RESULT");
+      seenReferences.add(invoice.reference);
+      seenInvoices.add(invoice.invoiceId);
+      return invoice;
+    });
   });
 }
 
@@ -722,15 +897,20 @@ export async function getTonInvoiceForReconciliation(
   invoiceId: string,
 ): Promise<TonInvoice | null> {
   const invoice = canonicalId(invoiceId);
-  return db.transaction(
-    async (tx) =>
-      (
-        await tx.query<{ result: TonInvoice | null }>({
-          text: "SELECT aiag_get_ton_invoice_for_reconciliation_v1($1::uuid) AS result",
-          values: [invoice],
-        })
-      ).rows[0]?.result ?? null,
-  );
+  return db.transaction(async (tx) => {
+    const result = await tx.query<{ result: unknown }>({
+      text: "SELECT aiag_get_ton_invoice_for_reconciliation_v1($1::uuid) AS result",
+      values: [invoice],
+    });
+    if (result.rows.length !== 1)
+      throw new Error("TON_INVALID_DATABASE_RESULT");
+    const value = result.rows[0]?.result;
+    if (value === null) return null;
+    const parsed = parseTonInvoiceResult(value);
+    if (parsed.invoiceId !== invoice)
+      throw new Error("TON_INVALID_DATABASE_RESULT");
+    return parsed;
+  });
 }
 
 export async function recordTonChainObservation(
