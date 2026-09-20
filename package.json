@@ -32,7 +32,7 @@
     "test:ton-core-native": "bun run packages/database/scripts/native-ton-core-test.ts",
     "db:test:clean72": "bun run packages/database/scripts/native-clean-rehearsal.ts",
     "test:catalog-contract": "vitest run --no-file-parallelism packages/shared/src/__tests__/catalog-contract.test.ts packages/api-gateway/src/__tests__/catalog-retail-token-pricing.test.ts packages/api-gateway/src/__tests__/public-catalog.test.ts packages/api-gateway/src/__tests__/catalog-route.test.ts packages/api-gateway/src/__tests__/server.test.ts packages/api-gateway/src/__tests__/stored-chat-composition.test.ts packages/api-gateway/src/__tests__/catalog-producer-consumer.http.test.ts tests/config/vitest-discovery.test.ts",
-    "test:catalog-native-smoke": "RUN_NATIVE_DB_INTEGRATION=1 vitest run --no-file-parallelism packages/api-gateway/src/__tests__/catalog-reader.native.integration.test.ts packages/api-gateway/src/__tests__/catalog-pagination.native.integration.test.ts"
+    "test:catalog-native-smoke": "RUN_NATIVE_DB_INTEGRATION=1 vitest run --no-file-parallelism packages/api-gateway/src/__tests__/catalog-reader.native.integration.test.ts packages/api-gateway/src/__tests__/catalog-pagination.native.integration.test.ts packages/api-gateway/src/__tests__/catalog-mounted.native.integration.test.ts"
   },
   "devDependencies": {
     "@aiag/typescript-config": "*",

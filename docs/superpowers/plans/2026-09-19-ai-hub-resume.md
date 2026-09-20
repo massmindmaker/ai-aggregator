@@ -44,8 +44,8 @@ Files: packages/api-gateway/src/__tests__/fixtures/catalog-consumer.ts; packages
 - [x] Один совместный review; focused tests, source/test types, lint, diff check.
 ### 1B. Guarded native continuation (следующий незакрытый срез)
 Files: packages/api-gateway/src/__tests__/catalog-mounted.native.integration.test.ts; root package.json; docs/product/acceptance/AG-P2.md.
-- [ ] Disposable DB identity+marker guard; stable pages, 16/17 and 512/513 fan-out, stale cursor after DB/key/runtime change.
-- [ ] Price mutation GET→POST; fresh immutable quote, unchanged earlier receipts/ledger snapshots.
+- [x] Guarded disposable local test DB identity+marker; stable pages,16/17 and512/513 fan-out, stale cursor after DB/key/runtime change (19.09 smoke +20.09 mounted matrix).
+- [x] Price mutation GET→POST; fresh immutable quote, unchanged earlier receipts/ledger snapshots (20.09 native proof and independent review).
 - [ ] Добавить подтверждённый native gate в baseline только после выполнения; реальный AG→AM остаётся UNVERIFIED.
 
 ## Пакет 2 — надёжность выполнения и списаний
@@ -88,3 +88,8 @@ Files: packages/api-gateway/src/__tests__/catalog-mounted.native.integration.tes
 Общий root unit baseline был ограничен 180s и не завершился: до остановки перечислены137 suites/2460 tests (включая skipped), наблюдались44 failure в native-ton-core-test.test.ts,27 в native-clean-rehearsal.test.ts и1 в старом scratch-repro. Scratch discovery defect исправлен RED→GREEN; два других набора не изменялись и не объявлены исправленными.
 
 Подробный checkpoint: docs/consolidation/2026-09-19-catalog-continuation.md.
+
+
+## Продолжение20.09
+
+Native matrix завершён как локальный инкремент:7/7 PASS, config5/5, strict test types/lint, независимые TS/GLM reviews APPROVE. Сохранённый WIP продолжен без изменений TON. Historical TON2 orchestration failures уже исправлены вc440ebb и подтверждены диагностикой; заново их не чинить. [Единый актуальный checkpoint](../../consolidation/2026-09-20-priorities-and-routing.md) сопоставляет этот план с полной product programme: AG-P3/другие billable routes/UX остаются в объёме. До общего DB/recovery baseline следующий обязательный gate — review сохранённой TON0076. Реальный AM consumer и полный выпуск не приняты.

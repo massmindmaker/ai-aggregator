@@ -33,6 +33,7 @@ describe('root Vitest discovery contract', () => {
   it('names native evidence as a guarded smoke gate rather than full acceptance', () => {
     expect(scripts['test:catalog-native-smoke']).toContain('RUN_NATIVE_DB_INTEGRATION=1');
     expect(scripts['test:catalog-native-smoke']).toContain('catalog-pagination.native.integration.test.ts');
+    expect(scripts['test:catalog-native-smoke']).toContain('catalog-mounted.native.integration.test.ts');
     expect(scripts['test:catalog-native-smoke']).not.toMatch(/migrat|bootstrap/);
   });
 
