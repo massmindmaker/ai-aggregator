@@ -156,19 +156,44 @@ beforeEach(() => {
   dbUpdate.mockReset();
 });
 
-/** dbExecute stub for the admin refund route: one confirmed, un-refunded payment
- *  of `amountRub` that can be CLAIMED exactly once. The claim UPDATE mirrors the
- *  real WHERE-guard — the first caller gets the row, every later caller gets 0
- *  rows (already claimed), which is the double-refund lock. */
-function mockRefundablePayment(amountRub: number) {
+/** DB-backed subscription identity for the admin refund route. The guarded
+ * claim UPDATE succeeds once, then returns zero rows on replay. */
+function mockRefundablePayment(
+  amountRub: number,
+  options: {
+    provider?: 'tinkoff' | 'yookassa' | 'sbp';
+    providerPaymentId?: string | null;
+  } = {},
+) {
   let claimed = false;
+  const provider = options.provider ?? 'tinkoff';
+  const providerPaymentId =
+    options.providerPaymentId === undefined ? 't1' : options.providerPaymentId;
   dbExecute.mockImplementation((q: { raw?: string }) => {
     const raw = q?.raw ?? '';
-    if (raw.includes('SELECT amount')) return Promise.resolve({ rows: [{ amount: String(amountRub) }] });
+    if (raw.includes('SELECT amount'))
+      return Promise.resolve({
+        rows: [
+          {
+            id: 'pay_1',
+            subscription_id: 'sub_1',
+            amount: String(amountRub),
+            currency: 'RUB',
+            status: 'confirmed',
+            payment_method: provider,
+            metadata: { kind: 'subscription', provider },
+            tinkoff_payment_id: providerPaymentId,
+            tinkoff_order_id: 'order_1',
+            topup_paid_kopecks: null,
+            topup_refunded_kopecks: '0',
+            refund_claim_id: null,
+          },
+        ],
+      });
     if (raw.includes('refunded_at = NOW()')) {
       if (claimed) return Promise.resolve({ rows: [] });
       claimed = true;
-      return Promise.resolve({ rows: [{ id: 'pay_1', amount: String(amountRub), tinkoff_payment_id: 't1' }] });
+      return Promise.resolve({ rows: [{ id: 'pay_1', amount: String(amountRub) }] });
     }
     return Promise.resolve({ rows: [] });
   });
@@ -393,15 +418,13 @@ describe('POST /api/admin/payments/refund', () => {
     expect(r.status).toBe(400);
   });
 
-  it('issues refund through provider', async () => {
+  it('uses the persisted Tinkoff subscription identity, not client input', async () => {
     signInAsAdminWithStepUp();
-    mockRefundablePayment(990);
+    mockRefundablePayment(990, { providerPaymentId: 'db_tinkoff_payment' });
     mockRefund.mockResolvedValue({ success: true, providerRefundId: 'rf_xx' });
     const r = await adminRefund(
       makeReq({
-        paymentId: 'pay_y',
-        provider: 'yookassa',
-        providerPaymentId: 'pmt_y',
+        paymentId: 'pay_1',
         amount: 990,
         reason: 'manual',
       }) as never
@@ -409,7 +432,24 @@ describe('POST /api/admin/payments/refund', () => {
     expect(r.status).toBe(200);
     const data = await r.json();
     expect(data.refundId).toBe('rf_xx');
-    expect(mockRefund).toHaveBeenCalledWith('pmt_y', 990, 'manual');
+    expect(mockRefund).toHaveBeenCalledWith('db_tinkoff_payment', 990, 'manual');
+  });
+
+  it('fails closed for a YooKassa subscription without persisted provider identity', async () => {
+    signInAsAdminWithStepUp();
+    mockRefundablePayment(990, {
+      provider: 'yookassa',
+      providerPaymentId: null,
+    });
+
+    const r = await adminRefund(
+      makeReq({ paymentId: 'pay_1', provider: 'yookassa', amount: 990 }) as never,
+    );
+
+    expect(r.status).toBe(409);
+    const data = await r.json();
+    expect(data.error.code).toBe('PAYMENT_PROVIDER_ID_MISSING');
+    expect(mockRefund).not.toHaveBeenCalled();
   });
 
   it('requires paymentId (the idempotency key) — missing → 400, provider untouched', async () => {
@@ -436,7 +476,7 @@ describe('POST /api/admin/payments/refund', () => {
     signInAsAdminWithStepUp();
     mockRefundablePayment(100); // stored payment is ₽100
     const r = await adminRefund(
-      makeReq({ paymentId: 'pay_1', provider: 'tinkoff', providerPaymentId: 'p', amount: 150 }) as never
+      makeReq({ paymentId: 'pay_1', provider: 'tinkoff', providerPaymentId: 't1', amount: 150 }) as never
     );
     expect(r.status).toBe(400);
     expect(mockRefund).not.toHaveBeenCalled();
@@ -444,7 +484,7 @@ describe('POST /api/admin/payments/refund', () => {
 
   it('a second refund on the same payment is a 409 no-op and never re-hits the provider', async () => {
     signInAsAdminWithStepUp();
-    mockRefundablePayment(990);
+    mockRefundablePayment(990, { providerPaymentId: 'pmt_1' });
     mockRefund.mockResolvedValue({ success: true, providerRefundId: 'rf_1' });
     const body = { paymentId: 'pay_1', provider: 'tinkoff', providerPaymentId: 'pmt_1', amount: 990 };
 
@@ -463,7 +503,7 @@ describe('POST /api/admin/payments/refund', () => {
 
   it('returns 502 on a definitive provider failure', async () => {
     signInAsAdminWithStepUp();
-    mockRefundablePayment(100);
+    mockRefundablePayment(100, { providerPaymentId: 'p' });
     mockRefund.mockResolvedValue({ success: false, errorMessage: 'gone' });
     const r = await adminRefund(
       makeReq({ paymentId: 'pay_1', provider: 'tinkoff', providerPaymentId: 'p', amount: 1 }) as never

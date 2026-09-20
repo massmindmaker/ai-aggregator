@@ -57,6 +57,11 @@ export default function BillingPage() {
   const [planName, setPlanName] = useState<string | null>(null);
   const [creditsLimit, setCreditsLimit] = useState<number | null>(null);
   const [balanceCredits, setBalanceCredits] = useState<number | null>(null);
+  const [paygCredits, setPaygCredits] = useState(0);
+  const [subscriptionCredits, setSubscriptionCredits] = useState(0);
+  const [refundDebtCredits, setRefundDebtCredits] = useState(0);
+  const [refundPending, setRefundPending] = useState(false);
+  const [summaryStatus, setSummaryStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
     void (async () => {
@@ -75,18 +80,34 @@ export default function BillingPage() {
     void (async () => {
       try {
         const res = await fetch('/api/dashboard/billing/summary');
-        if (!res.ok) return;
+        if (!res.ok) {
+          setSummaryStatus('error');
+          return;
+        }
         const data = (await res.json()) as {
           plan?: { name: string; creditsLimit: number | null };
-          balance?: { totalSpendableCredits: number };
+          balance?: {
+            paygCredits: number;
+            subscriptionCredits: number;
+            totalSpendableCredits: number;
+            refundDebtCredits: number;
+            refundPending: boolean;
+          };
         };
         if (data.plan) {
           setPlanName(data.plan.name);
           setCreditsLimit(data.plan.creditsLimit);
         }
-        if (data.balance) setBalanceCredits(data.balance.totalSpendableCredits);
+        if (data.balance) {
+          setBalanceCredits(data.balance.totalSpendableCredits);
+          setPaygCredits(data.balance.paygCredits);
+          setSubscriptionCredits(data.balance.subscriptionCredits);
+          setRefundDebtCredits(data.balance.refundDebtCredits);
+          setRefundPending(data.balance.refundPending);
+        }
+        setSummaryStatus(data.plan && data.balance ? 'ready' : 'error');
       } catch {
-        /* leave nulls — UI falls back to Free / 0 */
+        setSummaryStatus('error');
       }
     })();
   }, []);
@@ -177,7 +198,18 @@ export default function BillingPage() {
         </div>
 
         {/* Top cards: subscription / PAYG balance */}
-        <div className="grid gap-4 md:grid-cols-2 mb-8">
+        {summaryStatus === 'loading' && (
+          <div role="status" className="mb-8 rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
+            Загружаем данные биллинга…
+          </div>
+        )}
+        {summaryStatus === 'error' && (
+          <div role="alert" className="mb-8 rounded-2xl border border-destructive/40 bg-destructive/10 p-6 text-sm">
+            Не удалось загрузить данные биллинга. Попробуйте обновить страницу позже.
+          </div>
+        )}
+        {summaryStatus === 'ready' && (
+          <div className="grid gap-4 md:grid-cols-2 mb-8">
           <div className="rounded-2xl border border-border bg-card p-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Crown className="h-4 w-4 text-primary" />
@@ -214,8 +246,44 @@ export default function BillingPage() {
             <p className="mt-3 text-sm text-muted-foreground">
               Pay-per-use списания за API-запросы сверх лимита подписки.
             </p>
+            {(refundPending || refundDebtCredits > 0) && (
+              <div className="mt-4 space-y-3" aria-label="Статус возврата средств">
+                {refundPending && (
+                  <div
+                    role="status"
+                    className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm"
+                  >
+                    <p className="font-medium">Возврат находится на сверке</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Итог возврата ещё не подтверждён. До завершения сверки кредиты временно недоступны.
+                    </p>
+                  </div>
+                )}
+                {refundDebtCredits > 0 && (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
+                  >
+                    <p className="font-medium">Задолженность после возврата</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Задолженность: {refundDebtCredits.toLocaleString('ru-RU', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      кр. Расходование кредитов приостановлено до погашения задолженности.
+                    </p>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Учтено до блокировки: PAYG{' '}
+                  {paygCredits.toLocaleString('ru-RU', { maximumFractionDigits: 3 })} кр., подписка{' '}
+                  {subscriptionCredits.toLocaleString('ru-RU', { maximumFractionDigits: 3 })} кр.
+                </p>
+              </div>
+            )}
           </div>
-        </div>
+          </div>
+        )}
 
         {/* Top-up form */}
         <div className="rounded-2xl border border-border bg-card p-6 mb-8">

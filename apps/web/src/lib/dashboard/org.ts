@@ -1,6 +1,8 @@
-import { db } from '@/lib/db';
-import { organizations, organizationMembers } from '@aiag/database/schema';
-import { eq, and } from '@aiag/database';
+import { db } from "@/lib/db";
+import { organizations, organizationMembers } from "@aiag/database/schema";
+import { eq, and, asc, type Database } from "@aiag/database";
+
+type OrgDatabase = Pick<Database, "query" | "insert">;
 
 /**
  * Resolve (or auto-create) the default organization for a given user.
@@ -13,38 +15,43 @@ import { eq, and } from '@aiag/database';
  *
  * Returns the organization id.
  */
-export async function getOrCreateDefaultOrg(userId: string): Promise<string> {
+export async function getOrCreateDefaultOrg(
+  userId: string,
+  database: OrgDatabase = db,
+): Promise<string> {
   // 1. Membership lookup
-  const member = await db.query.organizationMembers.findFirst({
+  const member = await database.query.organizationMembers.findFirst({
     where: eq(organizationMembers.userId, userId),
+    orderBy: [asc(organizationMembers.joinedAt), asc(organizationMembers.id)],
   });
   if (member) return member.organizationId;
 
   // 2. Owner lookup
-  const owned = await db.query.organizations.findFirst({
+  const owned = await database.query.organizations.findFirst({
     where: eq(organizations.ownerId, userId),
+    orderBy: [asc(organizations.createdAt), asc(organizations.id)],
   });
   if (owned) return owned.id;
 
   // 3. Auto-create personal org. Slug must be unique → use short user-id slice.
   const slug = `user-${userId.slice(0, 8)}-${Date.now().toString(36)}`;
-  const [created] = await db
+  const [created] = await database
     .insert(organizations)
     .values({
       slug,
-      name: 'Personal Workspace',
+      name: "Personal Workspace",
       ownerId: userId,
     })
     .returning();
-  if (!created) throw new Error('failed_to_create_org');
+  if (!created) throw new Error("failed_to_create_org");
 
   // Add owner as a member with admin role for completeness.
-  await db
+  await database
     .insert(organizationMembers)
     .values({
       organizationId: created.id,
       userId,
-      role: 'admin',
+      role: "admin",
     })
     .onConflictDoNothing();
 

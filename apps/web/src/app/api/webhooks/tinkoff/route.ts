@@ -1,14 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { tinkoff } from '@/lib/tinkoff';
-import { resolveTinkoffSecret, getTier } from '@/lib/payments/providers';
-import { getOrCreateDefaultOrg } from '@/lib/dashboard/org';
-import { db } from '@/lib/db';
-import { eq, and, ne, sql } from '@aiag/database';
-import { payments, subscriptions, balanceTransactions, users } from '@aiag/database/schema';
-import type { WebhookNotification } from '@aiag/tinkoff';
+import { NextRequest, NextResponse } from "next/server";
+import { tinkoff } from "@/lib/tinkoff";
+import { resolveTinkoffSecret, getTier } from "@/lib/payments/providers";
+import { getOrCreateDefaultOrg } from "@/lib/dashboard/org";
+import {
+  blockUnconfirmedTopupGrantForRefund,
+  calculateTopupGrantCredits,
+  confirmTinkoffTopup,
+  rublesToKopecks,
+} from "@/lib/payments/topup-confirmation";
+import { reconcileFullTopupRefund } from "@/lib/payments/topup-refund";
+import { db } from "@/lib/db";
+import { eq, and, inArray, sql } from "@aiag/database";
+import {
+  payments,
+  paymentWebhookLogs,
+  subscriptions,
+} from "@aiag/database/schema";
+import type { WebhookNotification } from "@aiag/tinkoff";
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,8 +27,10 @@ export async function POST(request: NextRequest) {
     // rather than fall back to the guessable 'placeholder_secret' (which would
     // let a forged callback pass). A misconfigured prod must reject, not mint.
     if (!resolveTinkoffSecret()) {
-      console.error('[webhook/tinkoff] terminal secret not configured — rejecting');
-      return NextResponse.json({ error: 'Not configured' }, { status: 400 });
+      console.error(
+        "[webhook/tinkoff] terminal secret not configured — rejecting",
+      );
+      return NextResponse.json({ error: "Not configured" }, { status: 400 });
     }
 
     const payload = (await request.json()) as WebhookNotification;
@@ -28,8 +41,8 @@ export async function POST(request: NextRequest) {
     const webhookData = tinkoff.parseWebhook(payload);
 
     if (!webhookData.isValid) {
-      console.error('Invalid Tinkoff webhook signature');
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+      console.error("Invalid Tinkoff webhook signature");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
     }
 
     // Find payment by Tinkoff payment ID
@@ -38,193 +51,375 @@ export async function POST(request: NextRequest) {
     });
 
     if (!payment) {
-      console.error('Payment not found:', webhookData.paymentId);
-      return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
+      console.error("Payment not found:", webhookData.paymentId);
+      return NextResponse.json({ error: "Payment not found" }, { status: 404 });
     }
 
-    const isConfirming = webhookData.success && webhookData.status === 'CONFIRMED';
+    if (
+      payment.tinkoffPaymentId !== webhookData.paymentId ||
+      payment.tinkoffOrderId !== webhookData.orderId
+    ) {
+      await recordReconciliationFailure(
+        payment.id,
+        payload,
+        "HIGH: provider payment/order identity mismatch",
+      );
+      return NextResponse.json(
+        { error: "Payment identity mismatch" },
+        { status: 409 },
+      );
+    }
+
+    const metadata = payment.metadata as Record<string, unknown> | null;
+    const isTopup =
+      payment.subscriptionId === null &&
+      metadata?.kind === "topup" &&
+      metadata?.provider === "tinkoff";
+    const isSubscription = payment.subscriptionId !== null;
+    const isConfirming =
+      webhookData.success && webhookData.status === "CONFIRMED";
+
+    if (
+      !webhookData.success &&
+      [
+        "CONFIRMED",
+        "REFUNDED",
+        "PARTIAL_REFUNDED",
+        "REVERSED",
+        "PARTIAL_REVERSED",
+      ].includes(webhookData.status)
+    ) {
+      await recordReconciliationFailure(
+        payment.id,
+        payload,
+        "HIGH: unsuccessful terminal money notification",
+      );
+      return NextResponse.json(
+        { error: "Terminal notification requires reconciliation" },
+        { status: 409 },
+      );
+    }
 
     if (isConfirming) {
-      // Idempotent credit path. Bank retries a CONFIRMED callback until it
-      // gets a 2xx (and can also fire concurrently) — the guarded
-      // UPDATE ... WHERE status <> 'confirmed' ... RETURNING is the atomic
-      // gate: only the delivery that actually flips the row to 'confirmed'
-      // proceeds to credit the balance below. Under Postgres READ COMMITTED,
-      // a concurrent UPDATE on the same row blocks on the row lock until the
-      // first commits, then re-evaluates the WHERE against the now-committed
-      // row and returns 0 rows — so every retry/duplicate/parallel delivery
-      // after the first is a guaranteed no-op. Everything (gate + credit +
-      // ledger insert) runs in one transaction so a failure after the gate
-      // rolls back the status flip too (the bank will retry, and the retry
-      // will see status still not 'confirmed' and can succeed cleanly).
-      await (db as unknown as {
-        transaction: <T>(fn: (tx: typeof db) => Promise<T>) => Promise<T>;
-      }).transaction(async (tx) => {
-        const [confirmed] = await tx
-          .update(payments)
-          .set({
-            status: 'confirmed',
-            tinkoffStatus: webhookData.status,
-            cardPan: webhookData.cardPan,
-            tinkoffRebillId: webhookData.rebillId,
-            confirmedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(and(eq(payments.id, payment.id), ne(payments.status, 'confirmed')))
-          .returning();
-
-        if (!confirmed) {
-          // Already confirmed by an earlier delivery of this same webhook —
-          // this is exactly what makes repeated CONFIRMED callbacks safe.
-          console.log('[webhook/tinkoff] duplicate CONFIRMED, already settled', {
-            paymentId: payment.id,
+      if (isTopup) {
+        if (!Number.isSafeInteger(payload.Amount) || payload.Amount <= 0) {
+          await recordReconciliationFailure(
+            payment.id,
+            payload,
+            "HIGH: invalid signed top-up Amount",
+          );
+          return NextResponse.json(
+            { error: "Invalid payment amount" },
+            { status: 409 },
+          );
+        }
+        const persistedKopecks = rublesToKopecks(payment.amount);
+        if (persistedKopecks === null || persistedKopecks !== payload.Amount) {
+          await recordReconciliationFailure(
+            payment.id,
+            payload,
+            "HIGH: signed Amount differs from persisted RUB amount",
+          );
+          return NextResponse.json(
+            { error: "Payment amount mismatch" },
+            { status: 409 },
+          );
+        }
+        let grantCredits: number | undefined;
+        if (payment.status === "pending" || payment.status === "authorized") {
+          const basic = getTier("basic");
+          if (!basic) throw new Error("canonical Basic tier is unavailable");
+          grantCredits = calculateTopupGrantCredits(payload.Amount, {
+            priceRubles: basic.monthly,
+            credits: basic.credits,
           });
-          return;
         }
-
-        // Explicit, unambiguous fork on payment type. A payment with a
-        // subscriptionId is a TIER purchase -> activate the tier (grant the
-        // tier's credit allowance, NOT the ruble sum). Anything else is a
-        // balance top-up -> credit users.balance in rubles.
-        if (confirmed.subscriptionId) {
-          await activateSubscriptionTier(tx, confirmed, webhookData);
-        } else {
-          await creditBalance(tx, confirmed, webhookData);
-        }
-      });
-    } else if (webhookData.status === 'REFUNDED' || webhookData.status === 'PARTIAL_REFUNDED') {
-      // Refund is a LEGITIMATE post-confirmation transition — allowed to move a
-      // confirmed payment to a refunded state.
-      await db
-        .update(payments)
-        .set({
-          status: mapTinkoffStatus(webhookData.status),
-          tinkoffStatus: webhookData.status,
-          updatedAt: new Date(),
-        })
-        .where(eq(payments.id, payment.id));
-      await handleRefund(payment.id, webhookData);
-    } else {
-      // Non-terminal / rejection bookkeeping. Guard `status <> 'confirmed'`:
-      // a late NEW/AUTHORIZING/REJECTED callback must NOT downgrade an already
-      // confirmed (terminal) payment back into an unfinished state — that would
-      // reopen the idempotency gate. 0 rows updated on a confirmed payment; we
-      // still return 200 so the bank stops retrying (no 500 loop).
-      const newStatus = mapTinkoffStatus(webhookData.status);
-      await db
-        .update(payments)
-        .set({
-          status: newStatus,
-          tinkoffStatus: webhookData.status,
+        const confirmation = await confirmTinkoffTopup({
+          paymentId: payment.id,
+          userId: payment.userId,
+          providerPaymentId: webhookData.paymentId,
+          providerOrderId: webhookData.orderId,
+          paidKopecks: payload.Amount,
+          grantCredits,
+          tinkoffStatus: "CONFIRMED",
           cardPan: webhookData.cardPan,
-          tinkoffRebillId: webhookData.rebillId,
+          rebillId: webhookData.rebillId,
+        });
+        if (confirmation.kind === "reconciliation_required") {
+          await recordReconciliationFailure(
+            payment.id,
+            payload,
+            `HIGH: top-up confirmation CAS rejected (${confirmation.reason})`,
+          );
+          return NextResponse.json(
+            { error: "Top-up requires reconciliation" },
+            { status: 409 },
+          );
+        }
+      } else if (isSubscription) {
+        await (
+          db as unknown as {
+            transaction: <T>(fn: (tx: typeof db) => Promise<T>) => Promise<T>;
+          }
+        ).transaction(async (tx) => {
+          const [confirmed] = await tx
+            .update(payments)
+            .set({
+              status: "confirmed",
+              tinkoffStatus: webhookData.status,
+              cardPan: webhookData.cardPan,
+              tinkoffRebillId: webhookData.rebillId,
+              confirmedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(payments.id, payment.id),
+                inArray(payments.status, ["pending", "authorized"]),
+              ),
+            )
+            .returning();
+          if (confirmed)
+            await activateSubscriptionTier(tx, confirmed, webhookData);
+        });
+      } else {
+        await recordReconciliationFailure(
+          payment.id,
+          payload,
+          "HIGH: CONFIRMED payment type is ambiguous",
+        );
+        return NextResponse.json(
+          { error: "Unsupported payment type" },
+          { status: 409 },
+        );
+      }
+    } else if (webhookData.status === "REFUNDED") {
+      if (isTopup) {
+        let snapshotExists = Boolean(
+          payment.topupOrgId &&
+          payment.topupPaidKopecks &&
+          payment.topupGrantCredits,
+        );
+        if (!snapshotExists) {
+          const block = await blockUnconfirmedTopupGrantForRefund({
+            paymentId: payment.id,
+            providerPaymentId: webhookData.paymentId,
+            providerOrderId: webhookData.orderId,
+          });
+          snapshotExists = block.kind === "snapshot_exists";
+        }
+        if (!snapshotExists) {
+          await recordReconciliationFailure(
+            payment.id,
+            payload,
+            "HIGH: REFUNDED top-up arrived before an immutable grant snapshot",
+          );
+          return NextResponse.json(
+            { error: "Top-up requires reconciliation" },
+            { status: 409 },
+          );
+        }
+        const outcome = await reconcileFullTopupRefund(payment.id, {
+          provider: "tinkoff",
+          providerPaymentId: webhookData.paymentId,
+          providerOrderId: webhookData.orderId,
+        });
+        if (outcome.kind !== "settled" && outcome.kind !== "already_settled") {
+          await recordReconciliationFailure(
+            payment.id,
+            payload,
+            `HIGH: full top-up refund reconciliation failed (${outcome.kind})`,
+          );
+          return NextResponse.json(
+            { error: "Top-up refund reconciliation failed" },
+            { status: 409 },
+          );
+        }
+      } else if (isSubscription) {
+        await handleSubscriptionRefund(payment.id, webhookData);
+      } else {
+        await recordReconciliationFailure(
+          payment.id,
+          payload,
+          "HIGH: REFUNDED payment type is ambiguous",
+        );
+        return NextResponse.json(
+          { error: "Unsupported payment type" },
+          { status: 409 },
+        );
+      }
+    } else if (webhookData.status === "PARTIAL_REFUNDED" && isTopup) {
+      if (
+        !payment.topupOrgId ||
+        !payment.topupPaidKopecks ||
+        !payment.topupGrantCredits
+      ) {
+        await blockUnconfirmedTopupGrantForRefund({
+          paymentId: payment.id,
+          providerPaymentId: webhookData.paymentId,
+          providerOrderId: webhookData.orderId,
+        });
+      }
+      await recordReconciliationFailure(
+        payment.id,
+        payload,
+        "HIGH: partial top-up webhook has no claim-bound operation identity",
+      );
+      return NextResponse.json(
+        { error: "Partial refund requires reconciliation" },
+        { status: 409 },
+      );
+    } else if (webhookData.status === "PARTIAL_REFUNDED" && isSubscription) {
+      await handleSubscriptionRefund(payment.id, webhookData);
+    } else if (webhookData.status === "PARTIAL_REVERSED") {
+      await recordReconciliationFailure(
+        payment.id,
+        payload,
+        "HIGH: PARTIAL_REVERSED is unsupported",
+      );
+      return NextResponse.json(
+        { error: "Partial reversal requires reconciliation" },
+        { status: 409 },
+      );
+    } else if (webhookData.status === "REVERSED" && isTopup) {
+      if (
+        payment.topupOrgId ||
+        payment.topupPaidKopecks ||
+        payment.topupGrantCredits
+      ) {
+        await recordReconciliationFailure(
+          payment.id,
+          payload,
+          "HIGH: REVERSED contradicts an existing top-up grant snapshot",
+        );
+        return NextResponse.json(
+          { error: "Reversal contradicts settled top-up" },
+          { status: 409 },
+        );
+      }
+      const reversed = await db
+        .update(payments)
+        .set({
+          status: "cancelled",
+          tinkoffStatus: "REVERSED",
           updatedAt: new Date(),
         })
-        .where(and(eq(payments.id, payment.id), ne(payments.status, 'confirmed')));
+        .where(
+          and(
+            eq(payments.id, payment.id),
+            inArray(payments.status, ["pending", "authorized"]),
+          ),
+        )
+        .returning({ id: payments.id });
+      if (
+        reversed.length === 0 &&
+        !["cancelled", "rejected", "failed"].includes(payment.status)
+      ) {
+        await recordReconciliationFailure(
+          payment.id,
+          payload,
+          "HIGH: REVERSED top-up has an ineligible predecessor",
+        );
+        return NextResponse.json(
+          { error: "Reversal requires reconciliation" },
+          { status: 409 },
+        );
+      }
+    } else if (webhookData.status === "REVERSED" && isSubscription) {
+      await db
+        .update(payments)
+        .set({
+          status: "refunded",
+          tinkoffStatus: "REVERSED",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(payments.id, payment.id),
+            inArray(payments.status, ["pending", "authorized"]),
+          ),
+        );
+    } else {
+      await applyMonotonicTransition(payment.id, webhookData);
     }
 
-    return NextResponse.json({ success: true });
+    return new NextResponse("OK", {
+      status: 200,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
   } catch (error) {
-    console.error('Tinkoff webhook error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Tinkoff webhook error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
-function mapTinkoffStatus(tinkoffStatus: string): 'pending' | 'authorized' | 'confirmed' | 'refunded' | 'partial_refunded' | 'cancelled' | 'rejected' | 'failed' {
-  const statusMap: Record<string, 'pending' | 'authorized' | 'confirmed' | 'refunded' | 'partial_refunded' | 'cancelled' | 'rejected' | 'failed'> = {
-    NEW: 'pending',
-    FORM_SHOWED: 'pending',
-    AUTHORIZING: 'pending',
-    AUTHORIZED: 'authorized',
-    CONFIRMING: 'pending',
-    CONFIRMED: 'confirmed',
-    REVERSING: 'pending',
-    PARTIAL_REVERSED: 'partial_refunded',
-    REVERSED: 'refunded',
-    REFUNDING: 'pending',
-    PARTIAL_REFUNDED: 'partial_refunded',
-    REFUNDED: 'refunded',
-    REJECTED: 'rejected',
-    CANCELED: 'cancelled',
-    DEADLINE_EXPIRED: 'cancelled',
-    AUTH_FAIL: 'failed',
-  };
+type LocalPaymentStatus = typeof payments.$inferSelect.status;
 
-  return statusMap[tinkoffStatus] || 'pending';
-}
+const TRANSITION_POLICY: Partial<
+  Record<
+    string,
+    { target: LocalPaymentStatus; predecessors: LocalPaymentStatus[] }
+  >
+> = {
+  NEW: { target: "pending", predecessors: ["pending"] },
+  FORM_SHOWED: { target: "pending", predecessors: ["pending"] },
+  AUTHORIZING: { target: "pending", predecessors: ["pending"] },
+  CONFIRMING: { target: "pending", predecessors: ["pending"] },
+  AUTHORIZED: { target: "authorized", predecessors: ["pending", "authorized"] },
+  REVERSING: { target: "authorized", predecessors: ["authorized"] },
+  REFUNDING: { target: "confirmed", predecessors: ["confirmed"] },
+  REJECTED: { target: "rejected", predecessors: ["pending", "authorized"] },
+  CANCELED: { target: "cancelled", predecessors: ["pending", "authorized"] },
+  DEADLINE_EXPIRED: {
+    target: "cancelled",
+    predecessors: ["pending", "authorized"],
+  },
+  AUTH_FAIL: { target: "failed", predecessors: ["pending", "authorized"] },
+  REVERSED: { target: "cancelled", predecessors: ["pending", "authorized"] },
+};
 
-/**
- * TOPUP path. Runs INSIDE the transaction opened by the guarded gate above —
- * `tx` already proved this payment just transitioned into 'confirmed' for the
- * first time, so this runs at most once per payment, ever. Credits the ruble
- * sum into the user's pay-per-use balance.
- */
-async function creditBalance(
-  tx: typeof db,
-  payment: typeof payments.$inferSelect,
-  webhookData: ReturnType<typeof tinkoff.parseWebhook>
+async function applyMonotonicTransition(
+  paymentId: string,
+  webhookData: ReturnType<typeof tinkoff.parseWebhook>,
 ) {
-  const amountStr = webhookData.amount.toString();
-
-  // Atomic increment (`UPDATE ... SET balance = balance + $amount ... RETURNING`)
-  // instead of read-then-write: two different CONFIRMED payments for the same
-  // user settling concurrently must not lose an update. `balance` is stored as
-  // `text` (see schema/users.ts), hence the explicit ::numeric round-trip.
-  const [updatedUser] = await tx
-    .update(users)
+  const policy = TRANSITION_POLICY[webhookData.status];
+  if (!policy) return;
+  await db
+    .update(payments)
     .set({
-      balance: sql`(COALESCE(${users.balance}, '0')::numeric + ${amountStr}::numeric)::text`,
+      status: policy.target,
+      tinkoffStatus: webhookData.status,
+      cardPan: webhookData.cardPan,
+      tinkoffRebillId: webhookData.rebillId,
       updatedAt: new Date(),
     })
-    .where(eq(users.id, payment.userId))
-    .returning({ balance: users.balance });
+    .where(
+      and(
+        eq(payments.id, paymentId),
+        inArray(payments.status, policy.predecessors),
+      ),
+    );
+}
 
-  if (!updatedUser) {
-    console.error('[webhook/tinkoff] user not found for payment', {
-      paymentId: payment.id,
-      userId: payment.userId,
-    });
-    return;
-  }
-
-  const balanceAfter = parseFloat(updatedUser.balance || '0');
-  const balanceBefore = balanceAfter - webhookData.amount;
-
-  // Belt-and-suspenders: UNIQUE(payment_id, type) on balance_transactions
-  // (migration 0053) makes a second 'deposit' row for the same payment a DB
-  // error, not silent data — so even a bug in the gate above can't double-credit.
-  await tx.insert(balanceTransactions).values({
-    userId: payment.userId,
-    paymentId: payment.id,
-    type: 'deposit',
-    amount: amountStr,
-    balanceBefore: balanceBefore.toString(),
-    balanceAfter: balanceAfter.toString(),
-    description: 'Payment deposit',
-    referenceType: 'payment',
-    referenceId: payment.id,
+async function recordReconciliationFailure(
+  paymentId: string,
+  payload: WebhookNotification,
+  error: string,
+) {
+  await db.insert(paymentWebhookLogs).values({
+    paymentId,
+    eventType: payload.Status,
+    payload: {
+      status: payload.Status,
+      paymentId: String(payload.PaymentId),
+      orderId: payload.OrderId,
+    },
+    signatureValid: "true",
+    processingError: error,
   });
-
-  // ─── BRIDGE: payment → gateway-spendable credits ────────────────────────
-  // users.balance above is LEGACY (rubles, text) and is NOT what the gateway
-  // debits. The gateway's aiag_settle_charge_credits reads
-  // organizations.payg_credits (BIGINT MICRO-credits, 1 credit = 1000 micro =
-  // 1¢) scoped by the user's default org — the SAME org getOrCreateDefaultOrg
-  // resolves for /api/dashboard/billing/summary. Without this grant a paid
-  // top-up leaves the org at 0 → every model call 402s. PAYG rate = the Basic
-  // bundle (990 ₽ = 1200 credits = 1_200_000 micro), applied linearly.
-  // payg_credits ACCUMULATES (`+=`). Runs in the SAME guarded tx as the
-  // idempotency gate → grants exactly once per payment; the atomic
-  // `+ ${micro}` is safe for concurrent top-ups of the same org (no lost
-  // update). organizations.* columns are not in the Drizzle schema (BIGINT
-  // added by migration 0004/0056), so raw SQL — same as billing/summary.
-  const paygMicro = Math.round((webhookData.amount * 1_200_000) / 990);
-  const orgId = await getOrCreateDefaultOrg(payment.userId);
-  await tx.execute(sql`
-    UPDATE organizations
-    SET payg_credits = payg_credits + ${paygMicro}::bigint
-    WHERE id = ${orgId}::uuid
-  `);
 }
 
 /**
@@ -239,10 +434,13 @@ async function creditBalance(
 async function activateSubscriptionTier(
   tx: typeof db,
   payment: typeof payments.$inferSelect,
-  webhookData: ReturnType<typeof tinkoff.parseWebhook>
+  webhookData: ReturnType<typeof tinkoff.parseWebhook>,
 ) {
-  const meta = payment.metadata as { billing?: string; tier_id?: string } | null;
-  const yearly = meta?.billing === 'yearly';
+  const meta = payment.metadata as {
+    billing?: string;
+    tier_id?: string;
+  } | null;
+  const yearly = meta?.billing === "yearly";
   const now = new Date();
   const periodEnd = yearly
     ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
@@ -256,7 +454,7 @@ async function activateSubscriptionTier(
   await tx
     .update(subscriptions)
     .set({
-      status: 'active',
+      status: "active",
       currentPeriodStart: now,
       currentPeriodEnd: periodEnd,
       tinkoffRebillId: webhookData.rebillId,
@@ -265,7 +463,12 @@ async function activateSubscriptionTier(
       usedTokens: 0,
       updatedAt: now,
     })
-    .where(and(eq(subscriptions.id, payment.subscriptionId!), eq(subscriptions.status, 'pending')));
+    .where(
+      and(
+        eq(subscriptions.id, payment.subscriptionId!),
+        eq(subscriptions.status, "pending"),
+      ),
+    );
 
   // ─── BRIDGE: tier → gateway-spendable credits ───────────────────────────
   // Flipping the subscriptions row to active is NOT enough: the gateway debits
@@ -277,10 +480,10 @@ async function activateSubscriptionTier(
   // fresh period REPLACES the subscription bucket — these credits do not roll
   // over — while payg_credits (a separate column) is left untouched.
   // subscription_credits_expires_at is read by the gateway to expire the bucket.
-  const tier = getTier(meta?.tier_id || '');
+  const tier = getTier(meta?.tier_id || "");
   if (tier) {
     const grantedMicro = tier.credits * (yearly ? 12 : 1) * 1000;
-    const orgId = await getOrCreateDefaultOrg(payment.userId);
+    const orgId = await getOrCreateDefaultOrg(payment.userId, tx);
     await tx.execute(sql`
       UPDATE organizations
       SET subscription_credits = ${grantedMicro}::bigint,
@@ -293,8 +496,12 @@ async function activateSubscriptionTier(
     // the bank retry would loop forever on the same bad metadata. Log for
     // reconciliation; in practice /api/subscriptions/create always sets tier_id.
     console.error(
-      '[webhook/tinkoff] subscription CONFIRMED but tier_id missing/unknown — org NOT credited',
-      { paymentId: payment.id, subscriptionId: payment.subscriptionId, tierId: meta?.tier_id }
+      "[webhook/tinkoff] subscription CONFIRMED but tier_id missing/unknown — org NOT credited",
+      {
+        paymentId: payment.id,
+        subscriptionId: payment.subscriptionId,
+        tierId: meta?.tier_id,
+      },
     );
   }
 
@@ -304,13 +511,16 @@ async function activateSubscriptionTier(
   // yields a working active tier, which is the requirement.
 }
 
-async function handleRefund(
+async function handleSubscriptionRefund(
   paymentId: string,
-  webhookData: ReturnType<typeof tinkoff.parseWebhook>
+  webhookData: ReturnType<typeof tinkoff.parseWebhook>,
 ) {
   await db
     .update(payments)
     .set({
+      status:
+        webhookData.status === "REFUNDED" ? "refunded" : "partial_refunded",
+      tinkoffStatus: webhookData.status,
       refundedAt: new Date(),
       refundedAmount: webhookData.amount.toString(),
       updatedAt: new Date(),

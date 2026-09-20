@@ -38,6 +38,19 @@ vi.mock('@/lib/payments/providers', () => ({
   getPaymentProvider: () => ({ id: 'tinkoff', refund: (...a: unknown[]) => refundMock(...a) }),
 }));
 
+vi.mock('@/lib/tinkoff', () => ({
+  tinkoff: {
+    getRefundMethodContext: vi.fn(),
+    cancelClaimBoundRefund: vi.fn(),
+  },
+}));
+
+vi.mock('@/lib/payments/topup-refund', () => ({
+  claimTopupRefund: vi.fn(),
+  markTopupRefundDispatched: vi.fn(),
+  finalizeTopupRefundProof: vi.fn(),
+}));
+
 import type { NextRequest } from 'next/server';
 import { auth } from '@/auth';
 import { POST as refundPost } from '@/app/api/admin/payments/refund/route';
@@ -101,13 +114,31 @@ describe('POST /api/admin/payments/refund — step-up enforcement', () => {
     cookieGet.mockReturnValue({ value: 'valid-token' });
     verifyAdminSessionMock.mockResolvedValue(true);
     refundMock.mockResolvedValue({ success: true, providerRefundId: 'ref-1' });
-    // Confirmed, un-refunded ₽500 payment: the SELECT passes the ceiling and the
-    // claim UPDATE wins its WHERE-guard (returns the row), so the refund proceeds.
+    // Confirmed subscription payment: identity comes from the DB row and the
+    // guarded UPDATE wins, so the existing subscription branch proceeds.
     dbExecute.mockImplementation((q: { raw?: string }) => {
       const raw = q?.raw ?? '';
-      if (raw.includes('SELECT amount')) return Promise.resolve({ rows: [{ amount: '500' }] });
+      if (raw.includes('SELECT amount'))
+        return Promise.resolve({
+          rows: [
+            {
+              id: 'p-1',
+              subscription_id: 'sub-1',
+              amount: '500',
+              currency: 'RUB',
+              status: 'confirmed',
+              payment_method: 'tinkoff',
+              metadata: { kind: 'subscription', provider: 'tinkoff' },
+              tinkoff_payment_id: 'prov-1',
+              tinkoff_order_id: 'order-1',
+              topup_paid_kopecks: null,
+              topup_refunded_kopecks: '0',
+              refund_claim_id: null,
+            },
+          ],
+        });
       if (raw.includes('refunded_at = NOW()'))
-        return Promise.resolve({ rows: [{ id: 'p-1', amount: '500', tinkoff_payment_id: 'prov-1' }] });
+        return Promise.resolve({ rows: [{ id: 'p-1', amount: '500' }] });
       return Promise.resolve({ rows: [] });
     });
 

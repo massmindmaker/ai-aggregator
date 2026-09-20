@@ -17,6 +17,8 @@ if (RUN_INTEGRATION) {
 
 type RefundModule =
   typeof import("../../../../apps/web/src/lib/payments/topup-refund");
+type ConfirmationModule =
+  typeof import("../../../../apps/web/src/lib/payments/topup-confirmation");
 
 interface Fixture {
   userId: string;
@@ -30,6 +32,7 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
   let client: TestDatabaseClient;
   let closeClient: () => Promise<void>;
   let refunds: RefundModule;
+  let confirmation: ConfirmationModule;
   const fixtures: Fixture[] = [];
 
   async function openGuardedClient() {
@@ -118,6 +121,54 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
     return fixture;
   }
 
+  async function createPendingConfirmationFixture(options?: {
+    paygCredits?: number;
+    refundDebtCredits?: number;
+  }): Promise<Fixture> {
+    const fixture: Fixture = {
+      userId: randomUUID(),
+      orgId: randomUUID(),
+      paymentId: randomUUID(),
+      providerPaymentId: `provider-${randomUUID()}`,
+      providerOrderId: `order-${randomUUID()}`,
+    };
+    fixtures.push(fixture);
+    await client.query({
+      text: "INSERT INTO users (id, email) VALUES ($1, $2)",
+      values: [fixture.userId, `confirm-${fixture.userId}@example.test`],
+    });
+    await client.query({
+      text: `
+        INSERT INTO organizations (
+          id, slug, name, owner_id, payg_credits, refund_debt_credits
+        ) VALUES ($1, $2, 'Confirmation fixture', $3, $4, $5)
+      `,
+      values: [
+        fixture.orgId,
+        `confirm-${fixture.orgId}`,
+        fixture.userId,
+        options?.paygCredits ?? 0,
+        options?.refundDebtCredits ?? 0,
+      ],
+    });
+    await client.query({
+      text: `
+        INSERT INTO payments (
+          id, user_id, amount, status, tinkoff_payment_id, tinkoff_order_id,
+          currency, metadata
+        ) VALUES ($1, $2, '990.00', 'pending', $3, $4, 'RUB', $5::jsonb)
+      `,
+      values: [
+        fixture.paymentId,
+        fixture.userId,
+        fixture.providerPaymentId,
+        fixture.providerOrderId,
+        JSON.stringify({ kind: "topup", provider: "tinkoff" }),
+      ],
+    });
+    return fixture;
+  }
+
   function contextFor(
     fixture: Fixture,
     receiptMode: "full_no_receipt" | "trusted_no_receipt_required",
@@ -155,6 +206,27 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
     throw new Error(`query did not reach database lock barrier: ${marker}`);
   }
 
+  async function waitForLockedQuery(
+    observer: TestDatabaseClient,
+    marker: string,
+  ) {
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+      const result = await observer.query<{ blocked_count: string }>({
+        text: `
+          SELECT COUNT(*)::text AS blocked_count
+          FROM pg_stat_activity
+          WHERE wait_event_type = 'Lock'
+            AND query LIKE $1
+        `,
+        values: [`%${marker}%`],
+      });
+      if (Number(result.rows[0]?.blocked_count ?? 0) >= 1) return;
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`query did not reach lock wait: ${marker}`);
+  }
+
   beforeAll(async () => {
     const opened = await openGuardedClient();
     client = opened.client;
@@ -164,18 +236,26 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
     // passed environment, identity and marker/readback guards.
     refunds =
       await import("../../../../apps/web/src/lib/payments/topup-refund");
+    confirmation =
+      await import("../../../../apps/web/src/lib/payments/topup-confirmation");
   });
 
   afterEach(async () => {
-    const orgIds = fixtures.splice(0).map(({ orgId }) => orgId);
+    const currentFixtures = fixtures.splice(0);
+    const orgIds = currentFixtures.map(({ orgId }) => orgId);
+    const paymentIds = currentFixtures.map(({ paymentId }) => paymentId);
     if (orgIds.length === 0) return;
     await client.query({
       text: "DELETE FROM gateway_transactions WHERE org_id = ANY($1::uuid[])",
       values: [orgIds],
     });
     await client.query({
-      text: "DELETE FROM payments WHERE topup_org_id = ANY($1::uuid[])",
-      values: [orgIds],
+      text: "DELETE FROM balance_transactions WHERE payment_id = ANY($1::uuid[])",
+      values: [paymentIds],
+    });
+    await client.query({
+      text: "DELETE FROM payments WHERE id = ANY($1::uuid[]) OR topup_org_id = ANY($2::uuid[])",
+      values: [paymentIds, orgIds],
     });
     const users = await client.query<{ owner_id: string }>({
       text: "DELETE FROM organizations WHERE id = ANY($1::uuid[]) RETURNING owner_id",
@@ -190,6 +270,439 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
   afterAll(async () => {
     await closeClient?.();
   });
+
+  it("atomically snapshots a confirmation, repays debt, grants the remainder and preserves the legacy deposit", async () => {
+    const fixture = await createPendingConfirmationFixture({
+      paygCredits: 100,
+      refundDebtCredits: 200_000,
+    });
+    const input = {
+      paymentId: fixture.paymentId,
+      userId: fixture.userId,
+      providerPaymentId: fixture.providerPaymentId,
+      providerOrderId: fixture.providerOrderId,
+      paidKopecks: 99_000,
+      grantCredits: 1_200_000,
+      tinkoffStatus: "CONFIRMED" as const,
+    };
+
+    const outcomes = await Promise.all([
+      confirmation.confirmTinkoffTopup(input),
+      confirmation.confirmTinkoffTopup(input),
+    ]);
+    expect(outcomes.map(({ kind }) => kind).sort()).toEqual([
+      "confirmed",
+      "duplicate",
+    ]);
+
+    const state = await client.query<{
+      status: string;
+      topup_org_id: string;
+      topup_paid_kopecks: string;
+      topup_grant_credits: string;
+      payg_credits: string;
+      refund_debt_credits: string;
+      balance: string;
+      deposits: string;
+    }>({
+      text: `
+        SELECT p.status, p.topup_org_id, p.topup_paid_kopecks,
+               p.topup_grant_credits, o.payg_credits,
+               o.refund_debt_credits, u.balance,
+               COUNT(bt.id)::text AS deposits
+        FROM payments p
+        JOIN organizations o ON o.id = p.topup_org_id
+        JOIN users u ON u.id = p.user_id
+        LEFT JOIN balance_transactions bt
+          ON bt.payment_id = p.id AND bt.type = 'deposit'
+        WHERE p.id = $1
+        GROUP BY p.status, p.topup_org_id, p.topup_paid_kopecks,
+                 p.topup_grant_credits, o.payg_credits,
+                 o.refund_debt_credits, u.balance
+      `,
+      values: [fixture.paymentId],
+    });
+    expect(state.rows[0]).toEqual({
+      status: "confirmed",
+      topup_org_id: fixture.orgId,
+      topup_paid_kopecks: "99000",
+      topup_grant_credits: "1200000",
+      payg_credits: "1000100",
+      refund_debt_credits: "0",
+      balance: "990.00",
+      deposits: "1",
+    });
+  });
+
+  it("rolls back status, snapshot, legacy balance and org money when the deposit insert fails", async () => {
+    const fixture = await createPendingConfirmationFixture({
+      paygCredits: 77,
+      refundDebtCredits: 5,
+    });
+    await client.query({
+      text: `
+        INSERT INTO balance_transactions (
+          user_id, payment_id, type, amount, balance_before, balance_after
+        ) VALUES ($1, $2, 'deposit', 1, 0, 1)
+      `,
+      values: [fixture.userId, fixture.paymentId],
+    });
+
+    await expect(
+      confirmation.confirmTinkoffTopup({
+        paymentId: fixture.paymentId,
+        userId: fixture.userId,
+        providerPaymentId: fixture.providerPaymentId,
+        providerOrderId: fixture.providerOrderId,
+        paidKopecks: 99_000,
+        grantCredits: 1_200_000,
+        tinkoffStatus: "CONFIRMED",
+      }),
+    ).rejects.toMatchObject({ code: "23505" });
+
+    const state = await client.query<{
+      status: string;
+      topup_org_id: string | null;
+      topup_paid_kopecks: string | null;
+      topup_grant_credits: string | null;
+      payg_credits: string;
+      refund_debt_credits: string;
+      balance: string;
+    }>({
+      text: `
+        SELECT p.status, p.topup_org_id, p.topup_paid_kopecks,
+               p.topup_grant_credits, o.payg_credits,
+               o.refund_debt_credits, u.balance
+        FROM payments p
+        JOIN organizations o ON o.id = $2
+        JOIN users u ON u.id = p.user_id
+        WHERE p.id = $1
+      `,
+      values: [fixture.paymentId, fixture.orgId],
+    });
+    expect(state.rows[0]).toEqual({
+      status: "pending",
+      topup_org_id: null,
+      topup_paid_kopecks: null,
+      topup_grant_credits: null,
+      payg_credits: "77",
+      refund_debt_credits: "5",
+      balance: "0",
+    });
+  });
+
+  it("acknowledges a duplicate from its immutable snapshot after the user's default org changes", async () => {
+    const fixture = await createPendingConfirmationFixture();
+    const input = {
+      paymentId: fixture.paymentId,
+      userId: fixture.userId,
+      providerPaymentId: fixture.providerPaymentId,
+      providerOrderId: fixture.providerOrderId,
+      paidKopecks: 99_000,
+      grantCredits: 1_200_000,
+      tinkoffStatus: "CONFIRMED" as const,
+    };
+    await expect(
+      confirmation.confirmTinkoffTopup(input),
+    ).resolves.toMatchObject({
+      kind: "confirmed",
+      orgId: fixture.orgId,
+    });
+
+    const newDefaultOrgId = randomUUID();
+    fixtures.push({ ...fixture, orgId: newDefaultOrgId });
+    await client.query({
+      text: `
+        INSERT INTO organizations (id, slug, name, owner_id)
+        VALUES ($1, $2, 'Changed default', $3)
+      `,
+      values: [newDefaultOrgId, `changed-${newDefaultOrgId}`, fixture.userId],
+    });
+    await client.query({
+      text: `
+        INSERT INTO organization_members (organization_id, user_id, role)
+        VALUES ($1, $2, 'admin')
+      `,
+      values: [newDefaultOrgId, fixture.userId],
+    });
+
+    await expect(
+      confirmation.confirmTinkoffTopup({
+        ...input,
+        // Simulate a later canonical Basic-rate change. Replay authority is
+        // the immutable stored snapshot, not this newly derived value.
+        grantCredits: 2_400_000,
+      }),
+    ).resolves.toEqual({ kind: "duplicate" });
+    const state = await client.query<{
+      topup_org_id: string;
+      original_payg: string;
+      new_default_payg: string;
+      deposits: string;
+    }>({
+      text: `
+        SELECT p.topup_org_id,
+               original.payg_credits::text AS original_payg,
+               changed.payg_credits::text AS new_default_payg,
+               COUNT(bt.id)::text AS deposits
+        FROM payments p
+        JOIN organizations original ON original.id = p.topup_org_id
+        JOIN organizations changed ON changed.id = $2
+        LEFT JOIN balance_transactions bt
+          ON bt.payment_id = p.id AND bt.type = 'deposit'
+        WHERE p.id = $1
+        GROUP BY p.topup_org_id, original.payg_credits, changed.payg_credits
+      `,
+      values: [fixture.paymentId, newDefaultOrgId],
+    });
+    expect(state.rows[0]).toEqual({
+      topup_org_id: fixture.orgId,
+      original_payg: "1200000",
+      new_default_payg: "0",
+      deposits: "1",
+    });
+  });
+
+  it("persists a refund-before-confirmation marker that makes every later confirmation mint zero", async () => {
+    const fixture = await createPendingConfirmationFixture({ paygCredits: 41 });
+    await expect(
+      confirmation.blockUnconfirmedTopupGrantForRefund({
+        paymentId: fixture.paymentId,
+        providerPaymentId: fixture.providerPaymentId,
+        providerOrderId: fixture.providerOrderId,
+      }),
+    ).resolves.toEqual({ kind: "blocked" });
+
+    await expect(
+      confirmation.confirmTinkoffTopup({
+        paymentId: fixture.paymentId,
+        userId: fixture.userId,
+        providerPaymentId: fixture.providerPaymentId,
+        providerOrderId: fixture.providerOrderId,
+        paidKopecks: 99_000,
+        grantCredits: 1_200_000,
+        tinkoffStatus: "CONFIRMED",
+      }),
+    ).resolves.toMatchObject({
+      kind: "reconciliation_required",
+      reason: "CAS_REJECTED",
+    });
+
+    const state = await client.query<{
+      status: string;
+      error_code: string;
+      topup_org_id: string | null;
+      topup_paid_kopecks: string | null;
+      topup_grant_credits: string | null;
+      balance: string;
+      payg_credits: string;
+      deposits: string;
+    }>({
+      text: `
+        SELECT p.status, p.error_code, p.topup_org_id,
+               p.topup_paid_kopecks, p.topup_grant_credits,
+               u.balance, o.payg_credits,
+               COUNT(bt.id)::text AS deposits
+        FROM payments p
+        JOIN users u ON u.id = p.user_id
+        JOIN organizations o ON o.id = $2
+        LEFT JOIN balance_transactions bt
+          ON bt.payment_id = p.id AND bt.type = 'deposit'
+        WHERE p.id = $1
+        GROUP BY p.status, p.error_code, p.topup_org_id,
+                 p.topup_paid_kopecks, p.topup_grant_credits,
+                 u.balance, o.payg_credits
+      `,
+      values: [fixture.paymentId, fixture.orgId],
+    });
+    expect(state.rows[0]).toEqual({
+      status: "pending",
+      error_code: "TOPUP_REFUND_BEFORE_CONFIRMATION",
+      topup_org_id: null,
+      topup_paid_kopecks: null,
+      topup_grant_credits: null,
+      balance: "0",
+      payg_credits: "41",
+      deposits: "0",
+    });
+  });
+
+  it("serializes marker-first race so a queued confirmation cannot grant", async () => {
+    const fixture = await createPendingConfirmationFixture();
+    const blocker = await openGuardedClient();
+    let markerPromise:
+      | ReturnType<typeof confirmation.blockUnconfirmedTopupGrantForRefund>
+      | undefined;
+    let confirmPromise:
+      | ReturnType<typeof confirmation.confirmTinkoffTopup>
+      | undefined;
+    try {
+      await blocker.client.query({ text: "BEGIN", values: [] });
+      const pid = await blocker.client.query<{ pid: number }>({
+        text: "SELECT pg_backend_pid() AS pid",
+        values: [],
+      });
+      await blocker.client.query({
+        text: "SELECT id FROM payments WHERE id = $1 FOR UPDATE",
+        values: [fixture.paymentId],
+      });
+
+      markerPromise = confirmation.blockUnconfirmedTopupGrantForRefund({
+        paymentId: fixture.paymentId,
+        providerPaymentId: fixture.providerPaymentId,
+        providerOrderId: fixture.providerOrderId,
+      });
+      await waitForBlockedQuery(
+        client,
+        pid.rows[0].pid,
+        "topup_refund_before_confirmation_marker",
+      );
+      confirmPromise = confirmation.confirmTinkoffTopup({
+        paymentId: fixture.paymentId,
+        userId: fixture.userId,
+        providerPaymentId: fixture.providerPaymentId,
+        providerOrderId: fixture.providerOrderId,
+        paidKopecks: 99_000,
+        grantCredits: 1_200_000,
+        tinkoffStatus: "CONFIRMED",
+      });
+      await waitForLockedQuery(client, "topup_confirmation_payment_gate");
+      await blocker.client.query({ text: "COMMIT", values: [] });
+
+      await expect(markerPromise).resolves.toEqual({ kind: "blocked" });
+      await expect(confirmPromise).resolves.toMatchObject({
+        kind: "reconciliation_required",
+      });
+      const state = await client.query<{
+        status: string;
+        error_code: string;
+        topup_org_id: string | null;
+        payg_credits: string;
+      }>({
+        text: `
+          SELECT p.status, p.error_code, p.topup_org_id, o.payg_credits
+          FROM payments p
+          JOIN organizations o ON o.id = $2
+          WHERE p.id = $1
+        `,
+        values: [fixture.paymentId, fixture.orgId],
+      });
+      expect(state.rows[0]).toEqual({
+        status: "pending",
+        error_code: "TOPUP_REFUND_BEFORE_CONFIRMATION",
+        topup_org_id: null,
+        payg_credits: "0",
+      });
+    } finally {
+      await blocker.client
+        .query({ text: "ROLLBACK", values: [] })
+        .catch(() => undefined);
+      if (markerPromise || confirmPromise) {
+        await Promise.allSettled(
+          [markerPromise, confirmPromise].filter(Boolean) as Promise<unknown>[],
+        );
+      }
+      await blocker.close();
+    }
+  }, 30_000);
+
+  it("serializes confirmation-first race, then reconciles only after releasing the payment lock", async () => {
+    const fixture = await createPendingConfirmationFixture();
+    const blocker = await openGuardedClient();
+    let markerPromise:
+      | ReturnType<typeof confirmation.blockUnconfirmedTopupGrantForRefund>
+      | undefined;
+    let confirmPromise:
+      | ReturnType<typeof confirmation.confirmTinkoffTopup>
+      | undefined;
+    try {
+      await blocker.client.query({ text: "BEGIN", values: [] });
+      const pid = await blocker.client.query<{ pid: number }>({
+        text: "SELECT pg_backend_pid() AS pid",
+        values: [],
+      });
+      await blocker.client.query({
+        text: "SELECT id FROM payments WHERE id = $1 FOR UPDATE",
+        values: [fixture.paymentId],
+      });
+
+      confirmPromise = confirmation.confirmTinkoffTopup({
+        paymentId: fixture.paymentId,
+        userId: fixture.userId,
+        providerPaymentId: fixture.providerPaymentId,
+        providerOrderId: fixture.providerOrderId,
+        paidKopecks: 99_000,
+        grantCredits: 1_200_000,
+        tinkoffStatus: "CONFIRMED",
+      });
+      await waitForBlockedQuery(
+        client,
+        pid.rows[0].pid,
+        "topup_confirmation_payment_gate",
+      );
+      markerPromise = confirmation.blockUnconfirmedTopupGrantForRefund({
+        paymentId: fixture.paymentId,
+        providerPaymentId: fixture.providerPaymentId,
+        providerOrderId: fixture.providerOrderId,
+      });
+      await waitForLockedQuery(
+        client,
+        "topup_refund_before_confirmation_marker",
+      );
+      await blocker.client.query({ text: "COMMIT", values: [] });
+
+      await expect(confirmPromise).resolves.toMatchObject({
+        kind: "confirmed",
+      });
+      await expect(markerPromise).resolves.toEqual({ kind: "snapshot_exists" });
+
+      await expect(
+        refunds.reconcileFullTopupRefund(fixture.paymentId, {
+          provider: "tinkoff",
+          providerPaymentId: fixture.providerPaymentId,
+          providerOrderId: fixture.providerOrderId,
+        }),
+      ).resolves.toMatchObject({ kind: "settled", clawedCredits: 1_200_000 });
+      const state = await client.query<{
+        status: string;
+        topup_paid_kopecks: string;
+        topup_grant_credits: string;
+        topup_refunded_kopecks: string;
+        topup_clawed_credits: string;
+        payg_credits: string;
+        refund_debt_credits: string;
+      }>({
+        text: `
+          SELECT p.status, p.topup_paid_kopecks, p.topup_grant_credits,
+                 p.topup_refunded_kopecks, p.topup_clawed_credits,
+                 o.payg_credits, o.refund_debt_credits
+          FROM payments p
+          JOIN organizations o ON o.id = p.topup_org_id
+          WHERE p.id = $1
+        `,
+        values: [fixture.paymentId],
+      });
+      expect(state.rows[0]).toEqual({
+        status: "refunded",
+        topup_paid_kopecks: "99000",
+        topup_grant_credits: "1200000",
+        topup_refunded_kopecks: "99000",
+        topup_clawed_credits: "1200000",
+        payg_credits: "0",
+        refund_debt_credits: "0",
+      });
+    } finally {
+      await blocker.client
+        .query({ text: "ROLLBACK", values: [] })
+        .catch(() => undefined);
+      if (markerPromise || confirmPromise) {
+        await Promise.allSettled(
+          [markerPromise, confirmPromise].filter(Boolean) as Promise<unknown>[],
+        );
+      }
+      await blocker.close();
+    }
+  }, 30_000);
 
   it("creates one immutable org-locked claim and rejects a concurrent replacement", async () => {
     const fixture = await createFixture();

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-
-async function loadRefundModule() {
-  return import("../topup-refund");
-}
+import {
+  claimTopupRefund,
+  releaseProvenNoEffectTopupRefundClaim,
+} from "../topup-refund";
 
 function databaseThatMustNotBeTouched() {
   return new Proxy(
@@ -17,10 +17,6 @@ function databaseThatMustNotBeTouched() {
 
 describe("top-up refund validation", () => {
   it("rejects unsupported method facts before touching the database", async () => {
-    const modulePromise = loadRefundModule();
-    await expect(modulePromise).resolves.toBeDefined();
-    const { claimTopupRefund } = await modulePromise;
-
     await expect(
       claimTopupRefund(
         "00000000-0000-4000-8000-000000000001",
@@ -38,7 +34,6 @@ describe("top-up refund validation", () => {
   });
 
   it("rejects unknown and verified receipt modes before touching the database", async () => {
-    const { claimTopupRefund } = await loadRefundModule();
     const base = {
       paymentId: "provider-payment",
       orderId: "provider-order",
@@ -72,7 +67,6 @@ describe("top-up refund validation", () => {
   });
 
   it("rejects unsafe amounts before touching the database", async () => {
-    const { claimTopupRefund } = await loadRefundModule();
     const context = {
       paymentId: "provider-payment",
       orderId: "provider-order",
@@ -95,7 +89,6 @@ describe("top-up refund validation", () => {
   });
 
   it("never releases a dispatched claim for an unapproved provider result", async () => {
-    const { releaseProvenNoEffectTopupRefundClaim } = await loadRefundModule();
     const database = { transaction: vi.fn() } as never;
 
     await expect(
