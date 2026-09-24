@@ -118,6 +118,23 @@ function body() {
     usage: { prompt_tokens: 30, completion_tokens: 0, total_tokens: 30 },
   };
 }
+function completionBody() {
+  return {
+    id: "cmpl-test",
+    object: "text_completion",
+    created: 123,
+    model: "openai/gpt-4o-mini",
+    choices: [
+      {
+        text: "hello",
+        index: 0,
+        logprobs: null,
+        finish_reason: "stop",
+      },
+    ],
+    usage: { prompt_tokens: 30, completion_tokens: 0, total_tokens: 30 },
+  };
+}
 describe.skipIf(!enabled)("native gateway HTTP storage", () => {
   let db: TestDatabaseClient, close: () => Promise<void>;
   const fixtures: Fixture[] = [];
@@ -222,6 +239,19 @@ describe.skipIf(!enabled)("native gateway HTTP storage", () => {
     const r = request(await fixture());
     await claim(r);
     await admit(r);
+    await dispatch(r);
+    return r;
+  }
+  async function startedCompletion() {
+    const r = request(await fixture());
+    await query(
+      "SELECT * FROM aiag_claim_gateway_http_request_v1($1,$2,$3,'completions'::varchar,'stored'::varchar,$4,$5,1::smallint)",
+      [r.f.org, r.f.key, r.id, r.digest, r.fingerprint],
+    );
+    await query(
+      "SELECT * FROM aiag_admit_gateway_charge_v2($1,$2,$3,'trace','completions','stored','openai/gpt-4o-mini',$4,$5,$6,'SID',$7)",
+      [r.f.org, r.id, r.f.key, r.quote.tokenQuote.authorizedMaxCredits, r.quote, r.deadline, r.supplier],
+    );
     await dispatch(r);
     return r;
   }
@@ -1232,6 +1262,51 @@ describe.skipIf(!enabled)("native gateway HTTP storage", () => {
       "key_session_charged_v2:0:3",
       "org_day_supplier_v2:0:20",
     ]);
+  });
+
+  it("persists exact text completions, binds trusted chat usage, and rejects wrong DTO/model type", async () => {
+    const r = await startedCompletion();
+    await write(r, completionBody());
+    await settle(r);
+    const readResult = await query(
+      "SELECT status,response_body,actual_cost_credits::text AS actual_cost_credits FROM aiag_read_gateway_http_result_v1($1::uuid,$2::uuid,'completions'::varchar,'stored'::varchar,$3::text,$4::text,1::smallint)",
+      [r.f.org, r.f.key, r.digest, r.fingerprint],
+    );
+    expect(readResult.rows).toEqual([{
+      status: "ready",
+      response_body: completionBody(),
+      actual_cost_credits: "30",
+    }]);
+    const digest = await query(
+      "SELECT response_digest=encode(sha256(convert_to(response_body::text,'UTF8')),'hex') AS exact FROM gateway_http_results WHERE billing_request_id=$1",
+      [r.id],
+    );
+    expect(digest.rows[0].exact).toBe(true);
+
+    for (const response of [
+      { ...completionBody(), object: "chat.completion" },
+      { ...completionBody(), choices: [{ ...completionBody().choices[0], logprobs: [] }] },
+    ]) {
+      const invalid = await startedCompletion();
+      await expect(write(invalid, response)).rejects.toThrow("INVALID_HTTP_RESULT");
+      expect((await query(
+        "SELECT count(*)::int AS count FROM gateway_http_results WHERE billing_request_id=$1",
+        [invalid.id],
+      )).rows[0].count).toBe(0);
+    }
+
+    const wrongModel = request(await fixture());
+    await query(
+      "SELECT * FROM aiag_claim_gateway_http_request_v1($1::uuid,$2::uuid,$3::uuid,'completions'::varchar,'stored'::varchar,$4::text,$5::text,1::smallint)",
+      [wrongModel.f.org, wrongModel.f.key, wrongModel.id, wrongModel.digest, wrongModel.fingerprint],
+    );
+    const embeddingQuote = structuredClone(wrongModel.quote);
+    embeddingQuote.tokenQuote.candidates[0].modelType = "embedding";
+    const embeddingSupplier = { ...wrongModel.supplier, tokenQuote: embeddingQuote.tokenQuote };
+    await expect(query(
+      "SELECT * FROM aiag_admit_gateway_charge_v2($1,$2,$3,'trace','completions','stored','openai/gpt-4o-mini',$4,$5,$6,'SID',$7)",
+      [wrongModel.f.org, wrongModel.id, wrongModel.f.key, embeddingQuote.tokenQuote.authorizedMaxCredits, embeddingQuote, wrongModel.deadline, embeddingSupplier],
+    )).rejects.toThrow("INVALID_SUPPLIER_QUOTE");
   });
 
   it("keeps key FOR SHARE until authenticated read commits", async () => {

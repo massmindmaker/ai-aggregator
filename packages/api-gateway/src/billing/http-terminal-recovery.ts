@@ -90,7 +90,7 @@ function identity<Route extends GatewayHttpRouteKind>(
 ): GatewayHttpIdentity<Route> {
   dataObject(args);
   if (
-    !["chat", "embeddings"].includes(args.routeKind) ||
+    !["chat", "embeddings", "completions"].includes(args.routeKind) ||
     args.billingMode !== "stored" ||
     args.contractVersion !== 1
   )
@@ -394,7 +394,7 @@ export async function recoverGatewayHttpSettlement(
       a.apiKeyId !== apiKeyId ||
       a.billingRequestId !== billingRequestId ||
       a.state !== "settled" ||
-      !["chat", "embeddings"].includes(a.routeKind) ||
+      !["chat", "embeddings", "completions"].includes(a.routeKind) ||
       (args.routeKind !== undefined && a.routeKind !== args.routeKind) ||
       a.billingMode !== "stored" ||
       a.outcomeKind !== "success"

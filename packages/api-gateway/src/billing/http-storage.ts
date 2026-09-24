@@ -17,8 +17,10 @@ import {
 } from "./admission-internal";
 import {
   parseStoredHttpChatResponse,
+  parseStoredHttpCompletionResponse,
   parseStoredHttpEmbeddingsResponse,
   type StoredHttpChatResponse,
+  type StoredHttpCompletionResponse,
   type StoredHttpEmbeddingsResponse,
 } from "./http-storage-result";
 
@@ -37,7 +39,7 @@ export class HttpStorageAccessError extends AiagError {
     super("HTTP_STORAGE_ACCESS_DENIED", 403, "HTTP storage access denied");
   }
 }
-export type GatewayHttpRouteKind = "chat" | "embeddings";
+export type GatewayHttpRouteKind = "chat" | "embeddings" | "completions";
 export type GatewayHttpIdentity<
   Route extends GatewayHttpRouteKind = GatewayHttpRouteKind,
 > = Readonly<{
@@ -56,6 +58,7 @@ export type GatewayHttpClaim<
 type StoredHttpResponseByRoute = Readonly<{
   chat: StoredHttpChatResponse;
   embeddings: StoredHttpEmbeddingsResponse;
+  completions: StoredHttpCompletionResponse;
 }>;
 export type GatewayHttpResult<
   Route extends GatewayHttpRouteKind = "chat",
@@ -119,7 +122,7 @@ function identity<Route extends GatewayHttpRouteKind>(
 ): GatewayHttpIdentity<Route> {
   dataObject(args);
   if (
-    !["chat", "embeddings"].includes(args.routeKind) ||
+    !["chat", "embeddings", "completions"].includes(args.routeKind) ||
     args.billingMode !== "stored" ||
     args.contractVersion !== 1
   )
@@ -336,7 +339,9 @@ export function parseGatewayHttpResultRows(
       response:
         expectedRoute === "chat"
           ? parseStoredHttpChatResponse(r.response_body)
-          : parseStoredHttpEmbeddingsResponse(r.response_body),
+          : expectedRoute === "embeddings"
+            ? parseStoredHttpEmbeddingsResponse(r.response_body)
+            : parseStoredHttpCompletionResponse(r.response_body),
       actualCostCredits: parseAdmissionBigint(r.actual_cost_credits),
       storedAt,
       expiresAt,
@@ -353,7 +358,7 @@ export async function recordGatewayHttpOutcome<
     const captured = captureGatewayOutcome(args);
     const { before, actualCostCredits, usageSnapshot, outcomeKind } = captured;
     if (
-      !["chat", "embeddings"].includes(before.routeKind) ||
+      !["chat", "embeddings", "completions"].includes(before.routeKind) ||
       before.billingMode !== "stored" ||
       outcomeKind !== "success"
     )
@@ -363,7 +368,9 @@ export async function recordGatewayHttpOutcome<
     const response =
       before.routeKind === "chat"
         ? parseStoredHttpChatResponse(args.response)
-        : parseStoredHttpEmbeddingsResponse(args.response);
+        : before.routeKind === "embeddings"
+          ? parseStoredHttpEmbeddingsResponse(args.response)
+          : parseStoredHttpCompletionResponse(args.response);
     const call = client<
       postgres.Row[]
     >`SELECT * FROM aiag_record_gateway_http_outcome_v1(

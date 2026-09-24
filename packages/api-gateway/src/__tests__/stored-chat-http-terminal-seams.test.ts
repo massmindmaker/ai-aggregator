@@ -223,6 +223,37 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe("HTTP terminal executor seams", () => {
+  it.each([
+    [undefined, "chat"],
+    ["completions", "completions"],
+  ] as const)("binds trusted admission route %s as %s", async (configured, expected) => {
+    const f = fixture();
+    const h = createStoredChatAttempt(f.input, {
+      ...f.deps,
+      ...(configured === undefined ? {} : { admissionRouteKind: configured }),
+    });
+    if (h.status !== "ready") throw Error(h.status);
+    expect((await h.run()).kind).toBe("settled_success");
+    expect(f.deps.admitGatewayChargeV2.mock.calls[0]![0].routeKind).toBe(expected);
+  });
+
+  it("never dispatches when the durable ACK route differs from the trusted route", async () => {
+    const f = fixture();
+    const original = f.deps.admitGatewayChargeV2.getMockImplementation()!;
+    const h = createStoredChatAttempt(f.input, {
+      ...f.deps,
+      admissionRouteKind: "completions",
+      admitAttempt: async (a) => ({
+        kind: "admitted" as const,
+        admission: { ...(await original(a)), routeKind: "chat" },
+      }),
+    });
+    if (h.status !== "ready") throw Error(h.status);
+    expect(await h.run()).toMatchObject({ kind: "reconciliation_required", stage: "admit" });
+    expect(f.deps.markGatewayChargeDispatched).not.toHaveBeenCalled();
+    expect(f.execute).not.toHaveBeenCalled();
+  });
+
   it("uses the custom admission as sole writer and never executes on terminal reject", async () => {
     const f = fixture();
     const admitAttempt = vi.fn(async (a: { billingRequestId: string }) => ({

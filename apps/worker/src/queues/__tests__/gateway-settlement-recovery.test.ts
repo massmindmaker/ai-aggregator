@@ -49,6 +49,7 @@ describe("gateway settlement recovery parsers", () => {
     expect(parseGatewaySettlementRecoveryMode("disabled")).toBe("disabled");
     expect(parseGatewaySettlementRecoveryMode("stored_chat_v1")).toBe("stored_chat_v1");
     expect(parseGatewaySettlementRecoveryMode("stored_chat_embeddings_v1")).toBe("stored_chat_embeddings_v1");
+    expect(parseGatewaySettlementRecoveryMode("stored_chat_embeddings_completions_v1")).toBe("stored_chat_embeddings_completions_v1");
     expect(() => parseGatewaySettlementRecoveryMode("disabled ")).toThrow("invalid gateway settlement recovery mode");
   });
 

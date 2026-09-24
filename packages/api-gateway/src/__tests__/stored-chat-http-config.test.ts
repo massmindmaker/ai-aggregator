@@ -43,6 +43,13 @@ describe("stored chat HTTP startup config", () => {
     expect(config.GATEWAY_HTTP_EXECUTION_MODE).toBe("stored_chat_embeddings");
   });
 
+  it("accepts the explicit stored chat, embeddings and completions mode", async () => {
+    vi.stubEnv("GATEWAY_HTTP_EXECUTION_MODE", "stored_chat_embeddings_completions");
+    vi.resetModules();
+    const { config } = await import("../config");
+    expect(config.GATEWAY_HTTP_EXECUTION_MODE).toBe("stored_chat_embeddings_completions");
+  });
+
   it("rejects a noncanonical exact discount only in restricted mode", async () => {
     vi.stubEnv("GATEWAY_HTTP_EXECUTION_MODE", "stored_chat_only");
     vi.stubEnv("CACHING_DISCOUNT", "1e-7");

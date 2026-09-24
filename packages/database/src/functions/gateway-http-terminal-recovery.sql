@@ -192,7 +192,7 @@ BEGIN
  SELECT * INTO _result FROM gateway_http_results WHERE billing_request_id=_billing_request_id FOR UPDATE;
  PERFORM 1 FROM gateway_http_rejections WHERE billing_request_id=_billing_request_id FOR UPDATE;
  IF FOUND OR _r.org_id IS DISTINCT FROM _org_id OR _r.api_key_id IS DISTINCT FROM _api_key_id
- OR _r.route_kind NOT IN('chat','embeddings') OR _r.billing_mode IS DISTINCT FROM 'stored' OR _r.contract_version IS DISTINCT FROM 1
+ OR _r.route_kind NOT IN('chat','embeddings','completions') OR _r.billing_mode IS DISTINCT FROM 'stored' OR _r.contract_version IS DISTINCT FROM 1
  OR _a.route_kind IS DISTINCT FROM _r.route_kind OR _a.billing_mode IS DISTINCT FROM 'stored'
  OR _a.state NOT IN('outcome_recorded','settled') OR _a.outcome_kind IS DISTINCT FROM 'success'
  OR _a.attempt_id IS NULL OR _a.upstream_id IS NULL OR _a.pricing_snapshot IS NULL OR _a.usage_snapshot IS NULL

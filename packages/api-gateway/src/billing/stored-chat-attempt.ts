@@ -58,6 +58,8 @@ export type StoredChatAttemptArgs = {
 };
 /** Trusted composition/test seam only; never populate this object from a public request. */
 export type StoredChatAttemptDependencies = {
+  /** Trusted route identity for the shared chat mechanics; never from request body. */
+  admissionRouteKind?: 'chat' | 'completions';
   getAdapter: (key: string) => UpstreamAdapter;
   newUuid: () => string;
   admitGatewayChargeV2: typeof admitGatewayChargeV2;
@@ -114,6 +116,7 @@ export function createStoredChatAttempt(
     });
   }
   const deps = Object.freeze({
+    admissionRouteKind: 'chat' as const,
     getAdapter: getUpstream,
     newUuid: randomUUID,
     admitGatewayChargeV2,
@@ -123,6 +126,9 @@ export function createStoredChatAttempt(
     cancelUndispatchedGatewayCharge,
     ...dependencies,
   });
+  const admissionRouteKind = deps.admissionRouteKind;
+  if (admissionRouteKind !== 'chat' && admissionRouteKind !== 'completions')
+    return unavailable;
   const persistOutcome = deps.persistOutcome;
   const admitAttempt = deps.admitAttempt;
   const rejectUnstarted = deps.rejectUnstarted;
@@ -200,7 +206,7 @@ export function createStoredChatAttempt(
     }),
     preDispatchDeadlineAt: identity.preDispatchDeadlineAt,
     billingRequestId,
-    routeKind: 'chat',
+    routeKind: admissionRouteKind,
     billingMode: 'stored',
     modelSlug: body.modelSlug,
     authorizedMaxCredits: quote.authorizedMaxCredits,
@@ -235,6 +241,7 @@ export function createStoredChatAttempt(
       admission.billingRequestId !== billingRequestId ||
       admission.orgId !== identity.orgId ||
       admission.apiKeyId !== identity.apiKeyId ||
+      admission.routeKind !== admissionRouteKind ||
       admission.authorizedMaxCredits !== admissionArgs.authorizedMaxCredits
     )
       throw new Error('Unconfirmed admission');

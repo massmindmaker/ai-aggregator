@@ -396,6 +396,31 @@ describe("gateway settlement recovery row adapters", () => {
     ).resolves.toMatchObject({ routeKind: "embeddings" });
     await db.close();
   });
+
+  it("uses the strict three-route filter and accepts a completions settlement ACK", async () => {
+    const db = createGatewaySettlementRecoveryDb(databaseUrl, {
+      allowedRoutes: ["chat", "embeddings", "completions"],
+    });
+    pgMock.queryImplementation = async () => result([]);
+    await db.captureCycle();
+    expect(pool().query).toHaveBeenLastCalledWith({
+      text: CAPTURE_GATEWAY_SETTLEMENT_RECOVERY_CYCLE_SQL,
+      values: [["chat", "embeddings", "completions"]],
+    });
+    pgMock.queryImplementation = async () => result([{
+      org_id: orgId,
+      api_key_id: apiKeyId,
+      billing_request_id: billingRequestId,
+      state: "settled",
+      route_kind: "completions",
+      billing_mode: "stored",
+      outcome_kind: "success",
+    }]);
+    await expect(
+      db.recover({ orgId, apiKeyId, billingRequestId, reconcileAt: timestamp }),
+    ).resolves.toMatchObject({ routeKind: "completions" });
+    await db.close();
+  });
 });
 
 describe("gateway settlement recovery pool lifecycle", () => {

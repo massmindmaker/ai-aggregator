@@ -16,7 +16,12 @@ const schema = z.object({
     .enum(["debug", "info", "warn", "error", "fatal", "silent"])
     .default("info"),
   GATEWAY_HTTP_EXECUTION_MODE: z
-    .enum(["legacy", "stored_chat_only", "stored_chat_embeddings"])
+    .enum([
+      "legacy",
+      "stored_chat_only",
+      "stored_chat_embeddings",
+      "stored_chat_embeddings_completions",
+    ])
     .default("legacy"),
   // CBR endpoints (FIX H5/H6)
   CBR_URL: z.string().default("https://www.cbr.ru/scripts/XML_daily.asp"),

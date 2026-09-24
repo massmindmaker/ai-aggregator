@@ -115,13 +115,15 @@ function assertAvailable(item: CatalogItemV1): asserts item is CatalogAvailableI
 }
 
 describe('public catalog projector', () => {
-  it('advertises the reviewed embeddings operation only in explicit combined mode', async () => {
+  it.each(['stored_chat_embeddings', 'stored_chat_embeddings_completions'] as const)(
+    'advertises the reviewed embeddings operation in explicit combined mode %s',
+    async (executionMode) => {
     const embeddingModel = model({ type: 'embedding', slug: 'openai/text-embedding-3-small' });
     const embeddingCandidate = candidate({
       upstream_model_id: 'openai/text-embedding-3-small',
       price_per_1k_input: '0.002', price_per_1k_output: '0', markup: '1.25',
     });
-    const combined = runtime({ executionMode: 'stored_chat_embeddings', getAdapter: () => combinedAdapter() });
+    const combined = runtime({ executionMode, getAdapter: () => combinedAdapter() });
     const response = parseCatalogResponseV1(await read({
       runtime: combined,
       transaction: runner({ models: [embeddingModel], candidates: [embeddingCandidate] }),
@@ -146,7 +148,8 @@ describe('public catalog projector', () => {
       transaction: runner({ models: [embeddingModel], candidates: [embeddingCandidate] }),
     });
     expect(oldMode.data[0]!.availability).toMatchObject({ state: 'unavailable', reason: 'runtime_contract_unavailable' });
-  });
+    },
+  );
 
   it('projects one strict available unattested item through all five modes', async () => {
     const response = parseCatalogResponseV1(await read());
