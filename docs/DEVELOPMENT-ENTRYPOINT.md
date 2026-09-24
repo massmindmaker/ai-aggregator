@@ -2,7 +2,7 @@
 
 **Актуальный порядок20.09:** [сопоставленные планы, маршрутизация и текущий пакет](consolidation/2026-09-20-priorities-and-routing.md). Пользователь вернул в общую программу все три сервиса; первым выполняется Aggregator, затем Arena и Agents Market. Старые запреты на возобновление ниже описывают состояние13.09.
 
-**Принято20.09:** RUB/TON correction и stored embeddings lifecycle приняты локально; embeddings source `a587e88`, merge `4a5acdb`, native matrix341 совокупно + TON core58, итоговый financial/TS APPROVE. Runtime и production не включены. Следующий кодовый пакет — stored completions; точные остатки и evidence находятся в текущем checkpoint выше.
+**Принято24.09:** RUB/TON correction, stored embeddings и scalar non-stream completions приняты локально. Completions source `3a717bf`, merge `5297623`, cumulative native matrix350 + TON core58, итоговый financial/SQL/security/TS APPROVE. Runtime и production не включены; provider transport mocked. Следующие кодовые пакеты — stream/BYOK, затем async media/batches; точные остатки и evidence находятся в текущем checkpoint выше.
 
 **Приоритет пользователя13.09:** завершать только AI Aggregator; Arena и Agents Market отложены. [Точный текущий handoff, сохранённый WIP и границы приёмки](consolidation/2026-09-13-aggregator-only-handoff.md). Он заменяет прежний порядок работ от08.09; использовать Superpowers и независимых владельцев.
 

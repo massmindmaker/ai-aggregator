@@ -7,7 +7,7 @@
 | Очередь | Источник | Следующий результат |
 |---|---|---|
 | 1. Aggregator — каталог | 19.09 resume plan, 13.09 public catalog contract, AG-P2 | Native matrix принят; остаётся настоящий AG→AM HTTP consumer |
-| 2. Aggregator — расчёты | AG-P1 route coverage, [stored embeddings lifecycle](../superpowers/plans/2026-09-20-stored-embeddings-lifecycle.md) | Chat и embeddings приняты локально; далее completions, stream/BYOK и async media/batches по одному lifecycle |
+| 2. Aggregator — расчёты | AG-P1 route coverage, stored embeddings/completions lifecycle | Chat, embeddings и non-stream completions приняты локально; далее stream/BYOK и async media/batches по одному lifecycle |
 | 3. Aggregator — продукт | Production continuation AG-P3/P4/P5 | Авторская версия→доход, TON alongside RUB/login, modalities/UX и сквозная приёмка |
 | 4. Arena | Собственный entrypoint и prediction evaluation plan | Executable scorer/hash и opt-in binding→DB jobs→sandboxed evaluator→результат |
 | 5. Agents Market | Собственный native-account-principal/Web plan | HTTP/security review→guarded auth browser→UUID domain/worker→AG HTTP integration и independent Web/TMA acceptance |
@@ -18,7 +18,7 @@ TON0076 прошла итоговое source-review: прежние шесть H
 
 ## Что остаётся в полной программе
 
-- Aggregator AG-P1: stream, BYOK, completions, media/async и batches ещё требуют собственного admission/outcome/recovery; restricted501 означает закрытую возможность, а не реализованный сценарий. Accepted quota/refund primitives заново не писать. AG-P2 — каталог и настоящий AM consumer; AG-P3 — авторские версии/доход; AG-P4 — TON с сохранением RUB; AG-P5 — modalities, truthful UX и release.
+- Aggregator AG-P1: stream, BYOK, media/async и batches ещё требуют собственного admission/outcome/recovery; restricted501 означает закрытую возможность, а не реализованный сценарий. Accepted quota/refund primitives заново не писать. AG-P2 — каталог и настоящий AM consumer; AG-P3 — авторские версии/доход; AG-P4 — TON с сохранением RUB; AG-P5 — modalities, truthful UX и release.
 - Arena AR-P2 — полный конкурсный lifecycle, AR-P3 — доказательство качества (модели/агенты/RAG, reproducibility), AR-P4 — funding/payout, AR-P5 — export и выпуск. Pure scorer и выбранный JSON пока не означают выполненный evaluator.
 - Market AM-P2 — деньги и recovery run, AM-P3 — HTTP/Web identity, AM-P4 — useful agent и автор, AM-P5 — TON Web и owned-run/status TMA, AM-P6 — release и цикл оценки. Уже принятый DB baseline AM-P1 не повторять без причины.
 
@@ -50,7 +50,7 @@ TON0076 прошла итоговое source-review: прежние шесть H
 
 | Блок | Что ещё требуется | Граница готовности |
 |---|---|---|
-| Выполнение и учёт | Admission для stream/BYOK/completions/media/batches; async ownership/deadlines; запуск recovery на стенде | Каждый включённый тип даёт результат и один подтверждённый расчёт, включая сбой/повтор |
+| Выполнение и учёт | Admission для stream/BYOK/media/batches; async ownership/deadlines; запуск recovery на стенде | Каждый включённый тип даёт результат и один подтверждённый расчёт, включая сбой/повтор |
 | RUB | Tasks3–5 реализованы, reviewed и проверены локально. Saved-key operator retry и trusted non-Tinkoff identity остаются отдельными возможностями | Пополнение→вызов→возврат/долг, без повторного grant/refund; активация после общего admission boundary |
 | TON | Correction0076 принята локально после source-review и общих проверок. Далее observe worker и integration/login/checkout по принятому плану | Local/native evidence отдельно от разрешённого mainnet rehearsal |
 | Автор | Immutable executable version, безопасная модерация endpoint, начисление дохода, payout/reversal | Независимый автор продаёт вызов и видит объяснимое начисление |
@@ -98,4 +98,12 @@ TON0076 прошла итоговое source-review: прежние шесть H
 - Evidence сохранён в `/home/bob/Projects/.worktrees/ai-aggregator-stored-embeddings/.superpowers/sdd/2026-09-20-stored-embeddings/`: owner reports, final-review.md, final-database-baseline.log, final-review-fixes.log, final-review-fix-types.log. После merge source совпадает с reviewed commit, кроме сохранённого поясняющего комментария; пять чужих WIP файлов проверены по SHA256 и сохранены.
 - Граница: local acceptance, runtime disabled; real provider execution unproven. Публичная schema теперь содержит strict embeddings operation; внешним strict consumers нужен совместимый parser. Настоящий AG→AM consumer и provider-parameter activation остаются release gates. Production deploy/migrations, RPC и платные provider calls не выполнялись.
 
-Следующий функциональный пакет — stored non-stream `/v1/completions` с отдельными identity/DTO/replay, используя проверенный chat execution там, где это допускает точный контракт. Это ещё не реализованный путь. Затем остаются stream/BYOK, media/batches, авторский lifecycle и продуктовые/операционные gates из полной программы; этот checkpoint не объявляет сервис завершённым.
+## Stored completions: принятый локальный checkpoint24.09
+
+- Source `3a717bf`, интеграция в `feat/three-projects-completion` — `5297623`. Ограниченный compatibility route `POST /v1/completions` использует один принятый `admittedChat`, но имеет отдельные identity, durable DTO, replay и recovery. Поддержан только scalar prompt; batch prompts, stream, BYOK и неподдержанные legacy-параметры отклоняются до admission/provider.
+- Новый явный mode `stored_chat_embeddings_completions` сохраняет chat и embeddings и добавляет completions. Старые stored modes оставляют completions501; defaultlegacy и recovery defaultdisabled не изменены. Migration0078 additive, migrations до0077 не редактировались.
+- Native mounted proof через настоящий handler/adapter/PostgreSQL/Redis и mock только внешнего transport: reserve3457/supplier19205 → actual3/18, balance9997, release3454/19187, header30. Concurrent same-key fresh requests дают один provider effect и один ledger; отдельный Bun/server instance читает persisted replay без сети. Worker после forced settlement failure, revoked key и expired tombstone рассчитывает один раз; malformed usage остаётся dispatched/held и worker его пропускает.
+- Проверки: owner pure128+113, storage66, mounted8 acceptance cases, migration77→78/no-op78, schema15, migrator13, types/lint/build/config PASS. Итоговый native matrix принят совокупно:348 сценариев исходного запуска, исправленный flaky case и новый concurrent/restart case — всего350; полный matrix после test-only fix не повторялся. TON core58 PASS отдельно, fresh72/no-op72, rollback/cleanup0. Один independent financial/SQL/security/TypeScript review — APPROVE, findings закрыты адресно.
+- Граница: local source/native acceptance, runtime disabled; provider transport mocked, real provider execution и production activation не подтверждены. Catalog primary operation для chat-моделей не изменена: completions — compatibility endpoint, а не новая provider capability.
+
+Следующие функциональные пакеты — stream/BYOK, затем media/batches; отдельно остаются авторский lifecycle и продуктовые/операционные gates полной программы. Этот checkpoint не объявляет сервис завершённым.

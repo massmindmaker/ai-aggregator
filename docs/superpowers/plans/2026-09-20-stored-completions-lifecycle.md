@@ -1,6 +1,6 @@
 # Stored text completions: bounded compatibility lifecycle
 
-Дата20.09. Статус: implementation contract следующего AG-P1 пакета; реализация/приёмка ещё не выполнены. Base `116668e` после принятого embeddings `a587e88`/merge`4a5acdb`. Только local source/native; runtime/deploy/платные вызовы исключены. Superpowers SDD + Caveman, два владельца и один итоговый financial/TypeScript review, без повторного аудита принятых foundations.
+Дата20.09, принят24.09. Статус: выполнен и принят локально — source `3a717bf`, merge `5297623`; [checks, review и release boundary](../../consolidation/2026-09-20-priorities-and-routing.md). Base `116668e` после принятого embeddings `a587e88`/merge`4a5acdb`. Runtime/deploy/платные вызовы не выполнялись.
 
 ## Research inputs → decision → acceptance → deferred
 
