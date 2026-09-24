@@ -25,7 +25,14 @@ export function guard() {
 export type CatalogMutationOwnership = {
   state: "not_started" | "uncertain" | "committed" | "rolled_back";
 };
-export async function runtime() {
+export type StoredMountedRuntimeOptions = Readonly<{
+  executionMode?: "stored_chat_only" | "stored_chat_embeddings_completions";
+  cachingDiscount?: string;
+  providerCompletionTokens?: number;
+  providerCachedInputTokens?: number;
+  providerText?: string;
+}>;
+export async function runtime(options: StoredMountedRuntimeOptions = {}) {
   guard();
   await withGuardedTestDatabase(
     process.env,
@@ -52,10 +59,10 @@ export async function runtime() {
     restoreEnvironment,
   ];
   try {
-    process.env.GATEWAY_HTTP_EXECUTION_MODE = "stored_chat_only";
+    process.env.GATEWAY_HTTP_EXECUTION_MODE = options.executionMode ?? "stored_chat_only";
     process.env.OPENROUTER_API_KEY = "mc3-transport-stub-only";
     delete process.env.AIAG_FORCE_MOCK;
-    process.env.CACHING_DISCOUNT = "0.5";
+    process.env.CACHING_DISCOUNT = options.cachingDiscount ?? "0.5";
     const { default: postgres } = await import("postgres");
     const client = postgres(process.env.TEST_DATABASE_URL!, {
       max: 1,
@@ -81,15 +88,15 @@ export async function runtime() {
       choices: [
         {
           index: 0,
-          message: { role: "assistant", content: "native private completion" },
+          message: { role: "assistant", content: options.providerText ?? "native private completion" },
           finish_reason: "stop",
         },
       ],
       usage: {
         prompt_tokens: 100,
-        completion_tokens: 20,
-        total_tokens: 120,
-        prompt_tokens_details: { cached_tokens: 50 },
+        completion_tokens: options.providerCompletionTokens ?? 20,
+        total_tokens: 100 + (options.providerCompletionTokens ?? 20),
+        prompt_tokens_details: { cached_tokens: options.providerCachedInputTokens ?? 50 },
       },
     };
     const provider = vi.spyOn(transport, "fetchUpstream").mockImplementation(
@@ -316,21 +323,33 @@ export async function runtime() {
   }
 }
 export type Runtime = Awaited<ReturnType<typeof runtime>>;
-export async function owner(r: Runtime) {
+type DefaultStoredChatBody = Readonly<{
+  model: string;
+  messages: readonly [Readonly<{ role: 'user'; content: string }>];
+}>;
+export type StoredMountedOwnerOptions<Body = DefaultStoredChatBody> = Readonly<{
+  path?: "/v1/chat/completions" | "/v1/completions";
+  body?: Body;
+  initialPaygCredits?: number;
+}>;
+export async function owner<Body = DefaultStoredChatBody>(
+  r: Runtime,
+  options: StoredMountedOwnerOptions<Body> = {},
+) {
   const user = randomUUID(),
     org = randomUUID(),
     key = randomUUID(),
     token = `sk_aiag_test_${randomUUID().replaceAll("-", "")}`;
   await r.client.begin(async (tx) => {
     await tx`INSERT INTO users(id,email) VALUES(${user}::uuid,${`mc3-${user}@example.test`})`;
-    await tx`INSERT INTO organizations(id,slug,name,owner_id,payg_credits) VALUES(${org}::uuid,${org},'MC3 owned native fixture',${user}::uuid,1000000000)`;
+    await tx`INSERT INTO organizations(id,slug,name,owner_id,payg_credits) VALUES(${org}::uuid,${org},'MC3 owned native fixture',${user}::uuid,${options.initialPaygCredits ?? 1000000000})`;
     await tx`INSERT INTO gateway_api_keys(id,org_id,name,key_hash,key_prefix,rpm_limit,batch_rpm_limit,cost_limit_monthly_rub) VALUES(${key}::uuid,${org}::uuid,'MC3 owned key',${hash(token)},${token.slice(0, 20)},10000,10000,NULL)`;
     await tx`INSERT INTO gateway_quota_org_policies(org_id,enforcement_version,daily_supplier_usd_micro_limit_v2) VALUES(${org}::uuid,2,1000000000)`;
   });
-  const body = {
+  const body = (options.body ?? {
     model: slug,
     messages: [{ role: "user", content: "private MC3 prompt" }],
-  };
+  }) as Body extends DefaultStoredChatBody ? Body : Body | DefaultStoredChatBody;
   const redisKeys = [
     `rl:rpm:${key}`,
     `rl:batch:${key}`,
@@ -348,7 +367,7 @@ export async function owner(r: Runtime) {
     });
     new Headers(init.headers).forEach((v, k) => headers.set(k, v));
     const result = await r.app.fetch(
-      new Request("http://native.test/v1/chat/completions", {
+      new Request(`http://native.test${options.path ?? "/v1/chat/completions"}`, {
         method: "POST",
         body: JSON.stringify(data),
         ...init,
@@ -406,8 +425,8 @@ export async function owner(r: Runtime) {
       await tx`DELETE FROM gateway_http_rejections WHERE org_id=${org}::uuid`;
       await tx`DELETE FROM gateway_http_results WHERE org_id=${org}::uuid`;
       await tx`DELETE FROM gateway_http_requests WHERE org_id=${org}::uuid`;
-      await tx`DELETE FROM gateway_charge_quota_events WHERE billing_request_id=ANY(${tx.array(ids)}::uuid[])`;
-      await tx`DELETE FROM gateway_charge_quota_reservations WHERE billing_request_id=ANY(${tx.array(ids)}::uuid[])`;
+      await tx`DELETE FROM gateway_charge_quota_events WHERE billing_request_id=ANY(${ids}::uuid[])`;
+      await tx`DELETE FROM gateway_charge_quota_reservations WHERE billing_request_id=ANY(${ids}::uuid[])`;
       await tx`DELETE FROM gateway_charge_quota_contexts WHERE org_id=${org}::uuid`;
       await tx`DELETE FROM gateway_quota_buckets WHERE org_id=${org}::uuid`;
       await tx`DELETE FROM gateway_quota_key_policies WHERE org_id=${org}::uuid`;
@@ -424,8 +443,8 @@ export async function owner(r: Runtime) {
       UNION ALL SELECT count(*)::text FROM gateway_http_rejections WHERE org_id=${org}::uuid
       UNION ALL SELECT count(*)::text FROM gateway_http_results WHERE org_id=${org}::uuid
       UNION ALL SELECT count(*)::text FROM gateway_charge_admissions WHERE org_id=${org}::uuid
-      UNION ALL SELECT count(*)::text FROM gateway_charge_quota_events WHERE billing_request_id=ANY(${r.other.array(ids)}::uuid[])
-      UNION ALL SELECT count(*)::text FROM gateway_charge_quota_reservations WHERE billing_request_id=ANY(${r.other.array(ids)}::uuid[])
+      UNION ALL SELECT count(*)::text FROM gateway_charge_quota_events WHERE billing_request_id=ANY(${ids}::uuid[])
+      UNION ALL SELECT count(*)::text FROM gateway_charge_quota_reservations WHERE billing_request_id=ANY(${ids}::uuid[])
       UNION ALL SELECT count(*)::text FROM gateway_charge_quota_contexts WHERE org_id=${org}::uuid
       UNION ALL SELECT count(*)::text FROM gateway_quota_buckets WHERE org_id=${org}::uuid
       UNION ALL SELECT count(*)::text FROM gateway_quota_key_policies WHERE org_id=${org}::uuid
@@ -443,4 +462,4 @@ export async function owner(r: Runtime) {
   }
   return { user, org, key, token, body, post, facts, cleanup, redisKeys };
 }
-export type Owner = Awaited<ReturnType<typeof owner>>;
+export type Owner = Awaited<ReturnType<typeof owner<DefaultStoredChatBody>>>;

@@ -207,6 +207,39 @@ describe("gateway settlement recovery startup config", () => {
     expect(loadDb).toHaveBeenCalledWith(databaseUrl, ["chat", "embeddings"]);
     await handle?.close();
   });
+
+  it("pairs completions execution with the strict three-route recovery mode", async () => {
+    expect(parseGatewaySettlementRecoveryStartupConfig({
+      GATEWAY_SETTLEMENT_RECOVERY_MODE: "stored_chat_embeddings_completions_v1",
+      GATEWAY_HTTP_EXECUTION_MODE: "stored_chat_embeddings_completions",
+      DATABASE_URL: databaseUrl,
+    })).toEqual({
+      mode: "stored_chat_embeddings_completions_v1",
+      httpExecutionMode: "stored_chat_embeddings_completions",
+      databaseUrl,
+    });
+    const db = database();
+    const loadDb = vi.fn(async () => db);
+    const handle = await startGatewaySettlementRecoveryFromEnv({
+      env: {
+        GATEWAY_SETTLEMENT_RECOVERY_MODE: "stored_chat_embeddings_completions_v1",
+        GATEWAY_HTTP_EXECUTION_MODE: "stored_chat_embeddings_completions",
+        DATABASE_URL: databaseUrl,
+      },
+      logger: capturedPino().logger,
+      loadDb,
+    });
+    expect(loadDb).toHaveBeenCalledWith(databaseUrl, ["chat", "embeddings", "completions"]);
+    await handle?.close();
+  });
+
+  it("refuses a completions recovery mode paired with an older execution mode", () => {
+    expect(() => parseGatewaySettlementRecoveryStartupConfig({
+      GATEWAY_SETTLEMENT_RECOVERY_MODE: "stored_chat_embeddings_completions_v1",
+      GATEWAY_HTTP_EXECUTION_MODE: "stored_chat_embeddings",
+      DATABASE_URL: databaseUrl,
+    })).toThrow(GatewaySettlementRecoveryBoundaryError);
+  });
 });
 
 describe("gateway settlement recovery bootstrap boundary", () => {

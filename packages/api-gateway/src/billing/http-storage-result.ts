@@ -19,6 +19,24 @@ export type StoredHttpEmbeddingsResponse = DeepReadonly<{
     total_tokens: number;
   };
 }>;
+export type StoredHttpCompletionResponse = DeepReadonly<{
+  id: string;
+  object: "text_completion";
+  created: number;
+  model: string;
+  choices: Array<{
+    text: string;
+    index: 0;
+    logprobs: null;
+    finish_reason: "stop" | "length" | "content_filter";
+  }>;
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cached_input_tokens?: number;
+  };
+}>;
 function keys(
   value: unknown,
   expected: readonly string[],
@@ -93,6 +111,82 @@ export function parseStoredHttpChatResponse(
   )
     unavailable();
   return body as unknown as StoredHttpChatResponse;
+}
+
+/** Exact public text-completion DTO selected only from the trusted persisted route. */
+export function parseStoredHttpCompletionResponse(
+  value: unknown,
+): StoredHttpCompletionResponse {
+  let body: JsonObject;
+  try {
+    body = parseAdmissionJsonObject(value);
+  } catch {
+    unavailable();
+  }
+  keys(body, ["id", "object", "created", "model", "choices", "usage"]);
+  if (
+    typeof body.id !== "string" ||
+    !/^[A-Za-z0-9_-]{1,256}$/.test(body.id) ||
+    body.object !== "text_completion" ||
+    typeof body.model !== "string" ||
+    !/^[A-Za-z0-9_./:@+-]{1,256}$/.test(body.model)
+  )
+    unavailable();
+  count(body.created);
+  if (!Array.isArray(body.choices) || body.choices.length !== 1) unavailable();
+  const choice = body.choices[0];
+  keys(choice, ["text", "index", "logprobs", "finish_reason"]);
+  if (
+    typeof choice.text !== "string" ||
+    count(choice.index) !== 0 ||
+    choice.logprobs !== null ||
+    !["stop", "length", "content_filter"].includes(
+      choice.finish_reason as string,
+    )
+  )
+    unavailable();
+  const usage = body.usage;
+  const cached =
+    usage !== null &&
+    typeof usage === "object" &&
+    Object.hasOwn(usage, "cached_input_tokens");
+  keys(usage, [
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+    ...(cached ? ["cached_input_tokens"] : []),
+  ]);
+  const prompt = count(usage.prompt_tokens),
+    completion = count(usage.completion_tokens);
+  if (
+    count(usage.total_tokens) !== prompt + completion ||
+    (cached && count(usage.cached_input_tokens) > prompt)
+  )
+    unavailable();
+  return body as unknown as StoredHttpCompletionResponse;
+}
+
+/** Deterministic public projection of the already-sanitized trusted chat response. */
+export function projectStoredHttpCompletionResponse(
+  chatResponse: StoredHttpChatResponse,
+): StoredHttpCompletionResponse {
+  const chat = parseStoredHttpChatResponse(chatResponse);
+  const choice = chat.choices[0];
+  return parseStoredHttpCompletionResponse({
+    id: chat.id,
+    object: "text_completion",
+    created: chat.created,
+    model: chat.model,
+    choices: [
+      {
+        text: choice.message.content ?? "",
+        index: 0,
+        logprobs: null,
+        finish_reason: choice.finish_reason,
+      },
+    ],
+    usage: chat.usage,
+  });
 }
 
 /** Exact public embeddings DTO selected only from the trusted persisted route. */

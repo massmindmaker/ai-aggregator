@@ -35,7 +35,11 @@ import { STORED_EMBEDDINGS_REQUEST_BODY_LIMIT_BYTES } from '../billing/stored-em
 export const CATALOG_MAX_CANDIDATES_PER_MODEL = 16;
 export const CATALOG_MAX_CANDIDATES_PER_PAGE = 512;
 
-type ExecutionMode = 'legacy' | 'stored_chat_only' | 'stored_chat_embeddings';
+type ExecutionMode =
+  | 'legacy'
+  | 'stored_chat_only'
+  | 'stored_chat_embeddings'
+  | 'stored_chat_embeddings_completions';
 type MechanicsReadiness = Readonly<{
   profileId: string;
   profileRevision: number;
@@ -119,7 +123,7 @@ export function capturePublicCatalogRuntime(source: Readonly<{
   const forceMock = source.forceMock ?? process.env.AIAG_FORCE_MOCK === '1';
   const resolveAdapter = source.getAdapter ?? getUpstream;
   if (
-    !['legacy', 'stored_chat_only', 'stored_chat_embeddings'].includes(executionMode) ||
+    !['legacy', 'stored_chat_only', 'stored_chat_embeddings', 'stored_chat_embeddings_completions'].includes(executionMode) ||
     !positiveSafe(configuredDefaultMaxOutputTokens)
   )
     throw new PublicCatalogError('catalog_unavailable');
@@ -133,7 +137,9 @@ export function capturePublicCatalogRuntime(source: Readonly<{
   const mechanics = Object.freeze(
     [
       ...reviewedChatProfiles,
-      ...(executionMode === 'stored_chat_embeddings' ? reviewedEmbeddingProfiles : []),
+      ...(executionMode === 'stored_chat_embeddings' || executionMode === 'stored_chat_embeddings_completions'
+        ? reviewedEmbeddingProfiles
+        : []),
     ]
       .sort((a, b) => a.profileId.localeCompare(b.profileId))
       .map((profile) => {
@@ -398,7 +404,7 @@ function projectEmbeddingModel(
   runtime: CatalogRuntimeCapture,
   normalized: ReturnType<typeof normalizeStoredChatFreshPolicy>,
 ): CatalogItemV1 {
-  if (runtime.executionMode !== 'stored_chat_embeddings')
+  if (runtime.executionMode !== 'stored_chat_embeddings' && runtime.executionMode !== 'stored_chat_embeddings_completions')
     return unavailable(model, 'runtime_contract_unavailable');
   const candidates = rawCandidates.map(validateCandidate).filter((candidate): candidate is ValidCandidate => candidate !== null);
   const reviewed = candidates.map((candidate) => ({

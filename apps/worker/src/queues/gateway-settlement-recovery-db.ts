@@ -226,7 +226,7 @@ function parseAcknowledgement(result: QueryResult<Record<string, unknown>>): Gat
   const apiKeyId = canonicalUuid(row.api_key_id);
   const billingRequestId = canonicalUuid(row.billing_request_id);
   if (orgId === null || apiKeyId === null || billingRequestId === null || row.state !== "settled"
-    || (row.route_kind !== "chat" && row.route_kind !== "embeddings")
+    || (row.route_kind !== "chat" && row.route_kind !== "embeddings" && row.route_kind !== "completions")
     || row.billing_mode !== "stored" || row.outcome_kind !== "success") {
     throw new Error("invalid gateway settlement recovery acknowledgement");
   }
@@ -241,8 +241,8 @@ export function createGatewaySettlementRecoveryDb(
   const allowedRoutes = [...(options.allowedRoutes ?? ["chat"])] as GatewaySettlementRecoveryRoute[];
   if (
     allowedRoutes.length < 1 ||
-    allowedRoutes.length > 2 ||
-    allowedRoutes.some((route) => route !== "chat" && route !== "embeddings") ||
+    allowedRoutes.length > 3 ||
+    allowedRoutes.some((route) => route !== "chat" && route !== "embeddings" && route !== "completions") ||
     new Set(allowedRoutes).size !== allowedRoutes.length
   ) {
     throw new Error("invalid gateway settlement recovery routes");

@@ -118,7 +118,7 @@ export function normalizeStoredChatFreshPolicy(
 export function prepareStoredChatFreshPolicy(
   args: Readonly<{
     key: AuthenticatedApiKey;
-    identity: StoredChatHttpIdentity;
+    identity: Pick<StoredChatHttpIdentity, 'requestedMode' | 'attemptBody'>;
     model: ResolvedModel;
     requestId: string;
   }>,
