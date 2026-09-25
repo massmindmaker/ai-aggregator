@@ -22,6 +22,7 @@ const schema = z.object({
       "stored_chat_embeddings",
       "stored_chat_embeddings_completions",
       "stored_chat_embeddings_completions_stream",
+      "stored_chat_embeddings_completions_stream_media",
     ])
     .default("legacy"),
   // CBR endpoints (FIX H5/H6)
@@ -70,7 +71,7 @@ if (parsed.GATEWAY_HTTP_EXECUTION_MODE !== "legacy") {
     storedChatCachingDiscountExact,
   );
 }
-if (parsed.GATEWAY_HTTP_EXECUTION_MODE === "stored_chat_embeddings_completions_stream") {
+if (["stored_chat_embeddings_completions_stream","stored_chat_embeddings_completions_stream_media"].includes(parsed.GATEWAY_HTTP_EXECUTION_MODE)) {
   if (calculateByokFee(byokFeeCreditsExact) <= 0n)
     throw new Error("BYOK fee must be positive in durable BYOK mode");
 }

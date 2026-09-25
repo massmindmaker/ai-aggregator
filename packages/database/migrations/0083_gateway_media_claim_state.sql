@@ -1,30 +1,5 @@
-ALTER TABLE prediction_jobs
-  ADD COLUMN IF NOT EXISTS billing_request_id UUID,
-  ADD COLUMN IF NOT EXISTS route_kind VARCHAR(32),
-  ADD COLUMN IF NOT EXISTS billing_mode VARCHAR(16),
-  ADD COLUMN IF NOT EXISTS contract_version SMALLINT,
-  ADD COLUMN IF NOT EXISTS idempotency_key_digest TEXT,
-  ADD COLUMN IF NOT EXISTS request_fingerprint TEXT,
-  ADD COLUMN IF NOT EXISTS model_upstream_id UUID,
-  ADD COLUMN IF NOT EXISTS provider_family VARCHAR(32),
-  ADD COLUMN IF NOT EXISTS provider_task_id VARCHAR(256),
-  ADD COLUMN IF NOT EXISTS quoted_retail_microcredits BIGINT,
-  ADD COLUMN IF NOT EXISTS quoted_supplier_microcredits BIGINT,
-  ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS result_digest TEXT,
-  ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;
-
-CREATE UNIQUE INDEX IF NOT EXISTS prediction_jobs_media_idempotency_uniq
-  ON prediction_jobs(org_id, api_key_id, route_kind, idempotency_key_digest)
-  WHERE contract_version = 4;
-
-CREATE UNIQUE INDEX IF NOT EXISTS prediction_jobs_billing_request_uniq
-  ON prediction_jobs(billing_request_id)
-  WHERE billing_request_id IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS prediction_jobs_media_recovery_idx
-  ON prediction_jobs(status, deadline_at, created_at)
-  WHERE contract_version = 4 AND status IN ('queued','processing');
+-- 0083_gateway_media_claim_state.sql
+-- Distinguish durable identity claim from provider-submitted queue ownership.
 
 CREATE OR REPLACE FUNCTION aiag_claim_media_job_v1(
   _org_id UUID, _api_key_id UUID, _billing_request_id UUID, _task_id VARCHAR,
@@ -105,8 +80,3 @@ BEGIN
    WHERE p.id=_row.id RETURNING p.* INTO _row;
   RETURN QUERY SELECT _row.id,_row.task_id,_row.provider_task_id;
 END $$;
-
-CREATE OR REPLACE FUNCTION aiag_read_media_job_v1(_org_id UUID,_task_id VARCHAR)
-RETURNS SETOF prediction_jobs LANGUAGE sql STABLE AS $$
-  SELECT * FROM prediction_jobs WHERE org_id=_org_id AND task_id=_task_id AND contract_version=4 LIMIT 1
-$$;

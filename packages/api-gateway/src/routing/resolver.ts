@@ -75,6 +75,7 @@ export function projectModelRoutingRows(rows: ModelRoutingDbRow[], slug: string)
     billing: {
       modelUpstreamId: r.model_upstream_id,
       prices: { inputCentsPer1k: r.billing_input_cents_per_1k, outputCentsPer1k: r.billing_output_cents_per_1k, markup: r.billing_markup },
+      ...(r.price_per_image == null ? {} : { pricePerImageCents: String(r.price_per_image) }),
     },
     id: r.upstream_id,
     provider: r.provider,

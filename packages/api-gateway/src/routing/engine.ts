@@ -11,6 +11,7 @@
  */
 import { errors } from '../lib/errors';
 import { quoteChatMaximum, type TokenPrices } from '../billing/token-quote';
+import { quoteMediaUnits } from '../billing/media-unit-quote';
 import type { ReviewedChatProfile } from '../billing/reviewed-token-profiles';
 
 export type Upstream = {
@@ -24,7 +25,7 @@ export type Upstream = {
   ru_residency: boolean;
 };
 
-export type CandidateBillingFacts = Readonly<{ modelUpstreamId: string; prices: TokenPrices }>;
+export type CandidateBillingFacts = Readonly<{ modelUpstreamId: string; prices: TokenPrices; pricePerImageCents?: string }>;
 
 /** Validate exact DB text without passing monetary authority through Number. */
 export function parseCandidateBillingFacts(value: unknown): CandidateBillingFacts | null {
@@ -33,7 +34,12 @@ export function parseCandidateBillingFacts(value: unknown): CandidateBillingFact
   if (typeof modelUpstreamId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(modelUpstreamId) || !prices || typeof prices !== 'object') return null;
   try {
     quoteChatMaximum(prices, 1, 1);
-    return Object.freeze({ modelUpstreamId, prices: Object.freeze({ inputCentsPer1k: prices.inputCentsPer1k, outputCentsPer1k: prices.outputCentsPer1k, markup: prices.markup }) });
+    const media = (value as { pricePerImageCents?: unknown }).pricePerImageCents;
+    if (media !== undefined) {
+      if (typeof media !== 'string') return null;
+      quoteMediaUnits({ priceCentsPerUnit: media, markup: prices.markup }, 1);
+    }
+    return Object.freeze({ modelUpstreamId, prices: Object.freeze({ inputCentsPer1k: prices.inputCentsPer1k, outputCentsPer1k: prices.outputCentsPer1k, markup: prices.markup }), ...(media === undefined ? {} : { pricePerImageCents: media }) });
   } catch { return null; }
 }
 

@@ -24,8 +24,10 @@ describe.skipIf(!enabled)('durable media job ownership native',()=>{
         const args=[org,key,billing,task,'image',idem,fp,'media-'+model,upstream,mapping,'image','1200','1000',new Date(Date.now()+60000).toISOString(),JSON.stringify({prompt:'x'})];
         const first=await client.query({text:'SELECT * FROM aiag_claim_media_job_v1($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10::uuid,$11,$12::bigint,$13::bigint,$14::timestamptz,$15::jsonb)',values:args});
         expect(first.rows[0]?.did_claim).toBe(true);
-        const second=await client.query({text:'SELECT * FROM aiag_claim_media_job_v1($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10::uuid,$11,$12::bigint,$13::bigint,$14::timestamptz,$15::jsonb)',values:args});
+        const retryArgs=[...args]; retryArgs[2]=randomUUID(); retryArgs[3]='task_'+randomUUID().replaceAll('-','');
+        const second=await client.query({text:'SELECT * FROM aiag_claim_media_job_v1($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10::uuid,$11,$12::bigint,$13::bigint,$14::timestamptz,$15::jsonb)',values:retryArgs});
         expect(second.rows[0]?.did_claim).toBe(false);
+        expect(second.rows[0]?.billing_request_id).toBe(billing);
         await expect(client.query({text:'SELECT * FROM aiag_claim_media_job_v1($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10::uuid,$11,$12::bigint,$13::bigint,$14::timestamptz,$15::jsonb)',values:[...args.slice(0,6),'c'.repeat(64),...args.slice(7)]})).rejects.toThrow(/MEDIA_IDENTITY_CONFLICT/);
         const id=first.rows[0]!.id as string;
         const attached=await client.query({text:'SELECT * FROM aiag_attach_media_provider_task_v1($1::uuid,$2::uuid,$3::uuid,$4)',values:[org,id,billing,'jobs:provider-1']});
