@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { calculateTokenCharge } from "./billing/token-quote";
+import { calculateByokFee, calculateTokenCharge } from "./billing/token-quote";
 
 /**
  * Plan 04 gateway configuration loader (zod-validated).
@@ -59,6 +59,7 @@ const parsed = schema.parse(process.env);
 // Preserve the exact operator input for the future stored-chat quote. The legacy
 // number remains untouched for existing pricing callers.
 const storedChatCachingDiscountExact = process.env.CACHING_DISCOUNT ?? "0.5";
+const byokFeeCreditsExact = process.env.BYOK_FEE_CREDITS ?? "1";
 
 if (parsed.GATEWAY_HTTP_EXECUTION_MODE !== "legacy") {
   // This calls the existing exact decimal parser/range contract without deriving
@@ -69,11 +70,19 @@ if (parsed.GATEWAY_HTTP_EXECUTION_MODE !== "legacy") {
     storedChatCachingDiscountExact,
   );
 }
+if (parsed.GATEWAY_HTTP_EXECUTION_MODE === "stored_chat_embeddings_completions_stream") {
+  if (calculateByokFee(byokFeeCreditsExact) <= 0n)
+    throw new Error("BYOK fee must be positive in durable BYOK mode");
+}
 
 export type AppConfig = z.infer<typeof schema> &
-  Readonly<{ STORED_CHAT_CACHING_DISCOUNT_EXACT: string }>;
+  Readonly<{
+    STORED_CHAT_CACHING_DISCOUNT_EXACT: string;
+    BYOK_FEE_CREDITS_EXACT: string;
+  }>;
 
 export const config: AppConfig = Object.freeze({
   ...parsed,
   STORED_CHAT_CACHING_DISCOUNT_EXACT: storedChatCachingDiscountExact,
+  BYOK_FEE_CREDITS_EXACT: byokFeeCreditsExact,
 });

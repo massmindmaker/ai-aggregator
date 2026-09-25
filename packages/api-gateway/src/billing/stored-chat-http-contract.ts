@@ -329,6 +329,7 @@ export async function captureStoredChatHttpRequest(
         body,
         idempotencyKey: request.headers.get("idempotency-key"),
         declaredSessionId: request.headers.get("x-aiag-session-id"),
+        byokKey: request.headers.get("x-upstream-key"),
       }),
     });
   } catch {

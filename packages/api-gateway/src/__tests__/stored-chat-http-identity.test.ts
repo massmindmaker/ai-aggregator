@@ -155,6 +155,49 @@ describe('stored chat HTTP identity', () => {
     expect(changedKey.requestFingerprint).toBe(absent.requestFingerprint);
   });
 
+
+  it('captures BYOK as contract v3 using only a credential digest', () => {
+    const secret = 'sk-caller-BYOK-Secret_123';
+    const first = captureStoredChatHttpIdentity({
+      ...args(),
+      byokKey: secret,
+    });
+    const second = captureStoredChatHttpIdentity({
+      ...args(),
+      byokKey: secret + '-changed',
+    });
+    expect(first).toMatchObject({
+      contractVersion: 3,
+      routeKind: 'chat',
+      billingMode: 'byok_fee',
+      attemptBody: { stream: false },
+    });
+    expect(first.requestFingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(second.requestFingerprint).not.toBe(first.requestFingerprint);
+    expect(JSON.stringify(first)).not.toContain(secret);
+    expect(first).not.toHaveProperty('byokKey');
+  });
+
+  it.each([
+    '',
+    ' ',
+    'a b',
+    'line\nfeed',
+    'ключ',
+    'x'.repeat(4097),
+  ])('rejects invalid BYOK credential %#', (byokKey) =>
+    badRequest(() => captureStoredChatHttpIdentity({ ...args(), byokKey })),
+  );
+
+  it('rejects stream plus BYOK before durable identity exists', () => {
+    badRequest(() =>
+      captureStoredChatHttpIdentity({
+        ...args({ body: request({ stream: true }) }),
+        byokKey: 'sk-caller',
+      }),
+    );
+  });
+
   it.each([
     undefined,
     null,

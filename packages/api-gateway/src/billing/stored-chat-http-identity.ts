@@ -20,9 +20,9 @@ export type StoredChatHttpAttemptBody = Readonly<{
 }>;
 
 export type StoredChatHttpIdentity = Readonly<{
-  contractVersion: 1 | 2;
+  contractVersion: 1 | 2 | 3;
   routeKind: 'chat';
-  billingMode: 'stored';
+  billingMode: 'stored' | 'byok_fee';
   idempotencyKeyDigest: string;
   requestFingerprint: string;
   requestedMode: StoredChatMode | null;
@@ -36,6 +36,18 @@ function badRequest(): never {
 
 function sha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function parseByokKeyDigest(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (
+    typeof value !== 'string' ||
+    value.length < 1 ||
+    value.length > 4096 ||
+    !/^[\x21-\x7e]+$/.test(value)
+  )
+    badRequest();
+  return sha256(value);
 }
 
 function parseIdempotencyKey(value: unknown): string {
@@ -139,20 +151,42 @@ export function captureStoredChatHttpIdentity(args: Readonly<{
   body: unknown;
   idempotencyKey: unknown;
   declaredSessionId: unknown;
+  byokKey?: unknown;
 }>): StoredChatHttpIdentity {
   try {
     const idempotencyKey = parseIdempotencyKey(args.idempotencyKey);
     const declaredSessionId = captureDeclaredSessionId(args.declaredSessionId);
+    const byokKeyDigest = parseByokKeyDigest(args.byokKey);
     const body = parseBody(args.body);
-    const canonical = canonicalStoredChatHttpIdentityV1({
-      ...body.canonical,
-      declaredSessionId,
-      stream: body.attemptBody.stream,
-    });
+    if (byokKeyDigest !== null && body.attemptBody.stream) badRequest();
+    const billingMode = byokKeyDigest === null ? 'stored' as const : 'byok_fee' as const;
+    const contractVersion = byokKeyDigest === null
+      ? (body.attemptBody.stream ? 2 as const : 1 as const)
+      : 3 as const;
+    const canonical = byokKeyDigest === null
+      ? canonicalStoredChatHttpIdentityV1({
+          ...body.canonical,
+          declaredSessionId,
+          stream: body.attemptBody.stream,
+        })
+      : JSON.stringify([
+          3,
+          'chat',
+          'byok_fee',
+          body.attemptBody.model,
+          body.requestedMode,
+          declaredSessionId,
+          body.attemptBody.messages.map((message) => [message.role, message.content]),
+          body.attemptBody.max_tokens === undefined
+            ? ['absent']
+            : ['present', body.attemptBody.max_tokens],
+          false,
+          byokKeyDigest,
+        ]);
     return Object.freeze({
-      contractVersion: body.attemptBody.stream ? 2 : 1,
+      contractVersion,
       routeKind: 'chat',
-      billingMode: 'stored',
+      billingMode,
       idempotencyKeyDigest: sha256(idempotencyKey),
       requestFingerprint: sha256(canonical),
       requestedMode: body.requestedMode,

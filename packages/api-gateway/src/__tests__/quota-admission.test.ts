@@ -5,6 +5,7 @@ import { AdmissionUnavailableError } from "../billing/admission";
 import { parseGatewayChargeAdmissionResult } from "../billing/admission-result";
 import {
   admitGatewayChargeV2,
+  admitGatewayByokFeeV2,
   recordGatewayChargeOutcomeV2,
 } from "../billing/quota-admission";
 type Fragment = {
@@ -236,6 +237,60 @@ describe("quota v2 production wrappers", () => {
     ).rejects.toBeInstanceOf(AdmissionUnavailableError);
     expect(db.queries).toHaveLength(0);
   });
+
+  it("binds BYOK fee admission to quota v2 supplier-zero facts without widening stored wrapper", async () => {
+    const db = createSqlStub();
+    const quote = {
+      version: 2,
+      formulaVersion: "byok-fee-microcredits-v2",
+      feeMicrocredits: "1000",
+    };
+    db.returnRows([
+      heldRow({
+        billing_mode: "byok_fee",
+        authorized_max_credits: "1000",
+        held_subscription_credits: "0",
+        held_payg_credits: "1000",
+        quote_snapshot: quote,
+      }),
+    ]);
+    const result = await admitGatewayByokFeeV2(
+      {
+        ...admitArgs,
+        billingMode: "byok_fee",
+        authorizedMaxCredits: 1000n,
+        quoteSnapshot: quote,
+        declaredSessionId: null,
+        supplierQuoteSnapshot: { version: 2, formulaVersion: "byok-zero-v2" },
+      },
+      db.client,
+    );
+    expect(result).toMatchObject({
+      billingMode: "byok_fee",
+      authorizedMaxCredits: 1000n,
+    });
+    expect(db.queries[0]?.values[5]).toBe("byok_fee");
+    expect(db.queries[0]?.values[11]).toBe(
+      JSON.stringify({ version: 2, formulaVersion: "byok-zero-v2" }),
+    );
+
+    const rejected = createSqlStub();
+    await expect(
+      admitGatewayByokFeeV2(
+        {
+          ...admitArgs,
+          billingMode: "byok_fee",
+          authorizedMaxCredits: 1000n,
+          quoteSnapshot: quote,
+          declaredSessionId: null,
+          supplierQuoteSnapshot: { version: 2, formulaVersion: "wrong" },
+        },
+        rejected.client,
+      ),
+    ).rejects.toBeInstanceOf(AdmissionUnavailableError);
+    expect(rejected.queries).toHaveLength(0);
+  });
+
   it("requires stored mode and an object supplier snapshot", async () => {
     for (const patch of [
       { billingMode: "byok_fee" },

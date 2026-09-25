@@ -111,6 +111,14 @@ export const storedChat: Handler = async (c) => {
       );
     const key = c.get('apiKey' as never) as AuthenticatedApiKey;
     const { identity } = await captureStoredChatHttpRequest(c.req.raw);
+    // Until the dedicated BYOK composition task, v3 remains the same fixed 501
+    // boundary as the pre-existing raw-header guard. This also narrows the
+    // established stored scope for current v1/v2 execution.
+    if (identity.billingMode !== 'stored' || identity.contractVersion === 3)
+      return respondStoredChat(
+        c,
+        fixedStoredChatHttpError('unsupported_execution_contract'),
+      );
     if (
       identity.contractVersion === 2 &&
       config.GATEWAY_HTTP_EXECUTION_MODE !== 'stored_chat_embeddings_completions_stream'

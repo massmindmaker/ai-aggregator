@@ -142,6 +142,20 @@ describe("stored chat HTTP contract", () => {
     expect(Object.isFrozen(absent)).toBe(true);
   });
 
+
+  it("captures strict BYOK header as contract v3 without exposing the secret", async () => {
+    const secret = "sk-caller-BYOK-123";
+    const captured = await captureStoredChatHttpRequest(
+      request(requestBody(), { headers: { "x-upstream-key": secret } }),
+    );
+    expect(captured.identity).toMatchObject({
+      contractVersion: 3,
+      routeKind: "chat",
+      billingMode: "byok_fee",
+    });
+    expect(JSON.stringify(captured)).not.toContain(secret);
+  });
+
   it("classifies malformed JSON, key, and SID as B2 bad requests", async () => {
     await expectContractError(
       captureStoredChatHttpRequest(request("{")),

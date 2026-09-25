@@ -50,6 +50,20 @@ describe("stored chat HTTP startup config", () => {
     expect(config.GATEWAY_HTTP_EXECUTION_MODE).toBe("stored_chat_embeddings_completions");
   });
 
+
+  it("preserves exact BYOK fee input and requires a positive durable fee in newest mode", async () => {
+    vi.stubEnv("GATEWAY_HTTP_EXECUTION_MODE", "stored_chat_embeddings_completions_stream");
+    vi.stubEnv("BYOK_FEE_CREDITS", "1.2345");
+    vi.resetModules();
+    const { config } = await import("../config");
+    expect(config.BYOK_FEE_CREDITS).toBe(1.2345);
+    expect(config.BYOK_FEE_CREDITS_EXACT).toBe("1.2345");
+
+    vi.stubEnv("BYOK_FEE_CREDITS", "0");
+    vi.resetModules();
+    await expect(import("../config")).rejects.toThrow();
+  });
+
   it("rejects a noncanonical exact discount only in restricted mode", async () => {
     vi.stubEnv("GATEWAY_HTTP_EXECUTION_MODE", "stored_chat_only");
     vi.stubEnv("CACHING_DISCOUNT", "1e-7");
