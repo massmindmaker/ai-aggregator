@@ -107,7 +107,11 @@ export const storedChat: Handler = async (c) => {
   try {
     const byokHeaderPresent = c.req.raw.headers.has('x-upstream-key');
     const byokKey = c.req.raw.headers.get('x-upstream-key');
-    if (byokHeaderPresent && byokKey === '')
+    if (
+      byokHeaderPresent &&
+      (config.GATEWAY_HTTP_EXECUTION_MODE !== 'stored_chat_embeddings_completions_stream' ||
+        byokKey === '')
+    )
       return respondStoredChat(
         c,
         fixedStoredChatHttpError('unsupported_execution_contract'),

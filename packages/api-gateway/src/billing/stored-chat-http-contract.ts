@@ -322,6 +322,14 @@ export async function captureStoredChatHttpRequest(
     throw new StoredChatHttpContractError(
       errors.unsupported_execution_contract,
     );
+  if (
+    request.headers.has("x-upstream-key") &&
+    isRecord(body) &&
+    body.stream === true
+  )
+    throw new StoredChatHttpContractError(
+      errors.unsupported_execution_contract,
+    );
 
   try {
     return Object.freeze({

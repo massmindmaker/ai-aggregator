@@ -446,7 +446,7 @@ it('keeps stream+BYOK unavailable without durable claim', async () => {
   const response = await request(undefined, { ...body, stream: true }, {
     'x-upstream-key': 'caller-provider-secret',
   });
-  expect([400, 501]).toContain(response.status);
+  expect(response.status).toBe(501);
   expect(spies.read).not.toHaveBeenCalled();
   expect(spies.byokAttempt).not.toHaveBeenCalled();
 });

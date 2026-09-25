@@ -188,6 +188,15 @@ describe("stored chat HTTP contract", () => {
     expect(stream.identity.contractVersion).toBe(2);
     expect(stream.identity.attemptBody.stream).toBe(true);
     await expectContractError(
+      captureStoredChatHttpRequest(
+        request(requestBody({ stream: true }), {
+          headers: { "x-upstream-key": "secret-provider-key" },
+        }),
+      ),
+      501,
+      "UNSUPPORTED_EXECUTION_CONTRACT",
+    );
+    await expectContractError(
       captureStoredChatHttpRequest(request(requestBody({ tools: [] }))),
       501,
       "UNSUPPORTED_EXECUTION_CONTRACT",
