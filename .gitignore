@@ -72,3 +72,6 @@ video/
 # Agent tool dirs (local, never commit)
 .agents/
 .codex/
+
+# Superpowers isolated worktrees
+.worktrees/
