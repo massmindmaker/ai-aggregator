@@ -36,7 +36,7 @@ Managed prediction jobs have unique scope (org_id,api_key_id,media_kind,idempote
 ## Fresh model/policy/price
 Use a direct fresh DB resolver, not legacy Redis cache. Read live model/type, model_upstream UUID, upstream/model ids, provider, RU residency, egress, exact price_per_image::text, price_per_audio_sec::text and markup::text.
 
-Reuse stored policy semantics: whitelist/provider/RU/PII checks before reserve. Reviewed media profile binds exact model/upstream/upstream-model/adapter contract. No failover in v1.
+Reuse stored policy semantics: whitelist/provider/RU/PII checks before reserve. Reviewed media profile binds exact model/upstream/upstream-model/adapter contract. No failover in v1. The strict admitted-media submit/poll mechanics live in shared `@aiag/upstream-adapters`, which is already consumed by the worker; gateway composition calls that shared seam instead of creating a second Kie implementation.
 
 Exact fixed-unit formula:
 - retail microcredits = half-up(price_unit_cents * units * markup * 1000)

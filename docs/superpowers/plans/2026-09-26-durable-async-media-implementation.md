@@ -5,8 +5,8 @@
 **Spec:** docs/superpowers/plans/2026-09-26-durable-async-media-lifecycle.md
 **Base:** 3303d64
 
-### Task 1 — exact media contract and admitted Kie mechanics
-Create billing/media-price.ts, billing/reviewed-media-profiles.ts and tests. Extend upstream interface + kie adapter with strict admittedMedia submit/poll. RED exact retail/supplier math, reviewed bindings, one submit/no redirect/fallback/retry, strict task id, sanitized pending/completed/failed poll and bounds. GREEN then commit `feat(gateway): add admitted async media mechanics`.
+### Task 1 — exact media contract and shared admitted Kie mechanics
+Create `packages/api-gateway/src/billing/media-price.ts` and `reviewed-media-profiles.ts` + tests for gateway-owned exact pricing/profile binding. Add the strict admitted-media request/result contract and Kie submit/poll implementation to shared `packages/upstream-adapters`, with its own tests; export it from that package. Gateway and worker must consume this one shared transport seam rather than maintain a second Kie implementation. RED exact retail/supplier math, reviewed bindings, one submit/no redirect/fallback/retry, strict task id, sanitized pending/completed/failed poll and bounds. Legacy adapter APIs remain unchanged. GREEN then commit `feat(media): add shared admitted async media mechanics`.
 
 ### Task 2 — prediction persistence + media quota/finalization
 Create migration 0081, update schema and canonical admission/quota SQL mirrors, create typed media prediction DB module and native tests. RED claim race/fingerprint conflict, atomic claim+admit rejection, exact reserve/supplier reserve, dispatch once, submission idempotency/lost ACK reread, lease/takeover/backoff, completed atomic outcome+settle, failed verified_no_charge release, unknown hold, managed admin immutability, 80->81 apply/no-op/checksums. GREEN then commit `feat(database): add durable async media jobs`.
