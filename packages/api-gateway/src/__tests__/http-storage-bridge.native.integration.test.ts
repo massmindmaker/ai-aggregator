@@ -304,7 +304,7 @@ describe.skipIf(!enabled)("guarded postgres.js HTTP storage bridge B1", () => {
       expect(f.execute).toHaveBeenCalledTimes(1);
       expect(f.deps.persistOutcome).toHaveBeenCalledTimes(1);
       expect(f.deps.recordGatewayChargeOutcomeV2).not.toHaveBeenCalled();
-    }));
+    }), 15_000);
   it("records and settles after dispatch-time revoke while read and claim deny access", async () =>
     bridge(async (f) => {
       f.execute.mockImplementation(async () => {

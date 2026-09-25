@@ -104,12 +104,12 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
   restricted.use('*', requireApiKey);
   const aliases = (path: string) => [path, `${path}/`];
   restricted.on('POST', aliases('/chat/completions'), rpmOnly, storedChat);
-  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings' || config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions')
+  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings' || config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions_stream')
     restricted.on('POST', aliases('/embeddings'), rpmOnly, storedEmbeddings);
-  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions')
+  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions_stream')
     restricted.on('POST', aliases('/completions'), rpmOnly, storedCompletions);
   const unsupported = [
-    ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' ? [] : ['/completions']),
+    ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions_stream' ? [] : ['/completions']),
     ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_only' ? ['/embeddings'] : []),
     '/images/generations', '/video/generations',
     '/audio/speech', '/audio/transcriptions', '/batches'];

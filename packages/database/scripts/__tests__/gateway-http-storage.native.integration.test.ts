@@ -118,6 +118,67 @@ function body() {
     usage: { prompt_tokens: 30, completion_tokens: 0, total_tokens: 30 },
   };
 }
+function streamBody() {
+  const final = {
+    ...body(),
+    usage: {
+      ...body().usage,
+      cached_input_tokens: 0,
+    },
+  };
+  const common = {
+    id: "cmpl-test",
+    object: "chat.completion.chunk",
+    created: 123,
+    model: "openai/gpt-4o-mini",
+  };
+  return {
+    object: "aiag.chat.stream.v1",
+    events: [
+      {
+        ...common,
+        choices: [
+          {
+            index: 0,
+            delta: { role: "assistant" },
+            finish_reason: null,
+          },
+        ],
+      },
+      {
+        ...common,
+        choices: [
+          {
+            index: 0,
+            delta: { content: "hello" },
+            finish_reason: null,
+          },
+        ],
+      },
+      {
+        ...common,
+        choices: [
+          {
+            index: 0,
+            delta: {},
+            finish_reason: "stop",
+          },
+        ],
+      },
+      {
+        ...common,
+        choices: [],
+        usage: {
+          prompt_tokens: 30,
+          completion_tokens: 0,
+          total_tokens: 30,
+          cached_input_tokens: 0,
+        },
+      },
+    ],
+    final,
+  };
+}
 function completionBody() {
   return {
     id: "cmpl-test",
@@ -1348,12 +1409,55 @@ describe.skipIf(!enabled)("native gateway HTTP storage", () => {
       ).rows[0],
     ).toEqual({ response_body: null, purged: true });
   });
+  it("binds contract version to the stored response envelope in both directions", async () => {
+    const v1 = await started();
+    await expect(write(v1, streamBody())).rejects.toThrow("INVALID_HTTP_RESULT");
+    expect(
+      (
+        await query(
+          "SELECT count(*)::int AS count FROM gateway_http_results WHERE billing_request_id=$1",
+          [v1.id],
+        )
+      ).rows[0].count,
+    ).toBe(0);
+
+    const v2 = request(await fixture());
+    await query(
+      "SELECT * FROM aiag_claim_gateway_http_request_v1($1,$2,$3,'chat'::varchar,'stored'::varchar,$4,$5,2::smallint)",
+      [v2.f.org, v2.f.key, v2.id, v2.digest, v2.fingerprint],
+    );
+    await admit(v2);
+    await dispatch(v2);
+    await expect(
+      query(
+        "SELECT * FROM aiag_record_gateway_http_outcome_v1($1,$2,$3,$4,$5,30,$6,'success',$7,2::smallint)",
+        [
+          v2.f.org,
+          v2.f.key,
+          v2.id,
+          v2.digest,
+          v2.fingerprint,
+          JSON.stringify(usage(v2)),
+          JSON.stringify(body()),
+        ],
+      ),
+    ).rejects.toThrow("INVALID_HTTP_RESULT");
+    expect(
+      (
+        await query(
+          "SELECT count(*)::int AS count FROM gateway_http_results WHERE billing_request_id=$1",
+          [v2.id],
+        )
+      ).rows[0].count,
+    ).toBe(0);
+  });
+
   it("rejects nonstored/unsupported version and null UUID inputs without a mapping", async () => {
     const r = request(await fixture());
     for (const [route, mode, version, id] of [
       ["audio", "stored", 1, r.id],
       ["chat", "byok_fee", 1, r.id],
-      ["chat", "stored", 2, r.id],
+      ["chat", "stored", 3, r.id],
       ["chat", "stored", 1, null],
     ]) {
       await expect(

@@ -133,6 +133,8 @@ export function prepareStoredChatFreshPolicy(
     throw new StoredChatFreshPolicyError('model_not_allowed');
   const requestedMode =
     args.identity.requestedMode ?? policy.default_mode ?? 'auto';
+  if (args.identity.attemptBody.stream && policy.forbid_streaming_prompts)
+    throw new StoredChatFreshPolicyError('stored_chat_unavailable');
   let candidates = args.model.candidates.filter(
     (c) =>
       (!policy.allowed_providers?.length ||

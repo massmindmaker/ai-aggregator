@@ -97,6 +97,30 @@ describe('stored chat HTTP identity', () => {
     expect(second.requestFingerprint).toBe(first.requestFingerprint);
   });
 
+  it('binds stream true to contract v2 and a distinct canonical fingerprint', () => {
+    const buffered = captureStoredChatHttpIdentity(args());
+    const streamed = captureStoredChatHttpIdentity(
+      args({ body: request({ stream: true, max_tokens: 42 }) }),
+    );
+    expect(streamed).toMatchObject({
+      contractVersion: 2,
+      routeKind: 'chat',
+      billingMode: 'stored',
+      attemptBody: { stream: true, max_tokens: 42 },
+    });
+    expect(streamed.requestFingerprint).not.toBe(buffered.requestFingerprint);
+    expect(canonicalStoredChatHttpIdentityV1({
+      model,
+      requestedMode: null,
+      declaredSessionId: null,
+      messages: [{ role: 'user', content: 'private prompt' }],
+      maxTokens: 42,
+      stream: true,
+    })).toBe(
+      '[1,"chat","stored","openai/gpt-4o-mini",null,null,[["user","private prompt"]],["present",42],true]',
+    );
+  });
+
   it.each([
     ['model', request({ model: 'other/model' })],
     ['mode', request({ aiag_mode: 'auto' })],
@@ -152,10 +176,22 @@ describe('stored chat HTTP identity', () => {
       ),
   );
 
+  it('accepts stream max_tokens 2048 and rejects 2049', () => {
+    expect(
+      captureStoredChatHttpIdentity(
+        args({ body: request({ stream: true, max_tokens: 2048 }) }),
+      ).attemptBody.max_tokens,
+    ).toBe(2048);
+    badRequest(() =>
+      captureStoredChatHttpIdentity(
+        args({ body: request({ stream: true, max_tokens: 2049 }) }),
+      ),
+    );
+  });
+
   it.each([
     request({ aiag_mode: null }),
     request({ aiag_mode: 'invalid' }),
-    request({ stream: true }),
     request({ tools: [] }),
     request({ media: [] }),
     request({ byokKey: 'secret' }),

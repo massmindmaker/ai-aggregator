@@ -254,8 +254,9 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     const terminalMigration = await readFile(resolve("packages/database/migrations/0070_gateway_http_terminal_recovery.sql"), "utf8");
     const storedEmbeddingsMigration = await readFile(resolve("packages/database/migrations/0077_gateway_stored_embeddings.sql"), "utf8");
     const storedCompletionsMigration = await readFile(resolve("packages/database/migrations/0078_gateway_stored_completions.sql"), "utf8");
+    const storedStreamMigration = await readFile(resolve("packages/database/migrations/0079_gateway_stored_chat_stream.sql"), "utf8");
     // Only the admission core is replaced in0070; latest wins, not any historical match.
-    assertLatestFunctionMirror(mirror, [migration, terminalMigration, storedEmbeddingsMigration, storedCompletionsMigration]);
+    assertLatestFunctionMirror(mirror, [migration, terminalMigration, storedEmbeddingsMigration, storedCompletionsMigration, storedStreamMigration]);
     const quotaMirror = await readFile(
       resolve(
         "packages/database/src/functions/gateway-durable-spending-quotas.sql",
@@ -265,16 +266,17 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     assertLatestFunctionMirror(quotaMirror, [migration, storedEmbeddingsMigration]);
   });
 
-  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 78 migrations", async () => {
+  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 79 migrations", async () => {
     const migration = await readFile(resolve("packages/database/migrations/0069_gateway_http_storage.sql"), "utf8");
     const storedEmbeddingsMigration = await readFile(resolve("packages/database/migrations/0077_gateway_stored_embeddings.sql"), "utf8");
     const storedCompletionsMigration = await readFile(resolve("packages/database/migrations/0078_gateway_stored_completions.sql"), "utf8");
+    const storedStreamMigration = await readFile(resolve("packages/database/migrations/0079_gateway_stored_chat_stream.sql"), "utf8");
     const mirror = await readFile(resolve("packages/database/src/functions/gateway-http-storage.sql"), "utf8");
-    assertLatestFunctionMirror(mirror, [migration, storedEmbeddingsMigration, storedCompletionsMigration]);
+    assertLatestFunctionMirror(mirror, [migration, storedEmbeddingsMigration, storedCompletionsMigration, storedStreamMigration]);
     expect([...functionDefinitions(mirror).keys()].filter(signature => signature.startsWith("aiag_http_validate_response("))).toHaveLength(2);
     const previous = await readFile(resolve("packages/database/migrations/0068_gateway_durable_spending_quotas.sql"));
     expect(createHash("sha256").update(previous).digest("hex")).toBe("b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6");
-    expect(await discoverNativeMigrations()).toHaveLength(78);
+    expect(await discoverNativeMigrations()).toHaveLength(79);
     const types = await client.query<{ name: string; fields: string[] }>({ text: `
       SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
       JOIN pg_attribute a ON a.attrelid=t.typrelid AND a.attnum>0 AND NOT a.attisdropped
@@ -294,7 +296,8 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     const validationMigration = await readFile(resolve("packages/database/migrations/0071_gateway_http_recovery_validation.sql"), "utf8");
     const storedEmbeddingsMigration = await readFile(resolve("packages/database/migrations/0077_gateway_stored_embeddings.sql"), "utf8");
     const storedCompletionsMigration = await readFile(resolve("packages/database/migrations/0078_gateway_stored_completions.sql"), "utf8");
-    assertLatestFunctionMirror(mirror, [migration, validationMigration, storedEmbeddingsMigration, storedCompletionsMigration]);
+    const storedStreamMigration = await readFile(resolve("packages/database/migrations/0079_gateway_stored_chat_stream.sql"), "utf8");
+    assertLatestFunctionMirror(mirror, [migration, validationMigration, storedEmbeddingsMigration, storedCompletionsMigration, storedStreamMigration]);
     expect(createHash("sha256").update(migration).digest("hex")).toBe("b38ebb05871648feed2085526b89cdfced8e69328c645b4b0f6a944c664a6efa");
     const previous = await readFile(resolve("packages/database/migrations/0069_gateway_http_storage.sql"));
     expect(createHash("sha256").update(previous).digest("hex")).toBe("f6649670ea6aee06c0e3d79b92a0e4db355e99551815a74287a0f4bb784c22a2");
@@ -309,15 +312,15 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
   });
 
   it("rejects stale mirrors even when their bodies exist in earlier applied migrations", async () => {
-    const paths = ["migrations/0068_gateway_durable_spending_quotas.sql", "migrations/0070_gateway_http_terminal_recovery.sql", "migrations/0071_gateway_http_recovery_validation.sql", "migrations/0077_gateway_stored_embeddings.sql", "migrations/0078_gateway_stored_completions.sql", "src/functions/gateway-charge-admission.sql", "src/functions/gateway-http-terminal-recovery.sql"];
-    const [quota, terminal, validation, storedEmbeddings, storedCompletions, admissionMirror, terminalMirror] = await Promise.all(paths.map(path => readFile(resolve("packages/database", path), "utf8")));
+    const paths = ["migrations/0068_gateway_durable_spending_quotas.sql", "migrations/0070_gateway_http_terminal_recovery.sql", "migrations/0071_gateway_http_recovery_validation.sql", "migrations/0077_gateway_stored_embeddings.sql", "migrations/0078_gateway_stored_completions.sql", "migrations/0079_gateway_stored_chat_stream.sql", "src/functions/gateway-charge-admission.sql", "src/functions/gateway-http-terminal-recovery.sql"];
+    const [quota, terminal, validation, storedEmbeddings, storedCompletions, storedStream, admissionMirror, terminalMirror] = await Promise.all(paths.map(path => readFile(resolve("packages/database", path), "utf8")));
     const admissionName = "aiag_admit_gateway_charge_impl", recoveryName = "aiag_recover_gateway_http_settlement_v1";
     const oldAdmission = uniqueFunctionDefinition(quota, admissionName), currentAdmission = uniqueFunctionDefinition(admissionMirror, admissionName);
     const oldRecovery = uniqueFunctionDefinition(terminal, recoveryName), currentRecovery = uniqueFunctionDefinition(terminalMirror, recoveryName);
     expect(oldAdmission).not.toBe(currentAdmission); expect(oldRecovery).not.toBe(currentRecovery);
     // Callback keeps literal SQL $$ delimiters; a replacement string would interpret $$ as $.
-    expect(() => assertLatestFunctionMirror(admissionMirror.replace(currentAdmission, () => oldAdmission), [quota, terminal, storedEmbeddings, storedCompletions])).toThrow();
-    expect(() => assertLatestFunctionMirror(terminalMirror.replace(currentRecovery, () => oldRecovery), [terminal, validation, storedEmbeddings, storedCompletions])).toThrow();
+    expect(() => assertLatestFunctionMirror(admissionMirror.replace(currentAdmission, () => oldAdmission), [quota, terminal, storedEmbeddings, storedCompletions, storedStream])).toThrow();
+    expect(() => assertLatestFunctionMirror(terminalMirror.replace(currentRecovery, () => oldRecovery), [terminal, validation, storedEmbeddings, storedCompletions, storedStream])).toThrow();
   });
 
   it("keeps immutable 0067 checksum, v2 signatures and six durable quota tables", async () => {

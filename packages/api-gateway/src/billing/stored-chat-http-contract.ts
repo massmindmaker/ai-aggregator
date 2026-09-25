@@ -274,7 +274,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function hasUnsupportedFeature(body: unknown): boolean {
   if (!isRecord(body)) return false;
-  if (body.stream === true) return true;
   if (
     [
       "tools",

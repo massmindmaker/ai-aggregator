@@ -204,7 +204,7 @@ describe("gateway settlement recovery startup config", () => {
       logger: capturedPino().logger,
       loadDb,
     });
-    expect(loadDb).toHaveBeenCalledWith(databaseUrl, ["chat", "embeddings"]);
+    expect(loadDb).toHaveBeenCalledWith(databaseUrl, ["chat", "embeddings"], [1]);
     await handle?.close();
   });
 
@@ -229,7 +229,7 @@ describe("gateway settlement recovery startup config", () => {
       logger: capturedPino().logger,
       loadDb,
     });
-    expect(loadDb).toHaveBeenCalledWith(databaseUrl, ["chat", "embeddings", "completions"]);
+    expect(loadDb).toHaveBeenCalledWith(databaseUrl, ["chat", "embeddings", "completions"], [1]);
     await handle?.close();
   });
 
@@ -239,6 +239,35 @@ describe("gateway settlement recovery startup config", () => {
       GATEWAY_HTTP_EXECUTION_MODE: "stored_chat_embeddings",
       DATABASE_URL: databaseUrl,
     })).toThrow(GatewaySettlementRecoveryBoundaryError);
+  });
+
+  it("pairs stream execution with v1 and v2 recovery selectors", async () => {
+    expect(parseGatewaySettlementRecoveryStartupConfig({
+      GATEWAY_SETTLEMENT_RECOVERY_MODE: "stored_chat_embeddings_completions_stream_v1",
+      GATEWAY_HTTP_EXECUTION_MODE: "stored_chat_embeddings_completions_stream",
+      DATABASE_URL: databaseUrl,
+    })).toEqual({
+      mode: "stored_chat_embeddings_completions_stream_v1",
+      httpExecutionMode: "stored_chat_embeddings_completions_stream",
+      databaseUrl,
+    });
+    const db = database();
+    const loadDb = vi.fn(async () => db);
+    const handle = await startGatewaySettlementRecoveryFromEnv({
+      env: {
+        GATEWAY_SETTLEMENT_RECOVERY_MODE: "stored_chat_embeddings_completions_stream_v1",
+        GATEWAY_HTTP_EXECUTION_MODE: "stored_chat_embeddings_completions_stream",
+        DATABASE_URL: databaseUrl,
+      },
+      logger: capturedPino().logger,
+      loadDb,
+    });
+    expect(loadDb).toHaveBeenCalledWith(
+      databaseUrl,
+      ["chat", "embeddings", "completions"],
+      [1, 2],
+    );
+    await handle?.close();
   });
 });
 
@@ -311,7 +340,7 @@ describe("gateway settlement recovery bootstrap boundary", () => {
     });
 
     expect(handle).not.toBeNull();
-    expect(loadDb).toHaveBeenCalledWith(databaseUrl, ["chat"]);
+    expect(loadDb).toHaveBeenCalledWith(databaseUrl, ["chat"], [1]);
     expect(db.captureCycle).toHaveBeenCalledTimes(1);
     expect(timers.setTimeout).not.toHaveBeenCalled();
     finishCapture?.();

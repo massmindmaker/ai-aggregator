@@ -56,6 +56,12 @@ export function parseStoredChatBody(body: unknown, modelSlug: string) {
   });
 }
 
+export function parseStoredChatStreamBody(body: unknown, modelSlug: string) {
+  const parsed = bodySchema.extend({ stream: z.literal(true) }).parse(parseAdmissionJsonObject(body));
+  if (parsed.model !== modelSlug || (parsed.max_tokens !== undefined && parsed.max_tokens > 2048)) throw new TypeError('Invalid stored chat stream');
+  return Object.freeze({ modelSlug: parsed.model, messages: Object.freeze(parsed.messages.map((message) => Object.freeze(message))), maxTokens: parsed.max_tokens });
+}
+
 export function validateStoredChatIdentity(
   args: Readonly<{
     orgId: string;

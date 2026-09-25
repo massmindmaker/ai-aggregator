@@ -5,7 +5,8 @@ export type GatewaySettlementRecoveryMode =
   | "disabled"
   | "stored_chat_v1"
   | "stored_chat_embeddings_v1"
-  | "stored_chat_embeddings_completions_v1";
+  | "stored_chat_embeddings_completions_v1"
+  | "stored_chat_embeddings_completions_stream_v1";
 export type GatewaySettlementRecoveryRoute = "chat" | "embeddings" | "completions";
 export type GatewaySettlementRecoveryTickClassification =
   | "complete"
@@ -195,6 +196,7 @@ export function parseGatewaySettlementRecoveryMode(raw: string | undefined): Gat
   if (raw === "stored_chat_v1") return "stored_chat_v1";
   if (raw === "stored_chat_embeddings_v1") return "stored_chat_embeddings_v1";
   if (raw === "stored_chat_embeddings_completions_v1") return "stored_chat_embeddings_completions_v1";
+  if (raw === "stored_chat_embeddings_completions_stream_v1") return "stored_chat_embeddings_completions_stream_v1";
   throw new Error("invalid gateway settlement recovery mode");
 }
 

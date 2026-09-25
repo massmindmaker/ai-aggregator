@@ -26,7 +26,7 @@ export type CatalogMutationOwnership = {
   state: "not_started" | "uncertain" | "committed" | "rolled_back";
 };
 export type StoredMountedRuntimeOptions = Readonly<{
-  executionMode?: "stored_chat_only" | "stored_chat_embeddings_completions";
+  executionMode?: "stored_chat_only" | "stored_chat_embeddings_completions" | "stored_chat_embeddings_completions_stream";
   cachingDiscount?: string;
   providerCompletionTokens?: number;
   providerCachedInputTokens?: number;
@@ -100,11 +100,26 @@ export async function runtime(options: StoredMountedRuntimeOptions = {}) {
       },
     };
     const provider = vi.spyOn(transport, "fetchUpstream").mockImplementation(
-      async () =>
-        new Response(JSON.stringify(output), {
+      async (_url, init) => {
+        const requestBody = JSON.parse(String(init.body ?? "{}")) as { stream?: boolean };
+        if (requestBody.stream === true) {
+          const completionTokens = options.providerCompletionTokens ?? 5;
+          const cachedTokens = options.providerCachedInputTokens ?? 0;
+          const common = { id: "cmpl-native", object: "chat.completion.chunk", created: 1, model: slug };
+          const events = [
+            { ...common, choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }] },
+            { ...common, choices: [{ index: 0, delta: { content: options.providerText ?? "native private completion" }, finish_reason: null }] },
+            { ...common, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] },
+            { ...common, choices: [], usage: { prompt_tokens: 100, completion_tokens: completionTokens, total_tokens: 100 + completionTokens, prompt_tokens_details: { cached_tokens: cachedTokens } } },
+          ];
+          const sse = `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")}data: [DONE]\n\n`;
+          return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
+        }
+        return new Response(JSON.stringify(output), {
           status: 200,
           headers: { "content-type": "application/json" },
-        }),
+        });
+      },
     );
     setupCleanup.push(() => provider.mockRestore());
     // Fail any accidental non-provider network request before DNS. app.fetch is in-process.

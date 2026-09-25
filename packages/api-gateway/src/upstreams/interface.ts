@@ -125,6 +125,19 @@ export type AdmittedChatMechanics = Readonly<{
   contract: ReviewedChatProfile['adapterContract'];
   execute(req: AdmittedChatRequest): Promise<Readonly<{ response: AdmittedChatResponse; usage: AdmittedChatUsage }>>;
 }>;
+export type StoredChatStreamEvent = Readonly<{
+  id: string; object: 'chat.completion.chunk'; created: number; model: string;
+  choices: ReadonlyArray<Readonly<{ index: 0; delta: Readonly<{ role?: 'assistant'; content?: string }>; finish_reason: 'stop' | 'length' | 'content_filter' | null }>>;
+  usage?: Readonly<{ prompt_tokens: number; completion_tokens: number; total_tokens: number; cached_input_tokens?: number }>;
+}>;
+export type AdmittedChatStreamRequest = Readonly<{
+  modelId: string; messages: readonly Readonly<{ role: string; content: unknown }>[]; maxTokens: number;
+  endpointPolicy: ReviewedChatProfile['endpointPolicy']; egressProxyUrl?: string;
+}>;
+export type AdmittedChatStreamMechanics = Readonly<{
+  contract: 'openrouter-pinned-provider-chat-stream-v1';
+  execute(req: AdmittedChatStreamRequest, onEvent?: (event: StoredChatStreamEvent) => Promise<void> | void): Promise<Readonly<{ events: readonly StoredChatStreamEvent[]; response: AdmittedChatResponse; usage: AdmittedChatUsage }>>;
+}>;
 
 /**
  * Stored embeddings trusted seam. `input` is the already-normalized ordered
@@ -155,6 +168,7 @@ export type AdmittedEmbeddingsMechanics = Readonly<{
 
 export interface UpstreamAdapter {
   readonly admittedChat?: AdmittedChatMechanics;
+  readonly admittedChatStream?: AdmittedChatStreamMechanics;
   readonly admittedEmbeddings?: AdmittedEmbeddingsMechanics;
   chat(req: ChatRequest): Promise<ChatResponse>;
   chatStream?(req: ChatRequest): AsyncIterable<unknown>;

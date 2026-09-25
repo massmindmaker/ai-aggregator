@@ -44,12 +44,12 @@ CROSS JOIN LATERAL (
     AND admission.reconcile_after <= cutoff.cycle_due_before
     AND admission.outcome_recorded_at IS NOT NULL
     AND admission.outcome_recorded_at <= cutoff.cycle_due_before
-    AND request.contract_version = 1
+    AND request.contract_version = ANY($2::smallint[])
     AND request.route_kind = admission.route_kind
     AND request.billing_mode = 'stored'
-    AND http_result.contract_version = 1
+    AND http_result.contract_version = request.contract_version
     AND http_result.http_status = 200
-    AND http_result.content_type = 'application/json'
+    AND http_result.content_type = CASE WHEN request.contract_version=2 THEN 'text/event-stream' ELSE 'application/json' END
     AND quota.quota_version = 2
     AND NOT EXISTS (
       SELECT 1
@@ -87,15 +87,15 @@ WHERE admission.state = 'outcome_recorded'
   AND admission.route_kind = ANY($1::varchar[])
   AND admission.billing_mode = 'stored'
   AND admission.reconcile_after IS NOT NULL
-  AND admission.reconcile_after <= $2::timestamptz
+  AND admission.reconcile_after <= $3::timestamptz
   AND admission.outcome_recorded_at IS NOT NULL
-  AND admission.outcome_recorded_at <= $2::timestamptz
-  AND request.contract_version = 1
+  AND admission.outcome_recorded_at <= $3::timestamptz
+  AND request.contract_version = ANY($2::smallint[])
   AND request.route_kind = admission.route_kind
   AND request.billing_mode = 'stored'
-  AND http_result.contract_version = 1
+  AND http_result.contract_version = request.contract_version
   AND http_result.http_status = 200
-  AND http_result.content_type = 'application/json'
+  AND http_result.content_type = CASE WHEN request.contract_version=2 THEN 'text/event-stream' ELSE 'application/json' END
   AND quota.quota_version = 2
   AND NOT EXISTS (
     SELECT 1
@@ -105,17 +105,17 @@ WHERE admission.state = 'outcome_recorded'
       AND rejection.billing_request_id = admission.billing_request_id
   )
   AND (
-    $3::timestamptz IS NULL
+    $4::timestamptz IS NULL
     OR (
-      $4::uuid IS NOT NULL
+      $5::uuid IS NOT NULL
       AND (admission.reconcile_after, admission.billing_request_id)
-        > ($3::timestamptz, $4::uuid)
+        > ($4::timestamptz, $5::uuid)
     )
   )
   AND (admission.reconcile_after, admission.billing_request_id)
-    <= ($5::timestamptz, $6::uuid)
+    <= ($6::timestamptz, $7::uuid)
 ORDER BY admission.reconcile_after ASC, admission.billing_request_id ASC
-LIMIT $7::integer;
+LIMIT $8::integer;
 `;
 
 export const RECOVER_GATEWAY_HTTP_SETTLEMENT_SQL = `
@@ -235,15 +235,23 @@ function parseAcknowledgement(result: QueryResult<Record<string, unknown>>): Gat
 
 export function createGatewaySettlementRecoveryDb(
   databaseUrl: string,
-  options: Readonly<{ allowedRoutes?: readonly GatewaySettlementRecoveryRoute[] }> = {},
+  options: Readonly<{
+    allowedRoutes?: readonly GatewaySettlementRecoveryRoute[];
+    allowedContractVersions?: readonly (1 | 2)[];
+  }> = {},
 ): GatewaySettlementRecoveryDb {
   parseGatewaySettlementRecoveryDatabaseUrl(databaseUrl);
   const allowedRoutes = [...(options.allowedRoutes ?? ["chat"])] as GatewaySettlementRecoveryRoute[];
+  const allowedContractVersions = [...(options.allowedContractVersions ?? [1])] as (1 | 2)[];
   if (
     allowedRoutes.length < 1 ||
     allowedRoutes.length > 3 ||
     allowedRoutes.some((route) => route !== "chat" && route !== "embeddings" && route !== "completions") ||
     new Set(allowedRoutes).size !== allowedRoutes.length
+    || allowedContractVersions.length < 1
+    || allowedContractVersions.length > 2
+    || allowedContractVersions.some((version) => version !== 1 && version !== 2)
+    || new Set(allowedContractVersions).size !== allowedContractVersions.length
   ) {
     throw new Error("invalid gateway settlement recovery routes");
   }
@@ -273,11 +281,12 @@ export function createGatewaySettlementRecoveryDb(
 
   return {
     captureCycle() {
-      return query(CAPTURE_GATEWAY_SETTLEMENT_RECOVERY_CYCLE_SQL, [allowedRoutes], parseCapture);
+      return query(CAPTURE_GATEWAY_SETTLEMENT_RECOVERY_CYCLE_SQL, [allowedRoutes, allowedContractVersions], parseCapture);
     },
     selectPage(input) {
       return query(SELECT_GATEWAY_SETTLEMENT_RECOVERY_PAGE_SQL, [
         allowedRoutes,
+        allowedContractVersions,
         input.cycleDueBefore,
         input.after?.reconcileAt ?? null,
         input.after?.billingRequestId ?? null,

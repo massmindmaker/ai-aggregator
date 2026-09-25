@@ -3,6 +3,10 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { config } from '../../config';
 import type { AuthenticatedApiKey } from '../../middleware/auth-plan04';
 import { createStoredChatAttempt } from '../../billing/stored-chat-attempt';
+import { createStoredChatStreamAttempt } from '../../billing/stored-chat-stream-attempt';
+import { encodeStoredChatSseEvent, encodeStoredChatSseDone, projectStoredChatStreamReplay, storedChatStreamHeaders } from '../../billing/stored-chat-stream-http-contract';
+import type { StoredChatHttpIdentity } from '../../billing/stored-chat-http-identity';
+import type { ResolvedModel } from '../../routing/resolver';
 import {
   captureStoredChatHttpRequest,
   fixedStoredChatHttpError,
@@ -23,6 +27,7 @@ import {
   readGatewayHttpResultV2,
   rejectUnstartedGatewayHttpRequest,
   isHttpRejectionCode,
+  type HttpResultV2,
 } from '../../billing/http-terminal-recovery';
 import {
   resolveStoredChatFreshModel,
@@ -51,6 +56,48 @@ export const unsupportedStoredExecution: Handler = (c) =>
     fixedStoredChatHttpError('unsupported_execution_contract'),
   );
 
+function respondStoredStreamRead(c: Context, result: HttpResultV2<'chat'>): Response {
+  if (result.status === 'ready' && result.contractVersion === 2)
+    return projectStoredChatStreamReplay(result.response as import('../../billing/stored-chat-stream-http-contract').StoredHttpChatStreamResponse, result.billingRequestId, result.actualCostCredits);
+  return respondStoredChat(c, projectStoredChatHttpResult(result));
+}
+
+async function storedChatStream(
+  c: Context,
+  identity: StoredChatHttpIdentity,
+  scope: GatewayHttpIdentity<'chat'>,
+  model: ResolvedModel,
+  prepared: ReturnType<typeof prepareStoredChatFreshPolicy>,
+  requestId: string,
+): Promise<Response> {
+  const attempt = createStoredChatStreamAttempt({ orgId: scope.orgId, apiKeyId: scope.apiKeyId, clientRequestId: requestId, declaredSessionId: identity.declaredSessionId, model, body: identity.attemptBody, requestedMode: prepared.requestedMode, policy: prepared.policy, defaultMaxOutputTokens: config.GATEWAY_DEFAULT_MAX_OUTPUT_TOKENS, cachingDiscount: config.STORED_CHAT_CACHING_DISCOUNT_EXACT, preDispatchDeadlineAt: new Date(Date.now() + STORED_CHAT_PRE_DISPATCH_WINDOW_MS).toISOString(), signal: c.req.raw.signal }, {
+    admitAttempt: (args) => admitGatewayHttpCharge({ ...args, ...scope }),
+    rejectUnstarted: (args) => rejectUnstartedGatewayHttpRequest({ ...scope, billingRequestId: args.billingRequestId }),
+    persistOutcome: (args) => recordGatewayHttpOutcome({ ...args, idempotencyKeyDigest: scope.idempotencyKeyDigest, requestFingerprint: scope.requestFingerprint, contractVersion: 2 }),
+  });
+  if (attempt.status !== 'ready') return respondStoredChat(c, fixedStoredChatHttpError(attempt.status === 'bad_request' ? 'invalid_stored_chat_request' : 'stored_chat_unavailable'));
+  const claim = await claimGatewayHttpRequest({ ...scope, billingRequestId: attempt.billingRequestId });
+  if (!claim.didClaim) {
+    const existing = await readGatewayHttpResultV2(scope);
+    return respondStoredStreamRead(c, existing);
+  }
+  const begun = await attempt.begin();
+  if (begun.kind !== 'dispatch_granted') {
+    const existing = await readGatewayHttpResultV2(scope);
+    if (existing.status !== 'not_found') return respondStoredStreamRead(c, existing);
+    return respondStoredChat(c, fixedStoredChatHttpError('request_state_unavailable'));
+  }
+  let closed = false;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const emit: Parameters<typeof begun.runner.run>[0] = (event) => { if (closed) return; try { controller.enqueue(encodeStoredChatSseEvent(event)); } catch { closed = true; try { controller.close(); } catch { /* already closed */ } } };
+      void begun.runner.run(emit).then((result) => { if (closed) return; if (result.kind === 'settled_success') controller.enqueue(encodeStoredChatSseDone()); closed = true; controller.close(); }).catch(() => { closed = true; try { controller.close(); } catch { /* already closed */ } });
+    },
+    cancel() { closed = true; },
+  });
+  return new Response(stream, { status: 200, headers: storedChatStreamHeaders(begun.billingRequestId) });
+}
+
 /** Sole restricted execution composition; imported by the real server assembly. */
 export const storedChat: Handler = async (c) => {
   // Pin exact startup configuration before the first await. Never reconstruct it from a Number.
@@ -64,15 +111,31 @@ export const storedChat: Handler = async (c) => {
       );
     const key = c.get('apiKey' as never) as AuthenticatedApiKey;
     const { identity } = await captureStoredChatHttpRequest(c.req.raw);
+    if (
+      identity.contractVersion === 2 &&
+      config.GATEWAY_HTTP_EXECUTION_MODE !== 'stored_chat_embeddings_completions_stream'
+    )
+      return respondStoredChat(
+        c,
+        fixedStoredChatHttpError('unsupported_execution_contract'),
+      );
     const scope: GatewayHttpIdentity<'chat'> = Object.freeze({
       orgId: key.org_id,
       apiKeyId: key.id,
       routeKind: 'chat',
       billingMode: 'stored',
-      contractVersion: 1,
+      contractVersion: identity.contractVersion,
       idempotencyKeyDigest: identity.idempotencyKeyDigest,
       requestFingerprint: identity.requestFingerprint,
     });
+    if (identity.contractVersion === 2) {
+      const existing = await readGatewayHttpResultV2(scope);
+      if (existing.status !== 'not_found') return respondStoredStreamRead(c, existing);
+      const model = await resolveStoredChatFreshModel(identity.attemptBody.model);
+      const requestId = c.get('requestId' as never) as string;
+      const prepared = prepareStoredChatFreshPolicy({ key, identity, model, requestId });
+      return storedChatStream(c, identity, scope, model, prepared, requestId);
+    }
     const read = async () =>
       projectStoredChatHttpResult(await readGatewayHttpResultV2(scope));
     const existing = await readGatewayHttpResultV2(scope);

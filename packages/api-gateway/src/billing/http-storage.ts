@@ -23,6 +23,7 @@ import {
   type StoredHttpCompletionResponse,
   type StoredHttpEmbeddingsResponse,
 } from "./http-storage-result";
+import { parseStoredHttpChatStreamResponse, type StoredHttpChatStreamResponse } from './stored-chat-stream-http-contract';
 
 export class HttpStorageUnavailableError extends AiagError {
   constructor() {
@@ -47,7 +48,7 @@ export type GatewayHttpIdentity<
   apiKeyId: string;
   routeKind: Route;
   billingMode: "stored";
-  contractVersion: 1;
+  contractVersion: 1 | 2;
   idempotencyKeyDigest: string;
   requestFingerprint: string;
 }>;
@@ -56,32 +57,32 @@ export type GatewayHttpClaim<
 > = GatewayHttpIdentity<Route> &
   Readonly<{ billingRequestId: string; createdAt: string; didClaim: boolean }>;
 type StoredHttpResponseByRoute = Readonly<{
-  chat: StoredHttpChatResponse;
+  chat: StoredHttpChatResponse | StoredHttpChatStreamResponse;
   embeddings: StoredHttpEmbeddingsResponse;
   completions: StoredHttpCompletionResponse;
 }>;
 export type GatewayHttpResult<
   Route extends GatewayHttpRouteKind = "chat",
 > =
-  | Readonly<{ contractVersion: 1; status: "not_found" }>
+  | Readonly<{ contractVersion: 1 | 2; status: "not_found" }>
   | Readonly<{
-      contractVersion: 1;
+      contractVersion: 1 | 2;
       status: "pending" | "unavailable";
       billingRequestId: string;
     }>
   | Readonly<{
-      contractVersion: 1;
+      contractVersion: 1 | 2;
       status: "expired";
       billingRequestId: string;
       storedAt: string;
       expiresAt: string;
     }>
   | Readonly<{
-      contractVersion: 1;
+      contractVersion: 1 | 2;
       status: "ready";
       billingRequestId: string;
       httpStatus: 200;
-      contentType: "application/json";
+      contentType: "application/json" | "text/event-stream";
       response: StoredHttpResponseByRoute[Route];
       actualCostCredits: bigint;
       storedAt: string;
@@ -98,6 +99,7 @@ export type RecordGatewayHttpOutcomeArgs<
     response: StoredHttpResponseByRoute[Route];
     idempotencyKeyDigest: string;
     requestFingerprint: string;
+    contractVersion?: 1 | 2;
   }>;
 function hash(value: unknown): string {
   if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) unavailable();
@@ -124,7 +126,7 @@ function identity<Route extends GatewayHttpRouteKind>(
   if (
     !["chat", "embeddings", "completions"].includes(args.routeKind) ||
     args.billingMode !== "stored" ||
-    args.contractVersion !== 1
+    (args.contractVersion !== 1 && !(args.contractVersion === 2 && args.routeKind === 'chat'))
   )
     unavailable();
   return Object.freeze({
@@ -132,7 +134,7 @@ function identity<Route extends GatewayHttpRouteKind>(
     apiKeyId: uuid(args.apiKeyId),
     routeKind: args.routeKind,
     billingMode: "stored",
-    contractVersion: 1,
+    contractVersion: args.contractVersion,
     idempotencyKeyDigest: hash(args.idempotencyKeyDigest),
     requestFingerprint: hash(args.requestFingerprint),
   });
@@ -212,7 +214,7 @@ export async function claimGatewayHttpRequest<
     ]);
     const returnedId = uuid(r.billing_request_id);
     if (
-      r.contract_version !== 1 ||
+      r.contract_version !== i.contractVersion ||
       uuid(r.org_id) !== i.orgId ||
       uuid(r.api_key_id) !== i.apiKeyId ||
       r.route_kind !== i.routeKind ||
@@ -249,7 +251,7 @@ export async function readGatewayHttpResult<
       to_char(r.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at
       FROM aiag_read_gateway_http_result_v1(${i.orgId}::uuid, ${i.apiKeyId}::uuid, ${i.routeKind}::varchar,
       ${i.billingMode}::varchar, ${i.idempotencyKeyDigest}::text, ${i.requestFingerprint}::text, ${i.contractVersion}::smallint) r`;
-    return parseGatewayHttpResultRows(rows, i.routeKind);
+    return parseGatewayHttpResultRows(rows, i.routeKind, i.contractVersion);
   } catch (error) {
     throw mapped(error);
   }
@@ -261,10 +263,12 @@ export function parseGatewayHttpResultRows(
 export function parseGatewayHttpResultRows<Route extends GatewayHttpRouteKind>(
   rows: unknown,
   expectedRoute: Route,
+  expectedContractVersion?: 1 | 2,
 ): GatewayHttpResult<Route>;
 export function parseGatewayHttpResultRows(
   rows: unknown,
   expectedRoute: GatewayHttpRouteKind = "chat",
+  expectedContractVersion: 1 | 2 = 1,
 ): GatewayHttpResult<GatewayHttpRouteKind> {
     const r = row(rows, [
       "contract_version",
@@ -277,8 +281,8 @@ export function parseGatewayHttpResultRows(
       "stored_at",
       "expires_at",
     ]);
-    if (r.contract_version !== 1) unavailable();
-    const base = { contractVersion: 1 as const };
+    if (r.contract_version !== expectedContractVersion) unavailable();
+    const base = { contractVersion: expectedContractVersion };
     const requireNull = (names: string[]) => {
       if (names.some((n) => r[n] !== null)) unavailable();
     };
@@ -327,7 +331,7 @@ export function parseGatewayHttpResultRows(
     if (
       r.status !== "ready" ||
       r.http_status !== 200 ||
-      r.content_type !== "application/json"
+      r.content_type !== (expectedContractVersion === 2 ? "text/event-stream" : "application/json")
     )
       unavailable();
     return Object.freeze({
@@ -335,10 +339,10 @@ export function parseGatewayHttpResultRows(
       status: "ready",
       billingRequestId,
       httpStatus: 200,
-      contentType: "application/json",
+      contentType: expectedContractVersion === 2 ? "text/event-stream" : "application/json",
       response:
         expectedRoute === "chat"
-          ? parseStoredHttpChatResponse(r.response_body)
+          ? (r.contract_version === 2 ? parseStoredHttpChatStreamResponse(r.response_body) : parseStoredHttpChatResponse(r.response_body))
           : expectedRoute === "embeddings"
             ? parseStoredHttpEmbeddingsResponse(r.response_body)
             : parseStoredHttpCompletionResponse(r.response_body),
@@ -363,11 +367,15 @@ export async function recordGatewayHttpOutcome<
       outcomeKind !== "success"
     )
       unavailable();
+    const contractVersion = args.contractVersion ?? 1;
+    if (contractVersion === 2 && before.routeKind !== "chat") unavailable();
     const digest = hash(args.idempotencyKeyDigest),
       fingerprint = hash(args.requestFingerprint);
     const response =
       before.routeKind === "chat"
-        ? parseStoredHttpChatResponse(args.response)
+        ? (contractVersion === 2
+            ? parseStoredHttpChatStreamResponse(args.response)
+            : parseStoredHttpChatResponse(args.response))
         : before.routeKind === "embeddings"
           ? parseStoredHttpEmbeddingsResponse(args.response)
           : parseStoredHttpCompletionResponse(args.response);
@@ -376,7 +384,7 @@ export async function recordGatewayHttpOutcome<
     >`SELECT * FROM aiag_record_gateway_http_outcome_v1(
       ${before.orgId}::uuid, ${before.apiKeyId}::uuid, ${before.billingRequestId}::uuid, ${digest}::text, ${fingerprint}::text,
       ${actualCostCredits.toString()}::bigint, ${JSON.stringify(usageSnapshot)}::text::jsonb, ${outcomeKind}::varchar,
-      ${JSON.stringify(response)}::text::jsonb, ${1}::smallint)`;
+      ${JSON.stringify(response)}::text::jsonb, ${contractVersion}::smallint)`;
     const result = await queryAdmission(client, "outcome", call);
     assertGatewayOutcome(captured, result);
     return result;

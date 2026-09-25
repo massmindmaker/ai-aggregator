@@ -15,12 +15,12 @@ type StoredChatMessage = Readonly<{
 export type StoredChatHttpAttemptBody = Readonly<{
   model: string;
   messages: readonly StoredChatMessage[];
-  stream: false;
+  stream: false | true;
   max_tokens?: number;
 }>;
 
 export type StoredChatHttpIdentity = Readonly<{
-  contractVersion: 1;
+  contractVersion: 1 | 2;
   routeKind: 'chat';
   billingMode: 'stored';
   idempotencyKeyDigest: string;
@@ -75,7 +75,15 @@ function parseBody(body: unknown): Readonly<{
     Object.entries(detached).filter(([key]) => key !== 'aiag_mode'),
   );
   if (typeof supportedBody.model !== 'string') badRequest();
-  const parsed = parseStoredChatBody(supportedBody, supportedBody.model);
+  const stream = supportedBody.stream === true;
+  // The v1 parser deliberately accepts only non-streaming bodies. Streaming
+  // keeps the same strict shape, with the one explicit mode bit enabled.
+  const parsed = parseStoredChatBody(
+    stream ? { ...supportedBody, stream: false } : supportedBody,
+    supportedBody.model,
+  );
+  if (stream && parsed.maxTokens !== undefined && parsed.maxTokens > 2048)
+    badRequest();
   const messages = Object.freeze(
     parsed.messages.map((message) =>
       Object.freeze({ role: message.role, content: message.content }),
@@ -84,7 +92,7 @@ function parseBody(body: unknown): Readonly<{
   const attemptBody = Object.freeze({
     model: parsed.modelSlug,
     messages,
-    stream: false as const,
+    stream: stream as false | true,
     ...(parsed.maxTokens === undefined ? {} : { max_tokens: parsed.maxTokens }),
   });
   return Object.freeze({
@@ -96,6 +104,7 @@ function parseBody(body: unknown): Readonly<{
       declaredSessionId: null,
       messages,
       maxTokens: parsed.maxTokens,
+      stream,
     }),
   });
 }
@@ -111,6 +120,7 @@ export function canonicalStoredChatHttpIdentityV1(args: Readonly<{
   declaredSessionId: string | null;
   messages: readonly StoredChatMessage[];
   maxTokens: number | undefined;
+  stream?: boolean;
 }>): string {
   return JSON.stringify([
     1,
@@ -121,7 +131,7 @@ export function canonicalStoredChatHttpIdentityV1(args: Readonly<{
     args.declaredSessionId,
     args.messages.map((message) => [message.role, message.content]),
     args.maxTokens === undefined ? ['absent'] : ['present', args.maxTokens],
-    false,
+    args.stream === true,
   ]);
 }
 
@@ -137,9 +147,10 @@ export function captureStoredChatHttpIdentity(args: Readonly<{
     const canonical = canonicalStoredChatHttpIdentityV1({
       ...body.canonical,
       declaredSessionId,
+      stream: body.attemptBody.stream,
     });
     return Object.freeze({
-      contractVersion: 1,
+      contractVersion: body.attemptBody.stream ? 2 : 1,
       routeKind: 'chat',
       billingMode: 'stored',
       idempotencyKeyDigest: sha256(idempotencyKey),

@@ -17,6 +17,10 @@ import type {
   AdmittedChatRequest,
   AdmittedEmbeddingsMechanics,
   AdmittedEmbeddingsRequest,
+  AdmittedChatStreamMechanics,
+  AdmittedChatStreamRequest,
+  StoredChatStreamEvent,
+  AdmittedChatResponse,
 } from './interface';
 import { fetchUpstream } from './fetch-upstream';
 import { z } from 'zod';
@@ -107,6 +111,135 @@ const admittedChat: AdmittedChatMechanics = Object.freeze({
       choices: data.choices.map(c => ({ index: c.index, message: { role: c.message.role, content: c.message.content }, finish_reason: c.finish_reason })),
       usage: { prompt_tokens: usage.promptTokens, completion_tokens: usage.completionTokens, total_tokens: usage.totalTokens },
     }, usage };
+  },
+});
+
+const streamEventSchema = z.object({
+  id: z.string().min(1).max(256).regex(/^[A-Za-z0-9_-]+$/), object: z.literal('chat.completion.chunk'),
+  created: count, model: z.string().min(1).max(256).regex(/^[A-Za-z0-9_./:@+-]+$/),
+  choices: z.array(z.object({ index: z.literal(0), delta: z.object({ role: z.literal('assistant').optional(), content: z.string().min(1).optional() }).strict(), finish_reason: z.enum(['stop','length','content_filter']).nullable() }).strict()),
+  usage: z.object({
+    prompt_tokens: count,
+    completion_tokens: count,
+    total_tokens: count,
+    prompt_tokens_details: z.object({ cached_tokens: count.optional() }).strict().optional(),
+  }).strict().optional(),
+}).strict();
+const admittedChatStream: AdmittedChatStreamMechanics = Object.freeze({
+  contract: 'openrouter-pinned-provider-chat-stream-v1',
+  async execute(input: AdmittedChatStreamRequest, onEvent) {
+    const parsed = admittedRequest.safeParse(input);
+    if (!parsed.success || input.maxTokens > 2048) throw new AdmittedChatError('INVALID_ADMITTED_REQUEST');
+    const req = parsed.data;
+    const profile = findReviewedChatProfile({ modelSlug: req.modelId, modelType: 'chat', upstreamId: 'openrouter', upstreamModelId: req.modelId, adapterKey: 'openrouter' });
+    if (!profile || profile.adapterContract !== 'openrouter-pinned-provider-chat-v1') throw new AdmittedChatError('INVALID_ADMITTED_REQUEST');
+    const apiKey = selectKey();
+    if (!apiKey) throw new Error('model provider not configured');
+    const headers: Record<string,string> = { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', accept: 'text/event-stream' };
+    const res = await fetchUpstream(`${OPENROUTER_BASE}/chat/completions`, { method:'POST', headers, allowlist: OPENROUTER_ALLOWLIST, maxRedirects:0, sse:true,
+      body: JSON.stringify({ model: profile.upstreamModelId, messages:req.messages, stream:true, stream_options:{ include_usage:true }, max_tokens:req.maxTokens,
+        provider:{ only:profile.endpointPolicy.only, allow_fallbacks:false, require_parameters:true } }) }, req.egressProxyUrl);
+    if (!res.ok || !res.body) throw upstreamHttpError(res.status);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8', { fatal: true });
+    let buf = '', sawDone = false, writes = true, content = '';
+    let canonicalEventBytes = 0;
+    const events: StoredChatStreamEvent[] = [];
+    let terminalUsage: StoredChatStreamEvent['usage'];
+    let id: string | undefined, created: number | undefined, model: string | undefined;
+    let finish: 'stop' | 'length' | 'content_filter' | undefined;
+    const emit = async (raw: unknown) => {
+      const parsedEvent = streamEventSchema.safeParse(raw);
+      if (!parsedEvent.success || events.length >= 4096) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+      const providerEvent = parsedEvent.data;
+      const event = Object.freeze({
+        id: providerEvent.id,
+        object: providerEvent.object,
+        created: providerEvent.created,
+        model: providerEvent.model,
+        choices: providerEvent.choices,
+        ...(providerEvent.usage === undefined ? {} : {
+          usage: {
+            prompt_tokens: providerEvent.usage.prompt_tokens,
+            completion_tokens: providerEvent.usage.completion_tokens,
+            total_tokens: providerEvent.usage.total_tokens,
+            cached_input_tokens: providerEvent.usage.prompt_tokens_details?.cached_tokens ?? 0,
+          },
+        }),
+      }) as StoredChatStreamEvent;
+      const eventBytes = Buffer.byteLength(JSON.stringify(event), 'utf8');
+      if (eventBytes > 65_536 || canonicalEventBytes + eventBytes > 1_048_576)
+        throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+      canonicalEventBytes += eventBytes;
+      const usageEvent = event.usage !== undefined;
+      if ((usageEvent && event.choices.length !== 0) || (!usageEvent && event.choices.length !== 1)) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+      if (id === undefined) { id = event.id; created = event.created; model = event.model; }
+      if (event.id !== id || event.created !== created || event.model !== model || terminalUsage) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+      if (usageEvent) {
+        if (!finish || terminalUsage) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+        terminalUsage = event.usage;
+      } else {
+        if (finish) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+        const choice = event.choices[0]!;
+        const delta = choice.delta;
+        const keys = Object.keys(delta);
+        if (keys.length > 1 || (keys[0] !== undefined && !['role', 'content'].includes(keys[0]))) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+        if (delta.role !== undefined && (delta.role !== 'assistant' || events.length !== 0)) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+        if (delta.content !== undefined) {
+          content += delta.content;
+          if (Buffer.byteLength(content, 'utf8') > 524_288) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+        }
+        if (choice.finish_reason === null) {
+          if (keys.length === 0) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+        } else {
+          if (keys.length !== 0 || finish) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+          finish = choice.finish_reason;
+        }
+      }
+      const frozen = Object.freeze(event);
+      events.push(frozen);
+      if (onEvent && writes) { try { await onEvent(frozen); } catch { writes = false; } }
+    };
+    const consume = async (payload: string) => {
+      if (payload === '[DONE]') {
+        if (sawDone) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+        sawDone = true;
+        return;
+      }
+      if (sawDone) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+      let raw: unknown;
+      try { raw = JSON.parse(payload); } catch { throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE'); }
+      await emit(raw);
+    };
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith(':')) continue;
+          if (!trimmed.startsWith('data:')) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+          await consume(trimmed.slice(5).trim());
+        }
+      }
+      buf += decoder.decode();
+      if (buf.trim()) {
+        const trimmed = buf.trim();
+        if (!trimmed.startsWith('data:')) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+        await consume(trimmed.slice(5).trim());
+      }
+    } finally { reader.releaseLock(); }
+    if (!sawDone || !terminalUsage || !id || created === undefined || !model || !finish || events.length < 2) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+    if (terminalUsage.total_tokens !== terminalUsage.prompt_tokens + terminalUsage.completion_tokens
+      || (terminalUsage.cached_input_tokens ?? 0) > terminalUsage.prompt_tokens) throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+    const usage=Object.freeze({promptTokens:terminalUsage.prompt_tokens,completionTokens:terminalUsage.completion_tokens,totalTokens:terminalUsage.total_tokens,cachedInputTokens:terminalUsage.cached_input_tokens??0});
+    const response: AdmittedChatResponse={id,object:'chat.completion',created,model,choices:[{index:0,message:{role:'assistant',content},finish_reason:finish}],usage:{prompt_tokens:usage.promptTokens,completion_tokens:usage.completionTokens,total_tokens:usage.totalTokens,cached_input_tokens:usage.cachedInputTokens}};
+    if (Buffer.byteLength(JSON.stringify({ object:'aiag.chat.stream.v1', events, final:response }), 'utf8') > 1_048_576)
+      throw new AdmittedChatError('INVALID_ADMITTED_RESPONSE');
+    return {events:Object.freeze(events),response,usage};
   },
 });
 
@@ -266,6 +399,7 @@ const admittedEmbeddings: AdmittedEmbeddingsMechanics = Object.freeze({
 
 export const openRouterUpstream: UpstreamAdapter = {
   admittedChat,
+  admittedChatStream,
   admittedEmbeddings,
   async chat(req: ChatRequest): Promise<ChatResponse> {
     const apiKey = selectKey(req.byokKey);

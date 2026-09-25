@@ -15,13 +15,20 @@ const spies = vi.hoisted(() => ({
   spending: vi.fn(),
   catalog: vi.fn(),
   order: [] as string[],
+  mode: 'stored_chat_only' as
+    | 'stored_chat_only'
+    | 'stored_chat_embeddings'
+    | 'stored_chat_embeddings_completions'
+    | 'stored_chat_embeddings_completions_stream',
 }));
 vi.mock('../config', async () => {
   const actual = await vi.importActual<typeof import('../config')>('../config');
   return {
     config: {
       ...actual.config,
-      GATEWAY_HTTP_EXECUTION_MODE: 'stored_chat_only',
+      get GATEWAY_HTTP_EXECUTION_MODE() {
+        return spies.mode;
+      },
     },
   };
 });
@@ -135,6 +142,7 @@ function request(
 beforeEach(() => {
   vi.clearAllMocks();
   spies.order.length = 0;
+  spies.mode = 'stored_chat_only';
   spies.catalog.mockResolvedValue({
     schemaVersion: 1, object: 'catalog.list', catalogRevision: `sha256:${'a'.repeat(64)}`,
     data: [], page: { limit: 20, nextCursor: null },
@@ -341,6 +349,22 @@ it.each([
   expect(spies.query).not.toHaveBeenCalled();
   expect(spies.legacy).not.toHaveBeenCalled();
 });
+it.each([
+  'stored_chat_only',
+  'stored_chat_embeddings',
+  'stored_chat_embeddings_completions',
+] as const)('keeps stream:true unavailable in pre-stream execution mode %s', async (mode) => {
+  spies.mode = mode;
+  const response = await request('/v1/chat/completions', { ...body, stream: true });
+  expect(response.status).toBe(501);
+  expect(await response.json()).toMatchObject({
+    error: { code: 'UNSUPPORTED_EXECUTION_CONTRACT' },
+  });
+  expect(spies.read).not.toHaveBeenCalled();
+  expect(spies.resolve).not.toHaveBeenCalled();
+  expect(spies.claim).not.toHaveBeenCalled();
+});
+
 it.each([
   { stream: true },
   { tools: [] },

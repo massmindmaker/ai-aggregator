@@ -1152,7 +1152,7 @@ describe.skipIf(!enabled)("native HTTP terminal rejection and recovery", () => {
       } else if (kind === "version")
         await expect(
           query(
-            "SELECT * FROM aiag_read_gateway_http_result_v2($1,$2,'chat','stored',$3,$4,2::smallint)",
+            "SELECT * FROM aiag_read_gateway_http_result_v2($1,$2,'chat','stored',$3,$4,3::smallint)",
             [r.f.org, r.f.key, r.digest, r.fingerprint],
           ),
         ).rejects.toThrow("INVALID_HTTP_REQUEST");

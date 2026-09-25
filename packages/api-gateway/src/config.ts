@@ -21,6 +21,7 @@ const schema = z.object({
       "stored_chat_only",
       "stored_chat_embeddings",
       "stored_chat_embeddings_completions",
+      "stored_chat_embeddings_completions_stream",
     ])
     .default("legacy"),
   // CBR endpoints (FIX H5/H6)

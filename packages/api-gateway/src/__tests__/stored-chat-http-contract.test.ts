@@ -170,11 +170,9 @@ describe("stored chat HTTP contract", () => {
       400,
       "INVALID_STORED_CHAT_HTTP_IDENTITY",
     );
-    await expectContractError(
-      captureStoredChatHttpRequest(request(requestBody({ stream: true }))),
-      501,
-      "UNSUPPORTED_EXECUTION_CONTRACT",
-    );
+    const stream = await captureStoredChatHttpRequest(request(requestBody({ stream: true })));
+    expect(stream.identity.contractVersion).toBe(2);
+    expect(stream.identity.attemptBody.stream).toBe(true);
     await expectContractError(
       captureStoredChatHttpRequest(request(requestBody({ tools: [] }))),
       501,

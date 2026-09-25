@@ -63,7 +63,7 @@ export type HttpResultV2<
 > =
   | GatewayHttpResult<Route>
   | Readonly<{
-      contractVersion: 1;
+      contractVersion: 1 | 2;
       status: "rejected";
       billingRequestId: string;
       code: HttpRejectionCode;
@@ -92,7 +92,7 @@ function identity<Route extends GatewayHttpRouteKind>(
   if (
     !["chat", "embeddings", "completions"].includes(args.routeKind) ||
     args.billingMode !== "stored" ||
-    args.contractVersion !== 1
+    (args.contractVersion !== 1 && !(args.contractVersion === 2 && args.routeKind === "chat"))
   )
     unavailable();
   for (const h of [args.idempotencyKeyDigest, args.requestFingerprint])
@@ -102,7 +102,7 @@ function identity<Route extends GatewayHttpRouteKind>(
     apiKeyId: uuid(args.apiKeyId),
     routeKind: args.routeKind,
     billingMode: "stored",
-    contractVersion: 1,
+    contractVersion: args.contractVersion,
     idempotencyKeyDigest: args.idempotencyKeyDigest,
     requestFingerprint: args.requestFingerprint,
   });
@@ -347,14 +347,14 @@ export async function readGatewayHttpResultV2<
     const r = row(rows, 10);
     if (r.status === "rejected") {
       if (
-        r.contract_version !== 1 ||
+        r.contract_version !== i.contractVersion ||
         r.content_type !== "application/json" ||
         r.actual_cost_credits !== null ||
         r.expires_at !== null
       )
         unavailable();
       return Object.freeze({
-        contractVersion: 1,
+        contractVersion: i.contractVersion,
         status: "rejected",
         billingRequestId: uuid(r.billing_request_id),
         ...rejection(r.rejection_code, r.http_status, r.response_body),
@@ -365,7 +365,7 @@ export async function readGatewayHttpResultV2<
     if (r.rejection_code !== null) unavailable();
     const old = { ...r };
     delete old.rejection_code;
-    return parseGatewayHttpResultRows([old], i.routeKind);
+    return parseGatewayHttpResultRows([old], i.routeKind, i.contractVersion);
   } catch (error) {
     throw mapped(error);
   }

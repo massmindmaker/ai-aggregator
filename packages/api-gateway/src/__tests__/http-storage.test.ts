@@ -401,6 +401,7 @@ describe("HTTP fails closed before and after transport", () => {
     db.returnRows([r]);
     const v = await readGatewayHttpResult(identity, db.client);
     if (v.status !== "ready") throw Error(v.status);
+    if (v.response.object !== "chat.completion") throw Error(v.response.object);
     expect(v.actualCostCredits).toBe(9223372036854775807n);
     expect(Object.isFrozen(v.response.choices[0]!.message)).toBe(true);
     expect(v.response).not.toBe(r.response_body);

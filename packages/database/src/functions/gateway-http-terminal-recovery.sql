@@ -163,7 +163,7 @@ BEGIN
    OR EXISTS(SELECT 1 FROM gateway_charge_admissions WHERE billing_request_id=_id)
    OR EXISTS(SELECT 1 FROM gateway_http_results WHERE billing_request_id=_id) THEN
     RAISE EXCEPTION 'HTTP_RESULT_STATE_CONFLICT' USING ERRCODE='P0005'; END IF;
-   _out.contract_version:=1; _out.status:='rejected'; _out.billing_request_id:=_id;
+   _out.contract_version:=_contract_version; _out.status:='rejected'; _out.billing_request_id:=_id;
    _out.http_status:=_negative.http_status; _out.content_type:=_negative.content_type; _out.response_body:=_negative.response_body;
    _out.stored_at:=_negative.terminal_at; _out.rejection_code:=_negative.rejection_code;
    RETURN NEXT _out; RETURN;
@@ -192,13 +192,15 @@ BEGIN
  SELECT * INTO _result FROM gateway_http_results WHERE billing_request_id=_billing_request_id FOR UPDATE;
  PERFORM 1 FROM gateway_http_rejections WHERE billing_request_id=_billing_request_id FOR UPDATE;
  IF FOUND OR _r.org_id IS DISTINCT FROM _org_id OR _r.api_key_id IS DISTINCT FROM _api_key_id
- OR _r.route_kind NOT IN('chat','embeddings','completions') OR _r.billing_mode IS DISTINCT FROM 'stored' OR _r.contract_version IS DISTINCT FROM 1
+ OR _r.route_kind NOT IN('chat','embeddings','completions') OR _r.billing_mode IS DISTINCT FROM 'stored'
+ OR _r.contract_version NOT IN(1,2) OR (_r.contract_version=2 AND _r.route_kind IS DISTINCT FROM 'chat')
  OR _a.route_kind IS DISTINCT FROM _r.route_kind OR _a.billing_mode IS DISTINCT FROM 'stored'
  OR _a.state NOT IN('outcome_recorded','settled') OR _a.outcome_kind IS DISTINCT FROM 'success'
  OR _a.attempt_id IS NULL OR _a.upstream_id IS NULL OR _a.pricing_snapshot IS NULL OR _a.usage_snapshot IS NULL
  OR _a.actual_cost_credits IS NULL OR _a.actual_cost_credits<0 OR _a.actual_cost_credits>_a.authorized_max_credits
  OR _result.org_id IS DISTINCT FROM _org_id OR _result.api_key_id IS DISTINCT FROM _api_key_id
- OR _result.contract_version IS DISTINCT FROM 1 OR _result.http_status IS DISTINCT FROM 200 OR _result.content_type IS DISTINCT FROM 'application/json'
+ OR _result.contract_version IS DISTINCT FROM _r.contract_version OR _result.http_status IS DISTINCT FROM 200
+ OR _result.content_type IS DISTINCT FROM (CASE WHEN _r.contract_version=2 THEN 'text/event-stream' ELSE 'application/json' END)
  THEN RAISE EXCEPTION 'HTTP_RESULT_STATE_CONFLICT' USING ERRCODE='P0005'; END IF;
  SELECT * INTO _q FROM gateway_charge_quota_contexts WHERE billing_request_id=_billing_request_id;
  IF _q.org_id IS DISTINCT FROM _org_id OR _q.api_key_id IS DISTINCT FROM _api_key_id OR _q.quota_version IS DISTINCT FROM 2
