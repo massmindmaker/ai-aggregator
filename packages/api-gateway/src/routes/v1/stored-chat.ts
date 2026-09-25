@@ -3,6 +3,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { config } from '../../config';
 import type { AuthenticatedApiKey } from '../../middleware/auth-plan04';
 import { createStoredChatAttempt } from '../../billing/stored-chat-attempt';
+import { createStoredChatByokAttempt } from '../../billing/stored-chat-byok-attempt';
 import { createStoredChatStreamAttempt } from '../../billing/stored-chat-stream-attempt';
 import { encodeStoredChatSseEvent, encodeStoredChatSseDone, projectStoredChatStreamReplay, storedChatStreamHeaders } from '../../billing/stored-chat-stream-http-contract';
 import type { StoredChatHttpIdentity } from '../../billing/stored-chat-http-identity';
@@ -104,17 +105,140 @@ export const storedChat: Handler = async (c) => {
   const cachingDiscount = config.STORED_CHAT_CACHING_DISCOUNT_EXACT;
   const defaultMaxOutputTokens = config.GATEWAY_DEFAULT_MAX_OUTPUT_TOKENS;
   try {
-    if (c.req.raw.headers.has('x-upstream-key'))
+    const byokHeaderPresent = c.req.raw.headers.has('x-upstream-key');
+    const byokKey = c.req.raw.headers.get('x-upstream-key');
+    if (byokHeaderPresent && byokKey === '')
       return respondStoredChat(
         c,
         fixedStoredChatHttpError('unsupported_execution_contract'),
       );
     const key = c.get('apiKey' as never) as AuthenticatedApiKey;
     const { identity } = await captureStoredChatHttpRequest(c.req.raw);
-    // Until the dedicated BYOK composition task, v3 remains the same fixed 501
-    // boundary as the pre-existing raw-header guard. This also narrows the
-    // established stored scope for current v1/v2 execution.
-    if (identity.billingMode !== 'stored' || identity.contractVersion === 3)
+
+    if (identity.billingMode === 'byok_fee') {
+      if (
+        identity.contractVersion !== 3 ||
+        identity.attemptBody.stream ||
+        byokKey === null ||
+        config.GATEWAY_HTTP_EXECUTION_MODE !== 'stored_chat_embeddings_completions_stream'
+      )
+        return respondStoredChat(
+          c,
+          fixedStoredChatHttpError('unsupported_execution_contract'),
+        );
+      const scope: GatewayHttpIdentity<'chat'> = Object.freeze({
+        orgId: key.org_id,
+        apiKeyId: key.id,
+        routeKind: 'chat',
+        billingMode: 'byok_fee',
+        contractVersion: 3,
+        idempotencyKeyDigest: identity.idempotencyKeyDigest,
+        requestFingerprint: identity.requestFingerprint,
+      });
+      const read = async () =>
+        projectStoredChatHttpResult(await readGatewayHttpResultV2(scope));
+      const existing = await readGatewayHttpResultV2(scope);
+      if (existing.status !== 'not_found')
+        return respondStoredChat(c, projectStoredChatHttpResult(existing));
+      const model = await resolveStoredChatFreshModel(identity.attemptBody.model);
+      const requestId = c.get('requestId' as never) as string;
+      const prepared = prepareStoredChatFreshPolicy({
+        key,
+        identity,
+        model,
+        requestId,
+      });
+      const handle = createStoredChatByokAttempt(
+        {
+          orgId: scope.orgId,
+          apiKeyId: scope.apiKeyId,
+          clientRequestId: requestId,
+          declaredSessionId: identity.declaredSessionId,
+          body: identity.attemptBody,
+          ...prepared,
+          byokKey,
+          feeCreditsExact: config.BYOK_FEE_CREDITS_EXACT,
+          defaultMaxOutputTokens,
+          preDispatchDeadlineAt: new Date(
+            Date.now() + STORED_CHAT_PRE_DISPATCH_WINDOW_MS,
+          ).toISOString(),
+          signal: c.req.raw.signal,
+        },
+        {
+          admitAttempt: (args) => admitGatewayHttpCharge({ ...args, ...scope }),
+          rejectUnstarted: (args) =>
+            rejectUnstartedGatewayHttpRequest({
+              ...scope,
+              billingRequestId: args.billingRequestId,
+            }),
+          persistOutcome: (args) =>
+            recordGatewayHttpOutcome({
+              ...args,
+              idempotencyKeyDigest: scope.idempotencyKeyDigest,
+              requestFingerprint: scope.requestFingerprint,
+              contractVersion: 3,
+            }),
+        },
+      );
+      if (handle.status !== 'ready')
+        return respondStoredChat(
+          c,
+          fixedStoredChatHttpError(
+            handle.status === 'bad_request'
+              ? 'invalid_stored_chat_request'
+              : 'stored_chat_unavailable',
+          ),
+        );
+      const claim = await claimGatewayHttpRequest({
+        ...scope,
+        billingRequestId: handle.billingRequestId,
+      });
+      if (!claim.didClaim) return respondStoredChat(c, await read());
+
+      let result: Awaited<ReturnType<typeof handle.run>>;
+      try {
+        result = await handle.run();
+      } catch {
+        return respondStoredChat(
+          c,
+          fixedStoredChatHttpError('request_state_unavailable'),
+        );
+      }
+      if (
+        !result ||
+        result.billingRequestId !== handle.billingRequestId ||
+        (result.kind === 'rejected' && !isHttpRejectionCode(result.code)) ||
+        (result.kind === 'replay' &&
+          !['held','dispatched','outcome_recorded','settled','cancelled'].includes(result.state)) ||
+        (result.kind === 'settled_success' &&
+          (typeof result.actualCostCredits !== 'bigint' ||
+            result.actualCostCredits <= 0n ||
+            !result.response ||
+            !result.admission ||
+            result.admission.state !== 'settled' ||
+            result.admission.billingRequestId !== handle.billingRequestId))
+      )
+        return respondStoredChat(
+          c,
+          fixedStoredChatHttpError('request_state_unavailable'),
+        );
+      switch (result.kind) {
+        case 'settled_success':
+        case 'rejected':
+        case 'replay':
+        case 'cancelled_no_charge':
+          return respondStoredChat(c, await read());
+        case 'reconciliation_required':
+        case 'not_started':
+        default:
+          return respondStoredChat(
+            c,
+            fixedStoredChatHttpError('request_state_unavailable'),
+          );
+      }
+    }
+
+    if (identity.billingMode !== 'stored')
       return respondStoredChat(
         c,
         fixedStoredChatHttpError('unsupported_execution_contract'),

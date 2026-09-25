@@ -37,6 +37,14 @@ describe('root Vitest discovery contract', () => {
     expect(scripts['test:catalog-native-smoke']).not.toMatch(/migrat|bootstrap/);
   });
 
+  it('registers mounted BYOK acceptance in the mandatory database baseline', () => {
+    const baseline = scripts['test:database-baseline'];
+    expect(baseline).toContain('stored-chat-byok-mounted.native.integration.test.ts');
+    expect(baseline.indexOf('stored-chat-byok-mounted.native.integration.test.ts')).toBeLessThan(
+      baseline.indexOf('&& bun run test:ton-core-native'),
+    );
+  });
+
   it('uses Node by default and jsdom only for web tests', () => {
     expect(testConfig.environment).toBe('node');
     expect(testConfig.environmentMatchGlobs).toEqual([

@@ -6,6 +6,8 @@ const spies = vi.hoisted(() => ({
   resolve: vi.fn(),
   attempt: vi.fn(),
   run: vi.fn(),
+  byokAttempt: vi.fn(),
+  byokRun: vi.fn(),
   admit: vi.fn(),
   reject: vi.fn(),
   outcome: vi.fn(),
@@ -57,6 +59,9 @@ vi.mock('../billing/http-terminal-recovery', async () => ({
 }));
 vi.mock('../billing/stored-chat-attempt', () => ({
   createStoredChatAttempt: spies.attempt,
+}));
+vi.mock('../billing/stored-chat-byok-attempt', () => ({
+  createStoredChatByokAttempt: spies.byokAttempt,
 }));
 vi.mock('../billing/stored-chat-fresh-policy', async () => ({
   ...(await vi.importActual<
@@ -180,12 +185,20 @@ beforeEach(() => {
     spies.order.push('attempt');
     return { status: 'ready', billingRequestId: uuid, run: spies.run };
   });
+  spies.byokAttempt.mockImplementation(() => {
+    spies.order.push('byokAttempt');
+    return { status: 'ready', billingRequestId: uuid, run: spies.byokRun };
+  });
   spies.claim.mockImplementation(async () => {
     spies.order.push('claim');
     return { didClaim: true, billingRequestId: uuid };
   });
   spies.run.mockImplementation(async () => {
     spies.order.push('run');
+    return runResult();
+  });
+  spies.byokRun.mockImplementation(async () => {
+    spies.order.push('byokRun');
     return runResult();
   });
 });
@@ -376,11 +389,66 @@ it.each([
   ).toBe(501);
   expect(spies.read).not.toHaveBeenCalled();
 });
-it('BYOK header present, including empty value, never reaches B2/claim', async () => {
+it('keeps empty BYOK header unavailable before durable state', async () => {
   expect(
     (await request(undefined, body, { 'x-upstream-key': '' })).status,
   ).toBe(501);
   expect(spies.read).not.toHaveBeenCalled();
+});
+
+it('newest mode runs non-stream BYOK through durable v3 identity and fixed-fee attempt', async () => {
+  spies.mode = 'stored_chat_embeddings_completions_stream';
+  let byokReads = 0;
+  spies.read.mockImplementation(async () => {
+    spies.order.push('read');
+    byokReads += 1;
+    return byokReads === 1
+      ? { contractVersion: 3, status: 'not_found' }
+      : { contractVersion: 3, status: 'pending', billingRequestId: uuid };
+  });
+  spies.byokRun.mockImplementationOnce(async () => {
+    spies.order.push('byokRun');
+    return { ...runResult(), actualCostCredits: 1000n };
+  });
+  const response = await request(undefined, body, { 'x-upstream-key': 'caller-provider-secret' });
+  expect(response.status).toBe(202);
+  expect(spies.order).toEqual([
+    'auth', 'rpm', 'read', 'resolve', 'policy', 'byokAttempt', 'claim', 'byokRun', 'read',
+  ]);
+  expect(spies.byokAttempt).toHaveBeenCalledOnce();
+  expect(spies.attempt).not.toHaveBeenCalled();
+  expect(spies.byokAttempt.mock.calls[0]![0]).toMatchObject({
+    orgId: key.org_id,
+    apiKeyId: key.id,
+    byokKey: 'caller-provider-secret',
+    feeCreditsExact: '1',
+  });
+  expect(spies.claim.mock.calls[0]![0]).toMatchObject({
+    routeKind: 'chat',
+    billingMode: 'byok_fee',
+    contractVersion: 3,
+  });
+});
+
+it.each(['stored_chat_only','stored_chat_embeddings','stored_chat_embeddings_completions'] as const)(
+  'keeps non-stream BYOK unavailable in older stored mode %s',
+  async (mode) => {
+    spies.mode = mode;
+    const response = await request(undefined, body, { 'x-upstream-key': 'caller-provider-secret' });
+    expect(response.status).toBe(501);
+    expect(spies.read).not.toHaveBeenCalled();
+    expect(spies.byokAttempt).not.toHaveBeenCalled();
+  },
+);
+
+it('keeps stream+BYOK unavailable without durable claim', async () => {
+  spies.mode = 'stored_chat_embeddings_completions_stream';
+  const response = await request(undefined, { ...body, stream: true }, {
+    'x-upstream-key': 'caller-provider-secret',
+  });
+  expect([400, 501]).toContain(response.status);
+  expect(spies.read).not.toHaveBeenCalled();
+  expect(spies.byokAttempt).not.toHaveBeenCalled();
 });
 it('unknown fields stay B2 invalid; no fresh preparation on malformed identity', async () => {
   expect(
