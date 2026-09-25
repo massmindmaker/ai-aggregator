@@ -93,11 +93,28 @@ BEGIN
 END $$;
 CREATE OR REPLACE FUNCTION aiag_quota_supplier_max(_mode TEXT,_model TEXT,_max BIGINT,_quote JSONB,_supplier JSONB)
 RETURNS BIGINT LANGUAGE plpgsql IMMUTABLE AS $$
-DECLARE _q JSONB; _c JSONB; _v NUMERIC[]; _retail NUMERIC:=0; _s NUMERIC:=0; _discount NUMERIC;
+DECLARE _q JSONB; _c JSONB; _v NUMERIC[]; _retail NUMERIC:=0; _s NUMERIC:=0; _discount NUMERIC; _base NUMERIC; _m NUMERIC;
 BEGIN
  IF _mode='byok_fee' THEN
   IF _supplier IS DISTINCT FROM '{"version":2,"formulaVersion":"byok-zero-v2"}'::jsonb THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
   RETURN 0;
+ END IF;
+ IF _mode='stored' AND (_supplier->>'formulaVersion')='media-supplier-unit-microcredits-v1' THEN
+  IF NOT aiag_quota_keys(_supplier,ARRAY['version','formulaVersion','mediaQuote'])
+   OR _supplier->'version' IS DISTINCT FROM '2'::jsonb
+   OR NOT aiag_quota_keys(_quote,ARRAY['version','mediaQuote']) OR _quote->'version' IS DISTINCT FROM '1'::jsonb
+   OR _supplier->'mediaQuote' IS DISTINCT FROM _quote->'mediaQuote' THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
+  _q:=_quote->'mediaQuote';
+  IF NOT aiag_quota_keys(_q,ARRAY['version','formulaVersion','routeKind','modelSlug','modelUpstreamId','upstreamId','upstreamModelId','providerFamily','units','priceCentsPerUnit','markup','authorizedMaxCredits'])
+   OR _q->'version' IS DISTINCT FROM '1'::jsonb OR (_q->>'formulaVersion') IS DISTINCT FROM 'media-unit-microcredits-v1'
+   OR coalesce(_q->>'routeKind','') NOT IN('image','video','audio_speech')
+   OR (_q->>'modelSlug') IS DISTINCT FROM _model THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
+  _base:=aiag_quota_decimal(_q->'priceCentsPerUnit')*aiag_quota_count(_q->'units',TRUE)*1000;
+  _m:=aiag_quota_decimal(_q->'markup');
+  IF _base<=0 OR _m<=0 THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
+  _s:=ceil(_base*10); _retail:=ceil(_base*_m);
+  IF _max IS DISTINCT FROM aiag_quota_money(_retail) OR aiag_quota_decimal(_q->'authorizedMaxCredits',TRUE)<>_retail THEN RAISE EXCEPTION 'INVALID_CHARGED_MAXIMUM'; END IF;
+  RETURN aiag_quota_money(_s);
  END IF;
  IF _mode IS DISTINCT FROM 'stored' OR NOT aiag_quota_keys(_supplier,ARRAY['version','formulaVersion','tokenQuote'])
  OR _supplier->'version' IS DISTINCT FROM '2'::jsonb
@@ -129,6 +146,15 @@ BEGIN
  SELECT * INTO _ctx FROM gateway_charge_quota_contexts WHERE billing_request_id=_a.billing_request_id;
  IF NOT FOUND THEN RETURN; END IF;
  IF _ctx.org_id<>_a.org_id OR _ctx.api_key_id<>_a.api_key_id THEN RAISE EXCEPTION 'QUOTA_CONTEXT_CONFLICT'; END IF;
+ IF _a.billing_mode='stored' AND (_pricing->>'formulaVersion')='media-unit-microcredits-v1' THEN
+  IF NOT aiag_quota_keys(_pricing,ARRAY['version','formulaVersion','routeKind','modelSlug','modelUpstreamId','upstreamId','upstreamModelId','providerFamily','units','priceCentsPerUnit','markup','authorizedMaxCredits','supplierMaxMicrocredits','supplierMaxUsdMicro'])
+   OR _pricing->'version' IS DISTINCT FROM '1'::jsonb
+   OR (_pricing-'supplierMaxMicrocredits'-'supplierMaxUsdMicro') IS DISTINCT FROM (_a.quote_snapshot->'mediaQuote')
+   OR (_pricing->>'upstreamId') IS DISTINCT FROM _upstream
+   OR aiag_quota_money(aiag_quota_decimal(_pricing->'supplierMaxUsdMicro',TRUE))<>_ctx.supplier_authorized_max_usd_micro
+  THEN RAISE EXCEPTION 'SUPPLIER_DISPATCH_CONFLICT'; END IF;
+  RETURN;
+ END IF;
  IF _a.billing_mode='stored' THEN
   IF NOT EXISTS(SELECT 1 FROM jsonb_array_elements(_ctx.supplier_quote_snapshot->'tokenQuote'->'candidates') c
     WHERE _pricing=c.value||jsonb_build_object('actualChargePolicy',_a.quote_snapshot->'actualChargePolicy') AND c.value->>'upstreamId'=_upstream) THEN RAISE EXCEPTION 'SUPPLIER_DISPATCH_CONFLICT'; END IF;
@@ -151,6 +177,22 @@ BEGIN
   OR _usage->'verified' IS DISTINCT FROM 'true'::jsonb OR (_usage->>'billingRequestId') IS DISTINCT FROM _a.billing_request_id::text
   OR (_usage->>'attemptId') IS DISTINCT FROM _a.attempt_id::text OR (_usage->>'upstreamId') IS DISTINCT FROM _a.upstream_id
   OR _actual<>_a.authorized_max_credits THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
+  RETURN 0;
+ END IF;
+ IF _a.billing_mode='stored' AND (_a.pricing_snapshot->>'formulaVersion')='media-unit-microcredits-v1' THEN
+  IF NOT aiag_quota_keys(_usage,ARRAY['version','formulaVersion','billingRequestId','attemptId','upstreamId','terminalStatus','verified'])
+   OR _usage->'version' IS DISTINCT FROM '1'::jsonb OR (_usage->>'formulaVersion') IS DISTINCT FROM 'media-unit-microcredits-v1'
+   OR (_usage->>'billingRequestId') IS DISTINCT FROM _a.billing_request_id::text
+   OR (_usage->>'attemptId') IS DISTINCT FROM _a.attempt_id::text OR (_usage->>'upstreamId') IS DISTINCT FROM _a.upstream_id
+   OR _usage->'verified' IS DISTINCT FROM 'true'::jsonb
+   OR coalesce(_usage->>'terminalStatus','') NOT IN('completed','failed')
+  THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
+  _supplier:=aiag_quota_money(aiag_quota_decimal(_a.pricing_snapshot->'supplierMaxUsdMicro',TRUE));
+  IF (_usage->>'terminalStatus')='completed' THEN
+   IF _actual<>_a.authorized_max_credits THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
+   RETURN _supplier;
+  END IF;
+  IF _actual<>0 THEN RAISE EXCEPTION 'INVALID_SUPPLIER_USAGE'; END IF;
   RETURN 0;
  END IF;
  _p:=_a.pricing_snapshot;

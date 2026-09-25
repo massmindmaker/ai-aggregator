@@ -130,8 +130,8 @@ BEGIN
   END LOOP;
   IF _key.id IS NULL OR _key.disabled_at IS NOT NULL OR _key.revoked_at IS NOT NULL THEN RAISE EXCEPTION 'API_KEY_ORG_MISMATCH' USING ERRCODE='P0005'; END IF;
   IF _quota_version=2 THEN
-   IF _billing_mode='stored' AND _route_kind NOT IN('chat','embeddings','completions') THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
-   IF _billing_mode='stored' AND EXISTS(
+   IF _billing_mode='stored' AND _route_kind NOT IN('chat','embeddings','completions','image','video','audio_speech') THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
+   IF _billing_mode='stored' AND _route_kind IN('chat','embeddings','completions') AND EXISTS(
     SELECT 1 FROM jsonb_array_elements(_quote_snapshot->'tokenQuote'->'candidates') c
     WHERE CASE _route_kind WHEN 'chat' THEN c->>'modelType' IS DISTINCT FROM 'chat'
       WHEN 'completions' THEN c->>'modelType' IS DISTINCT FROM 'chat'
