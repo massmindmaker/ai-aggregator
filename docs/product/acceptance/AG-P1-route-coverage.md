@@ -5,7 +5,7 @@
 | Маршрут / режим | В legacy | В restricted `stored_chat_only` | Остаток |
 |---|---|---|---|
 | `/v1/chat/completions`, stored plaintext, non-stream | Provider до legacy settlement | Принят локально: durable identity, quota/hold, один dispatch, outcome/result, settlement/replay | Recovery source/bootstrap и общий baseline подтверждены локально20.09; operational cutover ещё впереди |
-| Chat stream | Stream до settlement, есть оценка токенов по длине текста | 501 до provider | Проверенный final usage и admission/SSE/recovery contract; оценка не считается финансовым доказательством |
+| Chat stream | Legacy streaming остаётся отдельным compatibility path | В новом `stored_chat_embeddings_completions_stream` принят локально durable SSE: strict terminal usage, один provider dispatch, stored replay и recovery | Runtime activation и real-provider compatibility остаются release gates; старые stored modes возвращают 501 |
 | Chat BYOK | Provider до фиксированной platform fee | 501 до provider | Отдельное резервирование platform fee; BYOK не бесплатен |
 | `/v1/completions` | Provider до legacy settlement | В новом `stored_chat_embeddings_completions` принят локально: strict scalar prompt, durable identity/result, один dispatch, settle/replay/recovery | Stream, BYOK и batch prompts остаются отдельными путями; старые stored modes возвращают501 |
 | `/v1/embeddings` | Provider до legacy settlement | 501 до provider | В новом `stored_chat_embeddings` lifecycle принят локально: claim/reserve/один dispatch/outcome/settle/replay/recovery; runtime gate остаётся |
@@ -25,6 +25,22 @@ Source anchors: `packages/api-gateway/src/server.ts`, `routes/v1/{stored-chat,ch
 ## Completions checkpoint24.09
 
 `3a717bf` + merge `5297623`: [stored completions contract](../../superpowers/plans/2026-09-20-stored-completions-lifecycle.md) выполнен локально, independent financial/SQL/security/TS APPROVE. Exact native proof:3457/19205→3/18, balance9997, release3454/19187, provider1/ledger1 при concurrent fresh и replay в новом app instance. Реальный worker восстанавливает durable outcome после settlement failure/revoke/expiry ровно один раз; malformed usage остаётся held и не redispatch. Cumulative native matrix350, TON core58, types/lint/build PASS. Production mode не включён; real provider call не выполнялся.
+
+## Stored chat streaming checkpoint25.09
+
+Source `23ce262`: [durable SSE contract](../../superpowers/plans/2026-09-24-stored-chat-stream-lifecycle.md) реализован локально. Новый explicit HTTP mode `stored_chat_embeddings_completions_stream` сохраняет принятые chat/embeddings/completions и добавляет только strict `stream:true` для reviewed `openai/gpt-4o-mini`; recovery mode `stored_chat_embeddings_completions_stream_v1` остаётся выключенным по умолчанию. Migration0079 additive; migrations до0078 не переписывались.
+
+Fresh acceptance после final review-fix:
+- focused gateway/worker streaming suite: 13 files / 402 PASS;
+- mounted stream + полный HTTP-storage native: 73 PASS, из них mounted SSE 6/6;
+- exact fixture: reserve3457/supplier19205 → actual3/18, replay receipt3/30, один provider effect и один ledger; disconnect после первого event не отменяет valid terminal evidence lifecycle;
+- gateway+worker strict types PASS; gateway final build и scoped lint PASS;
+- independent GLM-5.3-Flash review: Critical none; три Important coverage findings закрыты, scoped re-review — ADDRESSED/ADDRESSED/ADDRESSED, новых Critical/Important нет;
+- review выявил реальный boundary defect: `stream:true,max_tokens:2049` проходил identity capture. Regression сначала RED, затем HTTP identity теперь отклоняет >2048 до durable read/claim.
+
+Root database command в этой сессии показал test-infrastructure instability под высокой нагрузкой: первый прогон дал native16/356 PASS, затем historical TON child57/58; focused TON повтор58/58 PASS с cleanup dropped/sessions0. Второй прогон дал355/356 из-за другого historical entitlement test; тот же case focused1/1 PASS. Ни один из этих flakes не затрагивает streaming diff; точный root command не объявляется свежим exit0. Новый stream/native и затронутый storage gate подтверждены отдельно выше.
+
+Граница остаётся локальной: runtime/production не включены, внешний provider transport mocked, платный вызов не делался. BYOK, async media/batches, real provider activation и AG→AM остаются следующими пакетами.
 
 ## Принятые локальные foundations
 

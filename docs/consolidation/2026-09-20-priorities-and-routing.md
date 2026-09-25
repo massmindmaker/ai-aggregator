@@ -7,7 +7,7 @@
 | Очередь | Источник | Следующий результат |
 |---|---|---|
 | 1. Aggregator — каталог | 19.09 resume plan, 13.09 public catalog contract, AG-P2 | Native matrix принят; остаётся настоящий AG→AM HTTP consumer |
-| 2. Aggregator — расчёты | AG-P1 route coverage, stored embeddings/completions lifecycle | Chat, embeddings и non-stream completions приняты локально; далее stream/BYOK и async media/batches по одному lifecycle |
+| 2. Aggregator — расчёты | AG-P1 route coverage, stored embeddings/completions/stream lifecycle | Chat, embeddings, non-stream completions и durable chat SSE приняты локально; далее BYOK, затем async media/batches по одному lifecycle |
 | 3. Aggregator — продукт | Production continuation AG-P3/P4/P5 | Авторская версия→доход, TON alongside RUB/login, modalities/UX и сквозная приёмка |
 | 4. Arena | Собственный entrypoint и prediction evaluation plan | Executable scorer/hash и opt-in binding→DB jobs→sandboxed evaluator→результат |
 | 5. Agents Market | Собственный native-account-principal/Web plan | HTTP/security review→guarded auth browser→UUID domain/worker→AG HTTP integration и independent Web/TMA acceptance |
@@ -18,7 +18,7 @@ TON0076 прошла итоговое source-review: прежние шесть H
 
 ## Что остаётся в полной программе
 
-- Aggregator AG-P1: stream, BYOK, media/async и batches ещё требуют собственного admission/outcome/recovery; restricted501 означает закрытую возможность, а не реализованный сценарий. Accepted quota/refund primitives заново не писать. AG-P2 — каталог и настоящий AM consumer; AG-P3 — авторские версии/доход; AG-P4 — TON с сохранением RUB; AG-P5 — modalities, truthful UX и release.
+- Aggregator AG-P1: stored chat stream принят локально; BYOK, media/async и batches ещё требуют собственного admission/outcome/recovery; restricted501 означает закрытую возможность, а не реализованный сценарий. Accepted quota/refund primitives заново не писать. AG-P2 — каталог и настоящий AM consumer; AG-P3 — авторские версии/доход; AG-P4 — TON с сохранением RUB; AG-P5 — modalities, truthful UX и release.
 - Arena AR-P2 — полный конкурсный lifecycle, AR-P3 — доказательство качества (модели/агенты/RAG, reproducibility), AR-P4 — funding/payout, AR-P5 — export и выпуск. Pure scorer и выбранный JSON пока не означают выполненный evaluator.
 - Market AM-P2 — деньги и recovery run, AM-P3 — HTTP/Web identity, AM-P4 — useful agent и автор, AM-P5 — TON Web и owned-run/status TMA, AM-P6 — release и цикл оценки. Уже принятый DB baseline AM-P1 не повторять без причины.
 
@@ -106,4 +106,10 @@ TON0076 прошла итоговое source-review: прежние шесть H
 - Проверки: owner pure128+113, storage66, mounted8 acceptance cases, migration77→78/no-op78, schema15, migrator13, types/lint/build/config PASS. Итоговый native matrix принят совокупно:348 сценариев исходного запуска, исправленный flaky case и новый concurrent/restart case — всего350; полный matrix после test-only fix не повторялся. TON core58 PASS отдельно, fresh72/no-op72, rollback/cleanup0. Один independent financial/SQL/security/TypeScript review — APPROVE, findings закрыты адресно.
 - Граница: local source/native acceptance, runtime disabled; provider transport mocked, real provider execution и production activation не подтверждены. Catalog primary operation для chat-моделей не изменена: completions — compatibility endpoint, а не новая provider capability.
 
-Следующие функциональные пакеты — stream/BYOK, затем media/batches; отдельно остаются авторский lifecycle и продуктовые/операционные gates полной программы. Этот checkpoint не объявляет сервис завершённым.
+## Stored chat streaming: локальный checkpoint25.09
+
+`23ce262` добавляет explicit `stored_chat_embeddings_completions_stream`, contractVersion2 durable SSE, migration0079 и matching recovery mode без runtime activation. Финальная проверка после review-fix: focused402 PASS; mounted stream + HTTP storage native73 PASS; gateway/worker strict types PASS; gateway build/lint PASS. GLM-5.3-Flash final review не нашёл Critical; три Important test gaps закрыты и scoped re-review подтвердил все три как ADDRESSED. Один из новых regression tests выявил и закрыл позднюю валидацию stream `max_tokens>2048` на HTTP identity boundary.
+
+Полный database command дважды проявил разные неповторяемые historical flakes под высокой нагрузкой: 356/356 native с TON child57/58, затем355/356 native на entitlement case; targeted TON58/58 и entitlement1/1 прошли без code changes. Поэтому свежий root command не помечается exit0, а streaming acceptance опирается на impacted native/storage gates и независимый review. Production/runtime/provider activation не выполнялись.
+
+Следующий кодовый пакет Aggregator — BYOK admission/fee lifecycle; после него async media/batches. Затем возвращаемся к авторскому lifecycle и продуктовым/операционным gates полной программы. Этот checkpoint не объявляет сервис завершённым.
