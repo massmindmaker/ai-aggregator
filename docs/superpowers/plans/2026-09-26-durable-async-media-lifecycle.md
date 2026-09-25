@@ -13,11 +13,11 @@ Add worker mode `MEDIA_PREDICTION_WORKER_MODE=disabled|image_v1|media_v1`; defau
 Do not reuse `gateway_http_results` as the async job store. It models one request/terminal response, while media requires long-lived GET-visible jobs, leases, repeated polls and terminal state. Reuse charge admission/quota/settlement primitives; make `prediction_jobs` the durable media source of truth.
 
 ## Public v1 operations
-Image POST accepts only: model, prompt, optional n=1, optional aiag_mode. Prompt is well-formed non-empty UTF-8 <=32768 bytes. Size, negative_prompt, reference_image_url, BYOK and unknown fields reject before durable state. First reviewed profile is `nano-banana-2-kie` -> upstream `kie` -> `google/nano-banana-2`.
+Image POST accepts only: model, prompt, optional n=1, optional aiag_mode. Prompt is well-formed non-empty UTF-8 <=32768 bytes. Size, negative_prompt, reference_image_url, BYOK and unknown fields reject before durable state. First reviewed profile is `nano-banana-2-kie` -> upstream `kie` -> current provider model `nano-banana-2`.
 
-Video POST is prompt-only v1. duration_s, aspect_ratio and image_url overrides reject. First profile: `kling-1-6-kie` -> `kling/v1.6`; existing price_per_image is one default clip price.
+Video POST is prompt-only v1. duration_s, aspect_ratio and image_url overrides reject. First profile keeps gateway slug `kling-1-6-kie` for compatibility but binds the current Kie provider model `kling-2.6/text-to-video`; migration 0081 corrects the stale stored upstream id from migration 0009. Existing price_per_image is treated as one default clip price only after that tariff is revalidated.
 
-Audio speech POST is input-only v1. voice/format overrides reject. First flat-price profile: `suno-v3-5-kie` -> `suno/v3.5`, using existing per-generation price_per_image. Models priced only by price_per_audio_sec remain unavailable until trusted duration evidence exists. Audio transcription remains 501.
+Audio is implemented in Task 5 against the current Kie music contract, not the retired `suno-v3.5` transport. Current Kie uses Market `ai-music-api/generate` with a V6-family model inside `input`; activation requires a current explicit tariff binding before the stored route is mounted. Until that binding is proven, `/v1/audio/speech` remains truthful 501. Models priced only by `price_per_audio_sec` also remain unavailable until trusted duration evidence exists. Audio transcription remains 501.
 
 Fresh successful POST returns 202 with only our job_id, status, model, type and created_at. Never expose provider id/name, upstream task id, raw error or poll URL.
 
