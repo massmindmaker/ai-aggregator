@@ -6,7 +6,7 @@
 |---|---|---|---|
 | `/v1/chat/completions`, stored plaintext, non-stream | Provider до legacy settlement | Принят локально: durable identity, quota/hold, один dispatch, outcome/result, settlement/replay | Recovery source/bootstrap и общий baseline подтверждены локально20.09; operational cutover ещё впереди |
 | Chat stream | Legacy streaming остаётся отдельным compatibility path | В новом `stored_chat_embeddings_completions_stream` принят локально durable SSE: strict terminal usage, один provider dispatch, stored replay и recovery | Runtime activation и real-provider compatibility остаются release gates; старые stored modes возвращают 501 |
-| Chat BYOK | Provider до фиксированной platform fee | 501 до provider | Отдельное резервирование platform fee; BYOK не бесплатен |
+| Chat BYOK | Provider до фиксированной platform fee | В `stored_chat_embeddings_completions_stream` принят локально durable non-stream BYOK: funded fixed-fee hold, один caller-key dispatch, stored result, settle/replay/recovery | Старые stored modes и stream+BYOK остаются 501; другие BYOK routes и real-provider/runtime — отдельные gates |
 | `/v1/completions` | Provider до legacy settlement | В новом `stored_chat_embeddings_completions` принят локально: strict scalar prompt, durable identity/result, один dispatch, settle/replay/recovery | Stream, BYOK и batch prompts остаются отдельными путями; старые stored modes возвращают501 |
 | `/v1/embeddings` | Provider до legacy settlement | 501 до provider | В новом `stored_chat_embeddings` lifecycle принят локально: claim/reserve/один dispatch/outcome/settle/replay/recovery; runtime gate остаётся |
 | Images / video / audio speech | Submit/poll до settlement; queued job не связан с admission | 501 до provider/job | Durable async job, charge ownership, cancel/deadline/recovery |
@@ -40,7 +40,19 @@ Fresh acceptance после final review-fix:
 
 Root database command в этой сессии показал test-infrastructure instability под высокой нагрузкой: первый прогон дал native16/356 PASS, затем historical TON child57/58; focused TON повтор58/58 PASS с cleanup dropped/sessions0. Второй прогон дал355/356 из-за другого historical entitlement test; тот же case focused1/1 PASS. Ни один из этих flakes не затрагивает streaming diff; точный root command не объявляется свежим exit0. Новый stream/native и затронутый storage gate подтверждены отдельно выше.
 
-Граница остаётся локальной: runtime/production не включены, внешний provider transport mocked, платный вызов не делался. BYOK, async media/batches, real provider activation и AG→AM остаются следующими пакетами.
+Граница остаётся локальной: runtime/production не включены, внешний provider transport mocked, платный вызов не делался. Async media/batches, real provider activation и AG→AM остаются следующими пакетами.
+
+## Stored chat BYOK checkpoint25.09
+
+Durable BYOK реализован последовательностью `fb8caad` → `540521e` → `204c4cd`/`f1f3509` → `129008d`, review-fix `edd365d`. Контракт — только non-stream chat в самом полном explicit mode: HTTP `contractVersion=3`, `billingMode=byok_fee`; raw `X-Upstream-Key` не попадает в durable state, fingerprint содержит только SHA-256 credential bytes. Admission использует существующую fixed platform fee, supplier reserve/actual остаётся 0; proxy/failover запрещены, provider вызывается только после confirmed dispatch.
+
+Fresh evidence: post-fix scoped unit 11 files / 387 PASS; pre-review combined native HTTP storage68 + mounted BYOK4 =72 PASS; после review-fix отдельно подтверждены legacy stored boundary1, stream boundary1 и mounted BYOK4. Exact native fixture: default fee1 credit =1000 microcredits, balance5000→4000, supplier0, provider1/ledger1; changed caller key и stored/BYOK reuse одного chat idempotency key дают409. Provider error после dispatch сохраняет held/dispatched1000, result0/ledger0 и recovery selected0; forced settlement failure после durable result восстанавливается worker ровно один раз без второго provider call.
+
+Migration0080: applied1/skipped79, затем no-op applied0/skipped80; historical migrations≤0079 не переписывались. Full scoped pre-review verification: gateway/worker source/test types, gateway+worker builds, lint и diff-check exit0. Review-fix дополнительно: affected78 PASS, mounted BYOK4 PASS, strict test types/lint/diff-check PASS; post-fix full BYOK unit снова 387 PASS, gateway source types и build exit0. Затем amended root `test:database-baseline` завершился полностью: 17/17 files, 362/362 native PASS, обязательный TON core child58/58 PASS, fresh72/no-op72, rollback/cleanup0, `FULL_BASELINE_RC=0`.
+
+Independent GLM-5.3-Flash final review `006e9e52283648efbde7b20ced5d8c52` нашёл один Important: stream+BYOK классифицировался400 вместо frozen501. `edd365d` исправил boundary; scoped re-review `3616a07f63104acc955dd979c79ada76` — **APPROVE**, finding ADDRESSED, новых Critical/Important нет. Minor про теоретический `markGatewayChargeDispatched` replay в `held` оставлен в backlog: текущий durable claim допускает одного исполнителя и mounted concurrency не воспроизводит этот путь.
+
+Это local source/native acceptance, не runtime/provider/production release. Stream+BYOK, embeddings/completions/media BYOK, encrypted key vault/UI и платный live provider остаются вне этого пакета.
 
 ## Принятые локальные foundations
 
@@ -50,6 +62,6 @@ Accepted refund DB primitives (`e5ca6dd`, migration0066 и `apps/web/src/lib/pay
 
 ## Исправленный отдельный дефект — только локальная source-приёмка
 
-Дефект передачи BYOK key в legacy completions исправлен в `e5614e2`: тот же header используется для классификации и передаётся существующему адаптеру. Independent TypeScript/security/admission-boundary review — PASS / APPROVE. Focused24/types/lint PASS; route → real OpenRouter adapter → mocked transport с разными synthetic caller/platform keys подтверждает caller authorization, одну попытку, прежнюю BYOK fee и отсутствие списаний/счётчиков при provider error. Это не live provider proof. Registry всё ещё зависит от platform configuration; stored encrypted key flow не подключался. Старые restricted modes по-прежнему возвращают501 до provider; новый completions mode не поддерживает BYOK. Route admission и резервирование BYOK fee остаются открытыми.
+Дефект передачи BYOK key в legacy completions исправлен в `e5614e2`: тот же header используется для классификации и передаётся существующему адаптеру. Independent TypeScript/security/admission-boundary review — PASS / APPROVE. Focused24/types/lint PASS; route → real OpenRouter adapter → mocked transport с разными synthetic caller/platform keys подтверждает caller authorization, одну попытку, прежнюю BYOK fee и отсутствие списаний/счётчиков при provider error. Это не live provider proof. Registry всё ещё зависит от platform configuration; stored encrypted key flow не подключался. Старые restricted modes по-прежнему возвращают501 до provider; новый completions mode не поддерживает BYOK. Durable chat BYOK admission/fee lifecycle теперь принят отдельным checkpoint выше; BYOK для completions/embeddings/media остаётся открытым.
 
 501 в restricted mode — временная граница безопасного запуска, не выполнение обязательных модальностей v1. Полные AG-04/09 и продуктовая приёмка остаются открыты; возвраты и production switch не активированы.
