@@ -48,7 +48,7 @@ No Number-based monetary authority.
 
 ## Managed prediction_jobs
 Migration 0081 extends additively with:
-billing_request_id unique, media_kind, contract_version=1, idempotency_key_digest, request_fingerprint, model_upstream_id, upstream_model_id, attempt_id, pricing_snapshot, poll_family, fixed status contract, fixed error_code, poll_due_at/poll_attempts/poll lease owner+until/last_polled_at. Output is sanitized JSON only. Legacy rows remain readable.
+billing_request_id unique, media_kind, contract_version=1, idempotency_key_digest, request_fingerprint, managed_version=1, poll_family, fixed status contract, fixed error_code, poll_due_at/poll_attempts/poll lease owner+until/last_polled_at. Output is sanitized JSON only and the legacy NOT NULL input field contains only non-secret identity metadata for managed rows. Financial attempt/pricing/model-upstream facts are NOT duplicated here: `gateway_charge_admissions` and its quota context remain the single financial authority. Legacy rows remain readable.
 
 Managed states:
 claimed -> admitted -> dispatch_granted -> submitted -> processing -> completed|failed|unknown.
