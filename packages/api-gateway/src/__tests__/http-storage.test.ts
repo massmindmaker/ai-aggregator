@@ -234,6 +234,47 @@ describe("HTTP storage transport contract", () => {
       billingRequestId: ids.attempt,
     });
   });
+
+  it("accepts only chat BYOK contract v3 identity and preserves it through claim/read", async () => {
+    const byok = {
+      ...identity,
+      billingMode: "byok_fee" as const,
+      contractVersion: 3 as const,
+    };
+    const db = createSqlStub();
+    db.returnRows([
+      claimRow({
+        billing_mode: "byok_fee",
+        contract_version: 3,
+      }),
+    ]);
+    await expect(
+      claimGatewayHttpRequest(
+        { ...byok, billingRequestId: ids.billing } as never,
+        db.client,
+      ),
+    ).resolves.toMatchObject({
+      didClaim: true,
+      billingMode: "byok_fee",
+      contractVersion: 3,
+    });
+
+    db.returnRows([
+      readRow({
+        contract_version: 3,
+        content_type: "application/json",
+      }),
+    ]);
+    await expect(
+      readGatewayHttpResult(byok as never, db.client),
+    ).resolves.toMatchObject({
+      contractVersion: 3,
+      status: "ready",
+      actualCostCredits: 9007199254740993n,
+      response: { object: "chat.completion" },
+    });
+  });
+
   it("returns exact bigint and microseconds with detached frozen response", async () => {
     const db = createSqlStub();
     const row = readRow();
@@ -279,7 +320,7 @@ describe("HTTP fails closed before and after transport", () => {
     { billingRequestId: undefined },
     { contractVersion: "1" },
     { routeKind: "audio" },
-    { billingMode: "byok_fee" },
+    { billingMode: "other" },
     { idempotencyKeyDigest: "A".repeat(64) },
     { requestFingerprint: "b".repeat(63) },
     { requestFingerprint: "b".repeat(64) + "\n" },

@@ -1452,6 +1452,105 @@ describe.skipIf(!enabled)("native gateway HTTP storage", () => {
     ).toBe(0);
   });
 
+
+  it("persists and recovers fixed-fee BYOK contract v3 and conflicts with stored reuse", async () => {
+    const r = request(await fixture());
+    const fee = "1000";
+    const feeQuote = {
+      version: 2,
+      formulaVersion: "byok-fee-microcredits-v2",
+      upstreamId: "openrouter",
+      feeMicrocredits: fee,
+    };
+    const supplier = { version: 2, formulaVersion: "byok-zero-v2" };
+    const feeUsage = {
+      version: 2,
+      formulaVersion: "byok-fee-microcredits-v2",
+      billingRequestId: r.id,
+      attemptId: r.attempt,
+      upstreamId: "openrouter",
+      verified: true,
+    };
+
+    await query(
+      "SELECT * FROM aiag_claim_gateway_http_request_v1($1,$2,$3,'chat'::varchar,'byok_fee'::varchar,$4,$5,3::smallint)",
+      [r.f.org, r.f.key, r.id, r.digest, r.fingerprint],
+    );
+
+    await expect(
+      query(
+        "SELECT * FROM aiag_claim_gateway_http_request_v1($1,$2,$3,'chat'::varchar,'stored'::varchar,$4,$5,1::smallint)",
+        [r.f.org, r.f.key, randomUUID(), r.digest, hash("different-stored-body")],
+      ),
+    ).rejects.toThrow("HTTP_IDENTITY_CONFLICT");
+
+    await query(
+      "SELECT * FROM aiag_admit_gateway_charge_v2($1,$2,$3,'trace','chat','byok_fee','openai/gpt-4o-mini',$4,$5,$6,'SID',$7)",
+      [r.f.org, r.id, r.f.key, fee, feeQuote, r.deadline, supplier],
+    );
+    await query(
+      "SELECT * FROM aiag_mark_gateway_charge_dispatched($1,$2,$3,'openrouter',$4)",
+      [r.f.org, r.id, r.attempt, feeQuote],
+    );
+    await query(
+      "SELECT * FROM aiag_record_gateway_http_outcome_v1($1,$2,$3,$4,$5,$6,$7,'success',$8,3::smallint)",
+      [
+        r.f.org,
+        r.f.key,
+        r.id,
+        r.digest,
+        r.fingerprint,
+        fee,
+        JSON.stringify(feeUsage),
+        JSON.stringify(body()),
+      ],
+    );
+
+    const recovered = await query(
+      "SELECT state,billing_mode,outcome_kind,actual_cost_credits::text FROM aiag_recover_gateway_http_settlement_v1($1,$2,$3)",
+      [r.f.org, r.f.key, r.id],
+    );
+    expect(recovered.rows).toEqual([
+      {
+        state: "settled",
+        billing_mode: "byok_fee",
+        outcome_kind: "success",
+        actual_cost_credits: fee,
+      },
+    ]);
+
+    const replay = await query(
+      "SELECT contract_version,status,http_status,content_type,response_body,actual_cost_credits::text FROM aiag_read_gateway_http_result_v1($1,$2,'chat'::varchar,'byok_fee'::varchar,$3,$4,3::smallint)",
+      [r.f.org, r.f.key, r.digest, r.fingerprint],
+    );
+    expect(replay.rows).toMatchObject([
+      {
+        contract_version: 3,
+        status: "ready",
+        http_status: 200,
+        content_type: "application/json",
+        response_body: body(),
+        actual_cost_credits: fee,
+      },
+    ]);
+    expect(
+      (
+        await query(
+          "SELECT supplier_authorized_max_usd_micro::text AS reserved,supplier_actual_usd_micro::text AS actual FROM gateway_charge_quota_contexts WHERE billing_request_id=$1",
+          [r.id],
+        )
+      ).rows,
+    ).toEqual([{ reserved: "0", actual: "0" }]);
+    expect(
+      (
+        await query(
+          "SELECT payg_credits::text AS payg FROM organizations WHERE id=$1",
+          [r.f.org],
+        )
+      ).rows,
+    ).toEqual([{ payg: "999000" }]);
+  });
+
   it("rejects nonstored/unsupported version and null UUID inputs without a mapping", async () => {
     const r = request(await fixture());
     for (const [route, mode, version, id] of [

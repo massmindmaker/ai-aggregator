@@ -150,14 +150,17 @@ describe("gateway settlement recovery SQL contract", () => {
         WHERE admission.state = 'outcome_recorded'
           AND admission.outcome_kind = 'success'
           AND admission.route_kind = ANY($1::varchar[])
-          AND admission.billing_mode = 'stored'
+          AND admission.billing_mode = request.billing_mode
           AND admission.reconcile_after IS NOT NULL
           AND admission.reconcile_after <= cutoff.cycle_due_before
           AND admission.outcome_recorded_at IS NOT NULL
           AND admission.outcome_recorded_at <= cutoff.cycle_due_before
           AND request.contract_version = ANY($2::smallint[])
           AND request.route_kind = admission.route_kind
-          AND request.billing_mode = 'stored'
+          AND (
+            request.billing_mode = 'stored'
+            OR (request.billing_mode = 'byok_fee' AND request.route_kind = 'chat' AND request.contract_version = 3)
+          )
           AND http_result.contract_version = request.contract_version
           AND http_result.http_status = 200
           AND http_result.content_type = CASE WHEN request.contract_version=2 THEN 'text/event-stream' ELSE 'application/json' END
@@ -198,14 +201,17 @@ describe("gateway settlement recovery SQL contract", () => {
       WHERE admission.state = 'outcome_recorded'
         AND admission.outcome_kind = 'success'
         AND admission.route_kind = ANY($1::varchar[])
-        AND admission.billing_mode = 'stored'
+        AND admission.billing_mode = request.billing_mode
         AND admission.reconcile_after IS NOT NULL
         AND admission.reconcile_after <= $3::timestamptz
         AND admission.outcome_recorded_at IS NOT NULL
         AND admission.outcome_recorded_at <= $3::timestamptz
         AND request.contract_version = ANY($2::smallint[])
         AND request.route_kind = admission.route_kind
-        AND request.billing_mode = 'stored'
+        AND (
+          request.billing_mode = 'stored'
+          OR (request.billing_mode = 'byok_fee' AND request.route_kind = 'chat' AND request.contract_version = 3)
+        )
         AND http_result.contract_version = request.contract_version
         AND http_result.http_status = 200
         AND http_result.content_type = CASE WHEN request.contract_version=2 THEN 'text/event-stream' ELSE 'application/json' END
@@ -422,20 +428,49 @@ describe("gateway settlement recovery row adapters", () => {
     await db.close();
   });
 
-  it("allows contract v2 only when explicitly configured for the stream mode", async () => {
+  it("allows contracts v2/v3 only when explicitly configured for the stream+BYOK mode", async () => {
     const db = createGatewaySettlementRecoveryDb(databaseUrl, {
       allowedRoutes: ["chat", "embeddings", "completions"],
-      allowedContractVersions: [1, 2],
+      allowedContractVersions: [1, 2, 3],
     });
     pgMock.queryImplementation = async () => result([]);
     await db.captureCycle();
     expect(pool().query).toHaveBeenLastCalledWith({
       text: CAPTURE_GATEWAY_SETTLEMENT_RECOVERY_CYCLE_SQL,
-      values: [["chat", "embeddings", "completions"], [1, 2]],
+      values: [["chat", "embeddings", "completions"], [1, 2, 3]],
     });
     await db.close();
   });
 });
+
+
+  it("accepts a strict BYOK settlement ACK", async () => {
+    const db = createGatewaySettlementRecoveryDb(databaseUrl, {
+      allowedRoutes: ["chat", "embeddings", "completions"],
+      allowedContractVersions: [1, 2, 3],
+    });
+    pgMock.queryImplementation = async () => result([{
+      org_id: orgId,
+      api_key_id: apiKeyId,
+      billing_request_id: billingRequestId,
+      state: "settled",
+      route_kind: "chat",
+      billing_mode: "byok_fee",
+      outcome_kind: "success",
+    }]);
+    await expect(
+      db.recover({ orgId, apiKeyId, billingRequestId, reconcileAt: timestamp }),
+    ).resolves.toEqual({
+      orgId,
+      apiKeyId,
+      billingRequestId,
+      state: "settled",
+      routeKind: "chat",
+      billingMode: "byok_fee",
+      outcomeKind: "success",
+    });
+    await db.close();
+  });
 
 describe("gateway settlement recovery pool lifecycle", () => {
   it("does not reject a timeout until the fake pool has disposed its ambiguous client", async () => {

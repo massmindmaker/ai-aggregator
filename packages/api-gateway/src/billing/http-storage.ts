@@ -47,8 +47,8 @@ export type GatewayHttpIdentity<
   orgId: string;
   apiKeyId: string;
   routeKind: Route;
-  billingMode: "stored";
-  contractVersion: 1 | 2;
+  billingMode: "stored" | "byok_fee";
+  contractVersion: 1 | 2 | 3;
   idempotencyKeyDigest: string;
   requestFingerprint: string;
 }>;
@@ -64,21 +64,21 @@ type StoredHttpResponseByRoute = Readonly<{
 export type GatewayHttpResult<
   Route extends GatewayHttpRouteKind = "chat",
 > =
-  | Readonly<{ contractVersion: 1 | 2; status: "not_found" }>
+  | Readonly<{ contractVersion: 1 | 2 | 3; status: "not_found" }>
   | Readonly<{
-      contractVersion: 1 | 2;
+      contractVersion: 1 | 2 | 3;
       status: "pending" | "unavailable";
       billingRequestId: string;
     }>
   | Readonly<{
-      contractVersion: 1 | 2;
+      contractVersion: 1 | 2 | 3;
       status: "expired";
       billingRequestId: string;
       storedAt: string;
       expiresAt: string;
     }>
   | Readonly<{
-      contractVersion: 1 | 2;
+      contractVersion: 1 | 2 | 3;
       status: "ready";
       billingRequestId: string;
       httpStatus: 200;
@@ -99,7 +99,7 @@ export type RecordGatewayHttpOutcomeArgs<
     response: StoredHttpResponseByRoute[Route];
     idempotencyKeyDigest: string;
     requestFingerprint: string;
-    contractVersion?: 1 | 2;
+    contractVersion?: 1 | 2 | 3;
   }>;
 function hash(value: unknown): string {
   if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) unavailable();
@@ -123,17 +123,24 @@ function identity<Route extends GatewayHttpRouteKind>(
   args: GatewayHttpIdentity<Route>,
 ): GatewayHttpIdentity<Route> {
   dataObject(args);
+  const validStored =
+    args.billingMode === "stored" &&
+    (args.contractVersion === 1 ||
+      (args.contractVersion === 2 && args.routeKind === "chat"));
+  const validByok =
+    args.billingMode === "byok_fee" &&
+    args.routeKind === "chat" &&
+    args.contractVersion === 3;
   if (
     !["chat", "embeddings", "completions"].includes(args.routeKind) ||
-    args.billingMode !== "stored" ||
-    (args.contractVersion !== 1 && !(args.contractVersion === 2 && args.routeKind === 'chat'))
+    (!validStored && !validByok)
   )
     unavailable();
   return Object.freeze({
     orgId: uuid(args.orgId),
     apiKeyId: uuid(args.apiKeyId),
     routeKind: args.routeKind,
-    billingMode: "stored",
+    billingMode: args.billingMode,
     contractVersion: args.contractVersion,
     idempotencyKeyDigest: hash(args.idempotencyKeyDigest),
     requestFingerprint: hash(args.requestFingerprint),
@@ -263,12 +270,12 @@ export function parseGatewayHttpResultRows(
 export function parseGatewayHttpResultRows<Route extends GatewayHttpRouteKind>(
   rows: unknown,
   expectedRoute: Route,
-  expectedContractVersion?: 1 | 2,
+  expectedContractVersion?: 1 | 2 | 3,
 ): GatewayHttpResult<Route>;
 export function parseGatewayHttpResultRows(
   rows: unknown,
   expectedRoute: GatewayHttpRouteKind = "chat",
-  expectedContractVersion: 1 | 2 = 1,
+  expectedContractVersion: 1 | 2 | 3 = 1,
 ): GatewayHttpResult<GatewayHttpRouteKind> {
     const r = row(rows, [
       "contract_version",
@@ -361,14 +368,21 @@ export async function recordGatewayHttpOutcome<
     dataObject(args);
     const captured = captureGatewayOutcome(args);
     const { before, actualCostCredits, usageSnapshot, outcomeKind } = captured;
+    const contractVersion = args.contractVersion ?? 1;
+    const validStored =
+      before.billingMode === "stored" &&
+      (contractVersion === 1 ||
+        (contractVersion === 2 && before.routeKind === "chat"));
+    const validByok =
+      before.billingMode === "byok_fee" &&
+      before.routeKind === "chat" &&
+      contractVersion === 3;
     if (
       !["chat", "embeddings", "completions"].includes(before.routeKind) ||
-      before.billingMode !== "stored" ||
+      (!validStored && !validByok) ||
       outcomeKind !== "success"
     )
       unavailable();
-    const contractVersion = args.contractVersion ?? 1;
-    if (contractVersion === 2 && before.routeKind !== "chat") unavailable();
     const digest = hash(args.idempotencyKeyDigest),
       fingerprint = hash(args.requestFingerprint);
     const response =

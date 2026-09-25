@@ -40,7 +40,7 @@ export type GatewaySettlementRecoveryAck = Readonly<{
   billingRequestId: CanonicalRecoveryUuid;
   state: "settled";
   routeKind: GatewaySettlementRecoveryRoute;
-  billingMode: "stored";
+  billingMode: "stored" | "byok_fee";
   outcomeKind: "success";
 }>;
 
@@ -176,7 +176,8 @@ function validAck(value: unknown, hint: GatewaySettlementRecoveryHint): boolean 
   return isPlainRecord(value) && hasExactKeys(value, ["orgId", "apiKeyId", "billingRequestId", "state", "routeKind", "billingMode", "outcomeKind"])
     && canonicalUuid(value.orgId) === hint.orgId && canonicalUuid(value.apiKeyId) === hint.apiKeyId && canonicalUuid(value.billingRequestId) === hint.billingRequestId
     && value.state === "settled" && (value.routeKind === "chat" || value.routeKind === "embeddings" || value.routeKind === "completions")
-    && value.billingMode === "stored" && value.outcomeKind === "success";
+    && (value.billingMode === "stored" || (value.billingMode === "byok_fee" && value.routeKind === "chat"))
+    && value.outcomeKind === "success";
 }
 
 function result(

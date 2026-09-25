@@ -95,7 +95,7 @@ const nativeScheduler: GatewaySettlementRecoveryScheduler = {
 async function loadGatewaySettlementRecoveryDb(
   databaseUrl: string,
   allowedRoutes: readonly ("chat" | "embeddings" | "completions")[],
-  allowedContractVersions: readonly (1 | 2)[],
+  allowedContractVersions: readonly (1 | 2 | 3)[],
 ): Promise<GatewaySettlementRecoveryDb> {
   const { createGatewaySettlementRecoveryDb } = await import("./queues/gateway-settlement-recovery-db.js");
   return createGatewaySettlementRecoveryDb(databaseUrl, { allowedRoutes, allowedContractVersions });
@@ -157,7 +157,7 @@ export async function startGatewaySettlementRecoveryFromEnv(input: Readonly<{
   loadDb?: (
     databaseUrl: string,
     allowedRoutes: readonly ("chat" | "embeddings" | "completions")[],
-    allowedContractVersions: readonly (1 | 2)[],
+    allowedContractVersions: readonly (1 | 2 | 3)[],
   ) => Promise<GatewaySettlementRecoveryDb>;
 }>): Promise<GatewaySettlementRecoveryHandle | null> {
   const config = parseGatewaySettlementRecoveryStartupConfig(input.env);
@@ -173,7 +173,7 @@ export async function startGatewaySettlementRecoveryFromEnv(input: Readonly<{
         : config.mode === "stored_chat_embeddings_v1"
           ? ["chat", "embeddings"]
           : ["chat", "embeddings", "completions"],
-      config.mode === "stored_chat_embeddings_completions_stream_v1" ? [1, 2] : [1],
+      config.mode === "stored_chat_embeddings_completions_stream_v1" ? [1, 2, 3] : [1],
     );
     const handle = startGatewaySettlementRecovery({
       db,

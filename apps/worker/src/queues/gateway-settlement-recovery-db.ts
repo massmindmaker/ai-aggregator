@@ -39,14 +39,17 @@ CROSS JOIN LATERAL (
   WHERE admission.state = 'outcome_recorded'
     AND admission.outcome_kind = 'success'
     AND admission.route_kind = ANY($1::varchar[])
-    AND admission.billing_mode = 'stored'
+    AND admission.billing_mode = request.billing_mode
     AND admission.reconcile_after IS NOT NULL
     AND admission.reconcile_after <= cutoff.cycle_due_before
     AND admission.outcome_recorded_at IS NOT NULL
     AND admission.outcome_recorded_at <= cutoff.cycle_due_before
     AND request.contract_version = ANY($2::smallint[])
     AND request.route_kind = admission.route_kind
-    AND request.billing_mode = 'stored'
+    AND (
+      request.billing_mode = 'stored'
+      OR (request.billing_mode = 'byok_fee' AND request.route_kind = 'chat' AND request.contract_version = 3)
+    )
     AND http_result.contract_version = request.contract_version
     AND http_result.http_status = 200
     AND http_result.content_type = CASE WHEN request.contract_version=2 THEN 'text/event-stream' ELSE 'application/json' END
@@ -85,14 +88,17 @@ JOIN gateway_charge_quota_contexts AS quota
 WHERE admission.state = 'outcome_recorded'
   AND admission.outcome_kind = 'success'
   AND admission.route_kind = ANY($1::varchar[])
-  AND admission.billing_mode = 'stored'
+  AND admission.billing_mode = request.billing_mode
   AND admission.reconcile_after IS NOT NULL
   AND admission.reconcile_after <= $3::timestamptz
   AND admission.outcome_recorded_at IS NOT NULL
   AND admission.outcome_recorded_at <= $3::timestamptz
   AND request.contract_version = ANY($2::smallint[])
   AND request.route_kind = admission.route_kind
-  AND request.billing_mode = 'stored'
+  AND (
+    request.billing_mode = 'stored'
+    OR (request.billing_mode = 'byok_fee' AND request.route_kind = 'chat' AND request.contract_version = 3)
+  )
   AND http_result.contract_version = request.contract_version
   AND http_result.http_status = 200
   AND http_result.content_type = CASE WHEN request.contract_version=2 THEN 'text/event-stream' ELSE 'application/json' END
@@ -227,30 +233,39 @@ function parseAcknowledgement(result: QueryResult<Record<string, unknown>>): Gat
   const billingRequestId = canonicalUuid(row.billing_request_id);
   if (orgId === null || apiKeyId === null || billingRequestId === null || row.state !== "settled"
     || (row.route_kind !== "chat" && row.route_kind !== "embeddings" && row.route_kind !== "completions")
-    || row.billing_mode !== "stored" || row.outcome_kind !== "success") {
+    || (row.billing_mode !== "stored" && !(row.billing_mode === "byok_fee" && row.route_kind === "chat"))
+    || row.outcome_kind !== "success") {
     throw new Error("invalid gateway settlement recovery acknowledgement");
   }
-  return { orgId, apiKeyId, billingRequestId, state: "settled", routeKind: row.route_kind, billingMode: "stored", outcomeKind: "success" };
+  return {
+    orgId,
+    apiKeyId,
+    billingRequestId,
+    state: "settled",
+    routeKind: row.route_kind,
+    billingMode: row.billing_mode,
+    outcomeKind: "success",
+  };
 }
 
 export function createGatewaySettlementRecoveryDb(
   databaseUrl: string,
   options: Readonly<{
     allowedRoutes?: readonly GatewaySettlementRecoveryRoute[];
-    allowedContractVersions?: readonly (1 | 2)[];
+    allowedContractVersions?: readonly (1 | 2 | 3)[];
   }> = {},
 ): GatewaySettlementRecoveryDb {
   parseGatewaySettlementRecoveryDatabaseUrl(databaseUrl);
   const allowedRoutes = [...(options.allowedRoutes ?? ["chat"])] as GatewaySettlementRecoveryRoute[];
-  const allowedContractVersions = [...(options.allowedContractVersions ?? [1])] as (1 | 2)[];
+  const allowedContractVersions = [...(options.allowedContractVersions ?? [1])] as (1 | 2 | 3)[];
   if (
     allowedRoutes.length < 1 ||
     allowedRoutes.length > 3 ||
     allowedRoutes.some((route) => route !== "chat" && route !== "embeddings" && route !== "completions") ||
     new Set(allowedRoutes).size !== allowedRoutes.length
     || allowedContractVersions.length < 1
-    || allowedContractVersions.length > 2
-    || allowedContractVersions.some((version) => version !== 1 && version !== 2)
+    || allowedContractVersions.length > 3
+    || allowedContractVersions.some((version) => version !== 1 && version !== 2 && version !== 3)
     || new Set(allowedContractVersions).size !== allowedContractVersions.length
   ) {
     throw new Error("invalid gateway settlement recovery routes");

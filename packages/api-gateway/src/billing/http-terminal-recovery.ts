@@ -16,7 +16,7 @@ import {
   parseGatewayChargeAdmissionResult,
   type GatewayChargeAdmissionResult,
 } from "./admission-result";
-import type { AdmitGatewayChargeV2Args } from "./quota-admission";
+import type { AdmitGatewayByokFeeV2Args, AdmitGatewayChargeV2Args } from "./quota-admission";
 import {
   HttpStorageAccessError,
   HttpStorageConflictError,
@@ -63,7 +63,7 @@ export type HttpResultV2<
 > =
   | GatewayHttpResult<Route>
   | Readonly<{
-      contractVersion: 1 | 2;
+      contractVersion: 1 | 2 | 3;
       status: "rejected";
       billingRequestId: string;
       code: HttpRejectionCode;
@@ -89,10 +89,17 @@ function identity<Route extends GatewayHttpRouteKind>(
   args: GatewayHttpIdentity<Route>,
 ): GatewayHttpIdentity<Route> {
   dataObject(args);
+  const validStored =
+    args.billingMode === "stored" &&
+    (args.contractVersion === 1 ||
+      (args.contractVersion === 2 && args.routeKind === "chat"));
+  const validByok =
+    args.billingMode === "byok_fee" &&
+    args.routeKind === "chat" &&
+    args.contractVersion === 3;
   if (
     !["chat", "embeddings", "completions"].includes(args.routeKind) ||
-    args.billingMode !== "stored" ||
-    (args.contractVersion !== 1 && !(args.contractVersion === 2 && args.routeKind === "chat"))
+    (!validStored && !validByok)
   )
     unavailable();
   for (const h of [args.idempotencyKeyDigest, args.requestFingerprint])
@@ -101,7 +108,7 @@ function identity<Route extends GatewayHttpRouteKind>(
     orgId: uuid(args.orgId),
     apiKeyId: uuid(args.apiKeyId),
     routeKind: args.routeKind,
-    billingMode: "stored",
+    billingMode: args.billingMode,
     contractVersion: args.contractVersion,
     idempotencyKeyDigest: args.idempotencyKeyDigest,
     requestFingerprint: args.requestFingerprint,
@@ -271,7 +278,7 @@ async function terminalQuery(
 export async function admitGatewayHttpCharge<
   Route extends GatewayHttpRouteKind,
 >(
-  args: GatewayHttpIdentity<Route> & AdmitGatewayChargeV2Args,
+  args: GatewayHttpIdentity<Route> & (AdmitGatewayChargeV2Args | AdmitGatewayByokFeeV2Args),
   client: SqlClient = sql,
 ): Promise<HttpAdmissionResult> {
   try {

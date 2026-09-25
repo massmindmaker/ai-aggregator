@@ -265,7 +265,7 @@ describe("gateway settlement recovery startup config", () => {
     expect(loadDb).toHaveBeenCalledWith(
       databaseUrl,
       ["chat", "embeddings", "completions"],
-      [1, 2],
+      [1, 2, 3],
     );
     await handle?.close();
   });

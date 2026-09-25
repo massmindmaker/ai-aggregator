@@ -94,6 +94,36 @@ describe("gateway settlement recovery parsers", () => {
 });
 
 describe("gateway settlement recovery loop", () => {
+
+  it("counts a strict BYOK settlement ACK as settled", async () => {
+    const db = database({
+      captureCycle: vi.fn(async () => ({
+        cycleDueBefore: laterTimestamp,
+        upper: position(),
+      })),
+      selectPage: vi.fn(async () => ({ hints: [hint()] })),
+      recover: vi.fn(async (item) => ({
+        orgId: item.orgId,
+        apiKeyId: item.apiKeyId,
+        billingRequestId: item.billingRequestId,
+        state: "settled",
+        routeKind: "chat",
+        billingMode: "byok_fee",
+        outcomeKind: "success",
+      } as const)),
+    });
+    await expect(
+      createGatewaySettlementRecoveryLoop(db).runTick(() => false),
+    ).resolves.toMatchObject({
+      classification: "complete",
+      selected: 1,
+      attempted: 1,
+      settled: 1,
+      unconfirmed: 0,
+    });
+  });
+
+
   it("returns complete for an empty captured window", async () => {
     const db = database({ captureCycle: vi.fn(async () => null) });
     const result = await createGatewaySettlementRecoveryLoop(db).runTick(() => false);

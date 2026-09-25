@@ -146,7 +146,7 @@ BEGIN
  PERFORM 1 FROM organizations WHERE id=_org_id FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'HTTP_ACCESS_DENIED' USING ERRCODE='P0005'; END IF;
  SELECT billing_request_id INTO _id FROM gateway_http_requests WHERE org_id=_org_id AND api_key_id=_api_key_id
- AND route_kind=_route_kind AND billing_mode=_billing_mode AND idempotency_key_digest=_idempotency_key_digest;
+ AND route_kind=_route_kind AND idempotency_key_digest=_idempotency_key_digest;
  IF _id IS NOT NULL THEN
   PERFORM pg_advisory_xact_lock(hashtextextended(_id::text,0));
   PERFORM 1 FROM gateway_charge_admissions WHERE billing_request_id=_id FOR UPDATE;
@@ -155,6 +155,7 @@ BEGIN
  IF _id IS NOT NULL THEN
   SELECT * INTO _r FROM gateway_http_requests WHERE billing_request_id=_id FOR UPDATE;
   IF _r.org_id IS DISTINCT FROM _org_id OR _r.api_key_id IS DISTINCT FROM _api_key_id
+  OR _r.route_kind IS DISTINCT FROM _route_kind OR _r.billing_mode IS DISTINCT FROM _billing_mode
   OR _r.request_fingerprint IS DISTINCT FROM _request_fingerprint OR _r.contract_version IS DISTINCT FROM _contract_version THEN
    RAISE EXCEPTION 'HTTP_IDENTITY_CONFLICT' USING ERRCODE='P0005'; END IF;
   SELECT * INTO _negative FROM gateway_http_rejections WHERE billing_request_id=_id FOR UPDATE;
@@ -192,9 +193,12 @@ BEGIN
  SELECT * INTO _result FROM gateway_http_results WHERE billing_request_id=_billing_request_id FOR UPDATE;
  PERFORM 1 FROM gateway_http_rejections WHERE billing_request_id=_billing_request_id FOR UPDATE;
  IF FOUND OR _r.org_id IS DISTINCT FROM _org_id OR _r.api_key_id IS DISTINCT FROM _api_key_id
- OR _r.route_kind NOT IN('chat','embeddings','completions') OR _r.billing_mode IS DISTINCT FROM 'stored'
- OR _r.contract_version NOT IN(1,2) OR (_r.contract_version=2 AND _r.route_kind IS DISTINCT FROM 'chat')
- OR _a.route_kind IS DISTINCT FROM _r.route_kind OR _a.billing_mode IS DISTINCT FROM 'stored'
+ OR _r.route_kind NOT IN('chat','embeddings','completions')
+ OR NOT (
+   (_r.billing_mode='stored' AND (_r.contract_version=1 OR (_r.contract_version=2 AND _r.route_kind='chat')))
+   OR (_r.billing_mode='byok_fee' AND _r.contract_version=3 AND _r.route_kind='chat')
+ )
+ OR _a.route_kind IS DISTINCT FROM _r.route_kind OR _a.billing_mode IS DISTINCT FROM _r.billing_mode
  OR _a.state NOT IN('outcome_recorded','settled') OR _a.outcome_kind IS DISTINCT FROM 'success'
  OR _a.attempt_id IS NULL OR _a.upstream_id IS NULL OR _a.pricing_snapshot IS NULL OR _a.usage_snapshot IS NULL
  OR _a.actual_cost_credits IS NULL OR _a.actual_cost_credits<0 OR _a.actual_cost_credits>_a.authorized_max_credits
@@ -212,7 +216,9 @@ BEGIN
   IF _q.supplier_actual_usd_micro IS DISTINCT FROM aiag_quota_supplier_actual(_a,_a.actual_cost_credits,_a.usage_snapshot) THEN
    RAISE EXCEPTION 'HTTP_RESULT_STATE_CONFLICT' USING ERRCODE='P0005'; END IF;
   IF _result.response_body IS NOT NULL THEN
-   IF _result.payload_expired_at IS NOT NULL OR _result.response_digest IS DISTINCT FROM aiag_http_validate_response(_r.route_kind,_result.response_body,_a.usage_snapshot) THEN
+   IF _result.payload_expired_at IS NOT NULL OR _result.response_digest IS DISTINCT FROM
+    (CASE WHEN _r.billing_mode='byok_fee' THEN aiag_http_validate_byok_response(_result.response_body)
+      ELSE aiag_http_validate_response(_r.route_kind,_result.response_body,_a.usage_snapshot) END) THEN
     RAISE EXCEPTION 'HTTP_RESULT_STATE_CONFLICT' USING ERRCODE='P0005'; END IF;
   ELSIF _result.payload_expired_at IS NULL OR _result.expires_at>clock_timestamp()
   OR _result.payload_expired_at<_result.expires_at OR _result.payload_expired_at>clock_timestamp() THEN
