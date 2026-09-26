@@ -43,12 +43,16 @@ interface KieStatusResponse {
   code?: number;
   data: {
     taskId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'success' | 'queued';
+    status?: 'pending' | 'processing' | 'completed' | 'failed' | 'success' | 'queued';
+    state?: string;
+    resultJson?: string;
     output?: unknown;
     output_url?: string;
     url?: string;
     error?: string;
     fail_reason?: string;
+    failMsg?: string;
+    failCode?: string;
   };
 }
 
@@ -147,23 +151,54 @@ export class KieAdapter extends UpstreamAdapterBase {
   }
 
   async pollAsync(task_id: string, opts: UpstreamInvokeOptions): Promise<AsyncJobResult> {
+    const prefixed = /^(jobs|veo|suno):(.+)$/.exec(task_id);
     const hinted = (opts as UpstreamInvokeOptions & { poll_url?: string; family?: KieFamily }).poll_url;
-    const family: KieFamily =
-      (opts as UpstreamInvokeOptions & { family?: KieFamily }).family ??
-      inferFamilyFromPollUrl(hinted) ??
-      'veo';
-    const path = hinted ?? `/api/v1/${family}/status/${task_id}`;
+    let path: string;
+    if (prefixed) {
+      const family = prefixed[1]!;
+      const rawTaskId = prefixed[2]!;
+      path =
+        family === 'jobs'
+          ? `/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(rawTaskId)}`
+          : family === 'veo'
+            ? `/api/v1/veo/recordInfo?taskId=${encodeURIComponent(rawTaskId)}`
+            : `/api/v1/generate/recordInfo?taskId=${encodeURIComponent(rawTaskId)}`;
+    } else {
+      const family: KieFamily =
+        (opts as UpstreamInvokeOptions & { family?: KieFamily }).family ??
+        inferFamilyFromPollUrl(hinted) ??
+        'veo';
+      path = hinted ?? `/api/v1/${family}/status/${task_id}`;
+    }
+
     const res = await this.request({ path, method: 'GET', no_retry: true, byok_key: opts.byok_key });
     const body = (await res.json()) as KieStatusResponse;
-    const s = body?.data?.status;
+    const s = String(body?.data?.status ?? body?.data?.state ?? '').toLowerCase();
     if (s === 'completed' || s === 'success') {
-      return {
-        status: 'completed',
-        output: body.data.output ?? body.data.output_url ?? body.data.url,
-      };
+      let output = body.data.output ?? body.data.output_url ?? body.data.url;
+      if (output === undefined && body.data.resultJson) {
+        try {
+          const parsed = JSON.parse(body.data.resultJson) as Record<string, unknown>;
+          const urls = parsed.resultUrls ?? parsed.urls ?? parsed.outputUrls;
+          if (Array.isArray(urls)) {
+            const strings = urls.filter((value): value is string => typeof value === 'string');
+            output = strings.length === 1 ? strings[0] : strings;
+          } else if (typeof urls === 'string') {
+            output = urls;
+          } else {
+            output = parsed.videoUrl ?? parsed.audioUrl ?? parsed.imageUrl ?? parsed.url ?? parsed;
+          }
+        } catch {
+          output = body.data.resultJson;
+        }
+      }
+      return { status: 'completed', output };
     }
-    if (s === 'failed') {
-      return { status: 'failed', error: body.data.fail_reason ?? body.data.error ?? 'kie job failed' };
+    if (s === 'failed' || s === 'fail') {
+      return {
+        status: 'failed',
+        error: body.data.fail_reason ?? body.data.error ?? body.data.failMsg ?? body.data.failCode ?? 'kie job failed',
+      };
     }
     return { status: 'pending' };
   }

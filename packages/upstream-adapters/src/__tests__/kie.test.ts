@@ -96,6 +96,33 @@ describe('KieAdapter', () => {
     expect(failed.error).toBe('nsfw');
   });
 
+  it('pollAsync supports gateway-prefixed jobs recordInfo contract', async () => {
+    const pendingFetch = createFetchMock([
+      { status: 200, body: { data: { taskId: 'j1', state: 'processing' } } },
+    ]);
+    const pendingAdapter = new KieAdapter({ apiKey: 'k', fetch: pendingFetch.fetch });
+    expect((await pendingAdapter.pollAsync('jobs:j1', { request_id: 'r' })).status).toBe('pending');
+    expect(pendingFetch.calls[0].url).toContain('/api/v1/jobs/recordInfo?taskId=j1');
+
+    const doneFetch = createFetchMock([
+      { status: 200, body: { data: { taskId: 'v1', state: 'success', resultJson: JSON.stringify({ resultUrls: ['https://cdn.kie.ai/v.mp4'] }) } } },
+    ]);
+    const doneAdapter = new KieAdapter({ apiKey: 'k', fetch: doneFetch.fetch });
+    const done = await doneAdapter.pollAsync('veo:v1', { request_id: 'r' });
+    expect(done).toEqual({ status: 'completed', output: 'https://cdn.kie.ai/v.mp4' });
+    expect(doneFetch.calls[0].url).toContain('/api/v1/veo/recordInfo?taskId=v1');
+
+    const failedFetch = createFetchMock([
+      { status: 200, body: { data: { taskId: 's1', state: 'fail', failMsg: 'provider detail' } } },
+    ]);
+    const failedAdapter = new KieAdapter({ apiKey: 'k', fetch: failedFetch.fetch });
+    expect(await failedAdapter.pollAsync('suno:s1', { request_id: 'r' })).toEqual({
+      status: 'failed',
+      error: 'provider detail',
+    });
+    expect(failedFetch.calls[0].url).toContain('/api/v1/generate/recordInfo?taskId=s1');
+  });
+
   it('estimateCost returns credits=0 when model pricing is undefined (hidden pricing)', async () => {
     const adapter = new KieAdapter({ apiKey: 'k', markup: 1.2, usd_rate: 95 });
     const est = await adapter.estimateCost(

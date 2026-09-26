@@ -1,67 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
-import { buildUpstreamPollProcessor } from '../upstream-poll.js';
-
-function makeJob(data: Record<string, unknown>, queueAdd = vi.fn()) {
-  return {
-    name: 'poll',
-    data,
-    queue: { add: queueAdd },
-  } as unknown as Parameters<ReturnType<typeof buildUpstreamPollProcessor>>[0];
-}
-
-describe('upstream-poll processor', () => {
-  it('persists terminal completed status via sink', async () => {
-    const sink = vi.fn().mockResolvedValue(undefined);
-    const poll = vi.fn().mockResolvedValue({
-      status: 'completed',
-      outputUrl: 'https://storage.aiag.ru/x.png',
-    });
-    const proc = buildUpstreamPollProcessor({ poll, sink });
-    const result = await proc(
-      makeJob({ jobId: 'j1', upstream: 'fal', predictionId: 'p1' }),
-      'tok'
-    );
-    expect(result.status).toBe('completed');
-    expect(sink).toHaveBeenCalledWith({
-      jobId: 'j1',
-      status: 'completed',
-      outputUrl: 'https://storage.aiag.ru/x.png',
-      errorMessage: undefined,
-    });
-  });
-
-  it('re-enqueues with backoff while pending', async () => {
-    const queueAdd = vi.fn().mockResolvedValue(undefined);
-    const sink = vi.fn();
-    const poll = vi.fn().mockResolvedValue({ status: 'pending' });
-    const proc = buildUpstreamPollProcessor({ poll, sink });
-    await proc(
-      makeJob({ jobId: 'j2', upstream: 'kie', predictionId: 'p2', pollIntervalMs: 5000 }, queueAdd),
-      'tok'
-    );
-    expect(sink).not.toHaveBeenCalled();
-    expect(queueAdd).toHaveBeenCalledOnce();
-    const [, , addOpts] = queueAdd.mock.calls[0];
-    expect(addOpts.delay).toBeGreaterThanOrEqual(10_000);
-    expect(addOpts.delay).toBeLessThanOrEqual(30_000);
-  });
-
-  it('fails fast past deadline', async () => {
-    const sink = vi.fn().mockResolvedValue(undefined);
-    const poll = vi.fn();
-    const proc = buildUpstreamPollProcessor({ poll, sink });
-    await proc(
-      makeJob({
-        jobId: 'j3',
-        upstream: 'fal',
-        predictionId: 'p3',
-        deadlineAt: Date.now() - 1000,
-      }),
-      'tok'
-    );
-    expect(poll).not.toHaveBeenCalled();
-    expect(sink).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'failed', errorMessage: 'deadline_exceeded' })
-    );
-  });
+import { describe,expect,it,vi } from 'vitest';
+import { buildUpstreamPollProcessor } from '../upstream-poll';
+const owned={id:'11111111-1111-4111-8111-111111111111',orgId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',billingRequestId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',status:'queued' as const,providerFamily:'image' as const,providerTaskId:'jobs:p1',deadlineAt:Date.now()+60000,quotedRetailMicrocredits:100n,output:null,errorMessage:null,settledAt:null};
+function job(data={jobId:owned.id}){return {data,name:'poll',attemptsMade:0,queue:{add:vi.fn()}} as any}
+describe('owned upstream poll processor',()=>{
+ it('loads DB authority and requeues pending with job id only',async()=>{const q=job();const deps={load:vi.fn().mockResolvedValue(owned),markProcessing:vi.fn(),poll:vi.fn().mockResolvedValue({status:'pending'}),finalize:vi.fn()};expect(await buildUpstreamPollProcessor(deps)(q,'x')).toEqual({status:'pending'});expect(deps.poll).toHaveBeenCalledWith(owned);expect(q.queue.add.mock.calls[0][1]).toEqual({jobId:owned.id});expect(deps.finalize).not.toHaveBeenCalled();});
+ it('finalizes completed exactly through sink',async()=>{const deps={load:vi.fn().mockResolvedValue(owned),markProcessing:vi.fn(),poll:vi.fn().mockResolvedValue({status:'completed',output:'https://cdn/x'}),finalize:vi.fn()};await buildUpstreamPollProcessor(deps)(job(),'x');expect(deps.finalize).toHaveBeenCalledWith(owned,'completed','https://cdn/x',undefined);});
+ it('deadline fails without provider poll',async()=>{const expired={...owned,deadlineAt:Date.now()-1};const deps={load:vi.fn().mockResolvedValue(expired),markProcessing:vi.fn(),poll:vi.fn(),finalize:vi.fn()};expect(await buildUpstreamPollProcessor(deps)(job(),'x')).toMatchObject({status:'failed'});expect(deps.poll).not.toHaveBeenCalled();expect(deps.finalize).toHaveBeenCalled();});
+ it('terminal redelivery skips provider and asks DB sink to finish idempotently',async()=>{const done={...owned,status:'completed' as const,output:'https://cdn/x'};const deps={load:vi.fn().mockResolvedValue(done),markProcessing:vi.fn(),poll:vi.fn(),finalize:vi.fn()};await buildUpstreamPollProcessor(deps)(job(),'x');expect(deps.poll).not.toHaveBeenCalled();expect(deps.finalize).toHaveBeenCalledWith(done,'completed','https://cdn/x',undefined);});
+ it('rejects claimed job without attached provider task',async()=>{const claimed={...owned,status:'claimed' as const,providerTaskId:null};const deps={load:vi.fn().mockResolvedValue(claimed),markProcessing:vi.fn(),poll:vi.fn(),finalize:vi.fn()};await expect(buildUpstreamPollProcessor(deps)(job(),'x')).rejects.toThrow('MEDIA_PROVIDER_TASK_NOT_ATTACHED');});
 });

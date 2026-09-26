@@ -18,6 +18,9 @@ import {
 } from './gateway-settlement-recovery-bootstrap.js';
 import { createRedisConnection } from './redis.js';
 import { startUpstreamPollWorker } from './queues/upstream-poll.js';
+import { MediaJobDb } from './queues/upstream-poll-db.js';
+import { startMediaPollRecovery } from './queues/media-poll-recovery.js';
+import { KieAdapter } from '@aiag/upstream-adapters';
 import { startContestEvalWorker } from './queues/contest-eval.js';
 import { startWebhookRetryWorker } from './queues/webhook-retry.js';
 import { startEmailSendWorker } from './queues/email-send.js';
@@ -41,18 +44,22 @@ async function main(): Promise<void> {
   // Queue workers — for now most use stub deps; gateway/web will adopt them.
   // The contest-eval worker is real (runs python via systemd-run on Linux).
   // ---------------------------------------------------------------------------
+  const mediaDb = new MediaJobDb(process.env.DATABASE_URL ?? '');
+  const kie = process.env.KIE_API_KEY ? new KieAdapter({ apiKey: process.env.KIE_API_KEY }) : null;
   const upstreamPoll = startUpstreamPollWorker(connection, {
-    poll: async () => {
-      // TODO Phase 2: route via UpstreamRegistry.get(upstream).pollPrediction(id)
-      logger.warn('upstream-poll: poll() stub — returning pending');
-      return { status: 'pending' };
+    load: (jobId) => mediaDb.load(jobId),
+    markProcessing: (jobId) => mediaDb.markProcessing(jobId),
+    poll: async (job) => {
+      if (!kie || !job.providerTaskId) throw new Error('MEDIA_PROVIDER_UNAVAILABLE');
+      const family = job.providerFamily === 'video' ? 'veo' : job.providerFamily;
+      const result = await kie.pollAsync(job.providerTaskId, { request_id: job.id, family } as never);
+      if (result.status === 'pending') return { status: 'pending' as const };
+      if (result.status === 'completed') return { status: 'completed' as const, output: result.output };
+      return { status: 'failed' as const, error: result.error ?? 'provider_failed' };
     },
-    sink: async (input) => {
-      // TODO Phase 2: UPDATE prediction_jobs SET status=$1, output_url=$2 WHERE id=$3
-      logger.info(input, 'upstream-poll sink (stub)');
-    },
+    finalize: (job, status, output, error) => mediaDb.finalize(job, status, output, error),
   });
-
+  const mediaPollRecovery = startMediaPollRecovery(connection, mediaDb);
   const contestEval = startContestEvalWorker(connection, {
     run: runEvaluation,
     sink: async (input) => {
@@ -97,6 +104,7 @@ async function main(): Promise<void> {
 
   const workers = [
     upstreamPoll,
+    mediaPollRecovery,
     contestEval,
     webhookRetry,
     emailSend,
@@ -153,6 +161,7 @@ async function main(): Promise<void> {
     internalProbe.stop();
     server.close();
     await Promise.all(workers.map((w) => w.close()));
+    await mediaDb.close();
     await connection.quit();
     logger.info('shutdown complete');
     process.exit(0);
