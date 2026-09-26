@@ -100,6 +100,13 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
       const retry = Number(c.res.headers.get('Retry-After'));
       return c.json(errors.rateLimited(Number.isSafeInteger(retry) && retry > 0 ? retry : 60).toResponseBody(), 429);
     }
+    const mediaExecutionPath = /\/(?:images\/generations|video\/generations|audio\/speech)\/?$/.test(c.req.path);
+    if (mediaExecutionPath && error instanceof AiagError && error.code === 'PAYMENT_REQUIRED')
+      return c.json(errors.paymentRequired().toResponseBody(), 402);
+    if (mediaExecutionPath && error instanceof AiagError && error.code === 'BAD_REQUEST')
+      return c.json(errors.badRequest('Invalid media request').toResponseBody(), 400);
+    if (error instanceof AiagError && error.code === 'MEDIA_IDEMPOTENCY_CONFLICT')
+      return c.json(error.toResponseBody(), 409);
     return respondStoredChat(c, fixedStoredChatHttpError('request_state_unavailable'));
   });
   restricted.use('*', requireApiKey);

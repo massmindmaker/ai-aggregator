@@ -57,6 +57,12 @@ describe('effCost', () => {
   it('embedding metric: input-only', () => {
     expect(effCost(yandex, 'embedding')).toBe(0.0008);
   });
+  it('media metrics use the v1 per-job price authority', () => {
+    const media = { ...yandex, price_per_image: 7 };
+    expect(effCost(media, 'image')).toBe(7);
+    expect(effCost(media, 'video')).toBe(7);
+    expect(effCost(media, 'audio')).toBe(7);
+  });
 });
 
 describe('pickUpstream — 5 modes', () => {

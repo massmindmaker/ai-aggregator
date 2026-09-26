@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { config } from '../../config';
 import { errors } from '../../lib/errors';
 import type { AuthenticatedApiKey } from '../../middleware/auth-plan04';
 import { resolveModelWithOverride } from '../../routing/resolver';
@@ -20,10 +19,14 @@ function publicJob(job:Awaited<ReturnType<typeof readMediaJob>>){
 }
 async function submit(c:any,routeKind:StoredMediaRouteKind){
  const key=c.get('apiKey' as never) as AuthenticatedApiKey; const orgId=key.org_id;
- const body=await c.req.json(); const identity=captureStoredMediaHttpIdentity({routeKind,body,idempotencyKey:c.req.header('idempotency-key'),declaredSessionId:c.req.header('x-aiag-session-id'),byokKeyPresent:c.req.raw.headers.has('x-upstream-key')});
+ const body=await c.req.json();
+ const identity=(()=>{try{return captureStoredMediaHttpIdentity({routeKind,body,idempotencyKey:c.req.header('idempotency-key'),declaredSessionId:c.req.header('x-aiag-session-id') ?? null,byokKeyPresent:c.req.raw.headers.has('x-upstream-key')});}catch{throw errors.badRequest('Invalid media request');}})();
  const model=await resolveModelWithOverride(String(identity.body.model));
+ const expectedType=routeKind==='audio_speech'?'audio':routeKind;
+ if(model.type!==expectedType)throw errors.badRequest('Invalid media request');
  const policies=(key.policies??{}) as ApiKeyPolicies; const mode=(identity.requestedMode??policies.default_mode??'auto') as Mode;
- const candidate=pickUpstream(model.candidates,mode,policies,routeKind==='audio_speech'?'audio':routeKind);
+ const candidate=pickUpstream(model.candidates,mode,policies,expectedType);
+ if(candidate.provider!=='kie'||candidate.egress_proxy||process.env.AIAG_EGRESS_PROXY_URL)throw errors.unavailable('Media capability unavailable');
  const exact=candidate.billing?.pricePerImageCents; const markup=candidate.billing?.prices.markup;
  if(!candidate.billing||!exact||!markup)throw errors.unavailable('Media pricing unavailable');
  const units=routeKind==='image'?Number(identity.body.n??1):1; const quote=quoteMediaUnits({priceCentsPerUnit:exact,markup},units);

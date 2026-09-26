@@ -45,6 +45,19 @@ describe('root Vitest discovery contract', () => {
     );
   });
 
+  it('registers durable async media acceptance in the mandatory database baseline', () => {
+    const baseline = scripts['test:database-baseline'];
+    for (const file of [
+      'gateway-media-jobs.native.integration.test.ts',
+      'gateway-media-quota.native.integration.test.ts',
+      'stored-media-mounted.native.integration.test.ts',
+      'upstream-poll-db.native.integration.test.ts',
+    ]) {
+      expect(baseline).toContain(file);
+      expect(baseline.indexOf(file)).toBeLessThan(baseline.indexOf('&& bun run test:ton-core-native'));
+    }
+  });
+
   it('uses Node by default and jsdom only for web tests', () => {
     expect(testConfig.environment).toBe('node');
     expect(testConfig.environmentMatchGlobs).toEqual([

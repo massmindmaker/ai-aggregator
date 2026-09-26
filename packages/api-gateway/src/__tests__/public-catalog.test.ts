@@ -115,7 +115,7 @@ function assertAvailable(item: CatalogItemV1): asserts item is CatalogAvailableI
 }
 
 describe('public catalog projector', () => {
-  it.each(['stored_chat_embeddings', 'stored_chat_embeddings_completions'] as const)(
+  it.each(['stored_chat_embeddings', 'stored_chat_embeddings_completions', 'stored_chat_embeddings_completions_stream', 'stored_chat_embeddings_completions_stream_media'] as const)(
     'advertises the reviewed embeddings operation in explicit combined mode %s',
     async (executionMode) => {
     const embeddingModel = model({ type: 'embedding', slug: 'openai/text-embedding-3-small' });

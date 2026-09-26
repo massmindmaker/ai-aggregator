@@ -14,6 +14,7 @@ describe('media poll recovery',()=>{
     expect(queue.add).toHaveBeenCalledTimes(1);
     expect(queue.add.mock.calls[0]![0]).toBe('poll');
     expect(queue.add.mock.calls[0]![1]).toEqual({jobId:'j2'});
+    expect(String(queue.add.mock.calls[0]![2]?.jobId)).not.toContain(':');
     expect(JSON.stringify(queue.add.mock.calls[0]![1])).not.toContain('provider');
   });
 

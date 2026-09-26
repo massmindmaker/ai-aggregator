@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Pool, type PoolClient } from 'pg';
+import { Pool } from 'pg';
 
 export type OwnedMediaJob = Readonly<{
  id:string; orgId:string; billingRequestId:string; status:'claimed'|'queued'|'processing'|'completed'|'failed';
@@ -19,25 +19,45 @@ export class MediaJobDb {
  async markProcessing(id:string){await this.pool.query("UPDATE prediction_jobs SET status='processing' WHERE id=$1::uuid AND contract_version=4 AND status='queued'",[id]);}
  async scanRecoverable(limit=100):Promise<readonly string[]>{
   if(!Number.isSafeInteger(limit)||limit<1||limit>1000)throw new RangeError('invalid media recovery limit');
-  const r=await this.pool.query("SELECT id::text FROM prediction_jobs WHERE contract_version=4 AND status IN ('queued','processing') AND provider_task_id IS NOT NULL AND settled_at IS NULL ORDER BY created_at,id LIMIT $1",[limit]);
+  const r=await this.pool.query(
+   "SELECT p.id::text FROM prediction_jobs p JOIN gateway_charge_admissions a ON a.billing_request_id=p.billing_request_id WHERE p.contract_version=4 AND p.provider_task_id IS NOT NULL AND p.settled_at IS NULL AND (p.status IN ('queued','processing') OR (p.status IN ('completed','failed') AND a.state IN ('outcome_recorded','settled'))) ORDER BY p.created_at,p.id LIMIT $1",
+   [limit],
+  );
   return Object.freeze(r.rows.map((row)=>String(row.id)));
  }
- async finalize(job:OwnedMediaJob,status:'completed'|'failed',output:unknown,errorMessage?:string):Promise<void>{
-  const client=await this.pool.connect();try{await client.query('BEGIN');
+ async finalize(job:OwnedMediaJob,status:'completed'|'failed',output:unknown,_errorMessage?:string):Promise<void>{
+  let orgId='',billingRequestId='';
+  const client=await this.pool.connect();
+  try{
+   await client.query('BEGIN');
    const locked=await client.query("SELECT p.*,a.attempt_id::text,a.upstream_id,a.state admission_state FROM prediction_jobs p JOIN gateway_charge_admissions a ON a.billing_request_id=p.billing_request_id WHERE p.id=$1::uuid AND p.contract_version=4 FOR UPDATE OF p,a",[job.id]);
-   if(!locked.rowCount)throw new Error('MEDIA_JOB_NOT_FOUND');const x=locked.rows[0];
+   if(!locked.rowCount)throw new Error('MEDIA_JOB_NOT_FOUND');
+   const x=locked.rows[0]; orgId=String(x.org_id); billingRequestId=String(x.billing_request_id);
    if(x.settled_at){await client.query('COMMIT');return;}
-   const safeOutput=status==='completed'?output:{error:{code:'MEDIA_JOB_FAILED',message:'Media job failed'}};
-   await client.query("UPDATE prediction_jobs SET status=$2,output=$3::jsonb,error_message=$4,completed_at=coalesce(completed_at,clock_timestamp()),result_digest=$5 WHERE id=$1::uuid",[job.id,status,JSON.stringify(safeOutput),status==='failed'?'MEDIA_JOB_FAILED':null,digest(safeOutput)]);
-   const actual=status==='completed'?BigInt(x.quoted_retail_microcredits):0n;
-   const usage={version:1,formulaVersion:'media-unit-microcredits-v1',billingRequestId:x.billing_request_id,attemptId:x.attempt_id,upstreamId:x.upstream_id,terminalStatus:status,verified:true};
-   if(x.admission_state==='dispatched')await client.query("SELECT * FROM aiag_record_gateway_charge_outcome_v2($1::uuid,$2::uuid,$3::bigint,$4::jsonb,'success')",[x.org_id,x.billing_request_id,actual.toString(),JSON.stringify(usage)]);
-   const state=await client.query('SELECT state FROM gateway_charge_admissions WHERE billing_request_id=$1::uuid',[x.billing_request_id]);
-   if(state.rows[0]?.state==='outcome_recorded')await client.query('SELECT * FROM aiag_settle_admitted_gateway_charge($1::uuid,$2::uuid)',[x.org_id,x.billing_request_id]);
-   const final=await client.query('SELECT state FROM gateway_charge_admissions WHERE billing_request_id=$1::uuid',[x.billing_request_id]);
-   if(final.rows[0]?.state!=='settled')throw new Error('MEDIA_SETTLEMENT_UNCONFIRMED');
-   await client.query('UPDATE prediction_jobs SET settled_at=coalesce(settled_at,clock_timestamp()) WHERE id=$1::uuid',[job.id]);
-   await client.query('COMMIT');
+   if(x.admission_state==='settled'){
+    if(x.status!=='completed'&&x.status!=='failed')throw new Error('MEDIA_TERMINAL_STATE_CONFLICT');
+    await client.query('COMMIT');
+   }else if(x.admission_state==='outcome_recorded'){
+    if(x.status!=='completed'&&x.status!=='failed')throw new Error('MEDIA_TERMINAL_STATE_CONFLICT');
+    await client.query('COMMIT');
+   }else if(x.admission_state==='dispatched'){
+    const safeOutput=status==='completed'?output:{error:{code:'MEDIA_JOB_FAILED',message:'Media job failed'}};
+    await client.query("UPDATE prediction_jobs SET status=$2,output=$3::jsonb,error_message=$4,completed_at=coalesce(completed_at,clock_timestamp()),result_digest=$5 WHERE id=$1::uuid",[job.id,status,JSON.stringify(safeOutput),status==='failed'?'MEDIA_JOB_FAILED':null,digest(safeOutput)]);
+    const actual=status==='completed'?BigInt(x.quoted_retail_microcredits):0n;
+    const usage={version:1,formulaVersion:'media-unit-microcredits-v1',billingRequestId:x.billing_request_id,attemptId:x.attempt_id,upstreamId:x.upstream_id,terminalStatus:status,verified:true};
+    await client.query("SELECT * FROM aiag_record_gateway_charge_outcome_v2($1::uuid,$2::uuid,$3::bigint,$4::jsonb,'success')",[x.org_id,x.billing_request_id,actual.toString(),JSON.stringify(usage)]);
+    await client.query('COMMIT');
+   }else{
+    throw new Error('MEDIA_OUTCOME_STATE_CONFLICT');
+   }
   }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
+
+  const before=await this.pool.query('SELECT state FROM gateway_charge_admissions WHERE billing_request_id=$1::uuid',[billingRequestId]);
+  if(before.rows[0]?.state==='outcome_recorded'){
+   await this.pool.query('SELECT * FROM aiag_settle_admitted_gateway_charge($1::uuid,$2::uuid)',[orgId,billingRequestId]);
+  }
+  const final=await this.pool.query('SELECT state FROM gateway_charge_admissions WHERE billing_request_id=$1::uuid',[billingRequestId]);
+  if(final.rows[0]?.state!=='settled')throw new Error('MEDIA_SETTLEMENT_UNCONFIRMED');
+  await this.pool.query('UPDATE prediction_jobs SET settled_at=coalesce(settled_at,clock_timestamp()) WHERE id=$1::uuid AND contract_version=4',[job.id]);
  }
 }

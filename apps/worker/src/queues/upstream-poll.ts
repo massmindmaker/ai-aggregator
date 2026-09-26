@@ -22,7 +22,7 @@ export function buildUpstreamPollProcessor(deps:UpstreamPollDeps):Processor<Upst
   const result=await deps.poll(owned);
   if(result.status==='pending'){
    const delay=Math.min(30_000,5000*Math.max(1,job.attemptsMade+1));
-   await (job as unknown as {queue?:{add:(name:string,data:unknown,opts:unknown)=>Promise<unknown>}}).queue?.add(job.name,{jobId:owned.id},{delay,jobId:'media:'+owned.id+':'+Date.now()});
+   await (job as unknown as {queue?:{add:(name:string,data:unknown,opts:unknown)=>Promise<unknown>}}).queue?.add(job.name,{jobId:owned.id},{delay,jobId:'media-'+owned.id+'-'+Date.now()});
    return result;
   }
   await deps.finalize(owned,result.status,result.output??{},result.error);

@@ -88,4 +88,32 @@ describe.skipIf(!enabled)('native durable media worker settlement',()=>{
       expect(JSON.stringify(row.rows[0].output)).not.toContain('raw provider failure');
     } finally { if(f) await cleanup(pool,f); await db.close(); await pool.end(); }
   },30000);
+  it('persists terminal outcome before settlement so recovery can finish a failed settlement once',async()=>{
+    const url=assertLocalTestDb(), pool=new Pool({connectionString:url,max:2}), db=new MediaJobDb(url);
+    let f:Fixture|undefined; let fn=''; let trigger='';
+    try {
+      f=await makeFixture(pool,'completed');
+      const suffix=randomUUID().replaceAll('-','');
+      fn='media_settle_fail_'+suffix; trigger=fn;
+      await pool.query(`CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.request_id = TG_ARGV[0] THEN RAISE EXCEPTION 'owned media settlement failure'; END IF; RETURN NEW; END $$`);
+      await pool.query(`CREATE TRIGGER ${trigger} BEFORE INSERT ON gateway_transactions FOR EACH ROW EXECUTE FUNCTION ${fn}('gw:${f.billing}')`);
+      const owned=await db.load(f.jobId); expect(owned).not.toBeNull();
+      await expect(db.finalize(owned!,'completed','https://cdn.test/recover.png')).rejects.toThrow('owned media settlement failure');
+      const mid=await pool.query("SELECT a.state,p.status,p.output,p.settled_at::text settled FROM gateway_charge_admissions a JOIN prediction_jobs p ON p.billing_request_id=a.billing_request_id WHERE a.billing_request_id=$1::uuid",[f.billing]);
+      expect(mid.rows[0]).toMatchObject({state:'outcome_recorded',status:'completed',output:'https://cdn.test/recover.png',settled:null});
+      expect(await db.scanRecoverable()).toContain(f.jobId);
+      await pool.query(`DROP TRIGGER ${trigger} ON gateway_transactions`); trigger='';
+      await pool.query(`DROP FUNCTION ${fn}()`); fn='';
+      const replay=await db.load(f.jobId); expect(replay?.status).toBe('completed');
+      await db.finalize(replay!,'completed',replay!.output);
+      const final=await pool.query("SELECT o.payg_credits::text balance,a.state,p.settled_at::text settled,(SELECT count(*)::int FROM gateway_transactions g WHERE g.org_id=o.id AND g.request_id='gw:'||a.billing_request_id::text) receipts FROM organizations o JOIN gateway_charge_admissions a ON a.org_id=o.id JOIN prediction_jobs p ON p.billing_request_id=a.billing_request_id WHERE a.billing_request_id=$1::uuid",[f.billing]);
+      expect(final.rows[0]).toMatchObject({balance:'4892',state:'settled',receipts:1});
+      expect(final.rows[0].settled).toBeTruthy();
+    } finally {
+      if(trigger) await pool.query(`DROP TRIGGER IF EXISTS ${trigger} ON gateway_transactions`).catch(()=>{});
+      if(fn) await pool.query(`DROP FUNCTION IF EXISTS ${fn}()`).catch(()=>{});
+      if(f) await cleanup(pool,f); await db.close(); await pool.end();
+    }
+  },30000);
+
 });

@@ -1,5 +1,20 @@
 import { sql as defaultSql, type SqlClient } from '../lib/db';
+import { AiagError } from '../lib/errors';
 import type { StoredMediaHttpIdentity } from './stored-media-http-identity';
+
+export class MediaJobStorageUnavailableError extends AiagError {
+  constructor(){ super('MEDIA_JOB_STORAGE_UNAVAILABLE',503,'Media job storage unavailable'); }
+}
+export class MediaJobIdempotencyConflictError extends AiagError {
+  constructor(){ super('MEDIA_IDEMPOTENCY_CONFLICT',409,'Media idempotency conflict'); }
+}
+function mapped(error:unknown):AiagError {
+  const code=error&&typeof error==='object'&&'code' in error?(error as {code?:unknown}).code:undefined;
+  const message=error instanceof Error?error.message:undefined;
+  if(code==='P0005'&&message==='MEDIA_IDENTITY_CONFLICT') return new MediaJobIdempotencyConflictError();
+  if(error instanceof AiagError) return error;
+  return new MediaJobStorageUnavailableError();
+}
 
 export type MediaJobClaim = Readonly<{ id:string; taskId:string; billingRequestId:string; didClaim:boolean }>;
 export type MediaJobRead = Readonly<{
@@ -15,9 +30,38 @@ export async function claimMediaJob(args:Readonly<{
  modelSlug:string; upstreamId:string; modelUpstreamId:string; providerFamily:'image'|'video'|'suno';
  retailMaxMicrocredits:bigint; supplierMaxMicrocredits:bigint; deadlineAt:string; input:Readonly<Record<string,unknown>>;
 }>,client:SqlClient=defaultSql):Promise<MediaJobClaim>{
- const r=one(await client`SELECT * FROM aiag_claim_media_job_v1(${args.orgId}::uuid,${args.apiKeyId}::uuid,${args.billingRequestId}::uuid,${args.taskId}::varchar,${args.identity.routeKind}::varchar,${args.identity.idempotencyKeyDigest}::text,${args.identity.requestFingerprint}::text,${args.modelSlug}::varchar,${args.upstreamId}::varchar,${args.modelUpstreamId}::uuid,${args.providerFamily}::varchar,${args.retailMaxMicrocredits.toString()}::bigint,${args.supplierMaxMicrocredits.toString()}::bigint,${args.deadlineAt}::timestamptz,${JSON.stringify(args.input)}::jsonb)`);
- return Object.freeze({id:uuid(r.id),taskId:String(r.task_id),billingRequestId:uuid(r.billing_request_id),didClaim:r.did_claim===true});
+ try{
+  const r=one(await client`SELECT * FROM aiag_claim_media_job_v1(${args.orgId}::uuid,${args.apiKeyId}::uuid,${args.billingRequestId}::uuid,${args.taskId}::varchar,${args.identity.routeKind}::varchar,${args.identity.idempotencyKeyDigest}::text,${args.identity.requestFingerprint}::text,${args.modelSlug}::varchar,${args.upstreamId}::varchar,${args.modelUpstreamId}::uuid,${args.providerFamily}::varchar,${args.retailMaxMicrocredits.toString()}::bigint,${args.supplierMaxMicrocredits.toString()}::bigint,${args.deadlineAt}::timestamptz,${JSON.stringify(args.input)}::text::jsonb)`);
+  return Object.freeze({id:uuid(r.id),taskId:String(r.task_id),billingRequestId:uuid(r.billing_request_id),didClaim:r.did_claim===true});
+ }catch(error){throw mapped(error);}
 }
+export async function releaseUnadmittedMediaClaim(args:Readonly<{orgId:string;jobId:string;billingRequestId:string}>,client:SqlClient=defaultSql):Promise<boolean>{
+ try{
+  const rows=await client`
+   WITH org_lock AS (
+    SELECT id FROM organizations WHERE id=${args.orgId}::uuid FOR UPDATE
+   ), deleted AS (
+    DELETE FROM prediction_jobs p USING org_lock
+     WHERE p.id=${args.jobId}::uuid
+       AND p.org_id=${args.orgId}::uuid
+       AND p.billing_request_id=${args.billingRequestId}::uuid
+       AND p.contract_version=4
+       AND p.status='claimed'
+       AND p.provider_task_id IS NULL
+       AND NOT EXISTS (
+        SELECT 1 FROM gateway_charge_admissions a WHERE a.billing_request_id=p.billing_request_id
+       )
+     RETURNING p.id::text AS id
+   )
+   SELECT id FROM deleted`;
+  if(!Array.isArray(rows)||rows.length>1)throw new MediaJobStorageUnavailableError();
+  return rows.length===1;
+ }catch(error){
+  if(error instanceof AiagError)throw error;
+  throw new MediaJobStorageUnavailableError();
+ }
+}
+
 export async function attachMediaProviderTask(args:Readonly<{orgId:string;jobId:string;billingRequestId:string;providerTaskId:string}>,client:SqlClient=defaultSql):Promise<void>{
  one(await client`SELECT * FROM aiag_attach_media_provider_task_v1(${args.orgId}::uuid,${args.jobId}::uuid,${args.billingRequestId}::uuid,${args.providerTaskId}::varchar)`);
 }

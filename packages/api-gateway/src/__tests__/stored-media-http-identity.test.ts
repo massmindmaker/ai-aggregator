@@ -20,6 +20,9 @@ describe('stored media HTTP identity',()=>{
   it('normalizes omitted image n to one',()=>{
     expect(captureStoredMediaHttpIdentity({...base,routeKind:'image',body:{model:'m',prompt:'p'}}).body).toMatchObject({n:1});
   });
+  it('accepts explicit null as the absent declared session identity',()=>{
+    expect(captureStoredMediaHttpIdentity({idempotencyKey:'idem_null',declaredSessionId:null,routeKind:'image',body:{model:'m',prompt:'p'}}).declaredSessionId).toBeNull();
+  });
   it.each([
     {routeKind:'image' as const,body:{...image,unknown:true}},
     {routeKind:'image' as const,body:{...image,n:5}},

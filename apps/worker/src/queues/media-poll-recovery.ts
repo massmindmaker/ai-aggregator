@@ -34,7 +34,7 @@ export async function recoverOwnedMediaPollsOnce(
   for (const jobId of ids) {
     if (live.has(jobId)) { alreadyQueued += 1; continue; }
     await queue.add('poll',{jobId},{
-      jobId:`media-recovery:${jobId}:${Date.now()}`,
+      jobId:`media-recovery-${jobId}-${Date.now()}`,
       removeOnComplete:1000,
       removeOnFail:1000,
     });
