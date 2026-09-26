@@ -45,4 +45,34 @@ describe.skipIf(!enabled)('native media quota v2',()=>{
    }
   });
  },30000);
+
+ it('rounds tiny supplier reserve in the same microcredit unit as the TypeScript quote',async()=>{
+  await withGuardedTestDatabase(process.env,{clientFactory:createPgTestClient},async(c)=>{
+   const user=randomUUID(),org=randomUUID(),key=randomUUID(),id=randomUUID(),mapping=randomUUID();
+   const upstream='mq-tiny-'+randomUUID().slice(0,8), model='media-tiny-'+randomUUID();
+   const mediaQuote={version:1,formulaVersion:'media-unit-microcredits-v1',routeKind:'image',modelSlug:model,modelUpstreamId:mapping,upstreamId:upstream,upstreamModelId:'fixture/image',providerFamily:'image',units:1,priceCentsPerUnit:'0.0001',markup:'1.25',authorizedMaxCredits:'1'};
+   const quote={version:1,mediaQuote};
+   const supplier={version:2,formulaVersion:'media-supplier-unit-microcredits-v1',mediaQuote};
+   try{
+    await c.query({text:'INSERT INTO users(id,email) VALUES($1::uuid,$2)',values:[user,'mq-tiny-'+user+'@example.test']});
+    await c.query({text:"INSERT INTO organizations(id,slug,name,owner_id,payg_credits) VALUES($1::uuid,$2,'mq tiny',$3::uuid,5000)",values:[org,org,user]});
+    await c.query({text:"INSERT INTO gateway_api_keys(id,org_id,name,key_hash,key_prefix) VALUES($1::uuid,$2::uuid,'mq tiny',$3,$4)",values:[key,org,randomUUID().replaceAll('-').padEnd(64,'0').slice(0,64),key.slice(0,16)]});
+    await c.query({text:'INSERT INTO gateway_quota_org_policies(org_id,enforcement_version,daily_supplier_usd_micro_limit_v2) VALUES($1::uuid,2,1000000)',values:[org]});
+    await c.query({text:'INSERT INTO gateway_quota_key_policies(api_key_id,org_id) VALUES($1::uuid,$2::uuid)',values:[key,org]});
+    await c.query({text:"SELECT * FROM aiag_admit_gateway_charge_v2($1::uuid,$2::uuid,$3::uuid,$4::varchar,'image'::varchar,'stored'::varchar,$5::varchar,1::bigint,$6::jsonb,$7::timestamptz,NULL::varchar,$8::jsonb)",values:[org,id,key,'tiny',model,JSON.stringify(quote),new Date(Date.now()+60000).toISOString(),JSON.stringify(supplier)]});
+    const ctx=await c.query({text:'SELECT supplier_authorized_max_usd_micro::text AS supplier FROM gateway_charge_quota_contexts WHERE billing_request_id=$1::uuid',values:[id]});
+    expect(ctx.rows[0]?.supplier).toBe('10');
+   }finally{
+    await c.query({text:'DELETE FROM gateway_charge_admission_events WHERE org_id=$1::uuid',values:[org]}).catch(()=>{});
+    await c.query({text:'DELETE FROM gateway_quota_buckets WHERE org_id=$1::uuid',values:[org]}).catch(()=>{});
+    await c.query({text:'DELETE FROM gateway_charge_quota_contexts WHERE org_id=$1::uuid',values:[org]}).catch(()=>{});
+    await c.query({text:'DELETE FROM gateway_charge_admissions WHERE org_id=$1::uuid',values:[org]}).catch(()=>{});
+    await c.query({text:'DELETE FROM gateway_quota_key_policies WHERE api_key_id=$1::uuid',values:[key]}).catch(()=>{});
+    await c.query({text:'DELETE FROM gateway_quota_org_policies WHERE org_id=$1::uuid',values:[org]}).catch(()=>{});
+    await c.query({text:'DELETE FROM gateway_api_keys WHERE id=$1::uuid',values:[key]}).catch(()=>{});
+    await c.query({text:'DELETE FROM organizations WHERE id=$1::uuid',values:[org]}).catch(()=>{});
+    await c.query({text:'DELETE FROM users WHERE id=$1::uuid',values:[user]}).catch(()=>{});
+   }
+  });
+ },30000);
 });

@@ -112,7 +112,7 @@ BEGIN
   _base:=aiag_quota_decimal(_q->'priceCentsPerUnit')*aiag_quota_count(_q->'units',TRUE)*1000;
   _m:=aiag_quota_decimal(_q->'markup');
   IF _base<=0 OR _m<=0 THEN RAISE EXCEPTION 'INVALID_SUPPLIER_QUOTE'; END IF;
-  _s:=ceil(_base*10); _retail:=ceil(_base*_m);
+  _s:=ceil(_base)*10; _retail:=ceil(_base*_m);
   IF _max IS DISTINCT FROM aiag_quota_money(_retail) OR aiag_quota_decimal(_q->'authorizedMaxCredits',TRUE)<>_retail THEN RAISE EXCEPTION 'INVALID_CHARGED_MAXIMUM'; END IF;
   RETURN aiag_quota_money(_s);
  END IF;
