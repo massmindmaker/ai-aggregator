@@ -37,6 +37,20 @@
 
 Переход C1→C2 требует не просто зелёных локальных тестов, а проверенного Aggregator release candidate и понятного AG catalog/version contract для Arena. Переход C2→C4 требует version-bound evidence и отдельного HTTP API; общая база, автоматический перенос private data и двойной учёт внутреннего AG→AM оборота в roadmap не входят.
 
+## Критический путь и пять контролируемых рисков
+
+Применена узкая адаптация [PMBOK 6 для агентов](https://github.com/mb-mal/pmbok6): для каждого ближайшего этапа нужен измеримый результат, владелец риска и следующее решение. Полный комплект из49 процессов здесь не требуется; BAC/PV/EV/AC не установлены, поэтому SPI/CPI и процент исполнения не вычисляются.
+
+| Риск или зависимость | Триггер | Владелец и ответ |
+|---|---|---|
+| Batch item N оставляет деньги/parent от уже подготовленных items | Native rollback/concurrent test показывает хоть одну residual admission/reservation или двойной provider effect | AG gateway/DB owner: закрыть Task3 atomicity до Task4 и повторить только затронутый native gate. |
+| Новый mode обходит admitted route или включает старые write routes | Mounted suite показывает dispatch до hold либо old mode отвечает успешным POST | AG gateway owner: fixed501/contract regression до worker cutover. |
+| AG→AM consumer тянет прямой AG SQL и неверный price revision | В AM остаётся доступ к `models/model_upstreams` вместо HTTP receipt | AG catalog + AM HTTP owners: отдельный contract consumer и запрет AG DB credential у AM. |
+| Arena принимает scorer как готовый evaluator | Нет DB job, ACL, retry/timeout и сохранённого version-bound результата | Arena owner: PE-T2/T3 native gate перед расширением методик. |
+| Память или production status повышены без readback | Внешний индекс/LightRAG upload без processed/readback либо зелёный local test назван deploy | Controller: сохранить статус PENDING и владельца; источник истины — repo/acceptance, release только отдельным gate. |
+
+Критический путь ближайшей разработки: **AG batch Tasks3→4→5→6→whole-package acceptance**, затем AG-P2 consumer/AG-P3 author evidence и AG-P5 release. Arena PE-T2→T3→T4–T6 следует после version contract; AM-P3 HTTP/Web следует после AG catalog consumer. Риски пересматриваются при каждом принятом checkpoint, без отдельной бюрократической волны.
+
 ## Контроль scope
 
 - В текущем batch worktree нет признака новой billing authority: Task2 повторно использует chat/embeddings preparation, Task3 вызывает существующий `admitGatewayChargeV2` внутри одной транзакции. Дополнительный `pricing_snapshot` в item нужен для frozen dispatch/recovery. Task3 ещё не принят: WIP код и удачные отдельные тесты не заменяют финальный review.
