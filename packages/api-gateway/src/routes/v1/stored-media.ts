@@ -19,7 +19,7 @@ function publicJob(job:Awaited<ReturnType<typeof readMediaJob>>){
 }
 async function submit(c:any,routeKind:StoredMediaRouteKind){
  const key=c.get('apiKey' as never) as AuthenticatedApiKey; const orgId=key.org_id;
- const body=await c.req.json();
+ const body=await (async()=>{try{return await c.req.json();}catch{throw errors.badRequest('Invalid media request');}})();
  const identity=(()=>{try{return captureStoredMediaHttpIdentity({routeKind,body,idempotencyKey:c.req.header('idempotency-key'),declaredSessionId:c.req.header('x-aiag-session-id') ?? null,byokKeyPresent:c.req.raw.headers.has('x-upstream-key')});}catch{throw errors.badRequest('Invalid media request');}})();
  const model=await resolveModelWithOverride(String(identity.body.model));
  const expectedType=routeKind==='audio_speech'?'audio':routeKind;

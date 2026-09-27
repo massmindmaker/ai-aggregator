@@ -256,18 +256,20 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     const storedCompletionsMigration = await readFile(resolve("packages/database/migrations/0078_gateway_stored_completions.sql"), "utf8");
     const storedStreamMigration = await readFile(resolve("packages/database/migrations/0079_gateway_stored_chat_stream.sql"), "utf8");
     const storedByokMigration = await readFile(resolve("packages/database/migrations/0080_gateway_stored_chat_byok.sql"), "utf8");
-    // Only the admission core is replaced in0070; latest wins, not any historical match.
-    assertLatestFunctionMirror(mirror, [migration, terminalMigration, storedEmbeddingsMigration, storedCompletionsMigration, storedStreamMigration, storedByokMigration]);
+    const mediaQuotaMigration = await readFile(resolve("packages/database/migrations/0082_gateway_media_quota.sql"), "utf8");
+    const mediaSupplierRoundingMigration = await readFile(resolve("packages/database/migrations/0084_gateway_media_supplier_rounding.sql"), "utf8");
+    // Latest replacement wins, including the durable media route/supplier extensions.
+    assertLatestFunctionMirror(mirror, [migration, terminalMigration, storedEmbeddingsMigration, storedCompletionsMigration, storedStreamMigration, storedByokMigration, mediaQuotaMigration]);
     const quotaMirror = await readFile(
       resolve(
         "packages/database/src/functions/gateway-durable-spending-quotas.sql",
       ),
       "utf8",
     );
-    assertLatestFunctionMirror(quotaMirror, [migration, storedEmbeddingsMigration]);
+    assertLatestFunctionMirror(quotaMirror, [migration, storedEmbeddingsMigration, mediaQuotaMigration, mediaSupplierRoundingMigration]);
   });
 
-  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 80 migrations", async () => {
+  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 84 migrations", async () => {
     const migration = await readFile(resolve("packages/database/migrations/0069_gateway_http_storage.sql"), "utf8");
     const storedEmbeddingsMigration = await readFile(resolve("packages/database/migrations/0077_gateway_stored_embeddings.sql"), "utf8");
     const storedCompletionsMigration = await readFile(resolve("packages/database/migrations/0078_gateway_stored_completions.sql"), "utf8");
@@ -278,7 +280,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect([...functionDefinitions(mirror).keys()].filter(signature => signature.startsWith("aiag_http_validate_response("))).toHaveLength(2);
     const previous = await readFile(resolve("packages/database/migrations/0068_gateway_durable_spending_quotas.sql"));
     expect(createHash("sha256").update(previous).digest("hex")).toBe("b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6");
-    expect(await discoverNativeMigrations()).toHaveLength(80);
+    expect(await discoverNativeMigrations()).toHaveLength(84);
     const types = await client.query<{ name: string; fields: string[] }>({ text: `
       SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
       JOIN pg_attribute a ON a.attrelid=t.typrelid AND a.attnum>0 AND NOT a.attisdropped

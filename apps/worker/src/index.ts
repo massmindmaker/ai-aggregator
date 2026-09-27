@@ -20,7 +20,7 @@ import { createRedisConnection } from './redis.js';
 import { startUpstreamPollWorker } from './queues/upstream-poll.js';
 import { MediaJobDb } from './queues/upstream-poll-db.js';
 import { startMediaPollRecovery } from './queues/media-poll-recovery.js';
-import { KieAdapter } from '@aiag/upstream-adapters';
+import { createMediaKieAdapter } from './media-kie.js';
 import { startContestEvalWorker } from './queues/contest-eval.js';
 import { startWebhookRetryWorker } from './queues/webhook-retry.js';
 import { startEmailSendWorker } from './queues/email-send.js';
@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   // The contest-eval worker is real (runs python via systemd-run on Linux).
   // ---------------------------------------------------------------------------
   const mediaDb = new MediaJobDb(process.env.DATABASE_URL ?? '');
-  const kie = process.env.KIE_API_KEY ? new KieAdapter({ apiKey: process.env.KIE_API_KEY }) : null;
+  const kie = createMediaKieAdapter(process.env);
   const upstreamPoll = startUpstreamPollWorker(connection, {
     load: (jobId) => mediaDb.load(jobId),
     markProcessing: (jobId) => mediaDb.markProcessing(jobId),

@@ -175,22 +175,10 @@ export class KieAdapter extends UpstreamAdapterBase {
     const body = (await res.json()) as KieStatusResponse;
     const s = String(body?.data?.status ?? body?.data?.state ?? '').toLowerCase();
     if (s === 'completed' || s === 'success') {
-      let output = body.data.output ?? body.data.output_url ?? body.data.url;
-      if (output === undefined && body.data.resultJson) {
-        try {
-          const parsed = JSON.parse(body.data.resultJson) as Record<string, unknown>;
-          const urls = parsed.resultUrls ?? parsed.urls ?? parsed.outputUrls;
-          if (Array.isArray(urls)) {
-            const strings = urls.filter((value): value is string => typeof value === 'string');
-            output = strings.length === 1 ? strings[0] : strings;
-          } else if (typeof urls === 'string') {
-            output = urls;
-          } else {
-            output = parsed.videoUrl ?? parsed.audioUrl ?? parsed.imageUrl ?? parsed.url ?? parsed;
-          }
-        } catch {
-          output = body.data.resultJson;
-        }
+      const candidate = selectKiePublicOutputCandidate(body.data);
+      const output = sanitizePublicMediaOutput(candidate);
+      if (output === null) {
+        return { status: 'failed', error: 'kie completed without usable output' };
       }
       return { status: 'completed', output };
     }
@@ -263,6 +251,50 @@ export class KieAdapter extends UpstreamAdapterBase {
       .filter((m) => m.pricing)
       .map((m) => ({ model_id: m.id, pricing: m.pricing! }));
   }
+}
+
+function selectKiePublicOutputCandidate(data: KieStatusResponse['data']): unknown {
+  const direct: unknown = data.output ?? data.output_url ?? data.url;
+  if (direct !== undefined) return direct;
+  if (!data.resultJson) return undefined;
+  try {
+    const parsed = JSON.parse(data.resultJson) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return parsed;
+    const value = parsed as Record<string, unknown>;
+    return (
+      value.resultUrls ??
+      value.urls ??
+      value.outputUrls ??
+      value.videoUrl ??
+      value.audioUrl ??
+      value.imageUrl ??
+      value.url
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function sanitizePublicMediaOutput(value: unknown): string | string[] | null {
+  const asUrl = (raw: unknown): string | null => {
+    if (typeof raw !== 'string' || raw.length === 0 || raw.length > 8192) return null;
+    try {
+      const parsed = new URL(raw);
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return null;
+      return raw;
+    } catch {
+      return null;
+    }
+  };
+
+  if (Array.isArray(value)) {
+    if (value.length === 0 || value.length > 32) return null;
+    const urls = value.map(asUrl);
+    if (urls.some((url) => url === null)) return null;
+    const safe = urls as string[];
+    return safe.length === 1 ? safe[0]! : safe;
+  }
+  return asUrl(value);
 }
 
 function inferFamilyFromPollUrl(url?: string): KieFamily | null {

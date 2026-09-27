@@ -123,6 +123,30 @@ describe('KieAdapter', () => {
     expect(failedFetch.calls[0].url).toContain('/api/v1/generate/recordInfo?taskId=s1');
   });
 
+  it('fails closed when a completed provider payload has no public URL output', async () => {
+    const rawObject = new KieAdapter({
+      apiKey: 'k',
+      fetch: createFetchMock([
+        { status: 200, body: { data: { taskId: 'j1', state: 'success', output: { secret: 'provider-internal' } } } },
+      ]).fetch,
+    });
+    expect(await rawObject.pollAsync('jobs:j1', { request_id: 'r' })).toEqual({
+      status: 'failed',
+      error: 'kie completed without usable output',
+    });
+
+    const rawJson = new KieAdapter({
+      apiKey: 'k',
+      fetch: createFetchMock([
+        { status: 200, body: { data: { taskId: 'v1', state: 'success', resultJson: '{"opaque":"provider-internal"}' } } },
+      ]).fetch,
+    });
+    expect(await rawJson.pollAsync('veo:v1', { request_id: 'r' })).toEqual({
+      status: 'failed',
+      error: 'kie completed without usable output',
+    });
+  });
+
   it('estimateCost returns credits=0 when model pricing is undefined (hidden pricing)', async () => {
     const adapter = new KieAdapter({ apiKey: 'k', markup: 1.2, usd_rate: 95 });
     const est = await adapter.estimateCost(

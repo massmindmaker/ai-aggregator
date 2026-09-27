@@ -208,6 +208,20 @@ describe.skipIf(!enabled)('guarded mounted durable async media lifecycle',()=>{
     expect((await owner.facts()).jobs).toHaveLength(0);
   },30000);
 
+  it('rejects malformed JSON before claim, admission, or provider dispatch',async()=>{
+    const before=runtime.image.mock.calls.length;
+    const response=await runtime.app.fetch(new Request('http://native.test/v1/images/generations',{
+      method:'POST',
+      headers:{authorization:'Bearer '+owner.token,'content-type':'application/json','idempotency-key':randomUUID()},
+      body:'{"model":"native/image","prompt":',
+    }));
+    expect(response.status,await response.clone().text()).toBe(400);
+    expect(runtime.image.mock.calls.length).toBe(before);
+    const facts=await owner.facts();
+    expect(facts.jobs).toHaveLength(0);
+    expect(facts.admissions).toHaveLength(0);
+  },30000);
+
   it('fails closed before media dispatch when egress proxying is configured but worker polling cannot preserve it',async()=>{
     const previous=process.env.AIAG_EGRESS_PROXY_URL;
     process.env.AIAG_EGRESS_PROXY_URL='http://127.0.0.1:18080';

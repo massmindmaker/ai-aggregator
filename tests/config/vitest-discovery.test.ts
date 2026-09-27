@@ -4,6 +4,7 @@ import config from '../../vitest.config';
 
 const testConfig = config.test ?? {};
 const scripts = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).scripts as Record<string, string>;
+const workerIndex = readFileSync(new URL('../../apps/worker/src/index.ts', import.meta.url), 'utf8');
 
 describe('root Vitest discovery contract', () => {
   it('excludes generated and vendored trees at every nesting depth', () => {
@@ -56,6 +57,10 @@ describe('root Vitest discovery contract', () => {
       expect(baseline).toContain(file);
       expect(baseline.indexOf(file)).toBeLessThan(baseline.indexOf('&& bun run test:ton-core-native'));
     }
+  });
+
+  it('keeps durable media worker polling behind the tested Kie bootstrap helper', () => {
+    expect(workerIndex).toContain("createMediaKieAdapter(process.env)");
   });
 
   it('uses Node by default and jsdom only for web tests', () => {

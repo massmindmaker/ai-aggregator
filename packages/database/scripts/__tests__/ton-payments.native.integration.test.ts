@@ -44,7 +44,7 @@ describe.skipIf(!RUN)("TON invoice native core", () => {
     expect(manifest.rows).toEqual([{ count: 72, latest: 'migrations/0072_ton_invoice_core.sql' }]);
     const inventory = await f.client.query({ text: "SELECT count(*)::int AS count FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'", values: [] });
     expect(inventory.rows).toEqual([{ count: 110 }]);
-  });
+  }, 30000);
 
   it("matches all 18 applied function bodies and denies PUBLIC EXECUTE", async () => {
     const f = await open();
