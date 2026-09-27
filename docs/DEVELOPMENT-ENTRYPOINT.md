@@ -1,5 +1,7 @@
 # AI Aggregator: начать разработку здесь
 
+**Roadmap 27.09:** [текущие стадии трёх сервисов и минимум16 оставшихся крупных checkpoints](ecosystem/2026-09-27-development-roadmap-current.md). AG batch Task3 — WIP в `feat/durable-batches-20260927`; локально принятые media/stream/BYOK не означают production activation.
+
 **Актуальный порядок20.09:** [сопоставленные планы, маршрутизация и текущий пакет](consolidation/2026-09-20-priorities-and-routing.md). Пользователь вернул в общую программу все три сервиса; первым выполняется Aggregator, затем Arena и Agents Market. Старые запреты на возобновление ниже описывают состояние13.09.
 
 **Принято27.09:** durable async media package (`2a490e1` → `0a2d6bf`, supplier-rounding `c38f7eb`) прошёл локальную Superpowers acceptance. Image/video/audio speech доступны только в explicit `stored_chat_embeddings_completions_stream_media`: strict idempotency/identity, exact reserve, admission-linked `prediction_jobs`, opaque task id, DB-only GET, owned Kie poll/recovery и exactly-once settlement. Final gates: focused102, guarded root DB baseline374/374 + TON core58/58, gateway src/test + worker + adapter types exit0, gateway+worker builds, supported lint и diff-check PASS. External GLM final review не вернул usable report, поэтому fix-wave закрыт self-review fallback и не считается independent approval. Default runtime/production не переключались, paid provider не вызывался. Следующий кодовый пакет — durable batches admission/consumer lifecycle.
