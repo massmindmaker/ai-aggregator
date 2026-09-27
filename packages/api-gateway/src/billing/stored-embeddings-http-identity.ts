@@ -97,13 +97,12 @@ export function canonicalStoredEmbeddingsHttpIdentityV1(args: Readonly<{
   ]);
 }
 
-export function captureStoredEmbeddingsHttpIdentity(args: Readonly<{
-  body: unknown;
-  idempotencyKey: unknown;
-  declaredSessionId: unknown;
-}>): StoredEmbeddingsHttpIdentity {
+export function normalizeStoredEmbeddingsBodyV1(body: unknown): Readonly<{
+  requestedMode: StoredEmbeddingsMode | null;
+  attemptBody: StoredEmbeddingsHttpAttemptBody;
+}> {
   try {
-    const detached = parseAdmissionJsonObject(args.body);
+    const detached = parseAdmissionJsonObject(body);
     const allowed = ['model', 'input', 'encoding_format', 'dimensions', 'aiag_mode'];
     if (Object.keys(detached).some((key) => !allowed.includes(key))) badRequest();
     if (
@@ -120,13 +119,33 @@ export function captureStoredEmbeddingsHttpIdentity(args: Readonly<{
       ? parseRequestedMode(detached.aiag_mode)
       : null;
     const input = parseInput(detached.input);
-    const declaredSessionId = captureDeclaredSessionId(args.declaredSessionId);
-    const model = detached.model;
-    const canonical = canonicalStoredEmbeddingsHttpIdentityV1({
-      model,
+    return Object.freeze({
       requestedMode,
+      attemptBody: Object.freeze({
+        model: detached.model,
+        input,
+        encoding_format: 'float',
+        dimensions: 1536,
+      }),
+    });
+  } catch {
+    return badRequest();
+  }
+}
+
+export function captureStoredEmbeddingsHttpIdentity(args: Readonly<{
+  body: unknown;
+  idempotencyKey: unknown;
+  declaredSessionId: unknown;
+}>): StoredEmbeddingsHttpIdentity {
+  try {
+    const normalized = normalizeStoredEmbeddingsBodyV1(args.body);
+    const declaredSessionId = captureDeclaredSessionId(args.declaredSessionId);
+    const canonical = canonicalStoredEmbeddingsHttpIdentityV1({
+      model: normalized.attemptBody.model,
+      requestedMode: normalized.requestedMode,
       declaredSessionId,
-      input,
+      input: normalized.attemptBody.input,
     });
     return Object.freeze({
       contractVersion: 1,
@@ -134,14 +153,9 @@ export function captureStoredEmbeddingsHttpIdentity(args: Readonly<{
       billingMode: 'stored',
       idempotencyKeyDigest: sha256(parseIdempotencyKey(args.idempotencyKey)),
       requestFingerprint: sha256(canonical),
-      requestedMode,
+      requestedMode: normalized.requestedMode,
       declaredSessionId,
-      attemptBody: Object.freeze({
-        model,
-        input,
-        encoding_format: 'float',
-        dimensions: 1536,
-      }),
+      attemptBody: normalized.attemptBody,
     });
   } catch {
     return badRequest();

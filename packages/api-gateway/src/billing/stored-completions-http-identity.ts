@@ -95,13 +95,12 @@ export function canonicalStoredCompletionsHttpIdentityV1(args: Readonly<{
   ]);
 }
 
-export function captureStoredCompletionsHttpIdentity(args: Readonly<{
-  body: unknown;
-  idempotencyKey: unknown;
-  declaredSessionId: unknown;
-}>): StoredCompletionsHttpIdentity {
+export function normalizeStoredCompletionsBodyV1(body: unknown): Readonly<{
+  requestedMode: StoredCompletionsMode | null;
+  attemptBody: StoredCompletionsHttpAttemptBody;
+}> {
   try {
-    const detached = parseAdmissionJsonObject(args.body);
+    const detached = parseAdmissionJsonObject(body);
     const allowed = ['model', 'prompt', 'max_tokens', 'stream', 'aiag_mode'];
     if (Object.keys(detached).some((key) => !allowed.includes(key))) badRequest();
     if (
@@ -128,19 +127,35 @@ export function captureStoredCompletionsHttpIdentity(args: Readonly<{
     const messages = Object.freeze([
       Object.freeze({ role: 'user' as const, content: prompt }),
     ]) as StoredCompletionsHttpAttemptBody['messages'];
-    const attemptBody = Object.freeze({
-      model: parsed.modelSlug,
-      messages,
-      stream: false as const,
-      ...(parsed.maxTokens === undefined ? {} : { max_tokens: parsed.maxTokens }),
-    });
-    const declaredSessionId = captureDeclaredSessionId(args.declaredSessionId);
-    const canonical = canonicalStoredCompletionsHttpIdentityV1({
-      model: parsed.modelSlug,
+    return Object.freeze({
       requestedMode,
+      attemptBody: Object.freeze({
+        model: parsed.modelSlug,
+        messages,
+        stream: false as const,
+        ...(parsed.maxTokens === undefined ? {} : { max_tokens: parsed.maxTokens }),
+      }),
+    });
+  } catch {
+    return badRequest();
+  }
+}
+
+export function captureStoredCompletionsHttpIdentity(args: Readonly<{
+  body: unknown;
+  idempotencyKey: unknown;
+  declaredSessionId: unknown;
+}>): StoredCompletionsHttpIdentity {
+  try {
+    const normalized = normalizeStoredCompletionsBodyV1(args.body);
+    const declaredSessionId = captureDeclaredSessionId(args.declaredSessionId);
+    const prompt = normalized.attemptBody.messages[0].content;
+    const canonical = canonicalStoredCompletionsHttpIdentityV1({
+      model: normalized.attemptBody.model,
+      requestedMode: normalized.requestedMode,
       declaredSessionId,
       prompt,
-      maxTokens: parsed.maxTokens,
+      maxTokens: normalized.attemptBody.max_tokens,
     });
     return Object.freeze({
       contractVersion: 1,
@@ -148,9 +163,9 @@ export function captureStoredCompletionsHttpIdentity(args: Readonly<{
       billingMode: 'stored',
       idempotencyKeyDigest: sha256(parseIdempotencyKey(args.idempotencyKey)),
       requestFingerprint: sha256(canonical),
-      requestedMode,
+      requestedMode: normalized.requestedMode,
       declaredSessionId,
-      attemptBody,
+      attemptBody: normalized.attemptBody,
     });
   } catch {
     return badRequest();

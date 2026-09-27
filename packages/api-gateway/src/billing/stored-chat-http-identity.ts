@@ -73,52 +73,46 @@ function parseRequestedMode(value: unknown): StoredChatMode {
   return value;
 }
 
-function parseBody(body: unknown): Readonly<{
+export function normalizeStoredChatBodyV1(body: unknown): Readonly<{
   requestedMode: StoredChatMode | null;
   attemptBody: StoredChatHttpAttemptBody;
-  canonical: Parameters<typeof canonicalStoredChatHttpIdentityV1>[0];
 }> {
-  const detached = parseAdmissionJsonObject(body);
-  const hasMode = Object.hasOwn(detached, 'aiag_mode');
-  const requestedMode = hasMode
-    ? parseRequestedMode(detached.aiag_mode)
-    : null;
-  const supportedBody = Object.fromEntries(
-    Object.entries(detached).filter(([key]) => key !== 'aiag_mode'),
-  );
-  if (typeof supportedBody.model !== 'string') badRequest();
-  const stream = supportedBody.stream === true;
-  // The v1 parser deliberately accepts only non-streaming bodies. Streaming
-  // keeps the same strict shape, with the one explicit mode bit enabled.
-  const parsed = parseStoredChatBody(
-    stream ? { ...supportedBody, stream: false } : supportedBody,
-    supportedBody.model,
-  );
-  if (stream && parsed.maxTokens !== undefined && parsed.maxTokens > 2048)
-    badRequest();
-  const messages = Object.freeze(
-    parsed.messages.map((message) =>
-      Object.freeze({ role: message.role, content: message.content }),
-    ),
-  );
-  const attemptBody = Object.freeze({
-    model: parsed.modelSlug,
-    messages,
-    stream: stream as false | true,
-    ...(parsed.maxTokens === undefined ? {} : { max_tokens: parsed.maxTokens }),
-  });
-  return Object.freeze({
-    requestedMode,
-    attemptBody,
-    canonical: Object.freeze({
-      model: parsed.modelSlug,
+  try {
+    const detached = parseAdmissionJsonObject(body);
+    const hasMode = Object.hasOwn(detached, 'aiag_mode');
+    const requestedMode = hasMode
+      ? parseRequestedMode(detached.aiag_mode)
+      : null;
+    const supportedBody = Object.fromEntries(
+      Object.entries(detached).filter(([key]) => key !== 'aiag_mode'),
+    );
+    if (typeof supportedBody.model !== 'string') badRequest();
+    const stream = supportedBody.stream === true;
+    // The v1 parser deliberately accepts only non-streaming bodies. Streaming
+    // keeps the same strict shape, with the one explicit mode bit enabled.
+    const parsed = parseStoredChatBody(
+      stream ? { ...supportedBody, stream: false } : supportedBody,
+      supportedBody.model,
+    );
+    if (stream && parsed.maxTokens !== undefined && parsed.maxTokens > 2048)
+      badRequest();
+    const messages = Object.freeze(
+      parsed.messages.map((message) =>
+        Object.freeze({ role: message.role, content: message.content }),
+      ),
+    );
+    return Object.freeze({
       requestedMode,
-      declaredSessionId: null,
-      messages,
-      maxTokens: parsed.maxTokens,
-      stream,
-    }),
-  });
+      attemptBody: Object.freeze({
+        model: parsed.modelSlug,
+        messages,
+        stream: stream as false | true,
+        ...(parsed.maxTokens === undefined ? {} : { max_tokens: parsed.maxTokens }),
+      }),
+    });
+  } catch {
+    return badRequest();
+  }
 }
 
 /**
@@ -157,7 +151,7 @@ export function captureStoredChatHttpIdentity(args: Readonly<{
     const idempotencyKey = parseIdempotencyKey(args.idempotencyKey);
     const declaredSessionId = captureDeclaredSessionId(args.declaredSessionId);
     const byokKeyDigest = parseByokKeyDigest(args.byokKey);
-    const body = parseBody(args.body);
+    const body = normalizeStoredChatBodyV1(args.body);
     if (byokKeyDigest !== null && body.attemptBody.stream) badRequest();
     const billingMode = byokKeyDigest === null ? 'stored' as const : 'byok_fee' as const;
     const contractVersion = byokKeyDigest === null
@@ -165,8 +159,11 @@ export function captureStoredChatHttpIdentity(args: Readonly<{
       : 3 as const;
     const canonical = byokKeyDigest === null
       ? canonicalStoredChatHttpIdentityV1({
-          ...body.canonical,
+          model: body.attemptBody.model,
+          requestedMode: body.requestedMode,
           declaredSessionId,
+          messages: body.attemptBody.messages,
+          maxTokens: body.attemptBody.max_tokens,
           stream: body.attemptBody.stream,
         })
       : JSON.stringify([
