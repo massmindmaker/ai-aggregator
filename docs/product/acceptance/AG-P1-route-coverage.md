@@ -9,7 +9,7 @@
 | Chat BYOK | Provider до фиксированной platform fee | В `stored_chat_embeddings_completions_stream` принят локально durable non-stream BYOK: funded fixed-fee hold, один caller-key dispatch, stored result, settle/replay/recovery | Старые stored modes и stream+BYOK остаются 501; другие BYOK routes и real-provider/runtime — отдельные gates |
 | `/v1/completions` | Provider до legacy settlement | В новом `stored_chat_embeddings_completions` принят локально: strict scalar prompt, durable identity/result, один dispatch, settle/replay/recovery | Stream, BYOK и batch prompts остаются отдельными путями; старые stored modes возвращают501 |
 | `/v1/embeddings` | Provider до legacy settlement | 501 до provider | В новом `stored_chat_embeddings` lifecycle принят локально: claim/reserve/один dispatch/outcome/settle/replay/recovery; runtime gate остаётся |
-| Images / video / audio speech | Submit/poll до settlement; queued job не связан с admission | 501 до provider/job | Durable async job, charge ownership, cancel/deadline/recovery |
+| Images / video / audio speech | Submit/poll до settlement; queued job не связан с admission | В explicit `stored_chat_embeddings_completions_stream_media` принят локально durable async lifecycle: strict identity/idempotency, exact reserve, admission-linked `prediction_jobs`, opaque task id, DB-only GET, Kie poll/recovery и exactly-once settlement; старые stored modes остаются 501 | Runtime activation, real provider compatibility и production release остаются отдельными gates |
 | Audio transcription | Локальная ошибка без provider | 501 | Не включённый платный путь, отдельный контракт до продажи |
 | `/v1/batches` POST | DB row и очередь без admission ownership | 501 до row/queue | Batch consumer и admission lifecycle |
 | Models / balance / batch GET | Read-only | Сохранены read-only | Auth/tenant ownership сохраняются, execution admission не нужен |
@@ -53,6 +53,14 @@ Migration0080: applied1/skipped79, затем no-op applied0/skipped80; historic
 Independent GLM-5.3-Flash final review `006e9e52283648efbde7b20ced5d8c52` нашёл один Important: stream+BYOK классифицировался400 вместо frozen501. `edd365d` исправил boundary; scoped re-review `3616a07f63104acc955dd979c79ada76` — **APPROVE**, finding ADDRESSED, новых Critical/Important нет. Minor про теоретический `markGatewayChargeDispatched` replay в `held` оставлен в backlog: текущий durable claim допускает одного исполнителя и mounted concurrency не воспроизводит этот путь.
 
 Это local source/native acceptance, не runtime/provider/production release. Stream+BYOK, embeddings/completions/media BYOK, encrypted key vault/UI и платный live provider остаются вне этого пакета.
+
+## Durable async media checkpoint27.09
+
+`2a490e1` → `0a2d6bf` реализуют [durable async media lifecycle](../../superpowers/plans/2026-09-26-durable-async-media-lifecycle.md) для image generation, video generation и audio speech в explicit `stored_chat_embeddings_completions_stream_media`. Public POST требует `Idempotency-Key`, BYOK/STT запрещены, task id opaque, GET читает только owned DB state и не poll-ит provider. Pricing и supplier reserve считают exact decimal DB text; image использует `n`, video/audio — единицу. Worker получает только owned job id, восстанавливает provider task из DB, bounded poll-ит Kie и terminal outcome проводит через один settlement path.
+
+Final review-fix wave закрыла stranded claimed replay, lost settlement ACK, supplier rounding, Kie-only/no-egress boundary, worker `KIE_BASE_URL`, raw provider output sanitization и malformed JSON до admission. Fresh evidence: focused unit 10 files / 102 PASS; gateway src/test + worker + adapter types exit0; gateway+worker build PASS; supported gateway lint + `git diff --check` PASS; guarded root DB baseline 21/21 files / 374 PASS + isolated TON core58/58, cleanup dropped/sessions0/canonical unchanged. External GLM reviewer не вернул usable final report; Superpowers final self-review использован как fallback, поэтому это не independent approval.
+
+Граница остаётся локальной: default runtime/production не переключён, paid provider call не выполнялся, egress proxy для durable media v1 fail-closed, STT/BYOK media/batches остаются вне этого checkpoint. Следующий кодовый пакет — durable batches admission/consumer lifecycle.
 
 ## Принятые локальные foundations
 

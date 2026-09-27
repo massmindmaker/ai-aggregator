@@ -7,7 +7,7 @@
 | Очередь | Источник | Следующий результат |
 |---|---|---|
 | 1. Aggregator — каталог | 19.09 resume plan, 13.09 public catalog contract, AG-P2 | Native matrix принят; остаётся настоящий AG→AM HTTP consumer |
-| 2. Aggregator — расчёты | AG-P1 route coverage, stored embeddings/completions/stream/BYOK lifecycle | Chat, embeddings, non-stream completions, durable chat SSE и non-stream chat BYOK приняты локально; далее durable async media, затем batches отдельным lifecycle |
+| 2. Aggregator — расчёты | AG-P1 route coverage, stored embeddings/completions/stream/BYOK/media lifecycle | Chat, embeddings, non-stream completions, durable chat SSE, non-stream chat BYOK и durable async image/video/audio speech приняты локально; следующий пакет — batches admission/consumer lifecycle |
 | 3. Aggregator — продукт | Production continuation AG-P3/P4/P5 | Авторская версия→доход, TON alongside RUB/login, modalities/UX и сквозная приёмка |
 | 4. Arena | Собственный entrypoint и prediction evaluation plan | Executable scorer/hash и opt-in binding→DB jobs→sandboxed evaluator→результат |
 | 5. Agents Market | Собственный native-account-principal/Web plan | HTTP/security review→guarded auth browser→UUID domain/worker→AG HTTP integration и independent Web/TMA acceptance |
@@ -18,7 +18,7 @@ TON0076 прошла итоговое source-review: прежние шесть H
 
 ## Что остаётся в полной программе
 
-- Aggregator AG-P1: stored chat stream и non-stream chat BYOK приняты локально; media/async и batches ещё требуют собственного admission/outcome/recovery; restricted501 означает закрытую возможность, а не реализованный сценарий. Accepted quota/refund primitives заново не писать. AG-P2 — каталог и настоящий AM consumer; AG-P3 — авторские версии/доход; AG-P4 — TON с сохранением RUB; AG-P5 — modalities, truthful UX и release.
+- Aggregator AG-P1: stored chat stream, non-stream chat BYOK и durable async image/video/audio speech приняты локально; batches ещё требуют собственного admission/consumer/outcome/recovery. Restricted501 означает закрытую возможность, а не реализованный сценарий. Accepted quota/refund/media primitives заново не писать. AG-P2 — каталог и настоящий AM consumer; AG-P3 — авторские версии/доход; AG-P4 — TON с сохранением RUB; AG-P5 — modalities, truthful UX и release.
 - Arena AR-P2 — полный конкурсный lifecycle, AR-P3 — доказательство качества (модели/агенты/RAG, reproducibility), AR-P4 — funding/payout, AR-P5 — export и выпуск. Pure scorer и выбранный JSON пока не означают выполненный evaluator.
 - Market AM-P2 — деньги и recovery run, AM-P3 — HTTP/Web identity, AM-P4 — useful agent и автор, AM-P5 — TON Web и owned-run/status TMA, AM-P6 — release и цикл оценки. Уже принятый DB baseline AM-P1 не повторять без причины.
 
@@ -118,4 +118,10 @@ TON0076 прошла итоговое source-review: прежние шесть H
 
 Fresh scoped evidence: post-fix unit387 PASS; combined native storage68 + mounted BYOK4 PASS до review-fix и impacted native legacy1/stream1/BYOK4 после него; migration0080 applied1/skipped79 и no-op0/80; strict types/build/lint/diff checks в пакете exit0. Post-fix amended root database baseline также завершился полностью: 17/17 files, 362/362 native PASS + обязательный TON core58/58, `FULL_BASELINE_RC=0`. Exact fixture — fee1000 microcredits, supplier0, balance5000→4000, provider1/ledger1; unknown provider outcome остаётся held, coherent durable outcome worker settles once. GLM final review `006e9e52283648efbde7b20ced5d8c52` → one Important, `edd365d`; scoped re-review `3616a07f63104acc955dd979c79ada76` → APPROVE.
 
-Следующий архитектурный пакет Aggregator — durable async media foundation: сначала image generation на admission-linked `prediction_jobs` и реальном poll/sink worker, затем video/audio speech поверх того же принятого lifecycle. Batches остаются отдельным container/consumer contract после media. Затем возвращаемся к авторскому lifecycle и продуктовым/операционным gates полной программы. Этот checkpoint не объявляет сервис завершённым.
+## Durable async media: локальный checkpoint27.09
+
+`2a490e1` → `0a2d6bf`, включая supplier-rounding `c38f7eb`, закрывают локальный media package: image/video/audio speech в explicit `stored_chat_embeddings_completions_stream_media` используют strict identity, exact decimal reserve, admission-linked `prediction_jobs`, opaque task id, DB-only GET, owned Kie polling/recovery и один terminal settlement path. Final review-fix wave отдельно закрыла stranded claimed replay, lost settlement ACK, Kie provider/egress boundary, worker `KIE_BASE_URL`, raw terminal output sanitization и malformed JSON до admission.
+
+Fresh gates на итоговом diff: focused102 PASS; gateway src/test + worker + adapter types exit0; gateway+worker builds PASS; поддерживаемый gateway lint и `git diff --check` PASS; guarded root DB baseline 21/21 files, 374/374 PASS + mandatory isolated TON core58/58, cleanup dropped/sessions0/canonical unchanged. External GLM final review не вернул usable report; Superpowers self-review был fallback и не считается independent approval. Runtime/production не переключались, paid provider не вызывался.
+
+Следующий архитектурный пакет Aggregator — durable batches admission/consumer lifecycle. После batches возвращаемся к авторскому lifecycle, AG→AM и продуктовым/операционным gates полной программы. Этот checkpoint не объявляет весь сервис завершённым.
