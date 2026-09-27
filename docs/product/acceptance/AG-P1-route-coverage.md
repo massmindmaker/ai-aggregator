@@ -1,4 +1,4 @@
-# AG-P1: покрытие денежных маршрутов — 20.09.2026
+# AG-P1: покрытие денежных маршрутов — 28.09.2026
 
 Это инвентаризация текущих исходников после принятого MC1–4, а не новая runtime/production-приёмка. Канон: [admission](../../superpowers/plans/2026-09-07-gateway-charge-admission.md), [mounted cutover](../../superpowers/plans/2026-09-08-stored-chat-public-cutover.md), [RUB refund](../../superpowers/plans/2026-09-06-topup-refund-clawback.md). Рабочий режим по умолчанию остаётся `legacy`; production настройки не менялись.
 
@@ -11,7 +11,7 @@
 | `/v1/embeddings` | Provider до legacy settlement | 501 до provider | В новом `stored_chat_embeddings` lifecycle принят локально: claim/reserve/один dispatch/outcome/settle/replay/recovery; runtime gate остаётся |
 | Images / video / audio speech | Submit/poll до settlement; queued job не связан с admission | В explicit `stored_chat_embeddings_completions_stream_media` принят локально durable async lifecycle: strict identity/idempotency, exact reserve, admission-linked `prediction_jobs`, opaque task id, DB-only GET, Kie poll/recovery и exactly-once settlement; старые stored modes остаются 501 | Runtime activation, real provider compatibility и production release остаются отдельными gates |
 | Audio transcription | Локальная ошибка без provider | 501 | Не включённый платный путь, отдельный контракт до продажи |
-| `/v1/batches` POST | DB row и очередь без admission ownership | 501 до row/queue | Batch consumer и admission lifecycle |
+| `/v1/batches` POST / summary / results GET | DB row и очередь без admission ownership | Старые stored modes: 501 до row/queue; в explicit `stored_chat_embeddings_completions_stream_media_batches` локально принят atomic per-item admission, ID-only queue, worker и DB-only GET | Runtime activation, real-provider compatibility и operator reconciliation остаются release gates |
 | Models / balance / batch GET | Read-only | Сохранены read-only | Auth/tenant ownership сохраняются, execution admission не нужен |
 
 Source anchors: `packages/api-gateway/src/server.ts`, `routes/v1/{stored-chat,chat,completions,embeddings,images,video,audio,batches}.ts`, `streaming/sse.ts`. Инвентаризация описывает достижимый source path при подходящем candidate; конкретная live availability моделей этим не проверялась.
@@ -60,7 +60,15 @@ Independent GLM-5.3-Flash final review `006e9e52283648efbde7b20ced5d8c52` наш
 
 Final review-fix wave закрыла stranded claimed replay, lost settlement ACK, supplier rounding, Kie-only/no-egress boundary, worker `KIE_BASE_URL`, raw provider output sanitization и malformed JSON до admission. Fresh evidence: focused unit 10 files / 102 PASS; gateway src/test + worker + adapter types exit0; gateway+worker build PASS; supported gateway lint + `git diff --check` PASS; guarded root DB baseline 21/21 files / 374 PASS + isolated TON core58/58, cleanup dropped/sessions0/canonical unchanged. External GLM reviewer не вернул usable final report; Superpowers final self-review использован как fallback, поэтому это не independent approval.
 
-Граница остаётся локальной: default runtime/production не переключён, paid provider call не выполнялся, egress proxy для durable media v1 fail-closed, STT/BYOK media/batches остаются вне этого checkpoint. Следующий кодовый пакет — durable batches admission/consumer lifecycle.
+Граница остаётся локальной: default runtime/production не переключён, paid provider call не выполнялся, egress proxy для durable media v1 fail-closed, STT/BYOK media остаются вне этого checkpoint. Durable batches приняты отдельным checkpoint ниже.
+
+## Durable stored batches checkpoint28.09
+
+`10dcced` → `0b0595b` → `43a3fb6` → `f6cc5f6` → `b949c80` реализуют [durable batch lifecycle](../../superpowers/plans/2026-09-27-durable-batch-lifecycle-implementation.md) в новом explicit mode. Строгая identity и вся подготовка предшествуют одной транзакции parent/items/per-item holds. POST возвращает202 только после ACK очереди, в job находится только opaque `batchId`; failed/completed retained job возвращается в ожидание атомарным BullMQ retry. Worker использует сохранённые provider request/quote и существующие admission primitives, не ищет цену в изменившемся каталоге. Pending sanitized evidence записывается до outcome, поэтому потерянный settlement ACK и осиротевший processing восстанавливаются без повторного provider вызова; неизвестный post-dispatch исход удерживает резерв для operator reconciliation.
+
+Fresh acceptance: focused unit21 files/349 PASS; mounted guarded batch3/3, включая committed settlement→lost ACK→recovery, неизменный payg balance и один settlement event первого item, затем успешного queued-соседа при ровно двух provider вызовах на два item. Чистый временный PostgreSQL на guarded `127.0.0.1:15432/ai_aggregator_test`: migration0086 и вся цепочка86 applied, повтор86 skipped; обязательный root DB baseline24/24 files,388/388 tests и TON core58/58. Исходный test PGDATA восстановлен, marker/ledger snapshot совпал, Redis не переключался. Gateway source/test и worker types, gateway+worker builds, supported gateway lint и diff-check exit0; независимые financial/recovery и TypeScript reviews — APPROVE.
+
+Это локальная source/native-приёмка. Default остаётся `legacy`, production migrations, paid provider transport и публичное включение нового mode не выполнялись. Поддерживаются только batch chat/embeddings/scalar completions без BYOK, streaming, tools и proxy. Следующий кодовый поток — AG→AM HTTP consumer и авторский/revenue lifecycle, а полный AG-P1/AG-P5 release gate остаётся открытым.
 
 ## Принятые локальные foundations
 

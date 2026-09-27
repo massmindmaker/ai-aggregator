@@ -1,6 +1,6 @@
 # AG-P1 — локальная приёмка денежного пути
 
-Статус на 08.09.2026: **основание принято частями; весь AG-P1 ещё не принят**. По умолчанию chat сохраняет legacy execution. Ограниченный stored_chat_only маршрут теперь принят локально; live mode не переключался. Этот указатель связывает принятые узкие проверки с оставшимися продуктовыми критериями, без автоматического повышения 108-балльной оценки.
+Статус на 28.09.2026: **основание принято частями; весь AG-P1 ещё не принят**. По умолчанию chat сохраняет legacy execution. Ограниченные stored modes приняты локально, но live mode не переключался. Этот указатель связывает принятые узкие проверки с оставшимися продуктовыми критериями, без автоматического повышения 108-балльной оценки.
 
 | Принятый блок | Source | Авторитетный контракт и evidence |
 |---|---|---|
@@ -15,6 +15,8 @@
 | Mounted plaintext HTTP и native verification | `ac23cae`, harness `cd37771`, test fix `1c072b3` | [MC acceptance](../../superpowers/plans/2026-09-08-stored-chat-public-cutover.md): baseline315, final native46, types/lint и independent Approved; явные границы evidence и default legacy |
 | TON invoice core | `c62ce98`, review-fix `724a031` | [AG-TON2](../../superpowers/plans/2026-09-08-ton-invoice-core.md): independent financial/TS re-review Approved; baseline12/322, migration72 applied1/skipped71, isolated native58 без skip, fresh72/noop72; own DB dropped/sessions0/canonical unchanged. Verifier, checkout, login, testnet/mainnet и production не приняты. |
 | Durable async media | `2a490e1` → `0a2d6bf`, rounding `c38f7eb` | [Media lifecycle](../../superpowers/plans/2026-09-26-durable-async-media-lifecycle.md): image/video/audio speech в explicit media mode получили strict identity/idempotency, exact reserve, admission-linked `prediction_jobs`, Kie task ownership, DB-only GET, poll/recovery и exactly-once settlement. Fresh focused102, guarded DB baseline374/374 + TON58/58, gateway src/test + worker + adapter types, gateway+worker builds, supported lint и diff-check PASS. Production/runtime/paid provider не включались; внешний GLM final review не дал usable report, поэтому final fix-wave закрыт Superpowers self-review, не independent approval. |
+
+| Durable batches | `10dcced` → `0b0595b` → `43a3fb6` → `f6cc5f6` → `b949c80` | [Batch lifecycle](../../superpowers/plans/2026-09-27-durable-batch-lifecycle-implementation.md): explicit mode принимает chat/embeddings/scalar completions batch только после атомарных per-item holds, в BullMQ передаёт лишь owned batch id; worker подтверждает один dispatch и exact settlement, а durable evidence восстанавливает потерянный ACK без второго provider вызова. Native two-item loss/queued-sibling proof3/3, focused unit349/349, clean migration0086: 86 applied/86 skipped, полный guarded DB baseline24/24 files и388/388 tests + TON core58/58, gateway source/test и worker types, gateway/worker builds, supported lint и diff-check PASS. Independent financial/recovery и TypeScript reviews APPROVE. Default runtime/production/paid provider не включались. |
 
 ## Открытые критерии
 

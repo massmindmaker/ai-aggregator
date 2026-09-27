@@ -7,7 +7,7 @@
 | Очередь | Источник | Следующий результат |
 |---|---|---|
 | 1. Aggregator — каталог | 19.09 resume plan, 13.09 public catalog contract, AG-P2 | Native matrix принят; остаётся настоящий AG→AM HTTP consumer |
-| 2. Aggregator — расчёты | AG-P1 route coverage, stored embeddings/completions/stream/BYOK/media lifecycle | Chat, embeddings, non-stream completions, durable chat SSE, non-stream chat BYOK и durable async image/video/audio speech приняты локально; следующий пакет — batches admission/consumer lifecycle |
+| 2. Aggregator — расчёты | AG-P1 route coverage, stored embeddings/completions/stream/BYOK/media/batches lifecycle | Chat, embeddings, non-stream completions, durable chat SSE, non-stream chat BYOK, async image/video/audio speech и batches приняты локально; следующие пакеты — AG→AM HTTP consumer и авторский/revenue lifecycle |
 | 3. Aggregator — продукт | Production continuation AG-P3/P4/P5 | Авторская версия→доход, TON alongside RUB/login, modalities/UX и сквозная приёмка |
 | 4. Arena | Собственный entrypoint и prediction evaluation plan | Executable scorer/hash и opt-in binding→DB jobs→sandboxed evaluator→результат |
 | 5. Agents Market | Собственный native-account-principal/Web plan | HTTP/security review→guarded auth browser→UUID domain/worker→AG HTTP integration и independent Web/TMA acceptance |
@@ -18,7 +18,7 @@ TON0076 прошла итоговое source-review: прежние шесть H
 
 ## Что остаётся в полной программе
 
-- Aggregator AG-P1: stored chat stream, non-stream chat BYOK и durable async image/video/audio speech приняты локально; batches ещё требуют собственного admission/consumer/outcome/recovery. Restricted501 означает закрытую возможность, а не реализованный сценарий. Accepted quota/refund/media primitives заново не писать. AG-P2 — каталог и настоящий AM consumer; AG-P3 — авторские версии/доход; AG-P4 — TON с сохранением RUB; AG-P5 — modalities, truthful UX и release.
+- Aggregator AG-P1: stored chat stream, non-stream chat BYOK, durable async image/video/audio speech и [durable batches](../product/acceptance/AG-P1-route-coverage.md#durable-stored-batches-checkpoint2809) приняты локально. Restricted501 в старых modes означает закрытую возможность, не реализованный сценарий. Accepted quota/refund/media/batch primitives заново не писать. AG-P2 — каталог и настоящий AM consumer; AG-P3 — авторские версии/доход; AG-P4 — TON с сохранением RUB; AG-P5 — modalities, truthful UX и release.
 - Arena AR-P2 — полный конкурсный lifecycle, AR-P3 — доказательство качества (модели/агенты/RAG, reproducibility), AR-P4 — funding/payout, AR-P5 — export и выпуск. Pure scorer и выбранный JSON пока не означают выполненный evaluator.
 - Market AM-P2 — деньги и recovery run, AM-P3 — HTTP/Web identity, AM-P4 — useful agent и автор, AM-P5 — TON Web и owned-run/status TMA, AM-P6 — release и цикл оценки. Уже принятый DB baseline AM-P1 не повторять без причины.
 
@@ -124,4 +124,4 @@ Fresh scoped evidence: post-fix unit387 PASS; combined native storage68 + mounte
 
 Fresh gates на итоговом diff: focused102 PASS; gateway src/test + worker + adapter types exit0; gateway+worker builds PASS; поддерживаемый gateway lint и `git diff --check` PASS; guarded root DB baseline 21/21 files, 374/374 PASS + mandatory isolated TON core58/58, cleanup dropped/sessions0/canonical unchanged. External GLM final review не вернул usable report; Superpowers self-review был fallback и не считается independent approval. Runtime/production не переключались, paid provider не вызывался.
 
-Следующий архитектурный пакет Aggregator — durable batches admission/consumer lifecycle. После batches возвращаемся к авторскому lifecycle, AG→AM и продуктовым/операционным gates полной программы. Этот checkpoint не объявляет весь сервис завершённым.
+Durable batches admission/consumer/recovery приняты локально28.09: `10dcced`→`b949c80`, clean86 applied86/no-op86, root native baseline388/388 + TON58/58, source/test/worker types и builds/lint PASS, independent financial/TS APPROVE. Следующие архитектурные пакеты Aggregator — настоящий AG→AM HTTP consumer и авторский/revenue lifecycle; продуктовые/операционные gates полной программы остаются. Этот checkpoint не объявляет весь сервис завершённым.
