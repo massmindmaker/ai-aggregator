@@ -178,7 +178,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       "aiag_mark_gateway_charge_dispatched",
     );
     // 0073 adds catalog revisions; 0074 adds observations and reconciliation cursors.
-    expect(Number(result.rows[0].table_count)).toBe(113);
+    expect(Number(result.rows[0].table_count)).toBe(114);
   });
 
   it("verifies TON immutable schema, invoker entrypoints and exact mirror", async () => {
@@ -269,7 +269,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     assertLatestFunctionMirror(quotaMirror, [migration, storedEmbeddingsMigration, mediaQuotaMigration, mediaSupplierRoundingMigration]);
   });
 
-  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 84 migrations", async () => {
+  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 85 migrations", async () => {
     const migration = await readFile(resolve("packages/database/migrations/0069_gateway_http_storage.sql"), "utf8");
     const storedEmbeddingsMigration = await readFile(resolve("packages/database/migrations/0077_gateway_stored_embeddings.sql"), "utf8");
     const storedCompletionsMigration = await readFile(resolve("packages/database/migrations/0078_gateway_stored_completions.sql"), "utf8");
@@ -280,7 +280,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect([...functionDefinitions(mirror).keys()].filter(signature => signature.startsWith("aiag_http_validate_response("))).toHaveLength(2);
     const previous = await readFile(resolve("packages/database/migrations/0068_gateway_durable_spending_quotas.sql"));
     expect(createHash("sha256").update(previous).digest("hex")).toBe("b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6");
-    expect(await discoverNativeMigrations()).toHaveLength(84);
+    expect(await discoverNativeMigrations()).toHaveLength(85);
     const types = await client.query<{ name: string; fields: string[] }>({ text: `
       SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
       JOIN pg_attribute a ON a.attrelid=t.typrelid AND a.attnum>0 AND NOT a.attisdropped

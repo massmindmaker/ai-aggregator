@@ -450,7 +450,7 @@ export const predictionJobs = pgTable(
 );
 
 // -----------------------------------------------------------------------------
-// batches
+// batches + durable batch_items
 // -----------------------------------------------------------------------------
 export const batches = pgTable(
   'batches',
@@ -460,7 +460,7 @@ export const batches = pgTable(
     orgId: uuid('org_id').notNull(),
     apiKeyId: uuid('api_key_id'),
     type: varchar('type', { length: 20 }).notNull(),
-    status: varchar('status', { length: 20 }).notNull().default('validating'),
+    status: varchar('status', { length: 32 }).notNull().default('validating'),
     inputFileUrl: text('input_file_url').notNull(),
     outputFileUrl: text('output_file_url'),
     errorFileUrl: text('error_file_url'),
@@ -468,11 +468,65 @@ export const batches = pgTable(
     completedCount: integer('completed_count').notNull().default(0),
     failedCount: integer('failed_count').notNull().default(0),
     costRub: numeric('cost_rub', { precision: 18, scale: 6 }).notNull().default('0'),
+    contractVersion: smallint('contract_version').notNull().default(1),
+    billingMode: varchar('billing_mode', { length: 16 }),
+    idempotencyKeyDigest: varchar('idempotency_key_digest', { length: 64 }),
+    requestFingerprint: varchar('request_fingerprint', { length: 64 }),
+    queuedAt: timestamp('queued_at', { withTimezone: true }),
+    reconcileAfter: timestamp('reconcile_after', { withTimezone: true }),
+    terminalAt: timestamp('terminal_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
   (t) => ({
     orgStatusIdx: index('batches_org_status_idx').on(t.orgId, t.status),
+    durableIdentityUniq: uniqueIndex('batches_durable_identity_unique').on(
+      t.orgId,
+      t.contractVersion,
+      t.billingMode,
+      t.idempotencyKeyDigest
+    ),
+    reconcileIdx: index('batches_reconcile_idx').on(t.reconcileAfter, t.createdAt),
+  })
+);
+
+export const batchItems = pgTable(
+  'batch_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    batchId: uuid('batch_id')
+      .notNull()
+      .references(() => batches.id, { onDelete: 'cascade' }),
+    itemIndex: integer('item_index').notNull(),
+    customId: varchar('custom_id', { length: 128 }).notNull(),
+    routeKind: varchar('route_kind', { length: 32 }).notNull(),
+    requestFingerprint: varchar('request_fingerprint', { length: 64 }).notNull(),
+    requestBody: jsonb('request_body').$type<Record<string, unknown>>().notNull(),
+    billingRequestId: uuid('billing_request_id')
+      .notNull()
+      .references(() => gatewayChargeAdmissions.billingRequestId, { onDelete: 'restrict' }),
+    attemptId: uuid('attempt_id').notNull(),
+    modelSlug: varchar('model_slug', { length: 128 }).notNull(),
+    modelUpstreamId: uuid('model_upstream_id').notNull(),
+    upstreamId: varchar('upstream_id', { length: 64 }).notNull(),
+    upstreamModelId: varchar('upstream_model_id', { length: 256 }).notNull(),
+    adapterKey: varchar('adapter_key', { length: 64 }).notNull(),
+    pricingSnapshot: jsonb('pricing_snapshot').$type<Record<string, unknown>>().notNull(),
+    providerRequest: jsonb('provider_request').$type<Record<string, unknown>>().notNull(),
+    status: varchar('status', { length: 32 }).notNull().default('queued'),
+    output: jsonb('output').$type<Record<string, unknown>>(),
+    errorCode: varchar('error_code', { length: 64 }),
+    resultDigest: varchar('result_digest', { length: 64 }),
+    deadlineAt: timestamp('deadline_at', { withTimezone: true }).notNull(),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    parentIndexUniq: uniqueIndex('batch_items_parent_index_unique').on(t.batchId, t.itemIndex),
+    parentCustomUniq: uniqueIndex('batch_items_parent_custom_unique').on(t.batchId, t.customId),
+    billingUniq: uniqueIndex('batch_items_billing_unique').on(t.billingRequestId),
+    claimIdx: index('batch_items_claim_idx').on(t.batchId, t.status, t.itemIndex),
   })
 );
 

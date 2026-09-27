@@ -9,6 +9,7 @@ import {
   piiDetections,
   predictionJobs,
   batches,
+  batchItems,
 } from '../gateway';
 
 describe('Plan 04 gateway schema', () => {
@@ -80,10 +81,23 @@ describe('Plan 04 gateway schema', () => {
     );
   });
 
-  it('batches has batch_id + input_file_url + counters', () => {
+  it('batches has durable identity, queue recovery and terminal metadata', () => {
     const keys = Object.keys(batches);
-    expect(keys).toEqual(
-      expect.arrayContaining(['batchId', 'inputFileUrl', 'totalCount', 'completedCount', 'failedCount', 'costRub'])
-    );
+    expect(keys).toEqual(expect.arrayContaining([
+      'batchId', 'inputFileUrl', 'totalCount', 'completedCount', 'failedCount', 'costRub',
+      'contractVersion', 'billingMode', 'idempotencyKeyDigest', 'requestFingerprint',
+      'queuedAt', 'reconcileAfter', 'terminalAt',
+    ]));
+  });
+
+  it('batch_items owns immutable item identity, billing owner, pinned execution facts and sanitized terminal result', () => {
+    const keys = Object.keys(batchItems);
+    expect(keys).toEqual(expect.arrayContaining([
+      'batchId', 'itemIndex', 'customId', 'routeKind', 'requestFingerprint', 'requestBody',
+      'billingRequestId', 'attemptId', 'modelSlug', 'modelUpstreamId', 'upstreamId',
+      'upstreamModelId', 'adapterKey', 'pricingSnapshot', 'providerRequest', 'status', 'output', 'errorCode', 'resultDigest',
+      'deadlineAt', 'settledAt', 'createdAt', 'updatedAt',
+    ]));
+    expect(keys).not.toEqual(expect.arrayContaining(['apiKey', 'byokKey', 'proxyCredential', 'providerResponse']));
   });
 });
