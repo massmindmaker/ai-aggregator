@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthenticatedApiKey } from '../middleware/auth-plan04';
-import { createBatchQueueProducer } from '../lib/batch-queue';
+import { createBatchQueueProducer, ensureOwnedBatchJob } from '../lib/batch-queue';
 import { createStoredBatchesRoute } from '../routes/v1/stored-batches';
 
 const orgId = '10000000-0000-4000-8000-000000000001';
@@ -63,8 +63,30 @@ function harness(overrides: Record<string, unknown> = {}) {
 }
 
 describe('durable batch queue producer', () => {
+  it('exposes the same strict ID-only ownership state machine for scanner queues', async () => {
+    const retry = vi.fn(async () => {});
+    const add = vi.fn(async (_name: string, _data: { batchId: string }, _options: Record<string, unknown>) => ({
+      id: 'batch-' + summary.batchId,
+      data: { batchId: summary.batchId },
+      getState: vi.fn(async () => 'failed'),
+      retry,
+    }));
+    await ensureOwnedBatchJob({ add }, summary.batchId);
+    expect(add).toHaveBeenCalledWith('batch', { batchId: summary.batchId }, {
+      jobId: 'batch-' + summary.batchId,
+      removeOnComplete: 1000,
+      removeOnFail: 1000,
+    });
+    expect(retry).toHaveBeenCalledWith('failed');
+  });
+
   it('sends only the owned batch id with deterministic queue ownership', async () => {
-    const add = vi.fn(async () => ({ id: 'batch-' + summary.batchId }));
+    const add = vi.fn(async (_name: string, _data: { batchId: string }, _options: Record<string, unknown>) => ({
+      id: 'batch-' + summary.batchId,
+      data: { batchId: summary.batchId },
+      getState: vi.fn(async () => 'waiting'),
+      retry: vi.fn(),
+    }));
     const close = vi.fn(async () => {});
     const enqueue = createBatchQueueProducer({
       redisUrl: 'redis://127.0.0.1:16379',
@@ -92,10 +114,93 @@ describe('durable batch queue producer', () => {
     await expect(enqueue(summary.batchId)).rejects.toThrow('acknowledgement');
     expect(close).toHaveBeenCalledOnce();
   });
+
+  it.each(['failed', 'completed'] as const)(
+    'atomically revives a retained %s job with the same ID-only payload',
+    async (state) => {
+      const retry = vi.fn(async () => {});
+      const job = {
+        id: 'batch-' + summary.batchId,
+        data: { batchId: summary.batchId },
+        getState: vi.fn(async () => state),
+        retry,
+      };
+      const enqueue = createBatchQueueProducer({
+        redisUrl: 'redis://127.0.0.1:16379',
+        openQueue: vi.fn(async () => ({ add: vi.fn(async () => job), close: vi.fn(async () => {}) })),
+      });
+      await enqueue(summary.batchId);
+      expect(retry).toHaveBeenCalledWith(state);
+      expect(Object.keys(job.data)).toEqual(['batchId']);
+    },
+  );
+
+  it.each(['waiting', 'active', 'delayed', 'prioritized', 'waiting-children'] as const)(
+    'accepts an existing %s duplicate as live queue ownership',
+    async (state) => {
+      const retry = vi.fn();
+      const job = {
+        id: 'batch-' + summary.batchId,
+        data: { batchId: summary.batchId },
+        getState: vi.fn(async () => state),
+        retry,
+      };
+      const enqueue = createBatchQueueProducer({
+        redisUrl: 'redis://127.0.0.1:16379',
+        openQueue: vi.fn(async () => ({ add: vi.fn(async () => job), close: vi.fn(async () => {}) })),
+      });
+      await enqueue(summary.batchId);
+      expect(retry).not.toHaveBeenCalled();
+    },
+  );
+
+  it('treats a concurrent scanner retry race as success only after observing live ownership', async () => {
+    const getState = vi.fn()
+      .mockResolvedValueOnce('failed')
+      .mockResolvedValueOnce('waiting');
+    const retry = vi.fn(async () => { throw new Error('job is no longer failed'); });
+    const job = { id: 'batch-' + summary.batchId, data: { batchId: summary.batchId }, getState, retry };
+    const enqueue = createBatchQueueProducer({
+      redisUrl: 'redis://127.0.0.1:16379',
+      openQueue: vi.fn(async () => ({ add: vi.fn(async () => job), close: vi.fn(async () => {}) })),
+    });
+    await enqueue(summary.batchId);
+    expect(retry).toHaveBeenCalledWith('failed');
+    expect(getState).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails closed when a terminal retry loses a race without live ownership', async () => {
+    const job = {
+      id: 'batch-' + summary.batchId,
+      data: { batchId: summary.batchId },
+      getState: vi.fn(async () => 'failed'),
+      retry: vi.fn(async () => { throw new Error('retry rejected'); }),
+    };
+    const enqueue = createBatchQueueProducer({
+      redisUrl: 'redis://127.0.0.1:16379',
+      openQueue: vi.fn(async () => ({ add: vi.fn(async () => job), close: vi.fn(async () => {}) })),
+    });
+    await expect(enqueue(summary.batchId)).rejects.toThrow('ownership');
+  });
+
+  it('rejects an existing deterministic job carrying anything beyond the owned batch id', async () => {
+    const job = {
+      id: 'batch-' + summary.batchId,
+      data: { batchId: summary.batchId, orgId },
+      getState: vi.fn(async () => 'waiting'),
+      retry: vi.fn(),
+    };
+    const enqueue = createBatchQueueProducer({
+      redisUrl: 'redis://127.0.0.1:16379',
+      openQueue: vi.fn(async () => ({ add: vi.fn(async () => job), close: vi.fn(async () => {}) })),
+    });
+    await expect(enqueue(summary.batchId)).rejects.toThrow('acknowledgement invalid');
+    expect(job.getState).not.toHaveBeenCalled();
+  });
 });
 
 describe('stored batch HTTP composition', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); });
 
   it('does identity, durable replay read, full preparation, atomic create and queue ACK before 202', async () => {
     const { app, calls } = harness();

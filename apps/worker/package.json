@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@aiag/database": "*",
+    "@aiag/api-gateway": "*",
     "@aiag/shared": "*",
     "@aiag/upstream-adapters": "*",
     "bullmq": "^5.76.6",

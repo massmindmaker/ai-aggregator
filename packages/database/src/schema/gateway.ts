@@ -513,6 +513,7 @@ export const batchItems = pgTable(
     adapterKey: varchar('adapter_key', { length: 64 }).notNull(),
     pricingSnapshot: jsonb('pricing_snapshot').$type<Record<string, unknown>>().notNull(),
     providerRequest: jsonb('provider_request').$type<Record<string, unknown>>().notNull(),
+    pendingEvidence: jsonb('pending_evidence').$type<Record<string, unknown>>(),
     status: varchar('status', { length: 32 }).notNull().default('queued'),
     output: jsonb('output').$type<Record<string, unknown>>(),
     errorCode: varchar('error_code', { length: 64 }),

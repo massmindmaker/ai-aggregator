@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/server.ts', 'src/server-node.ts'],
+  entry: ['src/index.ts', 'src/server.ts', 'src/server-node.ts', 'src/batch-runtime.ts'],
   format: ['esm'],
   dts: true,
   clean: true,

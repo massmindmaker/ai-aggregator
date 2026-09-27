@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./batch-runtime": {
+      "import": "./dist/batch-runtime.js",
+      "types": "./dist/batch-runtime.d.ts"
     }
   },
   "scripts": {

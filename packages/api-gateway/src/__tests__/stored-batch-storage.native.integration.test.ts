@@ -1,18 +1,25 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { assertTestDatabaseEnvironment } from '../../../database/scripts/test-db-guard';
 import { sql } from '../lib/db';
 import { prepareStoredChatExecution } from '../billing/stored-chat-execution-preparation';
 import {
   claimNextStoredBatchItem,
+  completeStoredBatchItemFromPendingEvidence,
   createOrReplayStoredBatch,
+  hasQueuedStoredBatchItems,
   listRecoverableStoredBatches,
+  listStoredBatchEvidenceRecoveryCandidates,
+  loadStoredBatchPendingEvidence,
   loadStoredBatchItem,
   markStoredBatchQueued,
   markStoredBatchItemTerminal,
   markStoredBatchQueueRecoveryNeeded,
   readStoredBatch,
   readStoredBatchResults,
+  reconcileStaleStoredBatchProcessing,
+  recordStoredBatchPendingEvidence,
+  releaseStoredBatchItemClaimForRetry,
   refreshStoredBatchAggregate,
   StoredBatchConflictError,
 } from '../billing/stored-batch-storage';
@@ -60,7 +67,7 @@ async function fixture(payg:bigint){
   const f={user:randomUUID(),org:randomUUID(),key:randomUUID()}; fixtures.push(f);
   await sql`INSERT INTO users(id,email) VALUES(${f.user}::uuid,${'batch-'+f.user+'@example.test'})`;
   await sql`INSERT INTO organizations(id,slug,name,owner_id,subscription_credits,payg_credits)
-    VALUES(${f.org}::uuid,${'batch-'+f.org},'Batch fixture',${f.user}::uuid,0,${payg})`;
+    VALUES(${f.org}::uuid,${'batch-'+f.org},'Batch fixture',${f.user}::uuid,0,${payg.toString()}::bigint)`;
   await sql`INSERT INTO gateway_api_keys(id,org_id,name,key_hash,key_prefix,policies,rpm_limit,batch_rpm_limit,model_whitelist,ru_residency_only)
     VALUES(${f.key}::uuid,${f.org}::uuid,'Batch key',${randomUUID().replaceAll('-','').padEnd(64,'0').slice(0,64)},'sk_test','{}',100,100,'[]',false)`;
   await sql`INSERT INTO gateway_quota_org_policies(org_id,enforcement_version,daily_supplier_usd_micro_limit_v2)
@@ -157,6 +164,7 @@ describe.skipIf(!enabled)('stored batch atomic storage native',()=>{
 
     expect(await readStoredBatch(randomUUID(),batchId)).toBeNull();
     expect(await readStoredBatch(f.org,batchId)).toMatchObject({batchId,status:'queued',totalCount:2});
+    expect(await hasQueuedStoredBatchItems(batchId)).toBe(true);
     await expect(readStoredBatchResults(randomUUID(),batchId)).resolves.toEqual({items:[],nextCursor:null});
     await expect(readStoredBatchResults(f.org,batchId,-1,1)).resolves.toMatchObject({
       items:[{index:0,customId:'first',status:'queued',output:null,errorCode:null,settledMicrocredits:null}],
@@ -177,6 +185,8 @@ describe.skipIf(!enabled)('stored batch atomic storage native',()=>{
       admission:{state:'held',billingMode:'stored'},
     });
     await expect(loadStoredBatchItem(claimed!.id)).resolves.toMatchObject({id:claimed!.id,status:'processing'});
+    expect(await hasQueuedStoredBatchItems(batchId)).toBe(true);
+    expect(await hasQueuedStoredBatchItems('batch_'+randomUUID().replaceAll('-',''))).toBe(false);
     expect(await sql`SELECT billing_request_id FROM gateway_charge_admissions WHERE org_id=${f.org}::uuid`).toHaveLength(2);
   },30000);
 
@@ -262,6 +272,7 @@ describe.skipIf(!enabled)('stored batch atomic storage native',()=>{
     const queuedAt='2026-09-27T19:00:00.123000Z';
     await markStoredBatchQueueRecoveryNeeded(batchId,'2026-09-27T19:05:00.000000Z');
     expect(await claimNextStoredBatchItem(batchId)).not.toBeNull();
+    expect(await hasQueuedStoredBatchItems(batchId)).toBe(false);
 
     await expect(markStoredBatchQueued(batchId,queuedAt)).resolves.toBeUndefined();
     await expect(readStoredBatch(f.org,batchId)).resolves.toMatchObject({queuedAt,reconcileAfter:null,status:'processing'});
@@ -288,5 +299,139 @@ describe.skipIf(!enabled)('stored batch atomic storage native',()=>{
     await sql`UPDATE batches SET terminal_at=clock_timestamp() WHERE batch_id=${lateBatchId}`;
     await expect(markStoredBatchQueued(lateBatchId,queuedAt)).resolves.toBeUndefined();
     await expect(readStoredBatch(f.org,lateBatchId)).resolves.toMatchObject({queuedAt:null});
+  },30000);
+
+  it('persists exact pending evidence idempotently and selects outcome obligations even when evidence is missing',async()=>{
+    const f=await fixture(2_000_000n);
+    let n=700; const next=()=>uuid(n++);
+    const createClaim=async(digest:string,customId:string)=>{
+      const batchId='batch_'+randomUUID().replaceAll('-','');
+      await createOrReplayStoredBatch({
+        orgId:f.org,apiKeyId:f.key,batchId,batchType:'chat',contractVersion:5,billingMode:'stored',
+        idempotencyKeyDigest:digest.repeat(64),requestFingerprint:(digest==='b'?'c':'d').repeat(64),
+        expiresAt:new Date(Date.now()+86_400_000).toISOString(),items:[item(0,customId,f.org,f.key,next)],
+      });
+      const claimed=await claimNextStoredBatchItem(batchId);
+      if(!claimed) throw new Error('claim missing');
+      await sql`UPDATE gateway_charge_admissions SET state='dispatched',attempt_id=${claimed.attemptId}::uuid,
+        upstream_id=${claimed.upstreamId},pricing_snapshot=${JSON.stringify(claimed.pricingSnapshot)}::text::jsonb,
+        dispatched_at=clock_timestamp(),reconcile_after=clock_timestamp()+interval '15 minutes'
+        WHERE billing_request_id=${claimed.billingRequestId}::uuid`;
+      return claimed;
+    };
+    const owned=await createClaim('b','with-evidence');
+    const output={answer:'ok'};
+    const evidence={
+      output,usageSnapshot:{version:1,promptTokens:1},actualCostCredits:1n,
+      resultDigest:createHash('sha256').update(JSON.stringify(output)).digest('hex'),
+    };
+    await expect(recordStoredBatchPendingEvidence(owned.id,evidence)).resolves.toBeUndefined();
+    await expect(recordStoredBatchPendingEvidence(owned.id,evidence)).resolves.toBeUndefined();
+    await expect(recordStoredBatchPendingEvidence(owned.id,{...evidence,actualCostCredits:2n}))
+      .rejects.toBeInstanceOf(StoredBatchConflictError);
+    await expect(loadStoredBatchPendingEvidence(owned.id)).resolves.toEqual(evidence);
+    const dispatchedCandidates=await listStoredBatchEvidenceRecoveryCandidates(new Date(Date.now()+60_000).toISOString());
+    expect(dispatchedCandidates.find((value)=>value.itemId===owned.id)).toMatchObject({
+      admissionState:'dispatched',evidence,
+    });
+
+    const missing=await createClaim('e','missing-evidence');
+    await expect(loadStoredBatchPendingEvidence(missing.id)).resolves.toBeNull();
+    for(const claimed of [owned,missing]){
+      await sql`UPDATE gateway_charge_admissions SET state='outcome_recorded',actual_cost_credits=1,
+        usage_snapshot=${JSON.stringify(evidence.usageSnapshot)}::text::jsonb,outcome_kind='success',
+        outcome_recorded_at=clock_timestamp(),reconcile_after=clock_timestamp()
+        WHERE billing_request_id=${claimed.billingRequestId}::uuid`;
+    }
+    const candidates=await listStoredBatchEvidenceRecoveryCandidates(new Date(Date.now()+60_000).toISOString());
+    expect(candidates.find((value)=>value.itemId===owned.id)).toMatchObject({
+      admissionState:'outcome_recorded',evidence,
+    });
+    expect(candidates.find((value)=>value.itemId===missing.id)).toMatchObject({
+      admissionState:'outcome_recorded',evidence:null,
+    });
+
+    const settledRows=await sql<Array<{billing_request_id:string;settled_at:string}>>`
+      UPDATE gateway_charge_admissions SET state='settled',settled_at=clock_timestamp(),reconcile_after=NULL
+      WHERE billing_request_id=ANY(${[owned.billingRequestId,missing.billingRequestId]}::uuid[])
+      RETURNING billing_request_id::text,
+        to_char(settled_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS settled_at`;
+    await sql`UPDATE batch_items SET status='reconciliation_required',error_code='OUTCOME_ACK_LOST'
+      WHERE id=ANY(${[owned.id,missing.id]}::uuid[])`;
+    const ownedSettled=settledRows.find((value)=>value.billing_request_id===owned.billingRequestId)!.settled_at;
+    const missingSettled=settledRows.find((value)=>value.billing_request_id===missing.billingRequestId)!.settled_at;
+    await expect(completeStoredBatchItemFromPendingEvidence(owned.id,ownedSettled)).resolves.toBeUndefined();
+    await expect(completeStoredBatchItemFromPendingEvidence(owned.id,ownedSettled)).resolves.toBeUndefined();
+    await expect(readStoredBatchResults(f.org,owned.batchId)).resolves.toMatchObject({
+      items:[{status:'completed',output}],
+    });
+    await expect(sql`SELECT result_digest FROM batch_items WHERE id=${owned.id}::uuid`)
+      .resolves.toEqual([{result_digest:evidence.resultDigest}]);
+    await sql`UPDATE batch_items SET output='{"answer":"tampered"}'::jsonb WHERE id=${owned.id}::uuid`;
+    await expect(completeStoredBatchItemFromPendingEvidence(owned.id,ownedSettled))
+      .rejects.toBeInstanceOf(StoredBatchConflictError);
+    await expect(completeStoredBatchItemFromPendingEvidence(missing.id,missingSettled))
+      .rejects.toBeInstanceOf(StoredBatchConflictError);
+  },30000);
+
+  it('releases only held undispatched processing claims and marks the parent for retry',async()=>{
+    const f=await fixture(2_000_000n);
+    let n=800; const next=()=>uuid(n++);
+    const batchId='batch_'+randomUUID().replaceAll('-','');
+    await createOrReplayStoredBatch({
+      orgId:f.org,apiKeyId:f.key,batchId,batchType:'chat',contractVersion:5,billingMode:'stored',
+      idempotencyKeyDigest:'f'.repeat(64),requestFingerprint:'0'.repeat(64),
+      expiresAt:new Date(Date.now()+86_400_000).toISOString(),items:[item(0,'retry',f.org,f.key,next)],
+    });
+    const claimed=await claimNextStoredBatchItem(batchId);
+    if(!claimed) throw new Error('claim missing');
+    const retryAt='2030-01-01T00:01:00.000000Z';
+    await expect(releaseStoredBatchItemClaimForRetry(claimed.id,retryAt)).resolves.toBeUndefined();
+    await expect(loadStoredBatchItem(claimed.id)).resolves.toMatchObject({status:'queued',admission:{state:'held'}});
+    await expect(readStoredBatch(f.org,batchId)).resolves.toMatchObject({status:'reconciliation_required',reconcileAfter:retryAt});
+    await expect(releaseStoredBatchItemClaimForRetry(claimed.id,retryAt)).rejects.toBeInstanceOf(StoredBatchConflictError);
+  },30000);
+
+  it('requeues stale held claims but reconciles stale dispatched claims without provider work or releasing holds',async()=>{
+    const f=await fixture(2_000_000n);
+    let n=900; const next=()=>uuid(n++);
+    const batchId='batch_'+randomUUID().replaceAll('-','');
+    await createOrReplayStoredBatch({
+      orgId:f.org,apiKeyId:f.key,batchId,batchType:'chat',contractVersion:5,billingMode:'stored',
+      idempotencyKeyDigest:'1'.repeat(64),requestFingerprint:'2'.repeat(64),
+      expiresAt:new Date(Date.now()+86_400_000).toISOString(),items:[item(0,'stale',f.org,f.key,next)],
+    });
+    const claimed=await claimNextStoredBatchItem(batchId);
+    if(!claimed) throw new Error('claim missing');
+    const now='2026-09-27T22:00:00.000000Z';
+    await sql`UPDATE batch_items SET updated_at=${'2026-09-27T20:00:00.000000Z'}::timestamptz WHERE id=${claimed.id}::uuid`;
+    await expect(reconcileStaleStoredBatchProcessing(now,3600,10)).resolves.toEqual([claimed.id]);
+    await expect(loadStoredBatchItem(claimed.id)).resolves.toMatchObject({status:'queued',admission:{state:'held'}});
+    await expect(readStoredBatch(f.org,batchId)).resolves.toMatchObject({status:'reconciliation_required',reconciliationCount:0});
+    await expect(listRecoverableStoredBatches(now)).resolves.toContain(batchId);
+
+    const dispatchedBatchId='batch_'+randomUUID().replaceAll('-','');
+    await createOrReplayStoredBatch({
+      orgId:f.org,apiKeyId:f.key,batchId:dispatchedBatchId,batchType:'chat',contractVersion:5,billingMode:'stored',
+      idempotencyKeyDigest:'3'.repeat(64),requestFingerprint:'4'.repeat(64),
+      expiresAt:new Date(Date.now()+86_400_000).toISOString(),items:[
+        item(0,'dispatched-stale',f.org,f.key,next),item(1,'queued-sibling',f.org,f.key,next),
+      ],
+    });
+    await markStoredBatchQueued(dispatchedBatchId,'2026-09-27T20:00:01.000000Z');
+    const dispatched=await claimNextStoredBatchItem(dispatchedBatchId);
+    if(!dispatched) throw new Error('dispatched claim missing');
+    await sql`UPDATE gateway_charge_admissions SET state='dispatched',attempt_id=${dispatched.attemptId}::uuid,
+      upstream_id=${dispatched.upstreamId},pricing_snapshot=${JSON.stringify(dispatched.pricingSnapshot)}::text::jsonb,
+      dispatched_at=clock_timestamp(),reconcile_after=clock_timestamp()+interval '15 minutes'
+      WHERE billing_request_id=${dispatched.billingRequestId}::uuid`;
+    await sql`UPDATE batch_items SET updated_at=${'2026-09-27T20:00:00.000000Z'}::timestamptz WHERE id=${dispatched.id}::uuid`;
+    await expect(reconcileStaleStoredBatchProcessing(now,3600,10)).resolves.toEqual([dispatched.id]);
+    await expect(loadStoredBatchItem(dispatched.id)).resolves.toMatchObject({
+      status:'reconciliation_required',admission:{state:'dispatched'},
+    });
+    await expect(readStoredBatch(f.org,dispatchedBatchId)).resolves.toMatchObject({status:'reconciliation_required',reconciliationCount:1});
+    await expect(listRecoverableStoredBatches(now)).resolves.toContain(dispatchedBatchId);
+    await expect(reconcileStaleStoredBatchProcessing(now,3600,10)).resolves.toEqual([]);
   },30000);
 });

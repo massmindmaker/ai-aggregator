@@ -95,7 +95,8 @@ describe('Plan 04 gateway schema', () => {
     expect(keys).toEqual(expect.arrayContaining([
       'batchId', 'itemIndex', 'customId', 'routeKind', 'requestFingerprint', 'requestBody',
       'billingRequestId', 'attemptId', 'modelSlug', 'modelUpstreamId', 'upstreamId',
-      'upstreamModelId', 'adapterKey', 'pricingSnapshot', 'providerRequest', 'status', 'output', 'errorCode', 'resultDigest',
+      'upstreamModelId', 'adapterKey', 'pricingSnapshot', 'providerRequest', 'pendingEvidence',
+      'status', 'output', 'errorCode', 'resultDigest',
       'deadlineAt', 'settledAt', 'createdAt', 'updatedAt',
     ]));
     expect(keys).not.toEqual(expect.arrayContaining(['apiKey', 'byokKey', 'proxyCredential', 'providerResponse']));

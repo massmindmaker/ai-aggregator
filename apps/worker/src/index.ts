@@ -32,6 +32,10 @@ import { startCatalogSyncCron } from './catalog/sync-cron.js';
 
 async function main(): Promise<void> {
   loadSharedEnv();
+  // These modules import gateway runtime/storage bindings. Load them only
+  // after shared env is present so DATABASE_URL is captured correctly.
+  const { startBatchProcessWorker } = await import('./queues/batch-process.js');
+  const { startBatchProcessRecovery } = await import('./queues/batch-process-recovery.js');
   const gatewaySettlementRecovery = await startGatewaySettlementRecoveryFromEnv({
     env: process.env,
     logger,
@@ -70,6 +74,8 @@ async function main(): Promise<void> {
 
   const webhookRetry = startWebhookRetryWorker(connection);
   const emailSend = startEmailSendWorker(connection);
+  const batchProcess = startBatchProcessWorker(connection);
+  const batchProcessRecovery = startBatchProcessRecovery(connection);
 
   // ---------------------------------------------------------------------------
   // Phase 14 crons — closeContestsCron (hourly) + finalizeEarningsCron (daily).
@@ -108,6 +114,8 @@ async function main(): Promise<void> {
     contestEval,
     webhookRetry,
     emailSend,
+    batchProcess,
+    batchProcessRecovery,
     closeContests,
     finalizeEarnings,
     ...(gatewaySettlementRecovery === null ? [] : [gatewaySettlementRecovery]),

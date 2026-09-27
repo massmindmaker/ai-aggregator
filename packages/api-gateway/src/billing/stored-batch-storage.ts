@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import { sql as defaultSql, type SqlClient } from '../lib/db';
 import {
   admissionJsonObjectsEqual,
   normalizeAdmissionTimestamp,
   normalizeAdmissionUuid,
+  parseAdmissionBigint,
   parseAdmissionJsonObject,
   parseGatewayChargeAdmissionResult,
   type GatewayChargeAdmissionResult,
@@ -87,6 +89,22 @@ export type StoredBatchWorkerItem = Readonly<{
   admission:GatewayChargeAdmissionResult;
 }>;
 
+export type StoredBatchPendingEvidence = Readonly<{
+  output:JsonObject;
+  usageSnapshot:JsonObject;
+  actualCostCredits:bigint;
+  resultDigest:string;
+}>;
+
+export type StoredBatchEvidenceRecoveryCandidate = Readonly<{
+  itemId:string;
+  parentId:string;
+  batchId:string;
+  billingRequestId:string;
+  admissionState:'dispatched'|'outcome_recorded'|'settled';
+  evidence:StoredBatchPendingEvidence|null;
+}>;
+
 export class StoredBatchConflictError extends Error {
   readonly code='BATCH_IDENTITY_CONFLICT';
   constructor(){super('Stored batch identity conflict');this.name='StoredBatchConflictError';}
@@ -124,6 +142,37 @@ function boundedInt(value:unknown,name:string):number{
 function nullable(value:unknown):string|null{return value===null||value===undefined?null:String(value);}
 function uuid(value:unknown):string{return normalizeAdmissionUuid(value);}
 function object(value:unknown):JsonObject{return parseAdmissionJsonObject(value);}
+function canonicalJson(value:unknown):string{
+  if(value===null||typeof value!=='object') return JSON.stringify(value);
+  if(Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const record=value as Record<string,unknown>;
+  return `{${Object.keys(record).sort().map((key)=>`${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
+}
+function digestJson(value:JsonObject):string{return createHash('sha256').update(canonicalJson(value)).digest('hex');}
+function parsePendingEvidence(value:unknown):StoredBatchPendingEvidence{
+  const parsed=object(value);
+  const keys=Object.keys(parsed).sort();
+  if(keys.join(',')!=='actualCostCredits,output,resultDigest,usageSnapshot') throw new StoredBatchStorageError('pending_evidence');
+  const output=object(parsed.output);
+  const usageSnapshot=object(parsed.usageSnapshot);
+  const actualCostCredits=parseAdmissionBigint(parsed.actualCostCredits,'actual_cost_credits');
+  const resultDigest=String(parsed.resultDigest);
+  if(!HEX64.test(resultDigest)||digestJson(output)!==resultDigest) throw new StoredBatchStorageError('pending_evidence');
+  return Object.freeze({output,usageSnapshot,actualCostCredits,resultDigest});
+}
+function serializePendingEvidence(value:StoredBatchPendingEvidence):Readonly<{parsed:StoredBatchPendingEvidence;json:string}>{
+  if(!value||typeof value!=='object'||Array.isArray(value)
+    ||Object.keys(value).sort().join(',')!=='actualCostCredits,output,resultDigest,usageSnapshot'
+    ||typeof value.actualCostCredits!=='bigint') throw new StoredBatchStorageError('pending_evidence');
+  const parsed=parsePendingEvidence({
+    output:value.output,usageSnapshot:value.usageSnapshot,
+    actualCostCredits:value.actualCostCredits.toString(),resultDigest:value.resultDigest,
+  });
+  return Object.freeze({parsed,json:JSON.stringify({
+    output:parsed.output,usageSnapshot:parsed.usageSnapshot,
+    actualCostCredits:parsed.actualCostCredits.toString(),resultDigest:parsed.resultDigest,
+  })});
+}
 function assertCreateArgs(args:CreateStoredBatchArgs):void{
   normalizeAdmissionUuid(args.orgId);
   normalizeAdmissionUuid(args.apiKeyId);
@@ -370,6 +419,105 @@ export async function loadStoredBatchItem(id:string,client:SqlClient=defaultSql)
   return workerItem(row,admission);
 }
 
+export async function loadStoredBatchPendingEvidence(
+  itemId:string,client:SqlClient=defaultSql,
+):Promise<StoredBatchPendingEvidence|null>{
+  const id=normalizeAdmissionUuid(itemId);
+  const rows=await client<Array<{pending_evidence:unknown}>>`
+    SELECT pending_evidence FROM batch_items WHERE id=${id}::uuid`;
+  if(!rows[0]||rows[0].pending_evidence===null) return null;
+  return parsePendingEvidence(rows[0].pending_evidence);
+}
+
+export async function recordStoredBatchPendingEvidence(
+  itemId:string,evidence:StoredBatchPendingEvidence,client:SqlClient=defaultSql,
+):Promise<void>{
+  const id=normalizeAdmissionUuid(itemId);
+  const serialized=serializePendingEvidence(evidence);
+  const rows=await client<Array<{id:string}>>`
+    UPDATE batch_items bi SET pending_evidence=${serialized.json}::text::jsonb,updated_at=clock_timestamp()
+    FROM gateway_charge_admissions admission
+    WHERE bi.id=${id}::uuid AND bi.status='processing' AND bi.pending_evidence IS NULL
+      AND admission.billing_request_id=bi.billing_request_id
+      AND admission.state='dispatched'
+      AND admission.attempt_id=bi.attempt_id
+      AND admission.upstream_id=bi.upstream_id
+      AND admission.pricing_snapshot=bi.pricing_snapshot
+      AND ${serialized.parsed.actualCostCredits.toString()}::bigint<=admission.authorized_max_credits
+    RETURNING bi.id::text`;
+  if(rows.length) return;
+  const current=await loadStoredBatchPendingEvidence(id,client);
+  if(!current||current.actualCostCredits!==serialized.parsed.actualCostCredits
+    ||current.resultDigest!==serialized.parsed.resultDigest
+    ||!admissionJsonObjectsEqual(current.output,serialized.parsed.output)
+    ||!admissionJsonObjectsEqual(current.usageSnapshot,serialized.parsed.usageSnapshot))
+    throw new StoredBatchConflictError();
+}
+
+export async function completeStoredBatchItemFromPendingEvidence(
+  itemId:string,settledAt:string,client:SqlClient=defaultSql,
+):Promise<void>{
+  const id=normalizeAdmissionUuid(itemId);
+  const settled=normalizeAdmissionTimestamp(settledAt,'settled_at');
+  const rows=await client<Array<{id:string}>>`
+    UPDATE batch_items bi SET status='completed',output=bi.pending_evidence->'output',error_code=NULL,
+      result_digest=bi.pending_evidence->>'resultDigest',settled_at=admission.settled_at,
+      pending_evidence=NULL,updated_at=clock_timestamp()
+    FROM gateway_charge_admissions admission
+    WHERE bi.id=${id}::uuid AND bi.status IN('processing','reconciliation_required')
+      AND bi.pending_evidence IS NOT NULL
+      AND admission.billing_request_id=bi.billing_request_id AND admission.state='settled'
+      AND admission.attempt_id=bi.attempt_id AND admission.upstream_id=bi.upstream_id
+      AND admission.pricing_snapshot=bi.pricing_snapshot
+      AND admission.actual_cost_credits::text=bi.pending_evidence->>'actualCostCredits'
+      AND admission.usage_snapshot=bi.pending_evidence->'usageSnapshot'
+      AND to_char(admission.settled_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')=${settled}
+    RETURNING bi.id::text`;
+  if(rows.length) return;
+  const current=await client<Array<{confirmed:boolean;output:unknown;result_digest:string|null}>>`
+    SELECT bi.status='completed' AND bi.pending_evidence IS NULL
+      AND to_char(bi.settled_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')=${settled}
+      AND admission.state='settled' AND admission.settled_at=bi.settled_at
+      AND admission.billing_request_id=bi.billing_request_id
+      AND admission.attempt_id=bi.attempt_id AND admission.upstream_id=bi.upstream_id
+      AND admission.pricing_snapshot=bi.pricing_snapshot AS confirmed,
+      bi.output,bi.result_digest
+    FROM batch_items bi JOIN gateway_charge_admissions admission
+      ON admission.billing_request_id=bi.billing_request_id
+    WHERE bi.id=${id}::uuid`;
+  if(!current[0]?.confirmed||current[0].output===null||!current[0].result_digest
+    ||digestJson(object(current[0].output))!==current[0].result_digest) throw new StoredBatchConflictError();
+}
+
+export async function listStoredBatchEvidenceRecoveryCandidates(
+  now:string,limit=100,client:SqlClient=defaultSql,
+):Promise<readonly StoredBatchEvidenceRecoveryCandidate[]>{
+  const at=normalizeAdmissionTimestamp(now,'now');
+  if(!Number.isSafeInteger(limit)||limit<1||limit>1000) throw new StoredBatchStorageError();
+  const rows=await client<Array<Record<string,unknown>>>`
+    SELECT bi.id::text AS item_id,bi.batch_id::text AS parent_id,b.batch_id,
+      bi.billing_request_id::text,admission.state AS admission_state,bi.pending_evidence
+    FROM batch_items bi
+    JOIN batches b ON b.id=bi.batch_id
+    JOIN gateway_charge_admissions admission ON admission.billing_request_id=bi.billing_request_id
+    WHERE b.contract_version=5 AND b.terminal_at IS NULL
+      AND bi.status IN('processing','reconciliation_required')
+      AND (admission.state IN('outcome_recorded','settled')
+        OR (admission.state='dispatched' AND bi.pending_evidence IS NOT NULL))
+      AND coalesce(admission.settled_at,admission.outcome_recorded_at,bi.updated_at)<=${at}::timestamptz
+    ORDER BY coalesce(admission.settled_at,admission.outcome_recorded_at,bi.updated_at),bi.id
+    LIMIT ${limit}`;
+  return Object.freeze(rows.map((row)=>{
+    if(row.admission_state!=='dispatched'&&row.admission_state!=='outcome_recorded'&&row.admission_state!=='settled')
+      throw new StoredBatchStorageError();
+    return Object.freeze({
+      itemId:uuid(row.item_id),parentId:uuid(row.parent_id),batchId:String(row.batch_id),
+      billingRequestId:uuid(row.billing_request_id),admissionState:row.admission_state,
+      evidence:row.pending_evidence===null?null:parsePendingEvidence(row.pending_evidence),
+    });
+  }));
+}
+
 export async function claimNextStoredBatchItem(
   batchId:string,client:RootSql=defaultSql,
 ):Promise<StoredBatchWorkerItem|null>{
@@ -401,6 +549,85 @@ export async function claimNextStoredBatchItem(
   return id?loadStoredBatchItem(id,client):null;
 }
 
+export async function releaseStoredBatchItemClaimForRetry(
+  itemId:string,retryAt:string,client:RootSql=defaultSql,
+):Promise<void>{
+  const id=normalizeAdmissionUuid(itemId);
+  const retry=normalizeAdmissionTimestamp(retryAt,'retry_at');
+  await client.begin(async(tx)=>{
+    const owned=await tx<Array<{parent_id:string}>>`
+      SELECT bi.batch_id::text AS parent_id
+      FROM batch_items bi JOIN batches b ON b.id=bi.batch_id
+      WHERE bi.id=${id}::uuid AND b.contract_version=5 AND b.terminal_at IS NULL
+      LIMIT 1 FOR UPDATE OF bi,b`;
+    if(!owned[0]) throw new StoredBatchConflictError();
+    const released=await tx<Array<{id:string}>>`
+      UPDATE batch_items bi SET status='queued',updated_at=clock_timestamp()
+      WHERE bi.id=${id}::uuid AND bi.status='processing' AND bi.pending_evidence IS NULL
+        AND EXISTS(
+          SELECT 1 FROM gateway_charge_admissions admission
+          WHERE admission.billing_request_id=bi.billing_request_id
+            AND admission.state='held' AND admission.attempt_id IS NULL
+            AND admission.upstream_id IS NULL AND admission.dispatched_at IS NULL
+        )
+      RETURNING bi.id::text`;
+    if(!released[0]) throw new StoredBatchConflictError();
+    const parent=await tx<Array<{id:string}>>`
+      UPDATE batches SET status='reconciliation_required',queued_at=NULL,reconcile_after=${retry}::timestamptz
+      WHERE id=${owned[0].parent_id}::uuid AND contract_version=5 AND terminal_at IS NULL
+      RETURNING id::text`;
+    if(!parent[0]) throw new StoredBatchConflictError();
+  });
+}
+
+export async function reconcileStaleStoredBatchProcessing(
+  now:string,graceSeconds=3600,limit=100,client:RootSql=defaultSql,
+):Promise<readonly string[]>{
+  const at=normalizeAdmissionTimestamp(now,'now');
+  if(!Number.isSafeInteger(graceSeconds)||graceSeconds<3600||graceSeconds>604800
+    ||!Number.isSafeInteger(limit)||limit<1||limit>1000) throw new StoredBatchStorageError();
+  return client.begin(async(tx)=>{
+    const candidates=await tx<Array<{id:string;parent_id:string;safe_retry:boolean}>>`
+      SELECT bi.id::text,bi.batch_id::text AS parent_id,
+        admission.state='held' AND admission.attempt_id IS NULL AND admission.upstream_id IS NULL
+          AND admission.dispatched_at IS NULL AND bi.pending_evidence IS NULL AS safe_retry
+      FROM batch_items bi JOIN batches b ON b.id=bi.batch_id
+      JOIN gateway_charge_admissions admission ON admission.billing_request_id=bi.billing_request_id
+      WHERE b.contract_version=5 AND b.terminal_at IS NULL AND bi.status='processing'
+        AND bi.updated_at<=${at}::timestamptz-(${graceSeconds}::bigint*interval '1 second')
+      ORDER BY bi.updated_at,bi.id LIMIT ${limit} FOR UPDATE OF bi,admission SKIP LOCKED`;
+    if(!candidates.length) return Object.freeze([] as string[]);
+    const safeIds=candidates.filter((value)=>value.safe_retry).map((value)=>value.id);
+    const uncertainIds=candidates.filter((value)=>!value.safe_retry).map((value)=>value.id);
+    const updatedIds=new Set<string>();
+    if(safeIds.length){
+      const released=await tx<Array<{id:string}>>`
+        UPDATE batch_items SET status='queued',updated_at=clock_timestamp()
+        WHERE id=ANY(${safeIds}::uuid[]) AND status='processing' AND pending_evidence IS NULL
+        RETURNING id::text`;
+      for(const value of released) updatedIds.add(value.id);
+      const safeParents=[...new Set(candidates.filter((value)=>updatedIds.has(value.id)).map((value)=>value.parent_id))];
+      if(safeParents.length) await tx`
+        UPDATE batches SET status='reconciliation_required',queued_at=NULL,reconcile_after=${at}::timestamptz
+        WHERE id=ANY(${safeParents}::uuid[]) AND contract_version=5 AND terminal_at IS NULL`;
+    }
+    if(uncertainIds.length){
+      const uncertain=await tx<Array<{id:string}>>`
+      UPDATE batch_items SET status='reconciliation_required',error_code='BATCH_PROCESSING_STALE',
+        updated_at=clock_timestamp()
+      WHERE id=ANY(${uncertainIds}::uuid[]) AND status='processing'
+      RETURNING id::text`;
+      for(const value of uncertain) updatedIds.add(value.id);
+      const uncertainParents=[...new Set(candidates.filter((value)=>updatedIds.has(value.id)&&!value.safe_retry).map((value)=>value.parent_id))];
+      if(uncertainParents.length) await tx`
+        UPDATE batches SET status='reconciliation_required',queued_at=NULL,reconcile_after=${at}::timestamptz
+        WHERE id=ANY(${uncertainParents}::uuid[]) AND contract_version=5 AND terminal_at IS NULL`;
+      for(const parentId of uncertainParents) await refreshStoredBatchAggregate(parentId,tx as unknown as TransactionClient);
+    }
+    return Object.freeze(candidates.map((value)=>value.id).filter((idValue)=>updatedIds.has(idValue)));
+  });
+}
+
 export async function markStoredBatchItemTerminal(
   args:Readonly<{
     itemId:string;
@@ -426,6 +653,7 @@ export async function markStoredBatchItemTerminal(
       error_code=${args.errorCode??null},
       result_digest=${args.resultDigest??null},
       settled_at=${settledAt}::timestamptz,
+      pending_evidence=CASE WHEN ${args.status} IN('completed','failed') THEN NULL ELSE pending_evidence END,
       updated_at=clock_timestamp()
     WHERE id=${id}::uuid AND status IN ('queued','processing')
     RETURNING id::text`;
@@ -516,4 +744,18 @@ export async function listRecoverableStoredBatches(
       AND EXISTS(SELECT 1 FROM batch_items bi WHERE bi.batch_id=b.id AND bi.status='queued')
     ORDER BY b.batch_id LIMIT ${limit}`;
   return Object.freeze(rows.map(row=>String(row.batch_id)));
+}
+
+/** Internal worker progress check; public batch reads remain org scoped. */
+export async function hasQueuedStoredBatchItems(
+  batchId:string,client:SqlClient=defaultSql,
+):Promise<boolean>{
+  if(!BATCH_ID.test(batchId)) throw new StoredBatchStorageError();
+  const rows=await client<Array<{has_queued:boolean}>>`
+    SELECT EXISTS(
+      SELECT 1 FROM batches b JOIN batch_items bi ON bi.batch_id=b.id
+      WHERE b.batch_id=${batchId} AND b.contract_version=5
+        AND b.terminal_at IS NULL AND bi.status='queued'
+    ) AS has_queued`;
+  return rows[0]?.has_queued===true;
 }

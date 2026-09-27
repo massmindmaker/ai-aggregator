@@ -38,7 +38,7 @@ describe.skipIf(!enabled)('durable batch schema native', () => {
         'id','batch_id','item_index','custom_id','route_kind','request_fingerprint','request_body',
         'billing_request_id','attempt_id','model_slug','model_upstream_id','upstream_id',
         'upstream_model_id','adapter_key','pricing_snapshot','provider_request','status','output','error_code','result_digest',
-        'deadline_at','settled_at','created_at','updated_at',
+        'deadline_at','settled_at','created_at','updated_at','pending_evidence',
       ]));
       expect(byTable.get('batch_items')).not.toEqual(expect.arrayContaining([
         'api_key','byok_key','proxy_credential','provider_response','provider_task_id','egress_proxy_url',
@@ -66,10 +66,10 @@ describe.skipIf(!enabled)('durable batch schema native', () => {
                WHERE schemaname='public'
                  AND indexname=ANY($1::text[])
                ORDER BY indexname`,
-        values:[['batches_reconcile_idx','batch_items_claim_idx','batch_items_billing_idx']],
+        values:[['batches_reconcile_idx','batch_items_claim_idx','batch_items_billing_idx','batch_items_processing_updated_idx']],
       });
       expect(indexes.rows.map((row)=>row.indexname)).toEqual([
-        'batch_items_billing_idx','batch_items_claim_idx','batches_reconcile_idx',
+        'batch_items_billing_idx','batch_items_claim_idx','batch_items_processing_updated_idx','batches_reconcile_idx',
       ]);
 
       const identityCheck = await client.query<{ def:string }>({

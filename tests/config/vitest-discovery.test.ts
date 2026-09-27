@@ -59,6 +59,18 @@ describe('root Vitest discovery contract', () => {
     }
   });
 
+  it('registers durable batch storage and mounted recovery in the mandatory database baseline', () => {
+    const baseline = scripts['test:database-baseline'];
+    for (const file of [
+      'gateway-durable-batches.native.integration.test.ts',
+      'stored-batch-storage.native.integration.test.ts',
+      'stored-batches-mounted.native.integration.test.ts',
+    ]) {
+      expect(baseline).toContain(file);
+      expect(baseline.indexOf(file)).toBeLessThan(baseline.indexOf('&& bun run test:ton-core-native'));
+    }
+  });
+
   it('keeps durable media worker polling behind the tested Kie bootstrap helper', () => {
     expect(workerIndex).toContain("createMediaKieAdapter(process.env)");
   });
