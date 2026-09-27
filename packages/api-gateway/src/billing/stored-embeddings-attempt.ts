@@ -20,26 +20,25 @@ import {
 } from './admission';
 import {
   admissionJsonObjectsEqual,
-  normalizeAdmissionUuid,
   parseAdmissionJsonObject,
   type GatewayChargeAdmissionResult,
   type GatewayChargeAdmissionState,
 } from './admission-result';
-import { prepareStoredEmbeddingQuote } from './embedding-candidate-quote';
 import {
-  captureStoredEmbeddingsEvidence,
-  parseStoredEmbeddingsBody,
-  validateStoredEmbeddingsIdentity,
-  STORED_EMBEDDINGS_FORMULA,
   type StoredEmbeddingsAttemptPreparation,
   type StoredEmbeddingsAttemptResult,
   type StoredEmbeddingsAttemptStage,
 } from './stored-embeddings-attempt-contract';
+import {
+  prepareStoredEmbeddingsExecution,
+  captureStoredEmbeddingsExecutionMechanics,
+  capturePinnedStoredEmbeddingsEvidence,
+  type StoredEmbeddingsExecutionReady,
+} from './stored-embeddings-execution-preparation';
 import type { ApiKeyPolicies, Mode } from '../routing/engine';
 import type { ResolvedModel } from '../routing/resolver';
 import type {
   AdmittedEmbeddingsMechanics,
-  AdmittedEmbeddingsRequest,
   UpstreamAdapter,
 } from '../upstreams/interface';
 import { getUpstream } from '../upstreams/registry';
@@ -121,18 +120,6 @@ export function createStoredEmbeddingsAttempt(
   args: StoredEmbeddingsAttemptArgs,
   dependencies: Partial<StoredEmbeddingsAttemptDependencies> = {},
 ): StoredEmbeddingsAttemptPreparation {
-  let body: ReturnType<typeof parseStoredEmbeddingsBody>;
-  let identity: ReturnType<typeof validateStoredEmbeddingsIdentity>;
-  try {
-    body = parseStoredEmbeddingsBody(args.body, args.model.slug);
-    identity = validateStoredEmbeddingsIdentity(args);
-  } catch {
-    return Object.freeze({
-      status: 'bad_request',
-      code: 'INVALID_STORED_EMBEDDINGS_REQUEST',
-    });
-  }
-
   const deps = Object.freeze({
     getAdapter: getUpstream,
     newUuid: randomUUID,
@@ -162,13 +149,11 @@ export function createStoredEmbeddingsAttempt(
           });
           facade = Object.freeze({
             admittedEmbeddings,
-            chat: async () => {
-              throw new Error('Legacy chat is not admitted');
-            },
+            chat: async () => { throw new Error('Legacy chat is not admitted'); },
           });
         }
       } catch {
-        // Cache the unavailable result so registry mutation cannot alter this attempt.
+        // Cache unavailable too; a later lookup must not change the pool.
       }
       mechanics.set(key, facade);
     }
@@ -177,74 +162,30 @@ export function createStoredEmbeddingsAttempt(
     return adapter;
   };
 
-  let quote: ReturnType<typeof prepareStoredEmbeddingQuote>;
-  try {
-    quote = prepareStoredEmbeddingQuote({
-      model: args.model,
-      requestedMode: args.requestedMode,
-      policy: args.policy,
-      inputCount: body.input.length,
-      getAdapter: lookup,
-    });
-  } catch {
-    return unavailable;
-  }
-  if (quote.status !== 'ready') return unavailable;
-  const chosen = quote.candidates[0];
-  const execute = mechanics.get(chosen.adapterKey)?.admittedEmbeddings?.execute;
-  if (!execute || chosen.maxCredits !== quote.authorizedMaxCredits)
-    return unavailable;
-  const executeAttempt: AdmittedEmbeddingsMechanics['execute'] = execute;
+  const prepared = prepareStoredEmbeddingsExecution(args, {
+    getAdapter: lookup,
+    newUuid: deps.newUuid,
+  });
+  if (prepared.status !== 'ready') return prepared;
+  const readyPrepared: StoredEmbeddingsExecutionReady = prepared;
+  const capturedMechanics = captureStoredEmbeddingsExecutionMechanics(readyPrepared, lookup);
+  if (!capturedMechanics) return unavailable;
+  const executeAttempt: AdmittedEmbeddingsMechanics['execute'] = capturedMechanics.execute;
 
-  let billingRequestId: string;
-  let attemptId: string;
-  try {
-    billingRequestId = normalizeAdmissionUuid(deps.newUuid());
-    attemptId = normalizeAdmissionUuid(deps.newUuid());
-    if (billingRequestId === attemptId) return unavailable;
-  } catch {
-    return unavailable;
-  }
-
-  const actualChargePolicy = Object.freeze({
-    formulaVersion: STORED_EMBEDDINGS_FORMULA,
-    cachingDiscount: '1',
+  const billingRequestId = readyPrepared.billingRequestId;
+  const attemptId = readyPrepared.attemptId;
+  const admissionArgs = readyPrepared.admissionArgs;
+  const pricingSnapshot = readyPrepared.pricingSnapshot;
+  const chosen = readyPrepared.candidate;
+  const request = readyPrepared.providerRequest;
+  const identity = Object.freeze({
+    orgId: admissionArgs.orgId,
+    apiKeyId: admissionArgs.apiKeyId,
+    clientRequestId: admissionArgs.clientRequestId,
+    preDispatchDeadlineAt: admissionArgs.preDispatchDeadlineAt,
   });
-  const quoteSnapshot = parseAdmissionJsonObject({
-    version: 1,
-    tokenQuote: quote.quoteSnapshot,
-    actualChargePolicy,
-  });
-  const admissionArgs: AdmitGatewayChargeV2Args = Object.freeze({
-    orgId: identity.orgId,
-    apiKeyId: identity.apiKeyId,
-    clientRequestId: identity.clientRequestId,
-    declaredSessionId: identity.declaredSessionId,
-    supplierQuoteSnapshot: parseAdmissionJsonObject({
-      version: 2,
-      formulaVersion: 'catalog-input-output-cents-per-1k-usd-micro-v2',
-      tokenQuote: quote.quoteSnapshot,
-    }),
-    preDispatchDeadlineAt: identity.preDispatchDeadlineAt,
-    billingRequestId,
-    routeKind: 'embeddings',
-    billingMode: 'stored',
-    modelSlug: body.modelSlug,
-    authorizedMaxCredits: quote.authorizedMaxCredits,
-    quoteSnapshot,
-  });
-  const pricingSnapshot = parseAdmissionJsonObject({
-    ...quote.quoteSnapshot.candidates[0],
-    actualChargePolicy,
-  });
-  const request: AdmittedEmbeddingsRequest = Object.freeze({
-    modelId: chosen.upstreamModelId,
-    input: body.input,
-    endpointPolicy: chosen.profile.endpointPolicy,
-    ...(chosen.egressProxyUrl == null
-      ? {}
-      : { egressProxyUrl: chosen.egressProxyUrl }),
-  });
+  const body = readyPrepared.normalizedBody;
+  const quoteSnapshot = admissionArgs.quoteSnapshot;
 
   function confirmed(
     admission: GatewayChargeAdmissionResult,
@@ -402,14 +343,9 @@ export function createStoredEmbeddingsAttempt(
     } catch {
       return unknown('provider');
     }
-    let evidence: ReturnType<typeof captureStoredEmbeddingsEvidence>;
+    let evidence: ReturnType<typeof capturePinnedStoredEmbeddingsEvidence>;
     try {
-      evidence = captureStoredEmbeddingsEvidence(
-        output,
-        chosen,
-        billingRequestId,
-        attemptId,
-      );
+      evidence = capturePinnedStoredEmbeddingsEvidence(output, readyPrepared);
     } catch {
       return unknown('usage');
     }

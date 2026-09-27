@@ -3,6 +3,7 @@ const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock('../lib/db', () => ({ sql: query }));
 import {
   normalizeStoredChatFreshPolicy,
+  evaluateStoredChatFreshPolicy,
   prepareStoredChatFreshPolicy,
 } from '../billing/stored-chat-fresh-policy';
 import { captureStoredChatHttpIdentity } from '../billing/stored-chat-http-identity';
@@ -154,6 +155,14 @@ it('top-level RU is stronger than policy false, explicit mode and PII allowance'
   expect(result.policy.forbid_non_ru).toBe(true);
   expect(result.model.candidates.every((c) => c.ru_residency)).toBe(true);
 });
+it('pure evaluator applies the same PII/provider decision without telemetry writes', () => {
+  const id = identity('mail alice@example.com');
+  const result = evaluateStoredChatFreshPolicy({ key: key(), identity: id, model: model() });
+  expect(result.model.candidates.map((c) => c.provider)).toEqual(['ru']);
+  expect(result.requestedMode).toBe('auto');
+  expect(query).not.toHaveBeenCalled();
+});
+
 it('PII removes non-RU candidates from mixed pool and hashes bounded telemetry', () => {
   const result = prepare(key(), 'mail alice@example.com');
   expect(result.model.candidates.map((c) => c.provider)).toEqual(['ru']);

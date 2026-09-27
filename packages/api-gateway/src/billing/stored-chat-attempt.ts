@@ -17,26 +17,25 @@ import {
 } from './admission';
 import {
   admissionJsonObjectsEqual,
-  normalizeAdmissionUuid,
   parseAdmissionJsonObject,
   type GatewayChargeAdmissionResult,
   type GatewayChargeAdmissionState,
 } from './admission-result';
-import { prepareStoredChatQuote } from './candidate-quote';
 import {
-  captureStoredChatEvidence,
-  parseStoredChatBody,
-  validateStoredChatIdentity,
-  STORED_CHAT_FORMULA,
   type StoredChatAttemptPreparation,
   type StoredChatAttemptResult,
   type StoredChatAttemptStage,
 } from './stored-chat-attempt-contract';
+import {
+  prepareStoredChatExecution,
+  captureStoredChatExecutionMechanics,
+  capturePinnedStoredChatEvidence,
+  type StoredChatExecutionReady,
+} from './stored-chat-execution-preparation';
 import type { ApiKeyPolicies, Mode } from '../routing/engine';
 import type { ResolvedModel } from '../routing/resolver';
 import type {
   AdmittedChatMechanics,
-  AdmittedChatRequest,
   UpstreamAdapter,
 } from '../upstreams/interface';
 import { getUpstream } from '../upstreams/registry';
@@ -104,17 +103,6 @@ export function createStoredChatAttempt(
   args: StoredChatAttemptArgs,
   dependencies: Partial<StoredChatAttemptDependencies> = {},
 ): StoredChatAttemptPreparation {
-  let body: ReturnType<typeof parseStoredChatBody>,
-    identity: ReturnType<typeof validateStoredChatIdentity>;
-  try {
-    body = parseStoredChatBody(args.body, args.model.slug);
-    identity = validateStoredChatIdentity(args);
-  } catch {
-    return Object.freeze({
-      status: 'bad_request',
-      code: 'INVALID_STORED_CHAT_REQUEST',
-    });
-  }
   const deps = Object.freeze({
     admissionRouteKind: 'chat' as const,
     getAdapter: getUpstream,
@@ -126,15 +114,12 @@ export function createStoredChatAttempt(
     cancelUndispatchedGatewayCharge,
     ...dependencies,
   });
-  const admissionRouteKind = deps.admissionRouteKind;
-  if (admissionRouteKind !== 'chat' && admissionRouteKind !== 'completions')
-    return unavailable;
   const persistOutcome = deps.persistOutcome;
   const admitAttempt = deps.admitAttempt;
   const rejectUnstarted = deps.rejectUnstarted;
   const signal = args.signal;
+
   const mechanics = new Map<string, UpstreamAdapter | null>();
-  // The quote sees only a frozen facade, bound to the original mechanics receiver/function.
   const lookup = (key: string): UpstreamAdapter => {
     if (!mechanics.has(key)) {
       let facade: UpstreamAdapter | null = null;
@@ -148,9 +133,7 @@ export function createStoredChatAttempt(
           });
           facade = Object.freeze({
             admittedChat,
-            chat: async () => {
-              throw new Error('Legacy chat is not admitted');
-            },
+            chat: async () => { throw new Error('Legacy chat is not admitted'); },
           });
         }
       } catch {
@@ -162,72 +145,29 @@ export function createStoredChatAttempt(
     if (!adapter) throw new Error('Admitted mechanics unavailable');
     return adapter;
   };
-  let quote: ReturnType<typeof prepareStoredChatQuote>;
-  try {
-    quote = prepareStoredChatQuote({
-      model: args.model,
-      requestedMode: args.requestedMode,
-      policy: args.policy,
-      ...(body.maxTokens === undefined
-        ? {}
-        : { clientMaxTokens: body.maxTokens }),
-      defaultMaxOutputTokens: args.defaultMaxOutputTokens,
-      getAdapter: lookup,
-    });
-  } catch {
-    return unavailable;
-  }
-  if (quote.status !== 'ready') return unavailable;
-  const chosen = quote.candidates[0]!;
-  const execute = mechanics.get(chosen.adapterKey)?.admittedChat?.execute;
-  if (!execute || chosen.maxCredits > quote.authorizedMaxCredits)
-    return unavailable;
-  let billingRequestId: string, attemptId: string;
-  try {
-    billingRequestId = normalizeAdmissionUuid(deps.newUuid());
-    attemptId = normalizeAdmissionUuid(deps.newUuid());
-    if (billingRequestId === attemptId) return unavailable;
-  } catch {
-    return unavailable;
-  }
-  const actualChargePolicy = Object.freeze({
-    formulaVersion: STORED_CHAT_FORMULA,
-    cachingDiscount: identity.cachingDiscount,
+
+  const prepared = prepareStoredChatExecution(args, {
+    admissionRouteKind: deps.admissionRouteKind,
+    getAdapter: lookup,
+    newUuid: deps.newUuid,
   });
-  const admissionArgs: AdmitGatewayChargeV2Args = Object.freeze({
-    orgId: identity.orgId,
-    apiKeyId: identity.apiKeyId,
-    clientRequestId: identity.clientRequestId,
-    declaredSessionId: identity.declaredSessionId,
-    supplierQuoteSnapshot: parseAdmissionJsonObject({
-      version: 2,
-      formulaVersion: 'catalog-input-output-cents-per-1k-usd-micro-v2',
-      tokenQuote: quote.quoteSnapshot,
-    }),
-    preDispatchDeadlineAt: identity.preDispatchDeadlineAt,
-    billingRequestId,
-    routeKind: admissionRouteKind,
-    billingMode: 'stored',
-    modelSlug: body.modelSlug,
-    authorizedMaxCredits: quote.authorizedMaxCredits,
-    quoteSnapshot: parseAdmissionJsonObject({
-      version: 1,
-      tokenQuote: quote.quoteSnapshot,
-      actualChargePolicy,
-    }),
-  });
-  const pricingSnapshot = parseAdmissionJsonObject({
-    ...quote.quoteSnapshot.candidates[0],
-    actualChargePolicy,
-  });
-  const request: AdmittedChatRequest = Object.freeze({
-    modelId: chosen.upstreamModelId,
-    messages: body.messages,
-    maxTokens: chosen.maxOutputTokens,
-    endpointPolicy: chosen.profile.endpointPolicy,
-    ...(chosen.egressProxyUrl == null
-      ? {}
-      : { egressProxyUrl: chosen.egressProxyUrl }),
+  if (prepared.status !== 'ready') return prepared;
+  const readyPrepared: StoredChatExecutionReady = prepared;
+  const capturedMechanics = captureStoredChatExecutionMechanics(readyPrepared, lookup);
+  if (!capturedMechanics) return unavailable;
+  const execute: AdmittedChatMechanics['execute'] = capturedMechanics.execute;
+
+  const billingRequestId = readyPrepared.billingRequestId;
+  const attemptId = readyPrepared.attemptId;
+  const admissionArgs = readyPrepared.admissionArgs;
+  const pricingSnapshot = readyPrepared.pricingSnapshot;
+  const admissionRouteKind = readyPrepared.routeKind;
+  const chosen = readyPrepared.candidate;
+  const request = readyPrepared.providerRequest;
+  const identity = Object.freeze({
+    orgId: admissionArgs.orgId,
+    apiKeyId: admissionArgs.apiKeyId,
+    cachingDiscount: readyPrepared.cachingDiscount,
   });
 
   function confirmed(
@@ -354,15 +294,9 @@ export function createStoredChatAttempt(
     } catch {
       return unknown('provider');
     }
-    let evidence: ReturnType<typeof captureStoredChatEvidence>;
+    let evidence: ReturnType<typeof capturePinnedStoredChatEvidence>;
     try {
-      evidence = captureStoredChatEvidence(
-        output,
-        chosen,
-        identity.cachingDiscount,
-        billingRequestId,
-        attemptId,
-      );
+      evidence = capturePinnedStoredChatEvidence(output, readyPrepared);
     } catch {
       return unknown('usage');
     }

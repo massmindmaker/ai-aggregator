@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock('../lib/db', () => ({ sql: query }));
-import { prepareStoredEmbeddingsFreshPolicy } from '../billing/stored-embeddings-fresh-policy';
+import { evaluateStoredEmbeddingsFreshPolicy, prepareStoredEmbeddingsFreshPolicy } from '../billing/stored-embeddings-fresh-policy';
 import { captureStoredEmbeddingsHttpIdentity } from '../billing/stored-embeddings-http-identity';
 import type { AuthenticatedApiKey } from '../middleware/auth-plan04';
 import type { ResolvedModel } from '../routing/resolver';
@@ -29,6 +29,13 @@ it('keeps whitelist/provider/RU/default mode policy before admission', () => {
   expect(prepare(key({ default_mode: 'cheapest', blocked_providers: ['foreign'] })).model.candidates.map((c) => c.provider)).toEqual(['ru']);
   expect(prepare(key({ default_mode: 'cheapest' })).requestedMode).toBe('cheapest');
   expect(() => prepare({ ...key(), model_whitelist: ['other'] })).toThrow('MODEL_NOT_ALLOWED');
+});
+
+it('pure evaluator checks every input and filters PII without telemetry writes', () => {
+  const id = identity(['innocent', 'alice@example.com']);
+  const prepared = evaluateStoredEmbeddingsFreshPolicy({ key: key(), identity: id, model: model() });
+  expect(prepared.model.candidates.map((c) => c.provider)).toEqual(['ru']);
+  expect(query).not.toHaveBeenCalled();
 });
 
 it('checks PII across every input, filters non-RU and stores hashes only', () => {
