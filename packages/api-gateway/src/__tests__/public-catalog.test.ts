@@ -115,7 +115,14 @@ function assertAvailable(item: CatalogItemV1): asserts item is CatalogAvailableI
 }
 
 describe('public catalog projector', () => {
-  it.each(['stored_chat_embeddings', 'stored_chat_embeddings_completions', 'stored_chat_embeddings_completions_stream', 'stored_chat_embeddings_completions_stream_media'] as const)(
+  it('does not advertise batch invocation metadata in the batches execution mode', async () => {
+    const response = await read({
+      runtime: runtime({ executionMode: 'stored_chat_embeddings_completions_stream_media_batches' }),
+    });
+    expect(JSON.stringify(response)).not.toContain('/v1/batches');
+  });
+
+  it.each(['stored_chat_embeddings', 'stored_chat_embeddings_completions', 'stored_chat_embeddings_completions_stream', 'stored_chat_embeddings_completions_stream_media', 'stored_chat_embeddings_completions_stream_media_batches'] as const)(
     'advertises the reviewed embeddings operation in explicit combined mode %s',
     async (executionMode) => {
     const embeddingModel = model({ type: 'embedding', slug: 'openai/text-embedding-3-small' });

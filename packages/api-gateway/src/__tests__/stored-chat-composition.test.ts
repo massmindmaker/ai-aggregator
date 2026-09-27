@@ -21,7 +21,9 @@ const spies = vi.hoisted(() => ({
     | 'stored_chat_only'
     | 'stored_chat_embeddings'
     | 'stored_chat_embeddings_completions'
-    | 'stored_chat_embeddings_completions_stream',
+    | 'stored_chat_embeddings_completions_stream'
+    | 'stored_chat_embeddings_completions_stream_media'
+    | 'stored_chat_embeddings_completions_stream_media_batches',
 }));
 vi.mock('../config', async () => {
   const actual = await vi.importActual<typeof import('../config')>('../config');
@@ -396,8 +398,9 @@ it('keeps empty BYOK header unavailable before durable state', async () => {
   expect(spies.read).not.toHaveBeenCalled();
 });
 
-it('newest mode runs non-stream BYOK through durable v3 identity and fixed-fee attempt', async () => {
-  spies.mode = 'stored_chat_embeddings_completions_stream';
+it.each(['stored_chat_embeddings_completions_stream', 'stored_chat_embeddings_completions_stream_media_batches'] as const)(
+  'stream-capable mode %s runs non-stream BYOK through durable v3 identity and fixed-fee attempt', async (mode) => {
+  spies.mode = mode;
   let byokReads = 0;
   spies.read.mockImplementation(async () => {
     spies.order.push('read');
@@ -428,6 +431,15 @@ it('newest mode runs non-stream BYOK through durable v3 identity and fixed-fee a
     billingMode: 'byok_fee',
     contractVersion: 3,
   });
+});
+
+it('durable batches mode preserves stored stream replay instead of returning the old 501 gate', async () => {
+  spies.mode = 'stored_chat_embeddings_completions_stream_media_batches';
+  spies.read.mockResolvedValueOnce({ contractVersion: 2, status: 'pending', billingRequestId: uuid });
+  const response = await request('/v1/chat/completions', { ...body, stream: true });
+  expect(response.status).toBe(202);
+  expect(spies.read).toHaveBeenCalledOnce();
+  expect(spies.resolve).not.toHaveBeenCalled();
 });
 
 it.each(['stored_chat_only','stored_chat_embeddings','stored_chat_embeddings_completions'] as const)(

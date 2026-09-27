@@ -50,6 +50,13 @@ describe("stored chat HTTP startup config", () => {
     expect(config.GATEWAY_HTTP_EXECUTION_MODE).toBe("stored_chat_embeddings_completions");
   });
 
+  it("accepts the explicit durable batches mode", async () => {
+    vi.stubEnv("GATEWAY_HTTP_EXECUTION_MODE", "stored_chat_embeddings_completions_stream_media_batches");
+    vi.resetModules();
+    const { config } = await import("../config");
+    expect(config.GATEWAY_HTTP_EXECUTION_MODE).toBe("stored_chat_embeddings_completions_stream_media_batches");
+  });
+
 
   it("preserves exact BYOK fee input and requires a positive durable fee in newest mode", async () => {
     vi.stubEnv("GATEWAY_HTTP_EXECUTION_MODE", "stored_chat_embeddings_completions_stream");

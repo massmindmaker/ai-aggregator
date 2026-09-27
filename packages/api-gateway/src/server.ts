@@ -25,6 +25,7 @@ import { video } from './routes/v1/video';
 import { audio } from './routes/v1/audio';
 import { batches } from './routes/v1/batches';
 import { storedMedia } from './routes/v1/stored-media';
+import { storedBatches } from './routes/v1/stored-batches';
 import { catalogRoute } from './routes/v1/catalog';
 import { catalogHttpBoundary } from './catalog/http-contract';
 import { adminProxy } from './routes/admin/proxyTest';
@@ -112,16 +113,26 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
   restricted.use('*', requireApiKey);
   const aliases = (path: string) => [path, `${path}/`];
   restricted.on('POST', aliases('/chat/completions'), rpmOnly, storedChat);
-  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings' || config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || ['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media'].includes(config.GATEWAY_HTTP_EXECUTION_MODE))
+  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings' || config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || ['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE))
     restricted.on('POST', aliases('/embeddings'), rpmOnly, storedEmbeddings);
-  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || ['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media'].includes(config.GATEWAY_HTTP_EXECUTION_MODE))
+  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || ['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE))
     restricted.on('POST', aliases('/completions'), rpmOnly, storedCompletions);
-  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions_stream_media') restricted.route('/', storedMedia);
+  if (['stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE)) restricted.route('/', storedMedia);
+  if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions_stream_media_batches') {
+    for (const route of storedBatches.routes) {
+      const path = route.path === '/' ? '/batches' : `/batches${route.path}`;
+      if (route.method === 'POST')
+        restricted.on('POST', aliases(path), rpmOnly, route.handler);
+      else if (route.method === 'GET')
+        restricted.on('GET', aliases(path), rateLimit, keyLimits, piiFilter, modelStatusMiddleware(), route.handler);
+    }
+  }
   const unsupported = [
-    ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || ['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media'].includes(config.GATEWAY_HTTP_EXECUTION_MODE) ? [] : ['/completions']),
+    ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || ['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE) ? [] : ['/completions']),
     ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_only' ? ['/embeddings'] : []),
-    ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions_stream_media' ? [] : ['/images/generations','/video/generations','/audio/speech']),
-    '/audio/transcriptions', '/batches'];
+    ...(['stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE) ? [] : ['/images/generations','/video/generations','/audio/speech']),
+    '/audio/transcriptions',
+    ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions_stream_media_batches' ? [] : ['/batches'])];
   for (const path of unsupported)
     restricted.on(['POST', 'PUT', 'PATCH', 'DELETE'], aliases(path), unsupportedStoredExecution);
   restricted.on(['PUT', 'PATCH', 'DELETE'], aliases('/chat/completions'), unsupportedStoredExecution);

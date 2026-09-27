@@ -41,7 +41,8 @@ type ExecutionMode =
   | 'stored_chat_embeddings'
   | 'stored_chat_embeddings_completions'
   | 'stored_chat_embeddings_completions_stream'
-  | 'stored_chat_embeddings_completions_stream_media';
+  | 'stored_chat_embeddings_completions_stream_media'
+  | 'stored_chat_embeddings_completions_stream_media_batches';
 type MechanicsReadiness = Readonly<{
   profileId: string;
   profileRevision: number;
@@ -125,7 +126,7 @@ export function capturePublicCatalogRuntime(source: Readonly<{
   const forceMock = source.forceMock ?? process.env.AIAG_FORCE_MOCK === '1';
   const resolveAdapter = source.getAdapter ?? getUpstream;
   if (
-    !['legacy', 'stored_chat_only', 'stored_chat_embeddings', 'stored_chat_embeddings_completions', 'stored_chat_embeddings_completions_stream', 'stored_chat_embeddings_completions_stream_media'].includes(executionMode) ||
+    !['legacy', 'stored_chat_only', 'stored_chat_embeddings', 'stored_chat_embeddings_completions', 'stored_chat_embeddings_completions_stream', 'stored_chat_embeddings_completions_stream_media', 'stored_chat_embeddings_completions_stream_media_batches'].includes(executionMode) ||
     !positiveSafe(configuredDefaultMaxOutputTokens)
   )
     throw new PublicCatalogError('catalog_unavailable');
@@ -139,7 +140,7 @@ export function capturePublicCatalogRuntime(source: Readonly<{
   const mechanics = Object.freeze(
     [
       ...reviewedChatProfiles,
-      ...(executionMode === 'stored_chat_embeddings' || executionMode === 'stored_chat_embeddings_completions' || executionMode === 'stored_chat_embeddings_completions_stream' || executionMode === 'stored_chat_embeddings_completions_stream_media'
+      ...(executionMode === 'stored_chat_embeddings' || executionMode === 'stored_chat_embeddings_completions' || executionMode === 'stored_chat_embeddings_completions_stream' || executionMode === 'stored_chat_embeddings_completions_stream_media' || executionMode === 'stored_chat_embeddings_completions_stream_media_batches'
         ? reviewedEmbeddingProfiles
         : []),
     ]
@@ -406,7 +407,7 @@ function projectEmbeddingModel(
   runtime: CatalogRuntimeCapture,
   normalized: ReturnType<typeof normalizeStoredChatFreshPolicy>,
 ): CatalogItemV1 {
-  if (runtime.executionMode !== 'stored_chat_embeddings' && runtime.executionMode !== 'stored_chat_embeddings_completions' && runtime.executionMode !== 'stored_chat_embeddings_completions_stream' && runtime.executionMode !== 'stored_chat_embeddings_completions_stream_media')
+  if (runtime.executionMode !== 'stored_chat_embeddings' && runtime.executionMode !== 'stored_chat_embeddings_completions' && runtime.executionMode !== 'stored_chat_embeddings_completions_stream' && runtime.executionMode !== 'stored_chat_embeddings_completions_stream_media' && runtime.executionMode !== 'stored_chat_embeddings_completions_stream_media_batches')
     return unavailable(model, 'runtime_contract_unavailable');
   const candidates = rawCandidates.map(validateCandidate).filter((candidate): candidate is ValidCandidate => candidate !== null);
   const reviewed = candidates.map((candidate) => ({

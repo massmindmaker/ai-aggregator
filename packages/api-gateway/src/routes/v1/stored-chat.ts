@@ -109,7 +109,7 @@ export const storedChat: Handler = async (c) => {
     const byokKey = c.req.raw.headers.get('x-upstream-key');
     if (
       byokHeaderPresent &&
-      (!['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media'].includes(config.GATEWAY_HTTP_EXECUTION_MODE) ||
+      (!['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE) ||
         byokKey === '')
     )
       return respondStoredChat(
@@ -124,7 +124,7 @@ export const storedChat: Handler = async (c) => {
         identity.contractVersion !== 3 ||
         identity.attemptBody.stream ||
         byokKey === null ||
-        !['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media'].includes(config.GATEWAY_HTTP_EXECUTION_MODE)
+        !['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE)
       )
         return respondStoredChat(
           c,
@@ -249,7 +249,7 @@ export const storedChat: Handler = async (c) => {
       );
     if (
       identity.contractVersion === 2 &&
-      !['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media'].includes(config.GATEWAY_HTTP_EXECUTION_MODE)
+      !['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE)
     )
       return respondStoredChat(
         c,
