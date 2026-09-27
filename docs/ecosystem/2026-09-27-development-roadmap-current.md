@@ -32,7 +32,7 @@
 | AM-1 | AM-P2 reservation/receipt/unknown/recovery без двойного settlement. |
 | AM-2 | T2.3b native Web identity + AG catalog HTTP, устранение прямого AG DB доступа. |
 | AM-3 | Первый useful agent: права/подключения → owned run → сохраняемый результат/стоимость → история в Web и TMA. |
-| AM-4 | TON Web/TMA, авторские версии и денежные обязательства с отдельным AM ledger. |
+| AM-4 | TON checkout только для Web; TMA использует owned run/status и legacy reconciliation без нового checkout. Авторские версии и денежные обязательства остаются в отдельном AM ledger. |
 | AM-5 | Независимая Web и TMA acceptance, browser/private-domain, operator recovery и release/pilot. |
 
 Переход C1→C2 требует не просто зелёных локальных тестов, а проверенного Aggregator release candidate и понятного AG catalog/version contract для Arena. Переход C2→C4 требует version-bound evidence и отдельного HTTP API; общая база, автоматический перенос private data и двойной учёт внутреннего AG→AM оборота в roadmap не входят.
