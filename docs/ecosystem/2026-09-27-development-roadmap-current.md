@@ -1,5 +1,7 @@
 # AI Hub: текущая дорожная карта разработки
 
+**Статус 28.09:** этот трёхпроектный срез сохранён как история. Активная цель владельца теперь ограничена [AI Aggregator](2026-09-28-aggregator-only-roadmap.md); Arena и Agents Market в неё не входят.
+
 Срез на 28.09.2026. Источники истины — git и owner entrypoints трёх отдельных репозиториев: [Aggregator](../DEVELOPMENT-ENTRYPOINT.md), [Arena](/home/bob/Projects/aiarena/docs/DEVELOPMENT-ENTRYPOINT.md), [Agents Market](/home/bob/Projects/agents-market/docs/DEVELOPMENT-ENTRYPOINT.md). Стратегический порядок из [кооперативной карты](2026-09-07-cooperative-roadmap.md) сохраняется: **Aggregator → Arena → Agents Market**. Архив `aiag-web`, производные индексы и старые оценки готовности не заменяют текущий код и принятую приёмку.
 
 ## Где мы сейчас

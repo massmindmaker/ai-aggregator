@@ -1,5 +1,7 @@
 # AI Aggregator: начать разработку здесь
 
+**Активная цель 28.09:** завершить только AI Aggregator. [Актуальный AG-only roadmap](ecosystem/2026-09-28-aggregator-only-roadmap.md) задаёт AG-3a/3b, TON, оставшиеся маршруты, operator recovery и release gates. Arena и Agents Market не входят в критерий завершения этой цели. Старый трёхпроектный порядок ниже — исторический контекст.
+
 **Roadmap 28.09:** [текущие стадии трёх сервисов и минимум15 оставшихся крупных checkpoints](ecosystem/2026-09-27-development-roadmap-current.md). Durable batch lifecycle принят локально в `feat/durable-batches-20260927` (`b949c80`); это не production activation и не завершение всего Aggregator.
 
 **Память 27.09:** [Serena/Graphify readback и границы LightRAG/Memory Graph](consolidation/2026-09-27-memory-refresh-status.md). Производная навигация не заменяет owner acceptance.
