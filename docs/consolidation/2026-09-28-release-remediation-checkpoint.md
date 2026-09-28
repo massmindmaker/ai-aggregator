@@ -40,6 +40,8 @@ bun install --frozen-lockfile
 bash scripts/bootstrap-native-test-tools.sh
 flock /tmp/ai-ecosystem-build.lock bun run test:unit --no-file-parallelism
 bun run test:database:isolated
+DATABASE_URL='postgresql://aiag_test@127.0.0.1:15432/ai_aggregator_test' \
+REDIS_URL='redis://127.0.0.1:16379/0' \
 flock /tmp/ai-ecosystem-build.lock bun run --cwd apps/web build
 bun run test:e2e:auth
 bun audit
