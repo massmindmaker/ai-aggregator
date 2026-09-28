@@ -17,7 +17,7 @@ const legacyMarketplaceRedirects = require(
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@aiag/database', '@aiag/tinkoff', '@aiag/shared', '@aiag/api-gateway'],
+  transpilePackages: ['@aiag/database', '@aiag/tinkoff', '@aiag/shared', '@aiag/api-gateway', '@aiag/upstream-adapters'],
   images: {
     remotePatterns: [
       {

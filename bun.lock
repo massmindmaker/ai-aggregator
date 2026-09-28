@@ -33,6 +33,7 @@
         "@aiag/shared": "*",
         "@aiag/telegram-alerts": "*",
         "@aiag/tinkoff": "*",
+        "@aiag/upstream-adapters": "*",
         "@aiag/yookassa": "*",
         "@auth/drizzle-adapter": "^1.1.0",
         "@emotion/cache": "^11.11.0",
@@ -95,6 +96,7 @@
       "name": "@aiag/worker",
       "version": "1.0.0",
       "dependencies": {
+        "@aiag/api-gateway": "*",
         "@aiag/database": "*",
         "@aiag/shared": "*",
         "@aiag/upstream-adapters": "*",

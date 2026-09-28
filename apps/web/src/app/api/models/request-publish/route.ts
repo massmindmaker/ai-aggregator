@@ -1,144 +1,154 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db, sql } from '@/lib/db';
+import { AuthorManifestError, parseAuthorSubmission } from '@aiag/shared/server';
+import { deriveKek, encryptAesGcm } from '@aiag/upstream-adapters/byok';
 
 /**
- * POST /api/models/request-publish
- *
- * Submits an author-owned model for moderation review.
- *
- * Mapping form → schema:
- *   - hostedBy='author' → hosting_strategy='self_hosted_by_author'
- *   - hostedBy='platform' → hosting_strategy='cloud_api_wrap' (we wrap the
- *     author's own endpoint behind our gateway).
- *   - status='draft' (DB CHECK constraint allows draft|pending_author_consent|
- *     live|frozen|depublished — there is no 'review' state, so we mark
- *     status=draft + metadata.review_state='pending' for the moderation queue).
- *   - enabled=false until admin approves.
- *
- * Sensitive fields (authToken) are stored in metadata for the MVP. FIXME:
- * encrypt with packages/shared/crypto.ts KEK before opening this to the
- * public — owner has acknowledged the gap.
+ * Candidate author submission. No endpoint probe, commercial terms or public
+ * activation occurs in this first AG-P3 batch.
  */
-export async function POST(req: NextRequest) {
+export const runtime = 'nodejs';
+const MAX_BODY_BYTES = 16 * 1024;
+
+async function getAuthenticatedUser() {
   const session = await auth();
-  if (!session?.user) {
+  return session?.user?.id ? { user: session.user } : null;
+}
+
+async function readBoundedJson(req: NextRequest): Promise<unknown> {
+  if (req.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
+    throw new AuthorManifestError('INVALID_AUTHOR_SUBMISSION');
+  }
+  if (!req.body) throw new AuthorManifestError('INVALID_AUTHOR_SUBMISSION');
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > MAX_BODY_BYTES) throw new AuthorManifestError('INVALID_AUTHOR_SUBMISSION');
+      chunks.push(part.value);
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
+  catch { throw new AuthorManifestError('INVALID_AUTHOR_SUBMISSION'); }
+}
+
+function uniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { code?: unknown; cause?: { code?: unknown } };
+  return e.code === '23505' || e.cause?.code === '23505';
+}
+
+export async function POST(req: NextRequest) {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) {
     return NextResponse.json(
       { error: { message: 'Требуется вход' } },
       { status: 401 }
     );
   }
 
-  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-
-  const required = ['name', 'slug', 'description', 'endpointUrl', 'authToken'];
-  for (const k of required) {
-    if (!body[k] || typeof body[k] !== 'string') {
-      return NextResponse.json(
-        { error: { message: `Поле ${k} обязательно` } },
-        { status: 400 }
-      );
-    }
+  let candidate: ReturnType<typeof parseAuthorSubmission>;
+  try {
+    candidate = parseAuthorSubmission(await readBoundedJson(req));
+  } catch (error) {
+    const code = error instanceof AuthorManifestError ? error.code : 'INVALID_AUTHOR_SUBMISSION';
+    return NextResponse.json({ error: { code } }, { status: 400 });
   }
 
-  const slug = String(body.slug);
-  if (!/^[a-z0-9-]+$/.test(slug)) {
-    return NextResponse.json(
-      { error: { message: 'slug должен содержать только a-z, 0-9, -' } },
-      { status: 400 }
-    );
+  const masterKey = process.env.AUTHOR_ENDPOINT_KEK;
+  if (!masterKey) {
+    return NextResponse.json({ error: { code: 'AUTHOR_KEY_UNAVAILABLE' } }, { status: 503 });
   }
-  if (slug.length < 3 || slug.length > 64) {
-    return NextResponse.json(
-      { error: { message: 'slug: 3-64 символов' } },
-      { status: 400 }
-    );
+  let encryptedToken: ReturnType<typeof encryptAesGcm>;
+  try {
+    const key = deriveKek(masterKey, 'aiag:author-endpoint:' + authUser.user.id + ':v1');
+    encryptedToken = encryptAesGcm(candidate.authToken, key);
+  } catch {
+    return NextResponse.json({ error: { code: 'AUTHOR_KEY_UNAVAILABLE' } }, { status: 503 });
   }
 
-  const existingRes = await db.execute(
-    sql`SELECT id FROM models WHERE slug = ${slug} LIMIT 1`
-  );
-  const existingRows = ((existingRes as unknown as { rows?: unknown[] }).rows ??
-    existingRes) as Array<{ id: string }>;
-  if (existingRows.length > 0) {
-    return NextResponse.json(
-      { error: { message: 'Slug уже занят, выберите другой' } },
-      { status: 409 }
-    );
-  }
-
-  const hostedBy = body.hostedBy === 'author' ? 'author' : 'platform';
-  const exclusive = Boolean(body.exclusive);
-  const tierPct = hostedBy === 'author' && exclusive ? 85 : hostedBy === 'author' ? 80 : 70;
-  const hostingStrategy =
-    hostedBy === 'author' ? 'self_hosted_by_author' : 'cloud_api_wrap';
-
+  const hostingStrategy = candidate.hostedByIntent === 'author'
+    ? 'self_hosted_by_author' : 'cloud_api_wrap';
   const metadata = {
-    review_state: 'pending' as const,
-    endpoint_url: String(body.endpointUrl),
-    // FIXME: encrypt with KEK from packages/shared/crypto.ts before public
-    // launch. Plain-text in metadata is owner-acknowledged debt.
-    auth_token: String(body.authToken),
-    auth_header: typeof body.authHeader === 'string' ? body.authHeader : 'Authorization',
-    pricing_hint_per_request_rub:
-      typeof body.pricingHintPerRequestRub === 'number'
-        ? body.pricingHintPerRequestRub
-        : null,
-    exclusive,
-    hosted_by_intent: hostedBy,
-    tier_pct: tierPct,
-    contest_submission_id:
-      typeof body.contestSubmissionId === 'string' ? body.contestSubmissionId : null,
+    review_state: 'pending',
+    hosted_by_intent: candidate.hostedByIntent,
+    exclusive_intent: candidate.exclusiveIntent,
     submitted_at: new Date().toISOString(),
   };
 
   try {
-    const insertRes = await db.execute(sql`
-      INSERT INTO models (
-        slug, type, enabled, display_name, description, metadata,
-        author_user_id, hosting_strategy, status, tags
-      ) VALUES (
-        ${slug}, 'chat', false, ${String(body.name)}, ${String(body.description)},
-        ${JSON.stringify(metadata)}::jsonb,
-        ${session.user.id}::uuid, ${hostingStrategy}, 'draft', ARRAY[]::text[]
-      )
-      RETURNING id::text AS id, slug
-    `);
-    const insertRows = ((insertRes as unknown as { rows?: unknown[] }).rows ??
-      insertRes) as Array<{ id: string; slug: string }>;
-    const inserted = insertRows[0];
-    if (!inserted) throw new Error('insert returned no row');
+    const created = await db.transaction(async (tx) => {
+      const modelResult = await tx.execute(sql`
+        INSERT INTO models (
+          slug, type, enabled, display_name, description, metadata,
+          author_user_id, hosting_strategy, status, tags
+        ) VALUES (
+          ${candidate.manifest.model.slug}, 'chat', false,
+          ${candidate.manifest.model.displayName}, ${candidate.manifest.model.description},
+          ${JSON.stringify(metadata)}::jsonb, ${authUser.user.id}::uuid,
+          ${hostingStrategy}, 'draft', ARRAY[]::text[]
+        )
+        RETURNING id::text AS id, slug
+      `);
+      const modelRows = ((modelResult as unknown as { rows?: unknown[] }).rows ??
+        modelResult) as Array<{ id: string; slug: string }>;
+      const model = modelRows[0];
+      if (!model) throw new Error('MODEL_INSERT_EMPTY');
 
-    // Best-effort audit; don't block on failure.
-    try {
-      await db.execute(sql`
+      const versionResult = await tx.execute(sql`
+        INSERT INTO author_model_versions (
+          model_id, author_user_id, version_no, public_manifest,
+          manifest_digest, encrypted_token_envelope, status
+        ) VALUES (
+          ${model.id}::uuid, ${authUser.user.id}::uuid, 1,
+          ${candidate.manifestJson}::jsonb, ${candidate.manifestDigest},
+          ${JSON.stringify(encryptedToken)}::jsonb, 'candidate'
+        )
+        RETURNING id::text AS id
+      `);
+      const versionRows = ((versionResult as unknown as { rows?: unknown[] }).rows ??
+        versionResult) as Array<{ id: string }>;
+      const version = versionRows[0];
+      if (!version) throw new Error('VERSION_INSERT_EMPTY');
+
+      await tx.execute(sql`
         INSERT INTO audit_log (actor_email, action, resource_type, resource_id, details, created_at)
         VALUES (
-          ${session.user.email ?? null},
-          'models.submit',
-          'model',
-          ${inserted.id},
-          ${JSON.stringify({ slug, hosted_by: hostedBy, exclusive })}::jsonb,
+          ${authUser.user.email ?? null}, 'models.submit', 'model', ${model.id},
+          ${JSON.stringify({ slug: model.slug, version_id: version.id })}::jsonb,
           NOW()
         )
       `);
-    } catch (auditErr) {
-      console.error('[request-publish] audit insert failed', auditErr);
-    }
+      return { modelId: model.id, slug: model.slug, versionId: version.id };
+    });
 
     return NextResponse.json({
       success: true,
       data: {
-        id: inserted.id,
-        slug: inserted.slug,
-        status: 'review',
-        tierPct,
+        id: created.modelId,
+        slug: created.slug,
+        versionId: created.versionId,
+        manifestDigest: candidate.manifestDigest,
+        status: 'draft',
       },
     });
-  } catch (err) {
-    console.error('[request-publish] insert failed', err);
+  } catch (error) {
+    if (uniqueViolation(error)) {
+      return NextResponse.json({ error: { code: 'SLUG_ALREADY_EXISTS' } }, { status: 409 });
+    }
     return NextResponse.json(
-      { error: { message: 'Не удалось сохранить заявку — попробуйте позже' } },
+      { error: { code: 'AUTHOR_SUBMISSION_UNAVAILABLE' } },
       { status: 500 }
     );
   }
