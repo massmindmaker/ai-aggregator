@@ -21,3 +21,4 @@
 export * from './s3';
 export * from './safe-fetch';
 export * from './author-manifest';
+export * from './author-probe';

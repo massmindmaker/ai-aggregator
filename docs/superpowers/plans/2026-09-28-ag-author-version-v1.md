@@ -11,7 +11,7 @@
 
 ## Batch B — moderation and usable version
 
-Probe only through `safeFetch` without allowlist; fixed Bearer header, bounded POST/response, redirects and DNS rechecked. Moderation CAS approves exact version/digest/rights and sets current pointer. Gateway admission pins version ID/digest and invokes this version through the same safe adapter. Freeze/depublish blocks new admission but preserves old receipt. Native mounted author endpoint proves one bought text result; no paid provider.
+Probe only through `safeFetch` without allowlist and with `maxRedirects:0` so Bearer token cannot reach a second origin. Fixed Bearer header, bounded POST/response and DNS/IP checks. Persist exact probe operation before POST; unknown outcome requires operator review, not a fresh key or automatic retry. Moderation CAS approves exact version/digest/rights only after confirmed probe and accepted price policy, then sets current pointer. Gateway admission pins version ID/digest and invokes this version through the same safe adapter. Freeze/depublish blocks new admission but preserves old receipt. Native mounted author endpoint proves one bought text result; no paid provider.
 
 ## Batch C — money and recovery
 
