@@ -35,9 +35,7 @@ export function LegalPageShell({
           {children}
         </article>
         <footer className="mt-12 border-t pt-6 text-xs text-muted-foreground">
-          Оператор: ИП Боборов, ИНН …, реестр-номер РКН{' '}
-          {process.env.NEXT_PUBLIC_RKN_OPERATOR_NUMBER ?? '(в процессе регистрации)'}.
-          {' '}Ответственный за обработку ПДн:{' '}
+          По вопросам обработки персональных данных:{' '}
           <a
             href={`mailto:${process.env.NEXT_PUBLIC_DPO_EMAIL ?? 'dpo@ai-aggregator.ru'}`}
             className="underline"

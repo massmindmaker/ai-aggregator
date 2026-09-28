@@ -264,13 +264,9 @@ export default function LoginPage() {
         </Suspense>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          Входя в систему, вы соглашаетесь с{' '}
-          <Link href="/terms" className="text-primary hover:underline">
-            Условиями
-          </Link>{' '}
-          и{' '}
+          Подробнее об обработке данных — в{' '}
           <Link href="/privacy" className="text-primary hover:underline">
-            Политикой конфиденциальности
+            Политике конфиденциальности
           </Link>
         </p>
       </div>

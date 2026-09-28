@@ -1254,7 +1254,7 @@ export default function HomePage() {
               }}
             >
               Маркетплейс AI-моделей с OpenAI-совместимым API. Оплата в рублях.
-              Deploy в РФ-регионе. ИП Бобров М.А.
+              Deploy в РФ-регионе.
             </p>
           </div>
 
@@ -1283,10 +1283,7 @@ export default function HomePage() {
             },
             {
               h: 'Правовое',
-              links: [
-                ['Условия', '/terms'],
-                ['Конфиденциальность', '/privacy'],
-              ],
+              links: [['Конфиденциальность', '/privacy']],
             },
           ].map((col) => (
             <div key={col.h}>

@@ -8,7 +8,7 @@ const OUT = process.env.SHOTS_DIR ||
   'C:/Users/боб/brain/Projects/AIAG/Sessions/2026-04-27-screenshots';
 const BASE = 'https://ai-aggregator.ru';
 const PATHS = ['/', '/marketplace', '/pricing', '/contests', '/login',
-               '/register', '/docs', '/dashboard', '/privacy', '/terms'];
+               '/register', '/docs', '/dashboard', '/privacy'];
 
 await fs.mkdir(OUT, { recursive: true });
 

@@ -365,19 +365,9 @@ function RegisterForm() {
                 label="Я согласен(на) получать маркетинговые рассылки и новости (необязательно)"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Регистрируясь, вы также принимаете{' '}
-                <Link
-                  href="/terms"
-                  className="text-primary hover:underline"
-                >
-                  Условия использования
-                </Link>{' '}
-                и{' '}
-                <Link
-                  href="/privacy"
-                  className="text-primary hover:underline"
-                >
-                  Политику конфиденциальности
+                Информация об обработке данных — в{' '}
+                <Link href="/privacy" className="text-primary hover:underline">
+                  Политике конфиденциальности
                 </Link>
                 .
               </p>
@@ -447,13 +437,9 @@ export default function RegisterPage() {
         </Suspense>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          При регистрации вы соглашаетесь с нашими{' '}
-          <Link href="/terms" className="text-primary hover:underline">
-            Условиями использования
-          </Link>{' '}
-          и{' '}
+          Подробнее об обработке данных — в{' '}
           <Link href="/privacy" className="text-primary hover:underline">
-            Политикой конфиденциальности
+            Политике конфиденциальности
           </Link>
         </p>
       </div>

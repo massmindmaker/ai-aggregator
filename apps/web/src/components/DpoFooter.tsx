@@ -10,9 +10,6 @@ export function DpoFooter() {
       <a href={`mailto:${email}`} className="underline hover:text-foreground">
         {email}
       </a>
-      {process.env.NEXT_PUBLIC_RKN_OPERATOR_NUMBER && (
-        <> · Реестр РКН № {process.env.NEXT_PUBLIC_RKN_OPERATOR_NUMBER}</>
-      )}
     </div>
   );
 }
