@@ -4,6 +4,8 @@
 
 ## Текущая стадия
 
+**Ревью 28.09:** [проверенные исправления и открытый P0 аудит зависимостей](../consolidation/2026-09-28-aggregator-security-review.md). Полный свежий unit-прогон 2625 PASS / 485 SKIP, types/builds/scoped lint PASS не закрывают этот security gate. До дальнейшей приёмки AG-3a нужны совместимое обновление зависимостей и действующий native-стенд.
+
 Локально приняты durable chat, embeddings, scalar completions, streaming, BYOK, async media и batches. Последний финансовый checkpoint: `b949c80`, clean86 applied/no-op, root DB baseline388/388 и TON core58/58; независимые financial/recovery и TypeScript reviews APPROVE. Ветка `feat/durable-batches-20260927` содержит также `277b706`: публичные реквизиты и черновики оферты/условий сняты по запросу владельца; type-check, lint и React/TypeScript review прошли. Эти факты доказывают локальный source candidate, но не deployed runtime. Публичный режим по умолчанию остаётся `legacy`.
 
 AG владеет producer-контрактом `/v1/catalog` и versioned billing receipt. Потребитель каталога в Agents Market — внешний по отношению к этой цели checkpoint. Его отсутствие не подменяет AG-owned доказательства, а его локальный кандидат не считается готовностью Aggregator.

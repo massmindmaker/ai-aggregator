@@ -1,0 +1,47 @@
+{
+  "date": "2026-09-28",
+  "source_commit": "775e17c703df18a35e38171af531d3445ce1e9f8",
+  "branch": "feat/ag-author-version-20260928",
+  "exit_codes": {
+    "frozen-unit": 0,
+    "shared-types": 0,
+    "web-types": 0,
+    "gateway-types": 0,
+    "worker-types": 0,
+    "shared-build": 0,
+    "gateway-build": 0,
+    "worker-build": 0,
+    "web-build": 0,
+    "shared-lint": 0,
+    "web-lint": 0,
+    "bun-tls-smoke": 0,
+    "dependency-audit": 1
+  },
+  "unit": {
+    "passed": 2625,
+    "skipped": 485,
+    "failed": 0,
+    "files_passed": 195,
+    "files_skipped": 31
+  },
+  "audit_scanner_summary": {
+    "packages": 28,
+    "unique_advisories": 90,
+    "severity": {
+      "critical": 5,
+      "high": 32,
+      "moderate": 46,
+      "low": 7
+    }
+  },
+  "classification_note": "Raw registry severity, not verified exploitability; maintainer disagreements documented in review.",
+  "unit_log_sha256": "7f63388d361f51c0c6a9450c9ade76a4e9e12f96182ea6de10770b8e766c852d",
+  "not_performed": [
+    "fresh native PostgreSQL acceptance",
+    "full buyer/author/admin Web E2E",
+    "real paid provider call",
+    "production migration/deploy",
+    "mainnet/payment/payout",
+    "independent review approval"
+  ]
+}

@@ -17,3 +17,8 @@
 3. Нет production migration/deploy, live provider probe, реальных денег или публичной продажи. После снятия публичной оферты и реквизитов юридический release gate остаётся открытым.
 
 Owner plan: [AG-P3 Batch A–C](../../superpowers/plans/2026-09-28-ag-author-version-v1.md). Следующий исполняемый пакет — Batch B, затем Batch C; один green candidate test не закрывает AG-P3.
+
+
+## Ревью безопасности 28.09 — не завершение AG-P3
+
+Закрыты обход авторской модерации через legacy approve, отсутствие свежей проверки admin/step-up в пяти server actions и дефекты сетевой защиты Bun/Node. Финальный unit2625 PASS /485 SKIP, types/shared+gateway+worker+Web builds и scoped lint exit0; Bun local TLS mechanism smoke exit0. [Хендофф, точные границы и открытый dependency audit](../../consolidation/2026-09-28-aggregator-security-review.md). Durable probe/moderation/runtime pin/author earnings остаются незавершёнными. Свежей native-приёмки и независимого APPROVE в этой волне нет.
