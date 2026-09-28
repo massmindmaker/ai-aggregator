@@ -1,0 +1,126 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "0caa580",
+  "branch": "feat/ag-author-version-20260928",
+  "scope": "dependency/runtime/native/auth remediation; author Batch B/C and production not completed",
+  "unit": {
+    "passed": 2637,
+    "failed": 0,
+    "skipped": 485,
+    "files_passed": 200,
+    "files_skipped": 31,
+    "exit_code": 0
+  },
+  "native": {
+    "gateway_database_tests": 388,
+    "ton_core_tests": 58,
+    "author_version_scenarios": 1,
+    "migration_count": 87,
+    "exit_code": 0,
+    "owned_services_cleanup": "verified"
+  },
+  "browser": {
+    "scenarios_passed": 1,
+    "unexpected": 0,
+    "flaky": 0,
+    "skipped": 0,
+    "exit_code": 0,
+    "mode": "headless owned production preview with local PostgreSQL",
+    "checks": [
+      "registration consent400",
+      "registration201",
+      "duplicate409",
+      "wrong password rejected",
+      "actual credentials login and session identity",
+      "normal user admin403",
+      "dashboard",
+      "mobile no horizontal overflow",
+      "catalog and model detail",
+      "no same-origin5xx",
+      "no uncaught browser errors"
+    ]
+  },
+  "web_production_build": {
+    "exit_code": 0,
+    "next": "15.5.26",
+    "deployment": "not performed"
+  },
+  "dependency_audit": {
+    "initial_unique_advisories": 90,
+    "after_remediation_unique_advisories": 0,
+    "exit_code": 0
+  },
+  "verification_log_sha256": "fdb029ac645530310441ca97bb265eaaf77cc3613dc4f38dcc43b00077ec23c8",
+  "independent_review": "not obtained; no usable ZCode interface, previous Codex quota limit",
+  "remaining": [
+    "author durable probe/moderation/version pinning",
+    "author accrual/refund/reversal/mock payout",
+    "TON wallet/checkout/reconciliation acceptance",
+    "remaining sold modalities/STT",
+    "YooKassa settlement",
+    "operator recovery/backup/restore/release",
+    "full mobile UX/accessibility",
+    "real-provider and production authorization"
+  ],
+  "source_commit": "305c21ac97db2ad49d58923cc81bb000ce177e66",
+  "exit_codes": {
+    "unit-final-frozen": 0,
+    "post-type-focused": 0,
+    "native-rechecked": 0,
+    "browser-auth": 0,
+    "web-build-verified": 0,
+    "final-frozen-lock": 0,
+    "final-shared-types": 0,
+    "final-database-types": 0,
+    "gateway-types-patched": 0,
+    "final-worker-types": 0,
+    "final-web-types": 0,
+    "final-web-lint": 0,
+    "node-lint-verified": 0,
+    "final-diff-check": 0,
+    "audit-verified": 0
+  },
+  "post_unit_type_only_changes": {
+    "files": 7,
+    "legacy_mock_generics_converted": 22,
+    "emitted_javascript_identical": true,
+    "focused_tests_passed": 92,
+    "proof": [
+      {
+        "file": "packages/api-gateway/src/__tests__/http-storage-bridge.native.integration.test.ts",
+        "converted_generic_annotations": 1,
+        "emitted_js_identical": true
+      },
+      {
+        "file": "packages/api-gateway/src/__tests__/http-terminal-recovery-bridge.native.integration.test.ts",
+        "converted_generic_annotations": 1,
+        "emitted_js_identical": true
+      },
+      {
+        "file": "packages/api-gateway/src/__tests__/quota-executor-bridge.native.integration.test.ts",
+        "converted_generic_annotations": 1,
+        "emitted_js_identical": true
+      },
+      {
+        "file": "packages/api-gateway/src/__tests__/stored-chat-attempt-transport.test.ts",
+        "converted_generic_annotations": 6,
+        "emitted_js_identical": true
+      },
+      {
+        "file": "packages/api-gateway/src/__tests__/stored-chat-attempt.test.ts",
+        "converted_generic_annotations": 7,
+        "emitted_js_identical": true
+      },
+      {
+        "file": "packages/api-gateway/src/__tests__/stored-chat-http-terminal-seams.test.ts",
+        "converted_generic_annotations": 6,
+        "emitted_js_identical": true
+      },
+      {
+        "file": "packages/api-gateway/src/__tests__/stored-chat-stream-attempt.test.ts",
+        "converted_generic_annotations": 0,
+        "emitted_js_identical": true
+      }
+    ]
+  }
+}

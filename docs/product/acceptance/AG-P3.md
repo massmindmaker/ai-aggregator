@@ -22,3 +22,8 @@ Owner plan: [AG-P3 Batch A–C](../../superpowers/plans/2026-09-28-ag-author-ver
 ## Ревью безопасности 28.09 — не завершение AG-P3
 
 Закрыты обход авторской модерации через legacy approve, отсутствие свежей проверки admin/step-up в пяти server actions и дефекты сетевой защиты Bun/Node. Финальный unit2625 PASS /485 SKIP, types/shared+gateway+worker+Web builds и scoped lint exit0; Bun local TLS mechanism smoke exit0. [Хендофф, точные границы и открытый dependency audit](../../consolidation/2026-09-28-aggregator-security-review.md). Durable probe/moderation/runtime pin/author earnings остаются незавершёнными. Свежей native-приёмки и независимого APPROVE в этой волне нет.
+
+
+## Техническая совместимость после обновления зависимостей
+
+Новая волна28.09 повторила author-version native1 на свежих87миграциях, общий DBbaseline388 и TON58; исправлены transaction-driver и распознавание WebDBproxy адаптером Auth.js. Реальные регистрация/вход/admin403, каталог/detail и mobile-overflow проверены в браузере. [Точный checkpoint](../../consolidation/2026-09-28-release-remediation-checkpoint.md). Это усиление foundations, не реализация durable probe/moderation/runtime pin/author earnings; AG-P3 остаётся OPEN. Независимого одобрения новой волны нет.
