@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const dnsLookup = vi.hoisted(() => vi.fn());
 const captured = vi.hoisted(() => ({ options: null as unknown }));
 vi.mock('node:dns', () => ({ lookup: dnsLookup }));
-vi.mock('undici', () => ({ Agent: vi.fn((options: unknown) => {
+vi.mock('undici', () => ({ Agent: vi.fn(function AgentMock(options: unknown) {
   captured.options = options;
   return { close: vi.fn().mockResolvedValue(undefined), destroy: vi.fn().mockResolvedValue(undefined) };
 }) }));

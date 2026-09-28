@@ -16,7 +16,7 @@
  * lookups are sub-millisecond. NEVER add caching without first wiring a
  * synchronous flush endpoint called from the freeze/depublish admin routes.
  */
-import type { Context, Next } from 'hono';
+import type { Context, Next, MiddlewareHandler } from 'hono';
 import { sql as defaultSql, type SqlClient } from '../lib/db';
 
 export type ModelStatus =
@@ -56,7 +56,7 @@ export async function checkModelStatus(
  * Hono middleware factory. Reads `model` from JSON body (cloned so downstream
  * handlers can re-parse it). Non-JSON bodies / no `model` field pass through.
  */
-export function modelStatusMiddleware(sqlClient: SqlClient = defaultSql) {
+export function modelStatusMiddleware(sqlClient: SqlClient = defaultSql): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     let modelSlug: string | undefined;
     try {

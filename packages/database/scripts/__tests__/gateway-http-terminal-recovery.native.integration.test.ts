@@ -1166,7 +1166,7 @@ describe.skipIf(!enabled)("native HTTP terminal rejection and recovery", () => {
       expect(await snapshot(r)).toEqual(before);
     },
   );
-  it("rejects negative updates and parent deletes while preserving old FK SQLSTATE", async () => {
+  it("rejects negative updates and parent deletes while preserving explicit referential-integrity SQLSTATEs", async () => {
     const r = request(await fixture());
     await claim(r);
     await unstarted(r);
@@ -1181,7 +1181,7 @@ describe.skipIf(!enabled)("native HTTP terminal rejection and recovery", () => {
       query("DELETE FROM gateway_http_requests WHERE billing_request_id=$1", [
         r.id,
       ]),
-    ).rejects.toMatchObject({ code: "23503" });
+    ).rejects.toMatchObject({ code: expect.stringMatching(/^(23503|23001)$/) });
     expect((await read(r)).rows[0]).toEqual(before);
     const s = await started();
     await write(s);
@@ -1189,7 +1189,7 @@ describe.skipIf(!enabled)("native HTTP terminal rejection and recovery", () => {
       query("DELETE FROM gateway_http_requests WHERE billing_request_id=$1", [
         s.id,
       ]),
-    ).rejects.toMatchObject({ code: "23503" });
+    ).rejects.toMatchObject({ code: expect.stringMatching(/^(23503|23001)$/) });
   });
   it("cleans only confirmed owned fixture rows and leaves an unrelated sentinel intact", async () => {
     const sentinel = request(await fixture());

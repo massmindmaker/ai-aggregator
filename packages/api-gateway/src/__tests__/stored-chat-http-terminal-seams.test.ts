@@ -103,8 +103,7 @@ function fixture() {
     newUuid: vi.fn(() => uuid(id++)),
     getAdapter: vi.fn(() => adapter),
     admitGatewayChargeV2: vi.fn<
-      Parameters<StoredChatAttemptDependencies["admitGatewayChargeV2"]>,
-      ReturnType<StoredChatAttemptDependencies["admitGatewayChargeV2"]>
+      (...args: Parameters<StoredChatAttemptDependencies["admitGatewayChargeV2"]>) => ReturnType<StoredChatAttemptDependencies["admitGatewayChargeV2"]>
     >(async (a) => {
       order.push("admit");
       return Object.freeze({
@@ -133,8 +132,7 @@ function fixture() {
       });
     }),
     markGatewayChargeDispatched: vi.fn<
-      Parameters<StoredChatAttemptDependencies["markGatewayChargeDispatched"]>,
-      ReturnType<StoredChatAttemptDependencies["markGatewayChargeDispatched"]>
+      (...args: Parameters<StoredChatAttemptDependencies["markGatewayChargeDispatched"]>) => ReturnType<StoredChatAttemptDependencies["markGatewayChargeDispatched"]>
     >(async (a) => {
       order.push("dispatch");
       return {
@@ -151,8 +149,7 @@ function fixture() {
       };
     }),
     recordGatewayChargeOutcomeV2: vi.fn<
-      Parameters<StoredChatAttemptDependencies["recordGatewayChargeOutcomeV2"]>,
-      ReturnType<StoredChatAttemptDependencies["recordGatewayChargeOutcomeV2"]>
+      (...args: Parameters<StoredChatAttemptDependencies["recordGatewayChargeOutcomeV2"]>) => ReturnType<StoredChatAttemptDependencies["recordGatewayChargeOutcomeV2"]>
     >(async (a) => {
       order.push("outcome");
       return Object.freeze({
@@ -166,8 +163,7 @@ function fixture() {
       });
     }),
     settleAdmittedGatewayCharge: vi.fn<
-      Parameters<StoredChatAttemptDependencies["settleAdmittedGatewayCharge"]>,
-      ReturnType<StoredChatAttemptDependencies["settleAdmittedGatewayCharge"]>
+      (...args: Parameters<StoredChatAttemptDependencies["settleAdmittedGatewayCharge"]>) => ReturnType<StoredChatAttemptDependencies["settleAdmittedGatewayCharge"]>
     >(async (a) => {
       order.push("settle");
       return Object.freeze({
@@ -178,10 +174,9 @@ function fixture() {
       });
     }),
     cancelUndispatchedGatewayCharge: vi.fn<
-      Parameters<
+      (...args: Parameters<
         StoredChatAttemptDependencies["cancelUndispatchedGatewayCharge"]
-      >,
-      ReturnType<
+      >) => ReturnType<
         StoredChatAttemptDependencies["cancelUndispatchedGatewayCharge"]
       >
     >(async (a) => {
@@ -378,7 +373,7 @@ describe("HTTP terminal executor seams", () => {
     const first = deps.admitAttempt,
       h = createStoredChatAttempt(f.input, deps);
     if (h.status !== "ready") throw Error(h.status);
-    deps.admitAttempt = vi.fn<Parameters<typeof first>, ReturnType<typeof first>>(async () => {
+    deps.admitAttempt = vi.fn<(...args: Parameters<typeof first>) => ReturnType<typeof first>>(async () => {
       throw Error("changed");
     });
     const promise = h.run();

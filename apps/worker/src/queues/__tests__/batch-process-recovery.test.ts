@@ -7,7 +7,7 @@ const queueAdd = vi.fn(async (_name: string, data: { batchId: string }, options:
 }));
 const queueClose = vi.fn(async () => undefined);
 vi.mock('bullmq', () => ({
-  Queue: vi.fn(() => ({ add: queueAdd, close: queueClose })),
+  Queue: vi.fn(function QueueMock() { return { add: queueAdd, close: queueClose }; }),
 }));
 
 const NOW = '2026-09-27T12:00:00.000Z';

@@ -358,7 +358,7 @@ describe.skipIf(!RUN_INTEGRATION)("native top-up refund primitives", () => {
         grantCredits: 1_200_000,
         tinkoffStatus: "CONFIRMED",
       }),
-    ).rejects.toMatchObject({ code: "23505" });
+    ).rejects.toMatchObject({ cause: { code: "23505" } });
 
     const state = await client.query<{
       status: string;

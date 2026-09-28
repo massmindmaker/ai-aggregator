@@ -4,29 +4,15 @@ import { neon } from '@neondatabase/serverless';
 import { Pool } from 'pg';
 import * as schema from './schema';
 
-// Heuristic: Neon serverless HTTP works for *.neon.tech URLs (and Vercel
-// Postgres which proxies to it). Anything else (localhost, self-hosted
-// Postgres, the SSH-tunnelled VPS Postgres on 127.0.0.1:15432) must go
-// through the standard `pg` driver over TCP.
-function shouldUseNeon(connectionString: string): boolean {
-  return /neon\.tech|vercel-storage\.com/.test(connectionString);
-}
-
-// Detect a local Postgres URL — used to disable SSL for self-hosted DBs that
-// don't terminate TLS (e.g. local docker-compose or a VPS Postgres bound to
-// 127.0.0.1). Without this, `pg-connection-string` v3 escalates `sslmode=prefer`
-// to `verify-full` and the connection fails with
-// "The server does not support SSL connections".
+// Service clients always use a driver with interactive transactions.
+// HTTP edge access is explicit below, never inferred from text in a URL.
 function isLocalPostgres(connectionString: string): boolean {
-  return /@(localhost|127\.0\.0\.1|\[::1\])[:\/]/i.test(connectionString);
+  const host = new URL(connectionString).hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
 }
 
 // Create database client
 export function createDb(connectionString: string) {
-  if (shouldUseNeon(connectionString)) {
-    const sql = neon(connectionString);
-    return drizzleNeon(sql, { schema }) as unknown as ReturnType<typeof drizzlePg<typeof schema>>;
-  }
   const poolConfig: ConstructorParameters<typeof Pool>[0] = {
     connectionString,
   };

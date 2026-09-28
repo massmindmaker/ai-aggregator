@@ -14,7 +14,7 @@ import { getModelBySlug } from '@/lib/marketplace/catalog';
 import { CopyButton } from '@/components/marketplace/CopyButton';
 
 interface Params {
-  params: { scenario: string };
+  params: Promise<{ scenario: string }>;
 }
 
 export async function generateStaticParams() {
@@ -22,8 +22,9 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({
-  params,
+  params: paramsPromise,
 }: Params): Promise<Metadata> {
+  const params = await paramsPromise;
   const s = getScenarioBySlug(params.scenario);
   if (!s) return { title: 'Сценарий не найден' };
   return {
@@ -35,7 +36,8 @@ export async function generateMetadata({
   };
 }
 
-export default function ScenarioDetailPage({ params }: Params) {
+export default async function ScenarioDetailPage({ params: paramsPromise }: Params) {
+  const params = await paramsPromise;
   const scenario = getScenarioBySlug(params.scenario);
   if (!scenario) notFound();
 

@@ -40,10 +40,11 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default function MarketplacePage({ searchParams }: PageProps) {
+export default async function MarketplacePage({ searchParams: searchParamsPromise }: PageProps) {
+  const searchParams = await searchParamsPromise;
   const all = getAllModels();
   const facets = computeFacets(all);
   const filters = parseFiltersFromSearchParams(searchParams);

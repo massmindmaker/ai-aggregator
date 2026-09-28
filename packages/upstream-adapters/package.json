@@ -24,6 +24,6 @@
     "@aiag/typescript-config": "*",
     "@types/node": "^20.12.7",
     "typescript": "^5.4.5",
-    "vitest": "^1.3.1"
+    "vitest": "4.1.11"
   }
 }

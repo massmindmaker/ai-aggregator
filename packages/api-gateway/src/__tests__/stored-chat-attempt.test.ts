@@ -105,8 +105,7 @@ function fixture() {
     newUuid: vi.fn(() => uuid(id++)),
     getAdapter: vi.fn(() => adapter),
     admitGatewayChargeV2: vi.fn<
-      Parameters<StoredChatAttemptDependencies['admitGatewayChargeV2']>,
-      ReturnType<StoredChatAttemptDependencies['admitGatewayChargeV2']>
+      (...args: Parameters<StoredChatAttemptDependencies['admitGatewayChargeV2']>) => ReturnType<StoredChatAttemptDependencies['admitGatewayChargeV2']>
     >(async (a) => {
       order.push('admit');
       return Object.freeze({
@@ -135,8 +134,7 @@ function fixture() {
       });
     }),
     markGatewayChargeDispatched: vi.fn<
-      Parameters<StoredChatAttemptDependencies['markGatewayChargeDispatched']>,
-      ReturnType<StoredChatAttemptDependencies['markGatewayChargeDispatched']>
+      (...args: Parameters<StoredChatAttemptDependencies['markGatewayChargeDispatched']>) => ReturnType<StoredChatAttemptDependencies['markGatewayChargeDispatched']>
     >(async (a) => {
       order.push('dispatch');
       return {
@@ -153,8 +151,7 @@ function fixture() {
       };
     }),
     recordGatewayChargeOutcomeV2: vi.fn<
-      Parameters<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>,
-      ReturnType<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>
+      (...args: Parameters<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>) => ReturnType<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>
     >(async (a) => {
       order.push('outcome');
       return Object.freeze({
@@ -168,8 +165,7 @@ function fixture() {
       });
     }),
     settleAdmittedGatewayCharge: vi.fn<
-      Parameters<StoredChatAttemptDependencies['settleAdmittedGatewayCharge']>,
-      ReturnType<StoredChatAttemptDependencies['settleAdmittedGatewayCharge']>
+      (...args: Parameters<StoredChatAttemptDependencies['settleAdmittedGatewayCharge']>) => ReturnType<StoredChatAttemptDependencies['settleAdmittedGatewayCharge']>
     >(async (a) => {
       order.push('settle');
       return Object.freeze({
@@ -180,10 +176,9 @@ function fixture() {
       });
     }),
     cancelUndispatchedGatewayCharge: vi.fn<
-      Parameters<
+      (...args: Parameters<
         StoredChatAttemptDependencies['cancelUndispatchedGatewayCharge']
-      >,
-      ReturnType<
+      >) => ReturnType<
         StoredChatAttemptDependencies['cancelUndispatchedGatewayCharge']
       >
     >(async (a) => {
@@ -871,8 +866,7 @@ describe('custom persistence reconciliation', () => {
       return f.output;
     });
     const persistOutcome = vi.fn<
-      Parameters<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>,
-      ReturnType<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>
+      (...args: Parameters<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>) => ReturnType<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>
     >(async (a) => {
       expect(Object.isFrozen(a)).toBe(true);
       expect(Object.isFrozen(a.response.choices[0]!.message)).toBe(true);
@@ -891,8 +885,7 @@ describe('custom persistence reconciliation', () => {
     const handle = createStoredChatAttempt(f.input, deps);
     if (handle.status !== 'ready') throw Error(handle.status);
     deps.persistOutcome = vi.fn<
-      Parameters<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>,
-      ReturnType<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>
+      (...args: Parameters<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>) => ReturnType<NonNullable<StoredChatAttemptDependencies['persistOutcome']>>
     >(async () => {
       throw Error('replacement');
     });

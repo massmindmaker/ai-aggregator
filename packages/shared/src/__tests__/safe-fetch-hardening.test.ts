@@ -4,7 +4,7 @@ const dnsLookup = vi.hoisted(() => vi.fn());
 const close = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const destroy = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('node:dns', () => ({ lookup: dnsLookup }));
-vi.mock('undici', () => ({ Agent: vi.fn(() => ({ close, destroy })) }));
+vi.mock('undici', () => ({ Agent: vi.fn(function AgentMock() { return { close, destroy }; }) }));
 import { classifyBlockedIp, safeFetch } from '../safe-fetch';
 
 const bunDescriptor = Object.getOwnPropertyDescriptor(process.versions, 'bun');

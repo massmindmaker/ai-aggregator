@@ -6,7 +6,7 @@ import {
 import { openRouterUpstream } from '../upstreams/openrouter';
 import type { GatewayChargeAdmissionResult } from '../billing/admission-result';
 import { safeFetch } from '@aiag/shared/server';
-const fetchStub = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>();
+const fetchStub = vi.fn<(...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>>();
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const raw = () => ({
@@ -29,8 +29,7 @@ function fixture() {
     newUuid: () => id(n++),
     getAdapter: () => openRouterUpstream,
     admitGatewayChargeV2: vi.fn<
-      Parameters<StoredChatAttemptDependencies['admitGatewayChargeV2']>,
-      ReturnType<StoredChatAttemptDependencies['admitGatewayChargeV2']>
+      (...args: Parameters<StoredChatAttemptDependencies['admitGatewayChargeV2']>) => ReturnType<StoredChatAttemptDependencies['admitGatewayChargeV2']>
     >(async (a) =>
       Object.freeze({
         ...a,
@@ -39,8 +38,7 @@ function fixture() {
       } as unknown as GatewayChargeAdmissionResult),
     ),
     markGatewayChargeDispatched: vi.fn<
-      Parameters<StoredChatAttemptDependencies['markGatewayChargeDispatched']>,
-      ReturnType<StoredChatAttemptDependencies['markGatewayChargeDispatched']>
+      (...args: Parameters<StoredChatAttemptDependencies['markGatewayChargeDispatched']>) => ReturnType<StoredChatAttemptDependencies['markGatewayChargeDispatched']>
     >(async (a) => ({
       kind: 'dispatch_granted',
       admission: Object.freeze({
@@ -53,8 +51,7 @@ function fixture() {
       }),
     })),
     recordGatewayChargeOutcomeV2: vi.fn<
-      Parameters<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>,
-      ReturnType<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>
+      (...args: Parameters<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>) => ReturnType<StoredChatAttemptDependencies['recordGatewayChargeOutcomeV2']>
     >(async (a) =>
       Object.freeze({
         ...a.admission,
@@ -65,14 +62,12 @@ function fixture() {
       }),
     ),
     settleAdmittedGatewayCharge: vi.fn<
-      Parameters<StoredChatAttemptDependencies['settleAdmittedGatewayCharge']>,
-      ReturnType<StoredChatAttemptDependencies['settleAdmittedGatewayCharge']>
+      (...args: Parameters<StoredChatAttemptDependencies['settleAdmittedGatewayCharge']>) => ReturnType<StoredChatAttemptDependencies['settleAdmittedGatewayCharge']>
     >(async (a) => Object.freeze({ ...a.admission, state: 'settled' })),
     cancelUndispatchedGatewayCharge: vi.fn<
-      Parameters<
+      (...args: Parameters<
         StoredChatAttemptDependencies['cancelUndispatchedGatewayCharge']
-      >,
-      ReturnType<
+      >) => ReturnType<
         StoredChatAttemptDependencies['cancelUndispatchedGatewayCharge']
       >
     >(async () => {

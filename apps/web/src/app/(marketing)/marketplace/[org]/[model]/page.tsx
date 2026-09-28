@@ -27,7 +27,7 @@ import { ModelCard } from '@/components/marketplace/ModelCard';
 import { CodeExampleTabs } from '@/components/marketplace/CodeExampleTabs';
 
 interface RouteParams {
-  params: { org: string; model: string };
+  params: Promise<{ org: string; model: string }>;
 }
 
 export const revalidate = 300;
@@ -41,8 +41,9 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({
-  params,
+  params: paramsPromise,
 }: RouteParams): Promise<Metadata> {
+  const params = await paramsPromise;
   const model = getModelByOrgAndSlug(params.org, params.model);
   if (!model) {
     return { title: 'Модель не найдена — AI Aggregator' };
@@ -121,7 +122,8 @@ function buildProductJsonLd(model: CatalogModel) {
   };
 }
 
-export default function ModelDetailPage({ params }: RouteParams) {
+export default async function ModelDetailPage({ params: paramsPromise }: RouteParams) {
+  const params = await paramsPromise;
   const model = getModelByOrgAndSlug(params.org, params.model);
   if (!model) notFound();
 

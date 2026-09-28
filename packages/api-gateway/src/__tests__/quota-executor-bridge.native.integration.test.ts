@@ -108,7 +108,7 @@ async function fixture(client: SqlClient) {
     },
     defaultMaxOutputTokens: 4096,
   };
-  const fetchStub = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(
+  const fetchStub = vi.fn<(...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>>(
     async () =>
       new Response(
         JSON.stringify({

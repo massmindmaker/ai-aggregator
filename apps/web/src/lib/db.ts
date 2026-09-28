@@ -28,6 +28,9 @@ function getDb(): Database {
 
 // Export a proxy that lazily initializes the database
 export const db = new Proxy({} as Database, {
+  getPrototypeOf() {
+    return Object.getPrototypeOf(getDb());
+  },
   get(_, prop) {
     return getDb()[prop as keyof Database];
   },

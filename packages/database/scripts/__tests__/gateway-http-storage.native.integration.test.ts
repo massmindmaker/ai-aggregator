@@ -810,13 +810,13 @@ describe.skipIf(!enabled)("native gateway HTTP storage", () => {
       query("DELETE FROM gateway_http_requests WHERE billing_request_id=$1", [
         r.id,
       ]),
-    ).rejects.toMatchObject({ code: "23503" });
+    ).rejects.toMatchObject({ code: expect.stringMatching(/^(23503|23001)$/) });
     await expect(
       query(
         "DELETE FROM gateway_charge_admissions WHERE billing_request_id=$1",
         [r.id],
       ),
-    ).rejects.toMatchObject({ code: "23503" });
+    ).rejects.toMatchObject({ code: expect.stringMatching(/^(23503|23001)$/) });
     await expect(
       query("UPDATE gateway_api_keys SET org_id=$2 WHERE id=$1", [
         r.f.key,

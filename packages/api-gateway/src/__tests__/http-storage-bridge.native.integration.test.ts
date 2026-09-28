@@ -176,8 +176,7 @@ async function fixture(client: SqlClient, other: SqlClient) {
       a: Parameters<typeof common.cancelUndispatchedGatewayCharge>[0],
     ) => common.cancelUndispatchedGatewayCharge(a, client),
     persistOutcome: vi.fn<
-      Parameters<NonNullable<StoredChatAttemptDependencies["persistOutcome"]>>,
-      ReturnType<NonNullable<StoredChatAttemptDependencies["persistOutcome"]>>
+      (...args: Parameters<NonNullable<StoredChatAttemptDependencies["persistOutcome"]>>) => ReturnType<NonNullable<StoredChatAttemptDependencies["persistOutcome"]>>
     >((a) => http.recordGatewayHttpOutcome({ ...a, ...identity }, client)),
   };
   async function prepare() {

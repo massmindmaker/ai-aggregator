@@ -35,11 +35,9 @@ vi.mock('next-auth/react', () => ({
 
 // Global test utilities
 if (typeof window !== 'undefined') {
-  global.ResizeObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  }));
+  global.ResizeObserver = vi.fn().mockImplementation(function ResizeObserverMock() {
+    return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
+  });
 
   // matchMedia mock (required by next-themes + prefers-reduced-motion checks)
   Object.defineProperty(window, 'matchMedia', {

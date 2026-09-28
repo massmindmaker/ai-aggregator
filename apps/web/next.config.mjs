@@ -1,5 +1,6 @@
 import createNextIntlPlugin from 'next-intl/plugin';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
@@ -17,6 +18,7 @@ const legacyMarketplaceRedirects = require(
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
   transpilePackages: ['@aiag/database', '@aiag/tinkoff', '@aiag/shared', '@aiag/api-gateway', '@aiag/upstream-adapters'],
   images: {
     remotePatterns: [
@@ -34,9 +36,7 @@ const nextConfig = {
       },
     ],
   },
-  experimental: {
-    serverComponentsExternalPackages: ['@neondatabase/serverless'],
-  },
+  serverExternalPackages: ['@neondatabase/serverless'],
   poweredByHeader: false,
   compress: true,
   async redirects() {

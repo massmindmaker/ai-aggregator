@@ -39,7 +39,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
     "@aws-sdk/s3-request-presigner": "^3.1045.0",
-    "undici": "^6.21.3",
+    "undici": "7.30.0",
     "zod": "^3.23.6"
   },
   "devDependencies": {

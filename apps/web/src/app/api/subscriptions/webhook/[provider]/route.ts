@@ -23,9 +23,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { provider: string } }
+  { params }: { params: Promise<{ provider: string }> }
 ) {
-  const provider = params.provider as ProviderId;
+  const provider = (await params).provider as ProviderId;
 
   if (provider === 'tinkoff') {
     return NextResponse.json(

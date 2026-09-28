@@ -4,11 +4,12 @@ export const metadata = {
   title: 'Договор с авторами моделей — AI-Aggregator',
 };
 
-export default function AuthorAgreementPage({
-  searchParams,
+export default async function AuthorAgreementPage({
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { type?: string };
+  searchParams: Promise<{ type?: string }>;
 }) {
+  const searchParams = await searchParamsPromise;
   const type = searchParams?.type === 'exclusive' ? 'exclusive' : 'standard';
 
   return (

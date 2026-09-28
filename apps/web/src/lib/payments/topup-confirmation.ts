@@ -185,7 +185,7 @@ export async function blockUnconfirmedTopupGrantForRefund(
 }
 
 async function resolveAndLockDefaultOrg(
-  tx: ConfirmationDatabase,
+  tx: Pick<ConfirmationDatabase, "execute" | "query" | "insert">,
   userId: string,
 ): Promise<string> {
   // Serialize first-org creation for the user. Existing refund operations lock

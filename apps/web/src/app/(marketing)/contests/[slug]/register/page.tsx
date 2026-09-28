@@ -13,11 +13,12 @@ export const metadata = { title: 'Регистрация на конкурс —
  * /api/contests/[slug]/register → INSERT INTO contest_participants → redirect
  * to /contests/[slug]/submit.
  */
-export default function ContestRegisterPage({
-  params,
+export default async function ContestRegisterPage({
+  params: paramsPromise,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
+  const params = await paramsPromise;
   return (
     <MainLayout>
       <div className="container mx-auto px-4 py-10 max-w-2xl">

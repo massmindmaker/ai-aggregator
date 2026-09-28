@@ -59,7 +59,7 @@ function fixture() {
   }) as GatewayChargeAdmissionResult;
   const deps: Partial<StoredChatStreamAttemptDependencies> = {
     newUuid: vi.fn(() => uuid(nextId++)),
-    getAdapter: vi.fn(() => ({ admittedChatStream: { contract: 'openrouter-pinned-provider-chat-stream-v1', execute }, chat: vi.fn() })),
+    getAdapter: vi.fn(() => ({ admittedChatStream: { contract: 'openrouter-pinned-provider-chat-stream-v1' as const, execute }, chat: vi.fn() })),
     admitGatewayChargeV2: vi.fn(async () => { order.push('admit'); current = admission(); return current; }),
     markGatewayChargeDispatched: vi.fn(async ({ admission: before, attemptId, upstreamId, pricingSnapshot }) => {
       order.push('dispatch'); current = admission({ ...before, state: 'dispatched', attemptId, upstreamId, pricingSnapshot });

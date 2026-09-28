@@ -77,8 +77,13 @@ describe('root Vitest discovery contract', () => {
 
   it('uses Node by default and jsdom only for web tests', () => {
     expect(testConfig.environment).toBe('node');
-    expect(testConfig.environmentMatchGlobs).toEqual([
-      ['apps/web/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}', 'jsdom'],
-    ]);
+    // Root include would concatenate with the Web project and collect every test twice.
+    expect(testConfig.include).toBeUndefined();
+    const projects = testConfig.projects as Array<{ test?: { name?: string; environment?: string; include?: string[]; exclude?: string[] } }>;
+    expect(projects).toHaveLength(2);
+    expect(projects[0].test).toMatchObject({ name: 'node', environment: 'node' });
+    expect(projects[0].test?.exclude).toContain('apps/web/**');
+    expect(projects[1].test).toMatchObject({ name: 'web', environment: 'jsdom' });
+    expect(projects[1].test?.include).toEqual(['apps/web/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}']);
   });
 });

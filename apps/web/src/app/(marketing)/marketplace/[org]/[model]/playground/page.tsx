@@ -18,7 +18,7 @@ import { TransferWarningBadge } from '@/components/TransferWarningBadge';
 import { auth } from '@/auth';
 
 interface RouteParams {
-  params: { org: string; model: string };
+  params: Promise<{ org: string; model: string }>;
 }
 
 // This page reads the session (auth()), so it must render per-request, not
@@ -34,8 +34,9 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({
-  params,
+  params: paramsPromise,
 }: RouteParams): Promise<Metadata> {
+  const params = await paramsPromise;
   const model = getModelByOrgAndSlug(params.org, params.model);
   if (!model) return { title: 'Playground — модель не найдена' };
   return {
@@ -48,7 +49,8 @@ export async function generateMetadata({
   };
 }
 
-export default async function PlaygroundPage({ params }: RouteParams) {
+export default async function PlaygroundPage({ params: paramsPromise }: RouteParams) {
+  const params = await paramsPromise;
   const model = getModelByOrgAndSlug(params.org, params.model);
   if (!model) notFound();
 

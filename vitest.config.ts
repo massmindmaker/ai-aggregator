@@ -6,12 +6,19 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'node',
-    environmentMatchGlobs: [
-      ['apps/web/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}', 'jsdom'],
+    maxWorkers: 1,
+    fileParallelism: false,
+    projects: [
+      { extends: true, test: { name: 'node', environment: 'node', exclude: [
+        '**/node_modules/**', '**/dist/**', '**/.next/**', '**/.superpowers/**',
+        'docs/superpowers/recovered/**', 'e2e/**', 'tests/fixtures/**', 'apps/web/**',
+      ] } },
+      { extends: true, test: { name: 'web', environment: 'jsdom',
+        include: ['apps/web/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+      } },
     ],
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
-    include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
@@ -36,12 +43,10 @@ export default defineConfig({
         '**/types/**',
       ],
       thresholds: {
-        global: {
-          branches: 50,
-          functions: 50,
-          lines: 50,
-          statements: 50,
-        },
+        branches: 50,
+        functions: 50,
+        lines: 50,
+        statements: 50,
       },
     },
   },
