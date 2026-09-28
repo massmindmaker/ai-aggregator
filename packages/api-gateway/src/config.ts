@@ -26,6 +26,7 @@ const schema = z.object({
       "stored_chat_embeddings_completions_stream_media_batches",
     ])
     .default("legacy"),
+  AUTHOR_CHAT_ENABLED: z.enum(["0", "1"]).default("0"),
   // CBR endpoints (FIX H5/H6)
   CBR_URL: z.string().default("https://www.cbr.ru/scripts/XML_daily.asp"),
   CBR_FALLBACK_URL: z.string().optional(),
@@ -58,6 +59,9 @@ const schema = z.object({
 });
 
 const parsed = schema.parse(process.env);
+if (parsed.AUTHOR_CHAT_ENABLED === "1" && parsed.GATEWAY_HTTP_EXECUTION_MODE === "legacy") {
+  throw new Error("AUTHOR_CHAT_REQUIRES_STORED_EXECUTION");
+}
 // Preserve the exact operator input for the future stored-chat quote. The legacy
 // number remains untouched for existing pricing callers.
 const storedChatCachingDiscountExact = process.env.CACHING_DISCOUNT ?? "0.5";
@@ -72,7 +76,13 @@ if (parsed.GATEWAY_HTTP_EXECUTION_MODE !== "legacy") {
     storedChatCachingDiscountExact,
   );
 }
-if (["stored_chat_embeddings_completions_stream","stored_chat_embeddings_completions_stream_media","stored_chat_embeddings_completions_stream_media_batches"].includes(parsed.GATEWAY_HTTP_EXECUTION_MODE)) {
+if (
+  [
+    "stored_chat_embeddings_completions_stream",
+    "stored_chat_embeddings_completions_stream_media",
+    "stored_chat_embeddings_completions_stream_media_batches",
+  ].includes(parsed.GATEWAY_HTTP_EXECUTION_MODE)
+) {
   if (calculateByokFee(byokFeeCreditsExact) <= 0n)
     throw new Error("BYOK fee must be positive in durable BYOK mode");
 }

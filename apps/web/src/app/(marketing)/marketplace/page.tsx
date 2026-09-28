@@ -1,49 +1,51 @@
-import type { Metadata } from 'next';
-import Link from 'next/link';
-import { Suspense } from 'react';
-import MainLayout from '@/components/layout/MainLayout';
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Suspense } from "react";
+import MainLayout from "@/components/layout/MainLayout";
 import {
   Sheet,
   SheetContent,
   SheetTrigger,
   SheetHeader,
   SheetTitle,
-} from '@/components/ui/Sheet';
-import { Button } from '@/components/ui/Button';
-import { SlidersHorizontal } from 'lucide-react';
-import { ModelGrid } from '@/components/marketplace/ModelCard';
-import { CellsSpot } from '@/components/animations/CellsSpot';
-import { FilterPanel } from '@/components/marketplace/FilterPanel';
-import { computeFacets } from '@/lib/marketplace/facets';
-import { ActiveFilterChips } from '@/components/marketplace/ActiveFilterChips';
-import { SearchAndSort } from '@/components/marketplace/SearchAndSort';
-import { getAllModels } from '@/lib/marketplace/catalog';
+} from "@/components/ui/Sheet";
+import { Button } from "@/components/ui/Button";
+import { SlidersHorizontal } from "lucide-react";
+import { ModelGrid } from "@/components/marketplace/ModelCard";
+import { CellsSpot } from "@/components/animations/CellsSpot";
+import { FilterPanel } from "@/components/marketplace/FilterPanel";
+import { computeFacets } from "@/lib/marketplace/facets";
+import { ActiveFilterChips } from "@/components/marketplace/ActiveFilterChips";
+import { SearchAndSort } from "@/components/marketplace/SearchAndSort";
+import { getAllModels } from "@/lib/marketplace/catalog";
 import {
   parseFiltersFromSearchParams,
   applyFilters,
   filtersToSearchParams,
-} from '@/lib/marketplace/filters';
+} from "@/lib/marketplace/filters";
 
 export const metadata: Metadata = {
-  title: 'Каталог моделей — AI Aggregator',
+  title: "Каталог моделей — AI Aggregator",
   description:
-    'Витрина AI-моделей: GPT, Claude, YandexGPT, DALL-E и ещё десятки моделей. Единый API, оплата в рублях, без VPN.',
+    "Витрина AI-моделей: GPT, Claude, YandexGPT, DALL-E и ещё десятки моделей. Единый API, оплата в рублях, без VPN.",
   openGraph: {
-    title: 'Каталог моделей — AI Aggregator',
+    title: "Каталог моделей — AI Aggregator",
     description:
-      'Витрина AI-моделей: GPT, Claude, YandexGPT, DALL-E. Единый API, оплата в рублях.',
-    type: 'website',
+      "Витрина AI-моделей: GPT, Claude, YandexGPT, DALL-E. Единый API, оплата в рублях.",
+    type: "website",
   },
-  alternates: { canonical: '/marketplace' },
+  alternates: { canonical: "/marketplace" },
 };
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function MarketplacePage({ searchParams: searchParamsPromise }: PageProps) {
+export default async function MarketplacePage({
+  searchParams: searchParamsPromise,
+}: PageProps) {
   const searchParams = await searchParamsPromise;
   const all = getAllModels();
   const facets = computeFacets(all);
@@ -51,7 +53,7 @@ export default async function MarketplacePage({ searchParams: searchParamsPromis
   const result = applyFilters(all, filters);
 
   const orgNameBySlug = Object.fromEntries(
-    facets.orgs.map((o) => [o.slug, o.name])
+    facets.orgs.map((o) => [o.slug, o.name]),
   );
 
   return (
@@ -65,6 +67,12 @@ export default async function MarketplacePage({ searchParams: searchParamsPromis
             Все модели доступны через один API. Оплата в рублях с баланса.
             Фильтры сохраняются в ссылке — делитесь подборкой.
           </p>
+          <Link
+            href="/marketplace/community"
+            className="inline-block pt-2 text-sm underline underline-offset-4"
+          >
+            Модели авторов с фиксированной ценой →
+          </Link>
         </header>
 
         <div className="grid lg:grid-cols-[280px_1fr] gap-8">
@@ -116,9 +124,9 @@ export default async function MarketplacePage({ searchParams: searchParamsPromis
 
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>
-                Найдено{' '}
-                <strong className="text-foreground">{result.total}</strong>{' '}
-                {pluralRu(result.total, ['модель', 'модели', 'моделей'])}
+                Найдено{" "}
+                <strong className="text-foreground">{result.total}</strong>{" "}
+                {pluralRu(result.total, ["модель", "модели", "моделей"])}
               </span>
               {result.totalPages > 1 && (
                 <span>
@@ -165,7 +173,7 @@ function Pagination({
     const filters = parseFiltersFromSearchParams(searchParams);
     const sp = filtersToSearchParams({ ...filters, page: p });
     const qs = sp.toString();
-    return qs ? `/marketplace?${qs}` : '/marketplace';
+    return qs ? `/marketplace?${qs}` : "/marketplace";
   };
   return (
     <nav
@@ -177,8 +185,8 @@ function Pagination({
         aria-disabled={page === 1}
         className={
           page === 1
-            ? 'pointer-events-none opacity-50 px-3 py-1.5 text-sm border border-border rounded-md'
-            : 'px-3 py-1.5 text-sm border border-border rounded-md hover:bg-secondary'
+            ? "pointer-events-none opacity-50 px-3 py-1.5 text-sm border border-border rounded-md"
+            : "px-3 py-1.5 text-sm border border-border rounded-md hover:bg-secondary"
         }
       >
         ← Назад
@@ -191,8 +199,8 @@ function Pagination({
         aria-disabled={page === totalPages}
         className={
           page === totalPages
-            ? 'pointer-events-none opacity-50 px-3 py-1.5 text-sm border border-border rounded-md'
-            : 'px-3 py-1.5 text-sm border border-border rounded-md hover:bg-secondary'
+            ? "pointer-events-none opacity-50 px-3 py-1.5 text-sm border border-border rounded-md"
+            : "px-3 py-1.5 text-sm border border-border rounded-md hover:bg-secondary"
         }
       >
         Вперёд →
@@ -205,6 +213,7 @@ function pluralRu(n: number, forms: [string, string, string]): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
   if (mod10 === 1 && mod100 !== 11) return forms[0];
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return forms[1];
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20))
+    return forms[1];
   return forms[2];
 }

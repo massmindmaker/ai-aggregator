@@ -13,6 +13,8 @@ python3 - <<'CHECK'
 import socket
 for port in (15432, 16379):
  with socket.socket() as sock:
+  # Reuse only TIME_WAIT from our closed test server, never an active listener.
+  sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
   sock.bind(('127.0.0.1', port))
 CHECK
 owned="$(mktemp -d /tmp/aiag-native-review.XXXXXXXX)"

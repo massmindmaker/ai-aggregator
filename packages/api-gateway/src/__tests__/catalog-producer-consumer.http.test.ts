@@ -114,6 +114,8 @@ function seedTwoModels(): void {
   state.candidates = [candidate(1, modelId(1)), candidate(2, modelId(2))];
 }
 
+// This hook imports the full real server graph. Give only boot a60s budget;
+// provider and HTTP contract timeouts remain unchanged.
 async function boot(mode: 'legacy' | 'stored_chat_only'): Promise<ServerApp> {
   vi.resetModules();
   vi.stubEnv('NODE_ENV', 'test');
@@ -144,7 +146,7 @@ describe('public catalog producer-consumer over the real HTTP chain', () => {
 
   describe('stored_chat_only: available producer output parses strictly in the consumer', () => {
     let app: ServerApp;
-    beforeAll(async () => { app = await boot('stored_chat_only'); });
+    beforeAll(async () => { app = await boot('stored_chat_only'); }, 60_000);
 
     it('consumes one bounded page with an available advisory item and a synthetic bearer key', async () => {
       const fetchFn = consumerFetch(app);
@@ -205,7 +207,7 @@ describe('public catalog producer-consumer over the real HTTP chain', () => {
 
   describe('legacy mode: advertised unavailable output parses strictly', () => {
     let app: ServerApp;
-    beforeAll(async () => { app = await boot('legacy'); });
+    beforeAll(async () => { app = await boot('legacy'); }, 60_000);
 
     it('consumes unavailable advisory items with fixed reasons and no pricing', async () => {
       const result = await consumePublicCatalog({ baseUrl: 'http://gateway.test', apiKey: validKey, fetch: consumerFetch(app), pageLimit: 20 });
@@ -223,7 +225,7 @@ describe('public catalog producer-consumer over the real HTTP chain', () => {
 
   describe('fixed safe failure handling over the real chain', () => {
     let app: ServerApp;
-    beforeAll(async () => { app = await boot('stored_chat_only'); });
+    beforeAll(async () => { app = await boot('stored_chat_only'); }, 60_000);
 
     it('maps 401 from the real auth chain to a safe consumer failure', async () => {
       const intruder = consumePublicCatalog({ baseUrl: 'http://gateway.test', apiKey: 'sk_aiag_test_wrong', fetch: consumerFetch(app), pageLimit: 20 });

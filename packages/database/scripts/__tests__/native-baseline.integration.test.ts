@@ -21,25 +21,45 @@ const RUN_INTEGRATION = process.env.RUN_NATIVE_DB_INTEGRATION === "1";
 
 function functionDefinitions(source: string): Map<string, string> {
   return new Map(
-    [...source.matchAll(/CREATE OR REPLACE FUNCTION\s+(\w+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?\$\$;/g)].map(
-      (match) => [`${match[1]}(${match[2].replace(/\s+/g, " ").trim()})`, match[0]],
-    ),
+    [
+      ...source.matchAll(
+        /CREATE OR REPLACE FUNCTION\s+(\w+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?\$\$;/g,
+      ),
+    ].map((match) => [
+      `${match[1]}(${match[2].replace(/\s+/g, " ").trim()})`,
+      match[0],
+    ]),
   );
 }
 
 function uniqueFunctionDefinition(source: string, name: string): string {
-  const matches = [...functionDefinitions(source)].filter(([signature]) => signature.startsWith(`${name}(`));
-  if (matches.length !== 1) throw new Error(`Expected one definition of ${name}, found ${matches.length}`);
+  const matches = [...functionDefinitions(source)].filter(([signature]) =>
+    signature.startsWith(`${name}(`),
+  );
+  if (matches.length !== 1)
+    throw new Error(
+      `Expected one definition of ${name}, found ${matches.length}`,
+    );
   return matches[0][1];
 }
 
-function assertLatestFunctionMirror(mirror: string, migrations: readonly string[]) {
+function assertLatestFunctionMirror(
+  mirror: string,
+  migrations: readonly string[],
+) {
   const latest = new Map<string, string>();
-  for (const migration of migrations) for (const [signature, definition] of functionDefinitions(migration)) latest.set(signature, definition);
+  for (const migration of migrations)
+    for (const [signature, definition] of functionDefinitions(migration))
+      latest.set(signature, definition);
   const current = functionDefinitions(mirror);
   expect(current.size).toBeGreaterThan(0);
-  expect(current.size).toBe([...mirror.matchAll(/CREATE OR REPLACE FUNCTION\s+\w+\(/g)].length);
-  for (const [signature, definition] of current) expect(definition, `latest applied definition of ${signature}`).toBe(latest.get(signature));
+  expect(current.size).toBe(
+    [...mirror.matchAll(/CREATE OR REPLACE FUNCTION\s+\w+\(/g)].length,
+  );
+  for (const [signature, definition] of current)
+    expect(definition, `latest applied definition of ${signature}`).toBe(
+      latest.get(signature),
+    );
 }
 
 if (RUN_INTEGRATION) {
@@ -177,8 +197,8 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(result.rows[0].dispatch_function).toContain(
       "aiag_mark_gateway_charge_dispatched",
     );
-    // Includes catalog/recovery tables and 0087 immutable author_model_versions.
-    expect(Number(result.rows[0].table_count)).toBe(115);
+    // Includes author operations, terms, receipts, credit ledger and reconciliation through0090.
+    expect(Number(result.rows[0].table_count)).toBe(123);
   });
 
   it("verifies TON immutable schema, invoker entrypoints and exact mirror", async () => {
@@ -202,17 +222,31 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       });
       expect(result.rows[0]?.name).toBe(table);
     }
-    const expected = [...mirror.matchAll(/CREATE FUNCTION (\w+)\([^]*? AS \$\$([^]*?)\$\$;/g)];
+    const expected = [
+      ...mirror.matchAll(/CREATE FUNCTION (\w+)\([^]*? AS \$\$([^]*?)\$\$;/g),
+    ];
     expect(expected).toHaveLength(18);
-    const applied = await client.query<{ name: string; definition: string; invoker: boolean; public_execute: boolean; config: string[] }>({
+    const applied = await client.query<{
+      name: string;
+      definition: string;
+      invoker: boolean;
+      public_execute: boolean;
+      config: string[];
+    }>({
       text: "SELECT p.proname AS name,pg_get_functiondef(p.oid) AS definition,NOT p.prosecdef AS invoker,p.proconfig AS config,EXISTS(SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') AS public_execute FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname=ANY($1::text[]) ORDER BY p.proname",
       values: [expected.map((match) => match[1])],
     });
     expect(applied.rows).toHaveLength(18);
     for (const match of expected) {
       const row = applied.rows.find((entry) => entry.name === match[1]);
-      expect(row).toMatchObject({ invoker: true, public_execute: false, config: ["search_path=pg_catalog, public, pg_temp"] });
-      expect(row?.definition.split("$function$")[1]?.trim()).toBe(match[2].trim());
+      expect(row).toMatchObject({
+        invoker: true,
+        public_execute: false,
+        config: ["search_path=pg_catalog, public, pg_temp"],
+      });
+      expect(row?.definition.split("$function$")[1]?.trim()).toBe(
+        match[2].trim(),
+      );
     }
     const triggers = await client.query<{ name: string; enabled: string }>({
       text: "SELECT tgname AS name,tgenabled AS enabled FROM pg_trigger WHERE tgname=ANY($1::text[]) ORDER BY tgname",
@@ -251,81 +285,341 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       resolve("packages/database/src/functions/gateway-charge-admission.sql"),
       "utf8",
     );
-    const terminalMigration = await readFile(resolve("packages/database/migrations/0070_gateway_http_terminal_recovery.sql"), "utf8");
-    const storedEmbeddingsMigration = await readFile(resolve("packages/database/migrations/0077_gateway_stored_embeddings.sql"), "utf8");
-    const storedCompletionsMigration = await readFile(resolve("packages/database/migrations/0078_gateway_stored_completions.sql"), "utf8");
-    const storedStreamMigration = await readFile(resolve("packages/database/migrations/0079_gateway_stored_chat_stream.sql"), "utf8");
-    const storedByokMigration = await readFile(resolve("packages/database/migrations/0080_gateway_stored_chat_byok.sql"), "utf8");
-    const mediaQuotaMigration = await readFile(resolve("packages/database/migrations/0082_gateway_media_quota.sql"), "utf8");
-    const mediaSupplierRoundingMigration = await readFile(resolve("packages/database/migrations/0084_gateway_media_supplier_rounding.sql"), "utf8");
+    const terminalMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0070_gateway_http_terminal_recovery.sql",
+      ),
+      "utf8",
+    );
+    const storedEmbeddingsMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0077_gateway_stored_embeddings.sql",
+      ),
+      "utf8",
+    );
+    const storedCompletionsMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0078_gateway_stored_completions.sql",
+      ),
+      "utf8",
+    );
+    const storedStreamMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0079_gateway_stored_chat_stream.sql",
+      ),
+      "utf8",
+    );
+    const storedByokMigration = await readFile(
+      resolve("packages/database/migrations/0080_gateway_stored_chat_byok.sql"),
+      "utf8",
+    );
+    const mediaQuotaMigration = await readFile(
+      resolve("packages/database/migrations/0082_gateway_media_quota.sql"),
+      "utf8",
+    );
+    const mediaSupplierRoundingMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0084_gateway_media_supplier_rounding.sql",
+      ),
+      "utf8",
+    );
     // Latest replacement wins, including the durable media route/supplier extensions.
-    assertLatestFunctionMirror(mirror, [migration, terminalMigration, storedEmbeddingsMigration, storedCompletionsMigration, storedStreamMigration, storedByokMigration, mediaQuotaMigration]);
+    assertLatestFunctionMirror(mirror, [
+      migration,
+      terminalMigration,
+      storedEmbeddingsMigration,
+      storedCompletionsMigration,
+      storedStreamMigration,
+      storedByokMigration,
+      mediaQuotaMigration,
+    ]);
     const quotaMirror = await readFile(
       resolve(
         "packages/database/src/functions/gateway-durable-spending-quotas.sql",
       ),
       "utf8",
     );
-    assertLatestFunctionMirror(quotaMirror, [migration, storedEmbeddingsMigration, mediaQuotaMigration, mediaSupplierRoundingMigration]);
+    const authorLedgerMigration = await readFile(
+      resolve("packages/database/migrations/0089_author_charge_ledger.sql"),
+      "utf8",
+    );
+    const authorOperatorMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0090_author_operator_reconciliation.sql",
+      ),
+      "utf8",
+    );
+    assertLatestFunctionMirror(quotaMirror, [
+      migration,
+      storedEmbeddingsMigration,
+      mediaQuotaMigration,
+      mediaSupplierRoundingMigration,
+      authorLedgerMigration,
+      authorOperatorMigration,
+    ]);
   });
 
-  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 87 migrations", async () => {
-    const migration = await readFile(resolve("packages/database/migrations/0069_gateway_http_storage.sql"), "utf8");
-    const storedEmbeddingsMigration = await readFile(resolve("packages/database/migrations/0077_gateway_stored_embeddings.sql"), "utf8");
-    const storedCompletionsMigration = await readFile(resolve("packages/database/migrations/0078_gateway_stored_completions.sql"), "utf8");
-    const storedStreamMigration = await readFile(resolve("packages/database/migrations/0079_gateway_stored_chat_stream.sql"), "utf8");
-    const storedByokMigration = await readFile(resolve("packages/database/migrations/0080_gateway_stored_chat_byok.sql"), "utf8");
-    const mirror = await readFile(resolve("packages/database/src/functions/gateway-http-storage.sql"), "utf8");
-    assertLatestFunctionMirror(mirror, [migration, storedEmbeddingsMigration, storedCompletionsMigration, storedStreamMigration, storedByokMigration]);
-    expect([...functionDefinitions(mirror).keys()].filter(signature => signature.startsWith("aiag_http_validate_response("))).toHaveLength(2);
-    const previous = await readFile(resolve("packages/database/migrations/0068_gateway_durable_spending_quotas.sql"));
-    expect(createHash("sha256").update(previous).digest("hex")).toBe("b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6");
-    expect(await discoverNativeMigrations()).toHaveLength(87);
-    const types = await client.query<{ name: string; fields: string[] }>({ text: `
+  it("keeps HTTP storage mirror, immutable 0068, explicit old projections and all 90 migrations", async () => {
+    const migration = await readFile(
+      resolve("packages/database/migrations/0069_gateway_http_storage.sql"),
+      "utf8",
+    );
+    const storedEmbeddingsMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0077_gateway_stored_embeddings.sql",
+      ),
+      "utf8",
+    );
+    const storedCompletionsMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0078_gateway_stored_completions.sql",
+      ),
+      "utf8",
+    );
+    const storedStreamMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0079_gateway_stored_chat_stream.sql",
+      ),
+      "utf8",
+    );
+    const storedByokMigration = await readFile(
+      resolve("packages/database/migrations/0080_gateway_stored_chat_byok.sql"),
+      "utf8",
+    );
+    const mirror = await readFile(
+      resolve("packages/database/src/functions/gateway-http-storage.sql"),
+      "utf8",
+    );
+    assertLatestFunctionMirror(mirror, [
+      migration,
+      storedEmbeddingsMigration,
+      storedCompletionsMigration,
+      storedStreamMigration,
+      storedByokMigration,
+    ]);
+    expect(
+      [...functionDefinitions(mirror).keys()].filter((signature) =>
+        signature.startsWith("aiag_http_validate_response("),
+      ),
+    ).toHaveLength(2);
+    const previous = await readFile(
+      resolve(
+        "packages/database/migrations/0068_gateway_durable_spending_quotas.sql",
+      ),
+    );
+    expect(createHash("sha256").update(previous).digest("hex")).toBe(
+      "b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6",
+    );
+    expect(await discoverNativeMigrations()).toHaveLength(90);
+    const types = await client.query<{ name: string; fields: string[] }>({
+      text: `
       SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
       JOIN pg_attribute a ON a.attrelid=t.typrelid AND a.attnum>0 AND NOT a.attisdropped
       WHERE t.typname=ANY($1::text[]) GROUP BY t.typname ORDER BY t.typname`,
-      values: [["gateway_http_claim_result_v1", "gateway_http_read_result_v1"]] });
+      values: [["gateway_http_claim_result_v1", "gateway_http_read_result_v1"]],
+    });
     expect(types.rows).toEqual([
-      { name: "gateway_http_claim_result_v1", fields: ["contract_version","org_id","api_key_id","billing_request_id","route_kind","billing_mode","idempotency_key_digest","request_fingerprint","created_at","did_claim"] },
-      { name: "gateway_http_read_result_v1", fields: ["contract_version","status","billing_request_id","http_status","content_type","response_body","actual_cost_credits","stored_at","expires_at"] }
+      {
+        name: "gateway_http_claim_result_v1",
+        fields: [
+          "contract_version",
+          "org_id",
+          "api_key_id",
+          "billing_request_id",
+          "route_kind",
+          "billing_mode",
+          "idempotency_key_digest",
+          "request_fingerprint",
+          "created_at",
+          "did_claim",
+        ],
+      },
+      {
+        name: "gateway_http_read_result_v1",
+        fields: [
+          "contract_version",
+          "status",
+          "billing_request_id",
+          "http_status",
+          "content_type",
+          "response_body",
+          "actual_cost_credits",
+          "stored_at",
+          "expires_at",
+        ],
+      },
     ]);
-    const tables = await client.query({ text: "SELECT to_regclass($1)::text AS requests,to_regclass($2)::text AS results", values: ["gateway_http_requests", "gateway_http_results"] });
-    expect(tables.rows[0]).toEqual({ requests: "gateway_http_requests", results: "gateway_http_results" });
+    const tables = await client.query({
+      text: "SELECT to_regclass($1)::text AS requests,to_regclass($2)::text AS results",
+      values: ["gateway_http_requests", "gateway_http_results"],
+    });
+    expect(tables.rows[0]).toEqual({
+      requests: "gateway_http_requests",
+      results: "gateway_http_results",
+    });
   });
 
   it("keeps terminal mirror, frozen0069 and exact new SQL projections", async () => {
-    const migration = await readFile(resolve("packages/database/migrations/0070_gateway_http_terminal_recovery.sql"), "utf8");
-    const mirror = await readFile(resolve("packages/database/src/functions/gateway-http-terminal-recovery.sql"), "utf8");
-    const validationMigration = await readFile(resolve("packages/database/migrations/0071_gateway_http_recovery_validation.sql"), "utf8");
-    const storedEmbeddingsMigration = await readFile(resolve("packages/database/migrations/0077_gateway_stored_embeddings.sql"), "utf8");
-    const storedCompletionsMigration = await readFile(resolve("packages/database/migrations/0078_gateway_stored_completions.sql"), "utf8");
-    const storedStreamMigration = await readFile(resolve("packages/database/migrations/0079_gateway_stored_chat_stream.sql"), "utf8");
-    const storedByokMigration = await readFile(resolve("packages/database/migrations/0080_gateway_stored_chat_byok.sql"), "utf8");
-    assertLatestFunctionMirror(mirror, [migration, validationMigration, storedEmbeddingsMigration, storedCompletionsMigration, storedStreamMigration, storedByokMigration]);
-    expect(createHash("sha256").update(migration).digest("hex")).toBe("b38ebb05871648feed2085526b89cdfced8e69328c645b4b0f6a944c664a6efa");
-    const previous = await readFile(resolve("packages/database/migrations/0069_gateway_http_storage.sql"));
-    expect(createHash("sha256").update(previous).digest("hex")).toBe("f6649670ea6aee06c0e3d79b92a0e4db355e99551815a74287a0f4bb784c22a2");
-    const types = await client.query({text: `SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
-      JOIN pg_attribute a ON a.attrelid=t.typrelid AND a.attnum>0 AND NOT a.attisdropped
-      WHERE t.typname=ANY($1::text[]) GROUP BY t.typname ORDER BY t.typname`,values:[["gateway_http_admit_result_v1","gateway_http_read_result_v2"]]});
-    expect(types.rows).toEqual([
-      {name:"gateway_http_admit_result_v1",fields:["org_id","api_key_id","billing_request_id","status","admission","rejection_code","http_status","response_body","terminal_at","did_transition"]},
-      {name:"gateway_http_read_result_v2",fields:["contract_version","status","billing_request_id","http_status","content_type","response_body","actual_cost_credits","stored_at","expires_at","rejection_code"]},
+    const migration = await readFile(
+      resolve(
+        "packages/database/migrations/0070_gateway_http_terminal_recovery.sql",
+      ),
+      "utf8",
+    );
+    const mirror = await readFile(
+      resolve(
+        "packages/database/src/functions/gateway-http-terminal-recovery.sql",
+      ),
+      "utf8",
+    );
+    const validationMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0071_gateway_http_recovery_validation.sql",
+      ),
+      "utf8",
+    );
+    const storedEmbeddingsMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0077_gateway_stored_embeddings.sql",
+      ),
+      "utf8",
+    );
+    const storedCompletionsMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0078_gateway_stored_completions.sql",
+      ),
+      "utf8",
+    );
+    const storedStreamMigration = await readFile(
+      resolve(
+        "packages/database/migrations/0079_gateway_stored_chat_stream.sql",
+      ),
+      "utf8",
+    );
+    const storedByokMigration = await readFile(
+      resolve("packages/database/migrations/0080_gateway_stored_chat_byok.sql"),
+      "utf8",
+    );
+    assertLatestFunctionMirror(mirror, [
+      migration,
+      validationMigration,
+      storedEmbeddingsMigration,
+      storedCompletionsMigration,
+      storedStreamMigration,
+      storedByokMigration,
     ]);
-    expect((await client.query({text:"SELECT to_regclass('gateway_http_rejections')::text AS name",values:[]})).rows[0].name).toBe("gateway_http_rejections");
+    expect(createHash("sha256").update(migration).digest("hex")).toBe(
+      "b38ebb05871648feed2085526b89cdfced8e69328c645b4b0f6a944c664a6efa",
+    );
+    const previous = await readFile(
+      resolve("packages/database/migrations/0069_gateway_http_storage.sql"),
+    );
+    expect(createHash("sha256").update(previous).digest("hex")).toBe(
+      "f6649670ea6aee06c0e3d79b92a0e4db355e99551815a74287a0f4bb784c22a2",
+    );
+    const types = await client.query({
+      text: `SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
+      JOIN pg_attribute a ON a.attrelid=t.typrelid AND a.attnum>0 AND NOT a.attisdropped
+      WHERE t.typname=ANY($1::text[]) GROUP BY t.typname ORDER BY t.typname`,
+      values: [["gateway_http_admit_result_v1", "gateway_http_read_result_v2"]],
+    });
+    expect(types.rows).toEqual([
+      {
+        name: "gateway_http_admit_result_v1",
+        fields: [
+          "org_id",
+          "api_key_id",
+          "billing_request_id",
+          "status",
+          "admission",
+          "rejection_code",
+          "http_status",
+          "response_body",
+          "terminal_at",
+          "did_transition",
+        ],
+      },
+      {
+        name: "gateway_http_read_result_v2",
+        fields: [
+          "contract_version",
+          "status",
+          "billing_request_id",
+          "http_status",
+          "content_type",
+          "response_body",
+          "actual_cost_credits",
+          "stored_at",
+          "expires_at",
+          "rejection_code",
+        ],
+      },
+    ]);
+    expect(
+      (
+        await client.query({
+          text: "SELECT to_regclass('gateway_http_rejections')::text AS name",
+          values: [],
+        })
+      ).rows[0].name,
+    ).toBe("gateway_http_rejections");
   });
 
   it("rejects stale mirrors even when their bodies exist in earlier applied migrations", async () => {
-    const paths = ["migrations/0068_gateway_durable_spending_quotas.sql", "migrations/0070_gateway_http_terminal_recovery.sql", "migrations/0071_gateway_http_recovery_validation.sql", "migrations/0077_gateway_stored_embeddings.sql", "migrations/0078_gateway_stored_completions.sql", "migrations/0079_gateway_stored_chat_stream.sql", "migrations/0080_gateway_stored_chat_byok.sql", "src/functions/gateway-charge-admission.sql", "src/functions/gateway-http-terminal-recovery.sql"];
-    const [quota, terminal, validation, storedEmbeddings, storedCompletions, storedStream, storedByok, admissionMirror, terminalMirror] = await Promise.all(paths.map(path => readFile(resolve("packages/database", path), "utf8")));
-    const admissionName = "aiag_admit_gateway_charge_impl", recoveryName = "aiag_recover_gateway_http_settlement_v1";
-    const oldAdmission = uniqueFunctionDefinition(quota, admissionName), currentAdmission = uniqueFunctionDefinition(admissionMirror, admissionName);
-    const oldRecovery = uniqueFunctionDefinition(terminal, recoveryName), currentRecovery = uniqueFunctionDefinition(terminalMirror, recoveryName);
-    expect(oldAdmission).not.toBe(currentAdmission); expect(oldRecovery).not.toBe(currentRecovery);
+    const paths = [
+      "migrations/0068_gateway_durable_spending_quotas.sql",
+      "migrations/0070_gateway_http_terminal_recovery.sql",
+      "migrations/0071_gateway_http_recovery_validation.sql",
+      "migrations/0077_gateway_stored_embeddings.sql",
+      "migrations/0078_gateway_stored_completions.sql",
+      "migrations/0079_gateway_stored_chat_stream.sql",
+      "migrations/0080_gateway_stored_chat_byok.sql",
+      "src/functions/gateway-charge-admission.sql",
+      "src/functions/gateway-http-terminal-recovery.sql",
+    ];
+    const [
+      quota,
+      terminal,
+      validation,
+      storedEmbeddings,
+      storedCompletions,
+      storedStream,
+      storedByok,
+      admissionMirror,
+      terminalMirror,
+    ] = await Promise.all(
+      paths.map((path) => readFile(resolve("packages/database", path), "utf8")),
+    );
+    const admissionName = "aiag_admit_gateway_charge_impl",
+      recoveryName = "aiag_recover_gateway_http_settlement_v1";
+    const oldAdmission = uniqueFunctionDefinition(quota, admissionName),
+      currentAdmission = uniqueFunctionDefinition(
+        admissionMirror,
+        admissionName,
+      );
+    const oldRecovery = uniqueFunctionDefinition(terminal, recoveryName),
+      currentRecovery = uniqueFunctionDefinition(terminalMirror, recoveryName);
+    expect(oldAdmission).not.toBe(currentAdmission);
+    expect(oldRecovery).not.toBe(currentRecovery);
     // Callback keeps literal SQL $$ delimiters; a replacement string would interpret $$ as $.
-    expect(() => assertLatestFunctionMirror(admissionMirror.replace(currentAdmission, () => oldAdmission), [quota, terminal, storedEmbeddings, storedCompletions, storedStream])).toThrow();
-    expect(() => assertLatestFunctionMirror(terminalMirror.replace(currentRecovery, () => oldRecovery), [terminal, validation, storedEmbeddings, storedCompletions, storedStream])).toThrow();
+    expect(() =>
+      assertLatestFunctionMirror(
+        admissionMirror.replace(currentAdmission, () => oldAdmission),
+        [quota, terminal, storedEmbeddings, storedCompletions, storedStream],
+      ),
+    ).toThrow();
+    expect(() =>
+      assertLatestFunctionMirror(
+        terminalMirror.replace(currentRecovery, () => oldRecovery),
+        [
+          terminal,
+          validation,
+          storedEmbeddings,
+          storedCompletions,
+          storedStream,
+        ],
+      ),
+    ).toThrow();
   });
 
   it("keeps immutable 0067 checksum, v2 signatures and six durable quota tables", async () => {
@@ -384,7 +678,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
         9007199254740993n,
       );
     }
-  });
+  }, 30_000);
 
   it("contains the additive refund admission guard without changing legacy settlement", async () => {
     const result = await client.query<{
