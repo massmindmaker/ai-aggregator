@@ -2,6 +2,8 @@
 
 **Активная цель 28.09:** завершить только AI Aggregator. [Актуальный AG-only roadmap](ecosystem/2026-09-28-aggregator-only-roadmap.md) задаёт AG-3a/3b, TON, оставшиеся маршруты, operator recovery и release gates. Arena и Agents Market не входят в критерий завершения этой цели. Старый трёхпроектный порядок ниже — исторический контекст.
 
+**AG-P3 Batch A 28.09:** [локально принята безопасная заявка и неизменяемая candidate version](product/acceptance/AG-P3.md) в `feat/ag-author-version-20260928`, `967dc74`. Версия остаётся `draft/candidate`, без сетевого probe, платного вызова и начисления; AG-P3 открыт до Batch B/C. Это не меняет default `legacy` и production.
+
 **Roadmap 28.09:** [текущие стадии трёх сервисов и минимум15 оставшихся крупных checkpoints](ecosystem/2026-09-27-development-roadmap-current.md). Durable batch lifecycle принят локально в `feat/durable-batches-20260927` (`b949c80`); это не production activation и не завершение всего Aggregator.
 
 **Память 27.09:** [Serena/Graphify readback и границы LightRAG/Memory Graph](consolidation/2026-09-27-memory-refresh-status.md). Производная навигация не заменяет owner acceptance.
