@@ -28,10 +28,10 @@
  *      HTTP-CONNECT (executor injected by the gateway package — see
  *      registerEgressExecutor). Guards apply identically with or without it.
  *
- * Runtime notes: the undici Agent / dispatcher path applies on Node services.
- * On Bun the dispatcher option is ignored, but the
- * pre-flight DNS validation (steps 1–3, 6) and per-hop re-validation (step 5)
- * still run, so the guard degrades safely rather than failing open.
+ * Runtime notes: Node pins through an owned undici Agent. Bun pins the URL
+ * to the vetted IP while preserving Host and TLS serverName; implicit proxy
+ * environment variables are disabled on that path. Pre-flight DNS alone is
+ * not a defense against DNS rebinding. Abort covers DNS as well as transport.
  */
 
 import { lookup as dnsLookup } from 'node:dns';
@@ -168,7 +168,9 @@ function blockedIPv4(ip: string): string | null {
  *   ::ffff:0:0/96  IPv4-mapped — unwrapped & re-checked against IPv4 rules
  */
 function blockedIPv6(ip: string): string | null {
-  const lower = ip.toLowerCase().replace(/^\[|\]$/g, '');
+  // WHATWG URL canonicalization also normalizes expanded IPv6 from DNS.
+  const literal = ip.toLowerCase().replace(/^\[|\]$/g, '');
+  const lower = new URL('https://[' + literal + ']/').hostname.replace(/^\[|\]$/g, '');
   if (lower === '::1') return '::1 (loopback)';
   if (lower === '::') return ':: (unspecified)';
 
@@ -295,8 +297,7 @@ async function vetUrl(
 
 /**
  * Build a per-request undici dispatcher (Node only) that forces the socket to
- * connect to the pre-validated IP. On Bun this is a no-op (dispatcher ignored),
- * which is acceptable: the pre-flight + per-hop validation already ran.
+ * connect to the pre-validated IP. Bun uses its own IP/Host/TLS path below.
  */
 async function buildPinnedDispatcher(
   pinnedIp: string,
@@ -304,22 +305,39 @@ async function buildPinnedDispatcher(
 ): Promise<Agent> {
   return new Agent({
     connect: {
-      // undici passes (hostname) but we force the vetted IP for every lookup.
-      lookup: (
-        _hostname: string,
-        _opts: unknown,
-        cb: (err: Error | null, address: string, family: number) => void,
-      ) => cb(null, pinnedIp, family === 6 ? 6 : 4),
+      // Modern Node asks for all=true when autoSelectFamily is enabled.
+      // Both callback forms return only the single vetted address.
+      lookup: (_hostname, options, callback) => {
+        const pinnedFamily = family === 6 ? 6 : 4;
+        if (options.all) callback(null, [{ address: pinnedIp, family: pinnedFamily }]);
+        else callback(null, pinnedIp, pinnedFamily);
+      },
     },
   });
 }
 
+/** DNS lookup is not natively abortable; detach it without permitting a late dispatch. */
+async function vetAbortableUrl(raw: string, allowlist: Set<string>, signal?: AbortSignal | null) {
+  signal?.throwIfAborted();
+  if (!signal) return vetUrl(raw, allowlist);
+  return new Promise<Awaited<ReturnType<typeof vetUrl>>>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    void vetUrl(raw, allowlist).then(
+      (value) => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+  });
+}
+
+function discardResponse(response: Response): void {
+  // Cancellation is best-effort and must not extend the request deadline.
+  if (response.body && !response.body.locked) void response.body.cancel().catch(() => undefined);
+}
+
 /* ------------------------------- safeFetch ------------------------------- */
 
-/**
- * Drop-in `fetch` replacement that blocks SSRF. Follows redirects manually,
- * re-validating each hop. Throws SsrfError on any policy violation.
- */
+/** HTTPS/SSRF guard with runtime-specific IP pinning and manual redirect policy. */
 export async function safeFetch(
   input: string | URL,
   options: SafeFetchOptions = {},
@@ -332,65 +350,77 @@ export async function safeFetch(
     ...init
   } = options;
   const allowlist = new Set((allowArr ?? []).map((s) => s.toLowerCase()));
-
   let currentUrl = typeof input === 'string' ? input : input.toString();
   let method = (init.method ?? 'GET').toUpperCase();
   let body = init.body;
+  let headers = init.headers;
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
-    const { url, pinnedIp, family } = await vetUrl(currentUrl, allowlist);
-
+    const { url, pinnedIp, family } = await vetAbortableUrl(currentUrl, allowlist, init.signal);
+    init.signal?.throwIfAborted();
     let res: Response;
+    const requestInit = { ...init, headers, method, body, redirect: 'manual' as const };
     if (egressProxyUrl) {
-      // Destination is already vetted above — hand the request to the tunnel
-      // executor with the pinned IP so CONNECT targets the validated address.
       if (!egressExecutor) {
         throw new SsrfError(
           'opts.egressProxyUrl is set but no egress executor is registered (registerEgressExecutor)',
         );
       }
       res = await egressExecutor(
-        url.toString(),
-        { ...init, method, body, redirect: 'manual' },
-        egressProxyUrl,
-        pinnedIp ?? undefined,
-        maxBufferedResponseBytes,
+        url.toString(), requestInit, egressProxyUrl, pinnedIp ?? undefined, maxBufferedResponseBytes,
       );
+    } else if (pinnedIp && process.versions.bun) {
+      // Bun ignores undici dispatchers. Dial the vetted IP directly, with TLS
+      // still verifying the original name. No environment proxy may re-resolve it.
+      const pinnedUrl = new URL(url);
+      pinnedUrl.hostname = family === 6 ? '[' + pinnedIp + ']' : pinnedIp;
+      const pinnedHeaders = new Headers(headers);
+      pinnedHeaders.set('Host', url.host);
+      const fetchInit = {
+        ...requestInit,
+        headers: pinnedHeaders,
+        tls: { serverName: url.hostname.replace(/^\[|\]$/g, '') },
+        proxy: false,
+      };
+      res = await fetch(pinnedUrl.toString(), fetchInit);
     } else {
       const dispatcher = pinnedIp ? await buildPinnedDispatcher(pinnedIp, family) : undefined;
-
-      const fetchInit: Record<string, unknown> = {
-        ...init,
-        method,
-        body,
-        redirect: 'manual', // we follow + re-validate ourselves
-      };
-      // `dispatcher` is a Node/undici-only RequestInit extension (ignored on Bun);
-      // it pins the socket to the vetted IP. Typed loosely to stay runtime-portable.
+      const fetchInit: Record<string, unknown> = { ...requestInit };
       if (dispatcher) fetchInit.dispatcher = dispatcher;
-
-      res = await fetch(url.toString(), fetchInit as RequestInit);
+      try {
+        init.signal?.throwIfAborted();
+        res = await fetch(url.toString(), fetchInit as RequestInit);
+      } catch (error) {
+        if (dispatcher) void dispatcher.destroy().catch(() => undefined);
+        throw error;
+      }
+      // close() waits for the body, so never await it before returning the body.
+      if (dispatcher) void dispatcher.close().catch(() => {
+        void dispatcher.destroy().catch(() => undefined);
+      });
     }
 
-    // Not a redirect → done.
     if (res.status < 300 || res.status > 399) return res;
     const location = res.headers.get('location');
-    if (!location) return res; // redirect without target — hand back as-is
-
+    if (!location) return res;
+    discardResponse(res);
     if (hop === maxRedirects) {
       throw new SsrfError(`too many redirects (>${maxRedirects})`, 'redirect_limit');
     }
-
-    // Resolve relative redirects against the current URL, then re-vet next loop.
-    currentUrl = new URL(location, url).toString();
-    // Per fetch semantics, 303 (and 301/302 for non-GET/HEAD per most clients)
-    // turn into GET without a body.
+    const nextUrl = new URL(location, url);
+    if (nextUrl.origin !== url.origin) {
+      const sanitized = new Headers(headers);
+      for (const name of ['authorization', 'cookie', 'proxy-authorization', 'host']) sanitized.delete(name);
+      headers = sanitized;
+    }
+    currentUrl = nextUrl.toString();
     if (res.status === 303 || ((res.status === 301 || res.status === 302) && method !== 'HEAD')) {
       method = 'GET';
       body = undefined;
+      const sanitized = new Headers(headers);
+      for (const name of ['content-length', 'content-type', 'transfer-encoding']) sanitized.delete(name);
+      headers = sanitized;
     }
   }
-
-  // Unreachable, but satisfies the type checker.
   throw new SsrfError('redirect loop guard');
 }

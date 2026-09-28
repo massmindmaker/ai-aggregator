@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { redirect } from 'next/navigation';
 import { db, sql } from '@/lib/db';
+import { requireAdmin } from '@/lib/admin/guard';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
@@ -9,6 +10,7 @@ export const metadata = { title: 'Новая модель — Админка' };
 
 async function createModel(formData: FormData) {
   'use server';
+  await requireAdmin();
   const slug = String(formData.get('slug') ?? '').trim();
   const type = String(formData.get('type') ?? '').trim();
   const displayName = String(formData.get('display_name') ?? '').trim();
@@ -26,7 +28,8 @@ async function createModel(formData: FormData) {
   redirect(`/admin/models/${encodeURIComponent(slug)}/edit`);
 }
 
-export default function NewModelPage() {
+export default async function NewModelPage() {
+  await requireAdmin();
   return (
     <div className="container mx-auto px-4 py-10 max-w-2xl">
       <h1 className="text-3xl font-bold tracking-tight mb-6">Новая модель</h1>

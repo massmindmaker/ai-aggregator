@@ -36,7 +36,11 @@ describe('AES-256-GCM helpers', () => {
 
   it('decrypt with tampered ciphertext fails (auth tag mismatch)', () => {
     const enc = encryptAesGcm('secret', kek);
-    const tampered = { ...enc, ciphertext: Buffer.from('A' + enc.ciphertext.slice(1), 'base64').toString('base64') };
+    // Replacing a base64 character can leave the ciphertext unchanged (1/64).
+    const bytes = Buffer.from(enc.ciphertext, 'base64');
+    bytes[0] ^= 1;
+    const tampered = { ...enc, ciphertext: bytes.toString('base64') };
+    expect(tampered.ciphertext).not.toBe(enc.ciphertext);
     expect(() => decryptAesGcm(tampered, kek)).toThrow();
   });
 

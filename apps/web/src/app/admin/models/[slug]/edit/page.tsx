@@ -2,6 +2,8 @@ import * as React from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { db, sql } from '@/lib/db';
+import { requireAdmin } from '@/lib/admin/guard';
+import { rowsOf } from '@/lib/admin/rows';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -73,11 +75,28 @@ async function getData(slug: string) {
   return { model, upstreams, allUpstreams };
 }
 
+type ModelTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function assertLegacyModelMutable(tx: ModelTransaction, modelId: string) {
+  const model = rowsOf<{ author_user_id: string | null; has_author_version: boolean }>(
+    await tx.execute(sql`
+      SELECT m.author_user_id::text,
+        EXISTS (SELECT 1 FROM author_model_versions v WHERE v.model_id=m.id) AS has_author_version
+      FROM models m WHERE m.id=${modelId}::uuid FOR UPDATE OF m
+    `),
+  )[0];
+  if (!model) throw new Error('MODEL_NOT_FOUND');
+  if (model.author_user_id !== null || model.has_author_version) {
+    throw new Error('AUTHOR_VERSION_REVIEW_REQUIRED');
+  }
+}
+
 export default async function EditModelPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  await requireAdmin();
   const { slug: rawSlug } = await params;
   const slug = decodeURIComponent(rawSlug);
   const data = await getData(slug);
@@ -86,11 +105,14 @@ export default async function EditModelPage({
 
   async function updateModel(formData: FormData) {
     'use server';
+    await requireAdmin();
     const enabled = formData.get('enabled') === 'on';
     const displayName = String(formData.get('display_name') ?? '').trim();
     const description = String(formData.get('description') ?? '').trim();
     const type = String(formData.get('type') ?? '').trim();
-    await db.execute(sql`
+    await db.transaction(async (tx) => {
+      await assertLegacyModelMutable(tx, model.id);
+      await tx.execute(sql`
       UPDATE models
       SET enabled = ${enabled},
           display_name = ${displayName || null},
@@ -99,17 +121,20 @@ export default async function EditModelPage({
           updated_at = NOW()
       WHERE id = ${model.id}
     `);
+    });
     revalidatePath(`/admin/models/${slug}/edit`);
   }
 
   async function disableModel() {
     'use server';
+    await requireAdmin();
     await db.execute(sql`UPDATE models SET enabled = false WHERE id = ${model.id}`);
     redirect('/admin/models');
   }
 
   async function addUpstream(formData: FormData) {
     'use server';
+    await requireAdmin();
     const upstreamId = String(formData.get('upstream_id') ?? '').trim();
     const upstreamModelId = String(formData.get('upstream_model_id') ?? '').trim();
     const pIn = String(formData.get('price_per_1k_input') ?? '0');
@@ -119,7 +144,9 @@ export default async function EditModelPage({
     // Floor mirrors DB constraint chk_markup_floor (migration 0047): no upstream below 1.20.
     const markup = String(formData.get('markup') ?? '1.20');
     if (!upstreamId || !upstreamModelId) return;
-    await db.execute(sql`
+    await db.transaction(async (tx) => {
+      await assertLegacyModelMutable(tx, model.id);
+      await tx.execute(sql`
       INSERT INTO model_upstreams
         (model_id, upstream_id, upstream_model_id,
          price_per_1k_input, price_per_1k_output,
@@ -135,13 +162,18 @@ export default async function EditModelPage({
             price_per_audio_sec = EXCLUDED.price_per_audio_sec,
             markup = EXCLUDED.markup
     `);
+    });
     revalidatePath(`/admin/models/${slug}/edit`);
   }
 
   async function deleteUpstream(formData: FormData) {
     'use server';
+    await requireAdmin();
     const id = String(formData.get('id'));
-    await db.execute(sql`DELETE FROM model_upstreams WHERE id = ${id}`);
+    await db.transaction(async (tx) => {
+      await assertLegacyModelMutable(tx, model.id);
+      await tx.execute(sql`DELETE FROM model_upstreams WHERE id = ${id} AND model_id = ${model.id}`);
+    });
     revalidatePath(`/admin/models/${slug}/edit`);
   }
 
@@ -213,11 +245,9 @@ export default async function EditModelPage({
           </div>
           <div className="flex gap-2">
             <Button type="submit">Сохранить</Button>
-            <form action={disableModel}>
-              <Button type="submit" variant="destructive">
-                Отключить и вернуться к списку
-              </Button>
-            </form>
+            <Button type="submit" variant="destructive" formAction={disableModel}>
+              Отключить и вернуться к списку
+            </Button>
           </div>
         </form>
       </section>

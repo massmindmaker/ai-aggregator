@@ -81,6 +81,7 @@ export async function probeAuthorEndpoint(
   try {
     if (response.status !== 200 ||
         response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
+      if (response.body && !response.body.locked) void response.body.cancel().catch(() => undefined);
       throw new AuthorProbeError('INVALID_PROBE_RESPONSE');
     }
     const raw = await boundedBody(response, controller.signal);

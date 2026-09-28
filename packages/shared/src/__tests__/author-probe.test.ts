@@ -101,3 +101,16 @@ describe('author endpoint probe', () => {
     await assertion;
   });
 });
+
+
+describe('author probe discarded response cleanup', () => {
+  it.each([
+    { status: 503, headers: { 'content-type': 'application/json' } },
+    { status: 200, headers: { 'content-type': 'text/html' } },
+  ])('cancels an invalid response body without consuming untrusted bytes: %j', async (init) => {
+    const cancel = vi.fn();
+    vi.mocked(safeFetch).mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), init));
+    await expect(probeAuthorEndpoint(manifest, 'secret')).rejects.toMatchObject({ code: 'INVALID_PROBE_RESPONSE' });
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+});
