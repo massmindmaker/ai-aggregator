@@ -18,3 +18,7 @@ Probe only through `safeFetch` without allowlist and with `maxRedirects:0` so Be
 Versioned price/share policy fixed before admission. Settlement and author accrual share one durable authority or a persisted reconciliation task; remove warning-only loss. Refund reversal and mock payout use immutable operation identity and unknown-outcome recovery. One independent author, one buyer, replay/crash/race and accounting equality close AG-P3. Real payout remains separate release gate.
 
 Heavy runs serialize with `flock /tmp/ai-ecosystem-build.lock`. Test DB must use `/tmp/ai-ecosystem-run aggregator` or equivalent guard. Preserve `.serena/project.yml` in the accepted worktree. Do not change Arena/Agents Market.
+
+## Реализация29.09
+
+Batch B/C реализованы в этой ветке: additive0088–0090, shared bounded adapter, pinned stored gateway, Web author/moderator/operator interfaces. [Checkpoint и границы локальной приёмки](../../consolidation/2026-09-29-author-lifecycle-checkpoint.md). Native388 + TON58 + author16, два отдельных browser-сценария прошли; окончательные unit/type/build/lint/commit факты читаются из checkpoint/evidence. Независимый reviewer в этой волне не вернул одобрение. Не переоткрывать Batch B/C как отсутствующий код; следующий общий этап задаётся AG-only roadmap.

@@ -1,0 +1,102 @@
+{
+  "date": "2026-09-29",
+  "source_commit": "ace7213d188269bcdbc5a6c845e01a6f6c54cd09",
+  "branch": "feat/ag-author-version-20260928",
+  "base_commit": "da41dc4",
+  "changed_source_files": 60,
+  "scope": "AI Aggregator author lifecycle local verification; not full commercial release",
+  "unit": {
+    "passed": 2683,
+    "skipped": 500,
+    "failed": 0,
+    "files_passed": 208,
+    "files_skipped": 35,
+    "exit_code": 0,
+    "command": "bun run test:unit --no-file-parallelism --testTimeout=30000 --hookTimeout=60000",
+    "note": "Three heavy catalog server-import hooks have an explicit60s test-only budget; production deadlines unchanged."
+  },
+  "native": {
+    "base_database_tests_passed": 388,
+    "author_tests_passed": 16,
+    "ton_core_tests_passed": 58,
+    "migrations_applied": 90,
+    "ton_isolation": {
+      "cleanup": "dropped",
+      "canonical_unchanged": true,
+      "sessions_after": 0
+    },
+    "evidence_note": "Native phases passed in resume-native-browser.log; that composite run later failed an unrelated browser assertion. Subsequent browser-only acceptance is independently exit0."
+  },
+  "browser": {
+    "exit_code": 0,
+    "reports": {
+      "author": {
+        "startTime": "2026-09-28T23:21:45.215Z",
+        "duration": 127941.56,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "authentication": {
+        "startTime": "2026-09-28T23:24:42.009Z",
+        "duration": 45778.115,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      }
+    },
+    "provider_effects": "synthetic SQL fixtures in browser; controlled network stub in native mounted gateway",
+    "owned_servers_stopped": true
+  },
+  "exit_codes": {
+    "resume-browser-verified": 0,
+    "resume-unit-verified": 0,
+    "resume-gateway-types": 0,
+    "resume-web-types": 0,
+    "resume-gateway-build": 0,
+    "resume-worker-types": 0,
+    "resume-worker-build": 0,
+    "resume-web-lint": 0,
+    "resume-changed-lint": 0,
+    "resume-lockfile": 0,
+    "resume-audit": 0,
+    "resume-port-guard": 0,
+    "resume-diff": 0,
+    "web-build-retry": 0,
+    "release-shared-types": 0,
+    "release-db-types": 0,
+    "release-shared-build": 0,
+    "release-db-build": 0
+  },
+  "audit": {
+    "known_registry_advisories": 0,
+    "exit_code": 0
+  },
+  "web_build": {
+    "exit_code": 0,
+    "log": "web-build-retry.log",
+    "runtime_source_changed_after_build": false,
+    "gateway_and_worker_rebuilt_after_startup_guard": true
+  },
+  "source_manifest_sha256": "6a0238bc0115fd1403359ff1e0753f1e8b383cdd83ee9d8efea9cd0009a2b954",
+  "verification_log_sha256": {
+    "resume-unit-verified.log": "22c2bca14c5a79a28d8718ecef800aeb80c807626b3eac822ea35adcb02ba5fa",
+    "resume-native-browser.log": "e086c0020fa452f475bc1d0ef3ce04e4d9169b2709aa99ca3a70898232cf0bdf",
+    "resume-browser-verified.log": "9801283373b58f708b268142ec597cffd5d4b09f7613513c200ce4dae5458972"
+  },
+  "independent_review": {
+    "status": "not_obtained",
+    "reason": "Prior Codex review stopped on quota; no confirmed automated GLM/ZCode review interface. Self-review is not independent approval."
+  },
+  "not_performed": [
+    "production deployment/migrations",
+    "real paid provider invocation",
+    "mainnet or real payout",
+    "full wallet/TON checkout acceptance",
+    "all advertised modalities including transcription",
+    "general backup/restore release rehearsal",
+    "full accessibility and public pilot"
+  ]
+}
