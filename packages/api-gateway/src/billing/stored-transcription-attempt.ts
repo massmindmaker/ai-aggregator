@@ -7,6 +7,7 @@ import {
   type MediaJobClaim,type MediaJobRead,
 } from './media-job-storage';
 import type { StoredTranscriptionHttpIdentity } from './stored-transcription-http-identity';
+import { reviewedTranscriptionProfiles } from './reviewed-transcription-profiles';
 
 export type StoredTranscriptionQuote=Readonly<{
   billableMs:number;supplierRateUsdMicroPerHour:number;
@@ -47,10 +48,16 @@ function providerEvidenceMatches(identity:StoredTranscriptionHttpIdentity,value:
       (typeof value.providerResponseId==='string'&&value.providerResponseId.length>=1&&value.providerResponseId.length<=256&&/^[A-Za-z0-9._:-]+$/.test(value.providerResponseId)));
 }
 
+// Rate is owned by the reviewed-transcription profile, not restated here: the same value
+// also lives in migration 0094 and in its SQL validator, and a third literal copy is what
+// lets a price change drift into INVALID_TRANSCRIPTION_MAPPING. Fail closed instead.
+const reviewedSupplierRateUsdMicroPerHour=reviewedTranscriptionProfiles[0]?.supplierRateUsdMicroPerHour;
+if(reviewedSupplierRateUsdMicroPerHour===undefined)throw new Error('Reviewed transcription profile missing');
+
 export function createStoredTranscriptionAttempt(args:StoredTranscriptionAttemptArgs,partial:Partial<StoredTranscriptionAttemptDeps>={}){
   if(
     args.quote.billableMs!==args.identity.billableMs||
-    args.quote.supplierRateUsdMicroPerHour!==111000||
+    args.quote.supplierRateUsdMicroPerHour!==reviewedSupplierRateUsdMicroPerHour||
     args.quote.formulaVersion!=='groq-whisper-duration-v1'||
     args.quote.supplierFormulaVersion!=='groq-whisper-duration-usd-micro-v1'
   ) throw new Error('Invalid stored transcription quote binding');
