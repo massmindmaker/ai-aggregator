@@ -132,7 +132,16 @@ Worker отправляет `tools`/`tool_choice`, а legacy gateway chat их *
 ## Ближайшие шаги в порядке
 
 1. **Независимое ревью только моих коммитов 30.09** (`ecdcce1`: фильтр `isSoldV1Model`,
-   TTS-сценарий, `unavailableSamples`, sold-v1 тест). Всё до них уже получило APPROVE.
+   TTS-сценарий, `unavailableSamples`, sold-v1 тест). **Ревью денежного и security-контура
+   ace7213..HEAD проведено 30.09 (ZAI GLM): критичных дефектов нет** — double-charge и обход
+   идемпотентности не найдены; инварианты SQL/auth/test-гигиены соблюдены. Три некритичные
+   находки: (1) ~~хардкод цены Groq в 3 местах~~ **исправлено** (`2b882b4`: attempt-модуль
+   берёт ставку из process-owned профиля, fail-closed); (2) при неопределённом исходе у
+   провайдера hold висит до ручного reconciliation — автоматического sweep для `held` нет,
+   осознанный дизайн, зафиксировано; (3) `providerEvidenceMatches` — эвристика ±1000 мс, на
+   деньги не влияет (settlement считается из зафиксированного `billableMs`). Не покрыто
+   ревью: `ton-payments.ts`, `ton-reconciliation-internal.ts`, скрипты boundary/restore
+   (~1900 строк), фронт-компоненты.
 2. **Закрыть AG-6** по `docs/product/acceptance/AG-P6.md`: репетиция restore на **отдельном**
    стенде, opening balances при cutover, сквозная observability tenant→run→request→charge.
 3. **AG-7** — сквозная приёмка: покупатель/автор/админ, browser acceptance кошелька, claims на
