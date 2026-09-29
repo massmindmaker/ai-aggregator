@@ -331,24 +331,45 @@ function credit(input: VerifiedChainCredit) {
     jettonCredit,
   };
 }
-export async function settleTonInvoice(
+async function runTonSettlement(
   db: TonPaymentDatabase,
   invoiceId: string,
   input: VerifiedChainCredit,
+  workerBoundary: boolean,
 ): Promise<TonSettlementResult> {
   const invoice = id(invoiceId),
     c = credit(input);
+  if (workerBoundary && c.asset.kind !== "native")
+    throw new Error("TON_SETTLEMENT_ASSET_UNSUPPORTED");
   if (c.chainTimeMs > c.observedAtMs || c.observedAtMs > c.verifiedAtMs)
     throw new Error("TON_INVALID_TIME_ORDER");
   return db.transaction(
     async (tx) =>
       (
         await tx.query<{ result: TonSettlementResult }>({
-          text: "SELECT aiag_settle_ton_invoice_v1($1::uuid,$2::jsonb) AS result",
+          text: workerBoundary
+            ? "SELECT aiag_ton_worker.settle_invoice_v1($1::uuid,$2::jsonb) AS result"
+            : "SELECT aiag_settle_ton_invoice_v1($1::uuid,$2::jsonb) AS result",
           values: [invoice, stable(c)],
         })
       ).rows[0]!.result,
   );
+}
+
+export function settleTonInvoice(
+  db: TonPaymentDatabase,
+  invoiceId: string,
+  input: VerifiedChainCredit,
+): Promise<TonSettlementResult> {
+  return runTonSettlement(db, invoiceId, input, false);
+}
+/** Separate authority: no fallback to the legacy core if worker credentials/installation fail. */
+export function settleTonInvoiceAsWorker(
+  db: TonPaymentDatabase,
+  invoiceId: string,
+  input: VerifiedChainCredit,
+): Promise<TonSettlementResult> {
+  return runTonSettlement(db, invoiceId, input, true);
 }
 
 const TON_PROVIDER_ID = "toncenter-v3-testnet" as const;
@@ -585,8 +606,7 @@ function normalizeObservation(value: TonObservationInput): TonObservationInput {
   )
     throw new Error("TON_INVALID_OBSERVATION_RESULT");
 
-  const invoiceId =
-    raw.invoiceId === null ? null : canonicalId(raw.invoiceId);
+  const invoiceId = raw.invoiceId === null ? null : canonicalId(raw.invoiceId);
   let eventIdentity: TonObservationInput["eventIdentity"] = null;
   if (raw.eventIdentity !== null) {
     const event = object(raw.eventIdentity);
@@ -603,7 +623,8 @@ function normalizeObservation(value: TonObservationInput): TonObservationInput {
   if (
     (noCandidate && (invoiceId !== null || eventIdentity !== null)) ||
     (kind === "unmatched" && (invoiceId !== null || eventIdentity === null)) ||
-    (!noCandidate && kind !== "unmatched" &&
+    (!noCandidate &&
+      kind !== "unmatched" &&
       (invoiceId === null || eventIdentity === null))
   )
     throw new Error("TON_INVALID_OBSERVATION_IDENTITY");
@@ -681,22 +702,31 @@ function exactInvoiceAsset(value: unknown): TonInvoice["asset"] {
 }
 
 function invoiceTimestamp(value: unknown): string {
-  if (typeof value !== "string")
-    throw new Error("TON_INVALID_DATABASE_RESULT");
+  if (typeof value !== "string") throw new Error("TON_INVALID_DATABASE_RESULT");
   const match = full(
     "([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\\.([0-9]{0,5}[1-9]))?([+-])([0-9]{2}):([0-9]{2})",
   ).exec(value);
   if (!match) throw new Error("TON_INVALID_DATABASE_RESULT");
-  const [, year, month, day, hour, minute, second, , sign, offsetHour, offsetMinute] =
-    match;
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    ,
+    sign,
+    offsetHour,
+    offsetMinute,
+  ] = match;
   const yearNumber = Number(year);
   const monthNumber = Number(month);
   const dayNumber = Number(day);
   const offsetHourNumber = Number(offsetHour);
   const offsetMinuteNumber = Number(offsetMinute);
   const leapYear =
-    yearNumber % 4 === 0 &&
-    (yearNumber % 100 !== 0 || yearNumber % 400 === 0);
+    yearNumber % 4 === 0 && (yearNumber % 100 !== 0 || yearNumber % 400 === 0);
   const daysInMonth = [
     31,
     leapYear ? 29 : 28,
@@ -754,13 +784,14 @@ function parseTonInvoiceResult(value: unknown): TonInvoice {
     const parsedAsset = exactInvoiceAsset(raw.asset);
     const grantMicrocredits = atomic(raw.grantMicrocredits);
     const amountAtomic = atomic(raw.amountAtomic);
-    const reviewReason = raw.reviewReason === null ? null : label(raw.reviewReason);
+    const reviewReason =
+      raw.reviewReason === null ? null : label(raw.reviewReason);
     if (
       raw.quoteId !== parsedQuote.quoteId ||
       canonicalJson(parsedAsset) !== canonicalJson(parsedQuote.asset) ||
       grantMicrocredits !== parsedQuote.sourcePrice.amountAtomic ||
       amountAtomic !== parsedQuote.amountAtomic ||
-      ((raw.status === "review_required") !== (reviewReason !== null))
+      (raw.status === "review_required") !== (reviewReason !== null)
     )
       throw new Error("TON_INVALID_DATABASE_RESULT");
 
@@ -783,7 +814,9 @@ function parseTonInvoiceResult(value: unknown): TonInvoice {
       recipient: canonicalAddress(raw.recipient),
       reference: raw.reference,
       expectedSender:
-        raw.expectedSender === null ? null : canonicalAddress(raw.expectedSender),
+        raw.expectedSender === null
+          ? null
+          : canonicalAddress(raw.expectedSender),
       finalityPolicyId: label(raw.finalityPolicyId),
       verifierVersion: label(raw.verifierVersion),
       expiresAt: invoiceTimestamp(raw.expiresAt),
