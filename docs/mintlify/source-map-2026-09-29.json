@@ -1,0 +1,58 @@
+{
+  "deployment": "ai-aggregator",
+  "branch": "admin-mcp/verified-product-docs-20260929-7372180",
+  "pr_url": "https://github.com/mintlify-community/docs-ai-aggregator-3917e690/pull/1",
+  "documentation_commit": "f10befe14e27345f6477ea12ec5a5131d4f10daf",
+  "source_checkpoint": "c03a7005948b74fe3a89e8b2e3ac0ad8581c8b81",
+  "checked_at": "2026-09-29",
+  "publication": "saved pull request, not merged or deployed",
+  "validation": "Mintlify MDX/config accepted; saved branch clean; zero orphan nodes; no browser rendering claim",
+  "pages": {
+    "index": [
+      "docs/DEVELOPMENT-ENTRYPOINT.md",
+      "docs/ecosystem/2026-09-28-aggregator-only-roadmap.md"
+    ],
+    "quickstart": [
+      "packages/api-gateway/src/billing/stored-chat-http-contract.ts",
+      "packages/api-gateway/src/routes/v1/models.ts"
+    ],
+    "api/chat": [
+      "packages/api-gateway/src/routes/v1/stored-chat.ts",
+      "packages/shared/src/author-probe.ts"
+    ],
+    "api/receipts": [
+      "packages/api-gateway/src/billing/stored-chat-http-contract.ts",
+      "packages/api-gateway/src/routes/v1/author-chat.ts"
+    ],
+    "api/capabilities": [
+      "packages/api-gateway/src/config.ts",
+      "docs/product/acceptance/AG-P1-route-coverage.md"
+    ],
+    "authors/lifecycle": [
+      "apps/web/src/lib/author/service.ts",
+      "apps/web/src/components/author/AuthorModelPanel.tsx"
+    ],
+    "authors/earnings": [
+      "apps/web/src/app/dashboard/earnings/page.tsx",
+      "packages/database/migrations/0089_author_charge_ledger.sql"
+    ],
+    "payments/ton": [
+      "docs/product/acceptance/ton-verifier-testnet.md",
+      "apps/worker/src/ton-payment-bootstrap.ts"
+    ],
+    "operations/recovery": [
+      "apps/web/src/lib/author/operator.ts",
+      "apps/worker/src/ton-recovery-control.ts"
+    ],
+    "status": [
+      "docs/consolidation/2026-09-29-ton-settlement-startup-evidence.json"
+    ]
+  },
+  "not_claimed": [
+    "complete OpenAPI reference for every route",
+    "live API origin or universal tariff",
+    "actual testnet/mainnet transfer",
+    "real author payouts",
+    "whole-product commercial release"
+  ]
+}

@@ -1,0 +1,178 @@
+{
+  "date": "2026-09-29",
+  "base_commit": "c03a700",
+  "source_commit": "32fadef50433058ea31f6540cd98d27bc817c5f4",
+  "branch": "feat/ag-author-version-20260928",
+  "scope": "10-page Mintlify documentation PR and local read-only PostgreSQL privilege preflight; NOT runtime authorization or full release",
+  "docs": {
+    "deployment": "ai-aggregator",
+    "pr_url": "https://github.com/mintlify-community/docs-ai-aggregator-3917e690/pull/1",
+    "commit": "f10befe14e27345f6477ea12ec5a5131d4f10daf",
+    "pages": 10,
+    "orphan_count": 0,
+    "saved": true,
+    "merged": false,
+    "rendered_browser_check": false
+  },
+  "unit": {
+    "passed": 2862,
+    "failed": 0,
+    "skipped": 515,
+    "files_passed": 218,
+    "files_skipped": 38
+  },
+  "focused": {
+    "passed": 22,
+    "unit_tests": 21,
+    "composed_native_scenarios": 1,
+    "native_uses_real_separate_test_logins": [
+      "web",
+      "api",
+      "worker"
+    ],
+    "native_money_changes": 0,
+    "new_runtime_role_grants_deployed": false
+  },
+  "expected_cli_refusal": {
+    "exit_code": 1,
+    "reason": "missing explicitly required local environment",
+    "runtimeSettlementAllowed": false
+  },
+  "exit_codes": {
+    "native-final": 0,
+    "final-types": 0,
+    "final-lint": 0,
+    "full-unit": 0,
+    "audit-final": 0,
+    "frozen-lock": 0,
+    "diff-check": 0,
+    "final-review": 0
+  },
+  "audit_known_advisories": 0,
+  "reviews": [
+    {
+      "task": "A-docs-accuracy",
+      "requested_model": "stealth/space-bunny-alpha",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "request_id": "gen-1790676384-BZA4Pa45QayXTf0nbX6Z",
+      "http_status": 200,
+      "elapsed_seconds": 17.883,
+      "input_sha256": "f67cd210e37139dbebcb0d301d4322092ca4bc7aa0081d44baf4055925f333c0",
+      "reported_cost": 0,
+      "result_kind": "design_advice"
+    },
+    {
+      "task": "B-privilege-design",
+      "requested_model": "stealth/space-bunny-alpha",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "request_id": "gen-1790676384-CGnAFFUAK4MUg6v0xQyS",
+      "http_status": 200,
+      "elapsed_seconds": 44.614,
+      "input_sha256": "8361928566a1d033eaa0aee7918749da80093a0c425fe33eb0821ab5b4eb0bce",
+      "reported_cost": 0,
+      "result_kind": "design_advice"
+    },
+    {
+      "task": "C-security-source",
+      "requested_model": "stealth/space-bunny-alpha",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "request_id": "gen-1790677826-QSKcNhQqzk7IehRL7YpR",
+      "http_status": 200,
+      "elapsed_seconds": 40.35,
+      "input_sha256": "b60d8f5586ae18cc90d424bcb77dfc34a374457d3e86ca669587fd92fb058324",
+      "reported_cost": 0,
+      "result_kind": "CHANGES_REQUIRED"
+    },
+    {
+      "task": "D-types-source",
+      "requested_model": "stealth/space-bunny-alpha",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "request_id": "gen-1790677826-NiGvBXCQ3Ei5no1dnHqo",
+      "http_status": 200,
+      "elapsed_seconds": 18.748,
+      "input_sha256": "6f6879fd8f2b24c8bdfcd39da97c6a824962072268ba4aeef119df1ac4e2779d",
+      "reported_cost": 0,
+      "result_kind": "CHANGES_REQUIRED"
+    },
+    {
+      "task": "E-security-recheck",
+      "requested_model": "stealth/space-bunny-alpha",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "request_id": "gen-1790678114-NttoTgEJuEhrldBBXQBH",
+      "http_status": 200,
+      "elapsed_seconds": 20.429,
+      "input_sha256": "70f28a32d4b82753cbf41ab74880e88da78e2e0ebd8437eef3c338f495f15bf7",
+      "reported_cost": 0,
+      "result_kind": "CHANGES_REQUIRED"
+    },
+    {
+      "task": "F-types-recheck",
+      "requested_model": "stealth/space-bunny-alpha",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "request_id": "gen-1790678113-rA4BciCj0Xl2af2dOsVI",
+      "http_status": 200,
+      "elapsed_seconds": 14.982,
+      "input_sha256": "d431eb4ec386d5b6a02325056ad23be0d6c60715b3dcdc8ce04f615b965916b1",
+      "reported_cost": 0,
+      "result_kind": "APPROVE"
+    },
+    {
+      "task": "G-final-security",
+      "requested_model": "stealth/space-bunny-alpha",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "request_id": "gen-1790678306-XztgRTcPLqCRAQTngexX",
+      "http_status": 200,
+      "elapsed_seconds": 18.855,
+      "input_sha256": "3b5f4876e062565e7312acb3a8bdf1894016bf5861000d5dc802d4daa124fefb",
+      "reported_cost": 0,
+      "result_kind": "APPROVE"
+    }
+  ],
+  "model_api_reported_cost": 0,
+  "source_sha256": {
+    "packages/database/scripts/ton-privilege-preflight.ts": "c5d1f3b575f52b9c9a8a6a091f11752e9b37157804fa010ff121b2d0433f9c84",
+    "packages/database/scripts/ton-privilege-preflight-cli.ts": "232a264e68b7cd39495bce2987cfc0004c5ad3993ab5d79c560897f2f0e943b6",
+    "packages/database/scripts/__tests__/ton-privilege-preflight.test.ts": "c279a2994c292c0a4a1a71fe5ef32996151cd5e616906696ac03e32d30a6a9b4",
+    "packages/database/scripts/__tests__/ton-privilege-cli.test.ts": "508f0a68f826091b1cc2b85789103cae1faa30b1b8aadb609298bd9054a29f15",
+    "packages/database/scripts/__tests__/ton-privilege-preflight.native.integration.test.ts": "e817e09a62e8769db902cd749d7a182b0a1801a1b58e768ac493ed5c6a4e9734"
+  },
+  "unit_log_sha256": "340f8497d2af2e8efc2a8bada03fa66aa344d75b6466719ed9d362562ee16d3d",
+  "other_projects": {
+    "agents_market": {
+      "reviewed_head": "5979588",
+      "remaining_grouped_packages": 5,
+      "engineering_days_estimate": [
+        25,
+        45
+      ],
+      "full_suite_rerun": false
+    },
+    "arena": {
+      "reviewed_head": "c2f6559",
+      "remaining_grouped_packages": 6,
+      "engineering_days_estimate": [
+        40,
+        70
+      ],
+      "full_suite_rerun": false
+    }
+  },
+  "estimate_limitations": "Engineering effort estimate from source/plan/handoff; not measured completion percentage or promised calendar date. External acceptance and integration discoveries may increase it.",
+  "not_performed": [
+    "production DB access/grants/migrations/deploy",
+    "TON runtime settlement activation",
+    "real TON transfers",
+    "real author payout",
+    "full human security/financial audit",
+    "new full runtime build",
+    "changes to Agents Market or Arena",
+    "Mintlify PR merge/published-site browser validation"
+  ]
+}

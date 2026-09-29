@@ -4,6 +4,8 @@
 
 ## Текущая стадия
 
+**29.09 · Документация и preflight:** [10страниц Mintlify в PR и диагностика эффективных PostgreSQL прав](../consolidation/2026-09-29-documentation-privileges-and-product-status.md). Read-only preflight реализован; реальное разделение ролей/credentials и runtime settlement остаются OPEN. Не подменять эту границу зелёными локальными тестами.
+
 **TON29.09:** [Tasks5/6 приняты локально](../consolidation/2026-09-29-ton-settlement-and-startup.md): отдельный fixture-путь одного начисления и replay, source export fence, disabled-by-default observe startup и bounded cleanup. Независимые автоматизированные source reviews выполнены. AG-4 остаётся OPEN до DB ACL, wallet/checkout и внешней testnet-приёмки; runtime settlement не включён.
 
 **Продолжение29.09:** [авторские Batch B/C реализованы с локальными проверками](../consolidation/2026-09-29-author-lifecycle-checkpoint.md). Сохранённая проверка, принятые условия, версия запроса, точное начисление, возврат, mock payout и операторское восстановление работают в локальных native/browser-сценариях. Новая независимая приёмка остаётся открытой. AG-4–AG-7 в целом не завершены.

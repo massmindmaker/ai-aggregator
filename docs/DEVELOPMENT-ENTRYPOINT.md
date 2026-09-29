@@ -1,5 +1,7 @@
 # AI Aggregator: начать разработку здесь
 
+**29.09 · Документация и права БД:** [Mintlify PR1, проверенный read-only preflight и остаток по трём продуктам](consolidation/2026-09-29-documentation-privileges-and-product-status.md). Source `32fadef`, unit2862PASS/515SKIP, новые22проверки, strict types/lint/audit0. Preflight не выдаёт разрешение settlement и не настраивает production roles. Следующий gate — реальное разделение DB principal/credentials и положительная/отрицательная приёмка, затем wallet/checkout.
+
 **Последнее продолжение29.09 · TON Tasks5/6:** [проверенное начисление/replay в тестовом контуре и запуск observe-only worker](consolidation/2026-09-29-ton-settlement-and-startup.md). Source `9e84bfb` + `d38143f`; unit2841PASS/514SKIP, native14, прежнее TON core58, focused407, types/build/lint/audit0. Отдельные автоматизированные финансовое/TS/startup source reviews APPROVE. По умолчанию TON выключен; runtime settlement не подключён. Следующий gate — DB-principal/ACL proof, затем кошелёк/checkout и внешняя приёмка.
 
 **Сверка TON29.09 · `c6112a3`:** [observe-only восстановление после сбоя и проверочные границы](consolidation/2026-09-29-ton-observation-recovery.md). Реализованы claim/cursor recovery, дедупликация и ограниченное завершение. Профильные304, native6 и полный unit2756 PASS /506 SKIP, worker types/build/lint/audit0;  автоматическое начисление, кошелёк/checkout и подключение в общий worker пока не включены. Авторский цикл ниже сохраняется без изменений.
