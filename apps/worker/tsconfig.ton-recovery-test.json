@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node", "vitest/globals"],
+    "resolveJsonModule": true
+  },
+  "include": [
+    "src/ton-payment-reconciler.ts",
+    "src/ton-payment-bootstrap.ts",
+    "src/ton-recovery-*.ts",
+    "src/__tests__/ton-recovery.fixture.ts",
+    "src/__tests__/ton-payment-reconciler*.test.ts",
+    "src/__tests__/ton-payment-bootstrap.test.ts",
+    "src/__tests__/ton-payment-recovery-boundary.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
