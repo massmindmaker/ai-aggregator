@@ -29,14 +29,25 @@ export LANG=C.UTF-8
 case "${1:-}" in
   start)
     if [ -f "$PGDATA/postmaster.pid" ]; then
-      echo "already running: $PGDATA" >&2; exit 0
+      echo "already running: $PGDATA (use 'reset' first if it is stale)" >&2; exit 0
+    fi
+    # Refuse to wipe a directory that does not look like a stand this script created.
+    # PGDATA comes from the environment, so an unguarded rm -rf could otherwise take
+    # an arbitrary non-empty directory with no prompt at all.
+    if [ -d "$PGDATA" ] && [ -n "$(ls -A "$PGDATA" 2>/dev/null)" ]; then
+      if [ ! -f "$PGDATA/PG_VERSION" ] && [ ! -f "$PGDATA/server.log" ]; then
+        echo "refusing to wipe: $PGDATA exists, is not empty and has no PG_VERSION/server.log" >&2
+        echo "point PGDATA at a fresh path, or remove it yourself if that is really a stand" >&2
+        exit 65
+      fi
     fi
     rm -rf "$PGDATA"; mkdir -p "$PGDATA"; chmod 700 "$PGDATA"
     "$BIN/initdb" -D "$PGDATA" -U postgres -A trust --encoding=UTF8 --locale=C >/dev/null
     # unix_socket_directories inside our own PGDATA: the system dir may be absent or
     # unwritable, and this stand must not depend on shared cluster state.
+    # Quoted: PGDATA with spaces would otherwise split inside pg_ctl's -o string.
     "$BIN/pg_ctl" -D "$PGDATA" -l "$PGDATA/server.log" \
-      -o "-p $PGPORT -h 127.0.0.1 -c listen_addresses=127.0.0.1 -c fsync=off -c unix_socket_directories=$PGDATA" \
+      -o "-p $PGPORT -h 127.0.0.1 -c listen_addresses=127.0.0.1 -c fsync=off -c unix_socket_directories='$PGDATA'" \
       -w start >/dev/null
     echo "started on 127.0.0.1:$PGPORT ($PGDATA)"
     ;;

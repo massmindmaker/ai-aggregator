@@ -10,13 +10,18 @@ import * as net from "node:net";
 // Boots a throwaway PostgreSQL 18 cluster via packages/database/scripts/restore-stand.sh,
 // checks that psql reaches exactly that cluster, and verifies reset removes PGDATA.
 // Fully self-contained: own PGDATA under /tmp, dynamically picked port, no shared
-// cluster and no external calls. Skipped when the bundled native PostgreSQL tools
-// are not present in this checkout.
+// cluster and no external calls.
+//
+// Gated on the native driver flag as well as the bundled tools: this test runs a real
+// initdb + pg_ctl start, which costs seconds of CPU and must not ride along on every
+// ordinary unit run. Same gate as the neighbouring native suites.
 
 const script = resolve(__dirname, "../restore-stand.sh");
 const toolsRoot = resolve(__dirname, "../../../../.superpowers/tools/native18/root");
 
-const available = existsSync(join(toolsRoot, "usr/lib/postgresql/18/bin/postgres"));
+const available =
+  existsSync(join(toolsRoot, "usr/lib/postgresql/18/bin/postgres")) &&
+  process.env.RUN_NATIVE_DB_INTEGRATION === "1";
 const describeStand = available ? describe : describe.skip;
 
 function freePort(): Promise<number> {
