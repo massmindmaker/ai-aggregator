@@ -1,28 +1,54 @@
 {
   "date": "2026-09-29",
   "base_commit": "f9bd835",
-  "scope": "Task5 fixture-only settlement/import fence, no runtime activation",
-  "checks": {
-    "resume-native": 0,
-    "resume-ton-core": 0,
-    "task5-final-focused": 0,
-    "task5-final-types": 0,
-    "task5-final-build": 0,
-    "resume-database-types": 0,
-    "resume-db-build": 0,
-    "resume-lint": 0
+  "task5_commit": "9e84bfbf7638da1b10358bd9acb58d9012c052e0",
+  "task6_source_commit": "d38143f5c1f0a4667eb6ffd961019f1798feda61",
+  "scope": "Task5 fixture-only credit/receipt recovery; Task6 disabled-by-default observation startup. No runtime settlement permission.",
+  "unit": {
+    "passed": 2841,
+    "skipped": 514,
+    "failed": 0,
+    "files_passed": 216,
+    "files_skipped": 37,
+    "exit_code": 0
+  },
+  "focused": {
+    "passed": 407,
+    "failed": 0,
+    "files": 11
   },
   "native": {
-    "observe_scenarios": 6,
+    "passed": 14,
+    "observation_scenarios": 6,
     "settlement_scenarios": 8,
-    "passed": 14
+    "provider_evidence": "synthetic",
+    "database": "owned disposable PostgreSQL",
+    "cleanup": "completed, directory removed"
   },
-  "unchanged_core": {
+  "unchanged_ton_core": {
     "passed": 58,
-    "failed": 0
+    "failed": 0,
+    "skipped": 0
   },
-  "focused_after_review_fix": 144,
-  "source_review": [
+  "exit_codes": {
+    "wave-frozen-lock": 0,
+    "wave-focused": 0,
+    "wave-worker-types": 0,
+    "wave-test-types": 0,
+    "wave-worker-build": 0,
+    "wave-lint": 0,
+    "wave-native-complete": 0,
+    "wave-full-unit": 0,
+    "wave-audit": 0,
+    "wave-diff": 0,
+    "resume-ton-core": 0,
+    "resume-database-types": 0,
+    "resume-db-build": 0
+  },
+  "dependency_audit": {
+    "known_advisories": 0
+  },
+  "automated_source_reviews": [
     {
       "task": "F-financial-source",
       "requested_model": "stealth/space-bunny-alpha",
@@ -170,26 +196,87 @@
       "status": "completed",
       "elapsed_seconds": 12.375,
       "verdict": "APPROVE"
+    },
+    {
+      "task": "J-startup-source",
+      "requested_model": "stealth/space-bunny-alpha",
+      "input_sha256": "d9950e5018b136212350095afe8e76c56f44f2e55b4e2dda0830ce317256efb1",
+      "input_bytes": 48781,
+      "started_at": 1790673850.9387572,
+      "http_status": 200,
+      "request_id": "gen-1790673851-0SyPATXTBYN23WIMGZz6",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "usage": {
+        "prompt_tokens": 12969,
+        "completion_tokens": 789,
+        "total_tokens": 13758,
+        "cost": 0,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0,
+          "upstream_inference_prompt_cost": 0,
+          "upstream_inference_completions_cost": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "status": "completed",
+      "elapsed_seconds": 22.787,
+      "verdict": "APPROVE"
     }
   ],
-  "frozen_source": {
-    "apps/worker/src/ton-payment-reconciler.ts": "882e121fd88e4cf282b3176415277f13ac6efaea9a0ae211f7c97866fd0d4d8a",
-    "apps/worker/src/ton-settlement-result.ts": "0d01b48fb3fc507ae5314d539e5d371fb71911b2ca853e97ee1a810ba576f41f",
+  "review_limitations": "Automated review of supplied selected source, not human audit or test execution by the reviewers.",
+  "earlier_wrapper_timeout": {
+    "native_tests_reported_passed": 14,
+    "overall_exit": 124,
+    "whole_run_limit_seconds": 220,
+    "accepted": false,
+    "retry_exit": 0,
+    "retry_wrapper_limit_seconds": 600,
+    "product_deadlines_changed": false,
+    "residue_cleanup_verified": true
+  },
+  "source_sha256": {
+    "apps/worker/src/__tests__/ton-payment-bootstrap.test.ts": "20ebf41f08dfc2ce90a47f2f82e24ad22452ff8e1e59cd17d13f60804ab61461",
     "apps/worker/src/__tests__/ton-payment-import-boundary.test.ts": "c5c2eddfbc9f1d2e9316ca48f2177128dad887c1e7f81aac0a3a07d4968e87d6",
+    "apps/worker/src/__tests__/ton-payment-recovery-boundary.test.ts": "0f1c96eac7c7caa535951e0d1b88b8f5af8e984afdeaa6aa7f9a7f3bd4549f08",
     "apps/worker/src/__tests__/ton-payment-settlement-flow.test.ts": "81c11d4950c78108b441fd3dd21f968aba9792c0fbb44ea9b9157c2ab901ba32",
     "apps/worker/src/__tests__/ton-payment-settlement.native.integration.test.ts": "e3c175e5341e449c463b8d7efd385ea7bf1a79f8df0ae9def7430fddc3b9ad0d",
     "apps/worker/src/__tests__/ton-settlement-result.test.ts": "bf5ffa9e5acaaa2a648e7988732ee15e3b2f65131b0b52a0c0758a3127410f99",
     "apps/worker/src/__tests__/ton-settlement.fixture.ts": "57696e31530e73dfd69fea72d4764be91094ebe245dc8d262a39c03690df1a3a",
     "apps/worker/src/__tests__/ton-settlement.native.fixture.ts": "e59b8a4d4dcda196c2767485ca380bcc7a35064796653b2f34cdf87a6004ddaa",
-    "apps/worker/tsconfig.ton-recovery-test.json": "77cd7ef302cf9402931ad8284f35113a3f0d40a93c3fcfd554dba23929328d1e",
-    "packages/database/src/index.ts": "560e224b9277dca8ee94c9908f62ad0f532b418e7d29d0d971364e9fd2bfbe9b",
-    "packages/database/src/ton-reconciliation-internal.ts": "5e7fea6a0e7319d5ecb532db0c1e71b5defde28ce535d1a530ba90250e7e70ac",
-    "packages/database/src/__tests__/ton-payments.test.ts": "19be9992d3c21af66d61a39d10298ea2911d87c8c2cece5af451dd77ec237941",
+    "apps/worker/src/__tests__/ton-worker-entry.test.ts": "c8ba915f8d121dae196bb5e71f8bf18864bc341d1dbfe6de895f4993b1b44aec",
+    "apps/worker/src/index.ts": "926ec262a996d9b418dd6d0712fa1c4a942c4192af3b7899e01b804e9763076c",
+    "apps/worker/src/ton-payment-bootstrap.ts": "f8e7d1f7b097690ace14747354d5592b19e7cec40b645e196af5adeb0f48dbdd",
+    "apps/worker/src/ton-payment-reconciler.ts": "882e121fd88e4cf282b3176415277f13ac6efaea9a0ae211f7c97866fd0d4d8a",
+    "apps/worker/src/ton-settlement-result.ts": "0d01b48fb3fc507ae5314d539e5d371fb71911b2ca853e97ee1a810ba576f41f",
+    "apps/worker/tsconfig.ton-recovery-test.json": "f556fd3845709e36d7f5ac1b2467c832bac1931eea66fe59905dfe52674db3f2",
     "packages/database/scripts/__tests__/ton-payments.native.fixture.ts": "4c4729be9a02f5ad8dbc8e5d49eab0931db402986fac7782f6b88d1e85d8962d",
     "packages/database/scripts/__tests__/ton-payments.native.integration.test.ts": "b4143bf4ae0d85232f932aaccce59898b13d0ac6d7faeaf49d34e2c3eee2df72",
-    "packages/database/scripts/__tests__/ton-reconciliation.native.integration.test.ts": "7fb82a27f94ac29c83d55a83f337dfeb4cb1eae5c02b7788d31afb2581ae8e2d"
+    "packages/database/scripts/__tests__/ton-reconciliation.native.integration.test.ts": "7fb82a27f94ac29c83d55a83f337dfeb4cb1eae5c02b7788d31afb2581ae8e2d",
+    "packages/database/src/__tests__/ton-payments.test.ts": "19be9992d3c21af66d61a39d10298ea2911d87c8c2cece5af451dd77ec237941",
+    "packages/database/src/index.ts": "560e224b9277dca8ee94c9908f62ad0f532b418e7d29d0d971364e9fd2bfbe9b",
+    "packages/database/src/ton-reconciliation-internal.ts": "5e7fea6a0e7319d5ecb532db0c1e71b5defde28ce535d1a530ba90250e7e70ac"
   },
-  "full_suite": "Completed once in combined Task5/6 wave; see ton-settlement-startup-evidence.json",
-  "runtime_settlement_enabled": false,
-  "source_commit": "9e84bfbf7638da1b10358bd9acb58d9012c052e0"
+  "full_unit_log_sha256": "8aea78930990a9119f9126580575b7b611b80d3433867d5c555391c2613d5aa3",
+  "not_performed": [
+    "real provider RPC",
+    "actual testnet transfers",
+    "mainnet",
+    "production deployment or migration",
+    "runtime settlement activation",
+    "new browser acceptance",
+    "new human financial audit"
+  ],
+  "next_gate": "Separate reviewed PostgreSQL worker/Web/API privileges with negative direct-SQL/PUBLIC/inheritance/alternate-write tests before any runtime settlement."
 }

@@ -4,6 +4,8 @@
 
 ## Текущая стадия
 
+**TON29.09:** [Tasks5/6 приняты локально](../consolidation/2026-09-29-ton-settlement-and-startup.md): отдельный fixture-путь одного начисления и replay, source export fence, disabled-by-default observe startup и bounded cleanup. Независимые автоматизированные source reviews выполнены. AG-4 остаётся OPEN до DB ACL, wallet/checkout и внешней testnet-приёмки; runtime settlement не включён.
+
 **Продолжение29.09:** [авторские Batch B/C реализованы с локальными проверками](../consolidation/2026-09-29-author-lifecycle-checkpoint.md). Сохранённая проверка, принятые условия, версия запроса, точное начисление, возврат, mock payout и операторское восстановление работают в локальных native/browser-сценариях. Новая независимая приёмка остаётся открытой. AG-4–AG-7 в целом не завершены.
 
 Локально приняты durable chat, embeddings, scalar completions, streaming, BYOK, async media и batches. Последний финансовый checkpoint: `b949c80`, clean86 applied/no-op, root DB baseline388/388 и TON core58/58; независимые financial/recovery и TypeScript reviews APPROVE. Ветка `feat/durable-batches-20260927` содержит также `277b706`: публичные реквизиты и черновики оферты/условий сняты по запросу владельца; type-check, lint и React/TypeScript review прошли. Эти факты доказывают локальный source candidate, но не deployed runtime. Публичный режим по умолчанию остаётся `legacy`.
