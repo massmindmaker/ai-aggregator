@@ -1,0 +1,20 @@
+import { beforeEach,afterEach,describe,expect,it,vi } from 'vitest';
+const m=vi.hoisted(()=>({user:'00000000-0000-4000-8000-000000000001' as string|null,create:vi.fn(),read:vi.fn(),claim:vi.fn(),report:vi.fn(),options:vi.fn()}));
+vi.mock('@/auth',()=>({auth:async()=>m.user?{user:{id:m.user}}:null}));
+vi.mock('@/lib/ton-wallet/checkout-service',()=>({createCheckout:m.create,readCheckout:m.read,claimCheckout:m.claim,recordCheckoutClientReport:m.report,checkoutOptions:m.options}));
+import { POST } from '../app/api/ton/checkout/route';
+import { GET } from '../app/api/ton/checkout/[id]/route';
+import { POST as action } from '../app/api/ton/checkout/[id]/action/route';
+import { parseCheckoutPolicy } from '../lib/ton-wallet/checkout-policy';
+const id='00000000-0000-4000-8000-000000000002',origin='https://app.example.test',params={params:Promise.resolve({id})};
+const req=(body:unknown,override:Record<string,string>={})=>new Request(origin+'/api/ton/checkout',{method:'POST',headers:{origin,'content-type':'application/json',...override},body:JSON.stringify(body)});
+beforeEach(()=>{vi.resetAllMocks();m.user='00000000-0000-4000-8000-000000000001';vi.stubEnv('TON_WALLET_ENABLED','1');vi.stubEnv('TON_WALLET_ORIGIN',origin);vi.stubEnv('TON_WALLET_NETWORK','-3');m.create.mockResolvedValue({checkoutId:id});m.read.mockResolvedValue({checkoutId:id});m.claim.mockResolvedValue({didClaim:false,transaction:null});m.report.mockResolvedValue({recorded:true,creditGranted:false,outcome:'client_sent'});});
+afterEach(()=>vi.unstubAllEnvs());
+describe('checkout amount and account authority',()=>{
+ it('allows only a package and linkedwallet command under server session',async()=>{const input={packageId:'small',walletId:id,idempotencyKey:'owned-request'};expect((await POST(req(input))).status).toBe(200);expect(m.create).toHaveBeenCalledWith(m.user,input);});
+ it.each([{grantMicrocredits:'999999'},{recipient:'0:'+ 'a'.repeat(64)},{orgId:id},{amount:'0.01'}])('rejects client financial override %j',async patch=>{expect((await POST(req({packageId:'small',walletId:id,idempotencyKey:'request',...patch}))).status).toBe(400);expect(m.create).not.toHaveBeenCalled();});
+ it('rejects unauthenticated/crossorigin changes and scopes status to session',async()=>{m.user=null;expect((await POST(req({packageId:'small',walletId:id,idempotencyKey:'request'}))).status).toBe(401);m.user=id;expect((await action(req({action:'claim'},{origin:'https://evil.example.test'}),params)).status).toBe(403);expect((await GET(new Request(origin+'/api'),params)).status).toBe(200);expect(m.read).toHaveBeenCalledWith(id,id);});
+ it('dispatch claim and wallet advisory never accept settlement commands',async()=>{expect((await action(req({action:'claim'}),params)).status).toBe(200);expect(m.claim).toHaveBeenCalledWith(m.user,id);expect((await action(req({action:'settle'}),params)).status).toBe(400);expect((await action(req({action:'report',attemptId:id,outcome:'client_sent'}),params)).status).toBe(200);expect(m.report).toHaveBeenCalledWith(m.user,{checkoutId:id,attemptId:id,outcome:'client_sent'});});
+ it('keeps failures private and JSON responses no-store',async()=>{m.create.mockRejectedValue(Error('DATABASE_URL=private'));const response=await POST(req({packageId:'small',walletId:id,idempotencyKey:'owned'}));expect(response.status).toBe(503);expect(await response.text()).not.toContain('private');expect(response.headers.get('cache-control')).toContain('no-store');});
+ it('refuses absent or malformed explicit policy instead of choosing a tariff',()=>{for(const value of [undefined,'{}','x','[]','x'.repeat(40000)])expect(()=>parseCheckoutPolicy(value)).toThrow();});
+});
