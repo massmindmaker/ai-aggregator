@@ -1,6 +1,6 @@
 /**
  * POST /v1/audio/speech         — TTS / music generation (Suno via Kie).
- * POST /v1/audio/transcriptions — STT (not yet wired to a real upstream).
+ * POST /v1/audio/transcriptions — legacy route remains unavailable; durable STT is mounted by server.ts only in stored-media mode.
  *
  * Speech follows the submit+poll pattern (Suno is async ~30-60s).
  */
@@ -198,7 +198,8 @@ audio.post('/speech', async (c) => {
 });
 
 audio.post('/transcriptions', async (c) => {
-  // Placeholder — STT requires Whisper/Yandex SpeechKit; route returns 501.
+  // Legacy execution path stays unavailable. The reviewed durable STT route is
+  // mounted separately by server.ts only under the stored-media execution contract.
   void c;
-  throw errors.badRequest('STT not yet wired (use Whisper-capable upstream when available)');
+  throw errors.unsupported('Audio transcription is not available in sold v1');
 });

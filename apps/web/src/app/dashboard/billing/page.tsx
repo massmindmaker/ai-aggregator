@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/Label';
 import { Switch } from '@/components/ui/Switch';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
+import { TonWalletPanel } from '@/components/ton/TonWalletPanel';
 
 type ProviderId = 'tinkoff' | 'yookassa' | 'sbp';
 
@@ -353,6 +354,10 @@ export default function BillingPage() {
               ? 'Перенаправляем…'
               : `Пополнить на ${topupAmount.toLocaleString('ru-RU')} ₽`}
           </Button>
+        </div>
+
+        <div className="mb-8">
+          <TonWalletPanel mode="manage" showCheckout />
         </div>
 
         {/* Auto top-up */}

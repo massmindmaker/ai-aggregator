@@ -205,6 +205,12 @@ function defaultTransactionRunner<T>(work: (reader: CatalogReader) => Promise<T>
             FROM models
            WHERE enabled = TRUE
              AND status IN ('live', 'frozen')
+             AND slug <> 'whisper-large-v3'
+             AND lower(coalesce(metadata->>'operation','')) <> 'stt'
+             AND NOT EXISTS (
+               SELECT 1 FROM unnest(tags) tag
+                WHERE lower(tag) IN ('stt','transcription')
+             )
              AND (
                ${after?.slug ?? null}::text IS NULL
                OR (slug, id) > (${after?.slug ?? null}::text, ${after?.modelId ?? null}::uuid)

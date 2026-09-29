@@ -7,6 +7,8 @@ import { sql } from '../lib/db';
 import { errors } from '../lib/errors';
 import { parseCandidateBillingFacts, type UpstreamCandidate } from './engine';
 import { findReviewedChatProfile } from '../billing/reviewed-token-profiles';
+import { findReviewedTranscriptionProfile } from '../billing/reviewed-transcription-profiles';
+import { findReviewedMediaProfile } from '../billing/reviewed-media-profiles';
 import { z } from 'zod';
 
 const TTL_SEC = 600;
@@ -35,6 +37,8 @@ export type ModelRoutingDbRow = {
   price_per_1k_input: string | number;
   price_per_1k_output: string | number;
   price_per_image: string | number | null;
+  price_per_audio_sec: string | number | null;
+  billing_audio_cents_per_sec: string | null;
   markup: string | number;
   egress_proxy: string | null;
   priority: number;
@@ -45,7 +49,7 @@ const cachedModel = z.object({
   slug: z.string().min(1), type: z.enum(modelTypes),
   candidates: z.array(z.object({
     id: z.string().min(1), upstream_id: z.string().min(1), upstream_model_id: z.string().min(1), provider: z.string().min(1),
-    price_per_1k_input: finite.nonnegative(), price_per_1k_output: finite.nonnegative(), price_per_image: finite.nonnegative().optional(),
+    price_per_1k_input: finite.nonnegative(), price_per_1k_output: finite.nonnegative(), price_per_image: finite.nonnegative().optional(), price_per_audio_sec: finite.nonnegative().optional(),
     markup: finite.positive(), latency_p50_ms: finite.nonnegative(), uptime: finite.min(0).max(1), ru_residency: z.boolean(),
     egress_proxy: z.string().nullable().optional(), priority: z.number().int().optional(),
     billing: z.unknown().transform((value, ctx) => {
@@ -62,8 +66,15 @@ export function parseResolvedModelCache(value: unknown, slug: string): ResolvedM
   if (!parsed.success || parsed.data.slug !== slug) return null;
   const data = parsed.data;
   const candidates: UpstreamCandidate[] = data.candidates.map(c => {
-    const profile = findReviewedChatProfile({ modelSlug: data.slug, modelType: data.type, upstreamId: c.upstream_id, upstreamModelId: c.upstream_model_id, adapterKey: c.id });
-    return { ...c, ...(profile ? { reviewedChatProfile: profile } : {}) };
+    const chatProfile = findReviewedChatProfile({ modelSlug: data.slug, modelType: data.type, upstreamId: c.upstream_id, upstreamModelId: c.upstream_model_id, adapterKey: c.id });
+    const transcriptionProfile = findReviewedTranscriptionProfile({ modelSlug: data.slug, modelType: data.type, upstreamId: c.upstream_id, upstreamModelId: c.upstream_model_id, adapterKey: c.id });
+    const mediaProfile = (data.type==='image'||data.type==='video') ? findReviewedMediaProfile({routeKind:data.type,modelSlug:data.slug,modelType:data.type,upstreamId:c.upstream_id,upstreamModelId:c.upstream_model_id,adapterKey:c.id}) : null;
+    return {
+      ...c,
+      ...(chatProfile ? { reviewedChatProfile: chatProfile } : {}),
+      ...(transcriptionProfile ? { reviewedTranscriptionProfile: transcriptionProfile } : {}),
+      ...(mediaProfile ? { reviewedMediaProfile: mediaProfile } : {}),
+    };
   });
   return { slug: data.slug, type: data.type, candidates };
 }
@@ -76,12 +87,14 @@ export function projectModelRoutingRows(rows: ModelRoutingDbRow[], slug: string)
       modelUpstreamId: r.model_upstream_id,
       prices: { inputCentsPer1k: r.billing_input_cents_per_1k, outputCentsPer1k: r.billing_output_cents_per_1k, markup: r.billing_markup },
       ...(r.price_per_image == null ? {} : { pricePerImageCents: String(r.price_per_image) }),
+      ...(r.billing_audio_cents_per_sec == null ? {} : { pricePerAudioSecondCents: r.billing_audio_cents_per_sec }),
     },
     id: r.upstream_id,
     provider: r.provider,
     price_per_1k_input: Number(r.price_per_1k_input),
     price_per_1k_output: Number(r.price_per_1k_output),
     price_per_image: r.price_per_image == null ? undefined : Number(r.price_per_image),
+    price_per_audio_sec: r.price_per_audio_sec == null ? undefined : Number(r.price_per_audio_sec),
     latency_p50_ms: Number(r.latency_p50_ms),
     uptime: Number(r.uptime),
     ru_residency: r.ru_residency,
@@ -121,10 +134,11 @@ export async function resolveModel(slug: string): Promise<ResolvedModel> {
            mu.id::text AS model_upstream_id,
            mu.price_per_1k_input::text AS billing_input_cents_per_1k,
            mu.price_per_1k_output::text AS billing_output_cents_per_1k,
+           mu.price_per_audio_sec::text AS billing_audio_cents_per_sec,
            mu.markup::text AS billing_markup,
            mu.upstream_id, mu.upstream_model_id,
            u.provider, u.ru_residency, u.latency_p50_ms, u.uptime,
-           mu.price_per_1k_input, mu.price_per_1k_output, mu.price_per_image,
+           mu.price_per_1k_input, mu.price_per_1k_output, mu.price_per_image, mu.price_per_audio_sec,
            mu.markup, mu.egress_proxy, mu.priority
       FROM models m
       JOIN model_upstreams mu ON mu.model_id = m.id AND mu.enabled = TRUE
@@ -138,7 +152,10 @@ export async function resolveModel(slug: string): Promise<ResolvedModel> {
   const payload = projectModelRoutingRows(rows, slug);
   try {
     // Capability bindings are process-owned, never trusted from Redis.
-    const cachePayload = { ...payload, candidates: payload.candidates.map(({ reviewedChatProfile: _profile, ...candidate }) => candidate) };
+    const cachePayload = {
+      ...payload,
+      candidates: payload.candidates.map(({ reviewedChatProfile: _chat, reviewedTranscriptionProfile: _stt, reviewedMediaProfile: _media, ...candidate }) => candidate),
+    };
     await redis.setex(`model:v2:${slug}`, TTL_SEC, JSON.stringify(cachePayload));
   } catch {
     /* ignore */

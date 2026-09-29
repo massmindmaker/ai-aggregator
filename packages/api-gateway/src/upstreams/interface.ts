@@ -1,5 +1,6 @@
 import type { ReviewedChatProfile } from '../billing/reviewed-token-profiles';
 import type { ReviewedEmbeddingProfile } from '../billing/reviewed-embedding-profiles';
+import type { ReviewedTranscriptionProfile } from '../billing/reviewed-transcription-profiles';
 
 /**
  * Upstream adapter interface (abstract). Plan 05 implements concrete
@@ -166,10 +167,36 @@ export type AdmittedEmbeddingsMechanics = Readonly<{
   execute(req: AdmittedEmbeddingsRequest): Promise<Readonly<{ response: AdmittedEmbeddingsResponse; usage: AdmittedEmbeddingsUsage }>>;
 }>;
 
+export type AdmittedMediaRequest=
+ | Readonly<{profileId:'kie-nano-banana-2-image-v1';routeKind:'image';modelId:'nano-banana-2';prompt:string;egressProxyUrl?:string}>
+ | Readonly<{profileId:'kie-kling-3-video-5s-std-v1';routeKind:'video';modelId:'kling-3.0/video';prompt:string;durationSec:5;aspectRatio?:'16:9'|'9:16'|'1:1';imageUrl?:string;egressProxyUrl?:string}>;
+export type AdmittedMediaMechanics=Readonly<{
+  contract:'kie-market-reviewed-media-v1';
+  submit(req:AdmittedMediaRequest):Promise<MediaJob>;
+}>;
+
+export type AdmittedTranscriptionRequest = Readonly<{
+  modelId: 'whisper-large-v3';
+  audioBytes: Uint8Array;
+  language?: string;
+  egressProxyUrl?: string | undefined;
+}>;
+export type AdmittedTranscriptionResponse = Readonly<{
+  text: string;
+  providerDurationMs: number;
+  providerResponseId: string | null;
+}>;
+export type AdmittedTranscriptionMechanics = Readonly<{
+  contract: ReviewedTranscriptionProfile['adapterContract'];
+  execute(req: AdmittedTranscriptionRequest): Promise<AdmittedTranscriptionResponse>;
+}>;
+
 export interface UpstreamAdapter {
   readonly admittedChat?: AdmittedChatMechanics;
   readonly admittedChatStream?: AdmittedChatStreamMechanics;
   readonly admittedEmbeddings?: AdmittedEmbeddingsMechanics;
+  readonly admittedTranscription?: AdmittedTranscriptionMechanics;
+  readonly admittedMedia?: AdmittedMediaMechanics;
   chat(req: ChatRequest): Promise<ChatResponse>;
   chatStream?(req: ChatRequest): AsyncIterable<unknown>;
   embeddings?(req: EmbeddingsRequest): Promise<EmbeddingsResponse>;

@@ -25,6 +25,7 @@ import { video } from './routes/v1/video';
 import { audio } from './routes/v1/audio';
 import { batches } from './routes/v1/batches';
 import { storedMedia } from './routes/v1/stored-media';
+import { storedTranscription } from './routes/v1/stored-transcription';
 import { storedBatches } from './routes/v1/stored-batches';
 import { catalogRoute } from './routes/v1/catalog';
 import { catalogHttpBoundary } from './catalog/http-contract';
@@ -101,9 +102,11 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
       const retry = Number(c.res.headers.get('Retry-After'));
       return c.json(errors.rateLimited(Number.isSafeInteger(retry) && retry > 0 ? retry : 60).toResponseBody(), 429);
     }
-    const mediaExecutionPath = /\/(?:images\/generations|video\/generations|audio\/speech)\/?$/.test(c.req.path);
+    const mediaExecutionPath = /\/(?:images\/generations|video\/generations|audio\/(?:speech|transcriptions))\/?$/.test(c.req.path);
     if (mediaExecutionPath && error instanceof AiagError && error.code === 'PAYMENT_REQUIRED')
       return c.json(errors.paymentRequired().toResponseBody(), 402);
+    if (mediaExecutionPath && error instanceof AiagError && error.code === 'UNSUPPORTED_EXECUTION_CONTRACT')
+      return c.json(errors.unsupported('Execution contract unsupported').toResponseBody(), 501);
     if (mediaExecutionPath && error instanceof AiagError && error.code === 'BAD_REQUEST')
       return c.json(errors.badRequest('Invalid media request').toResponseBody(), 400);
     if (error instanceof AiagError && error.code === 'MEDIA_IDEMPOTENCY_CONFLICT')
@@ -117,7 +120,10 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
     restricted.on('POST', aliases('/embeddings'), rpmOnly, storedEmbeddings);
   if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || ['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE))
     restricted.on('POST', aliases('/completions'), rpmOnly, storedCompletions);
-  if (['stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE)) restricted.route('/', storedMedia);
+  if (['stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE)) {
+    restricted.route('/', storedMedia);
+    restricted.route('/', storedTranscription);
+  }
   if (config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions_stream_media_batches') {
     for (const route of storedBatches.routes) {
       const path = route.path === '/' ? '/batches' : `/batches${route.path}`;
@@ -130,8 +136,7 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
   const unsupported = [
     ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions' || ['stored_chat_embeddings_completions_stream','stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE) ? [] : ['/completions']),
     ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_only' ? ['/embeddings'] : []),
-    ...(['stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE) ? [] : ['/images/generations','/video/generations','/audio/speech']),
-    '/audio/transcriptions',
+    ...(['stored_chat_embeddings_completions_stream_media','stored_chat_embeddings_completions_stream_media_batches'].includes(config.GATEWAY_HTTP_EXECUTION_MODE) ? [] : ['/images/generations','/video/generations','/audio/speech','/audio/transcriptions']),
     ...(config.GATEWAY_HTTP_EXECUTION_MODE === 'stored_chat_embeddings_completions_stream_media_batches' ? [] : ['/batches'])];
   for (const path of unsupported)
     restricted.on(['POST', 'PUT', 'PATCH', 'DELETE'], aliases(path), unsupportedStoredExecution);

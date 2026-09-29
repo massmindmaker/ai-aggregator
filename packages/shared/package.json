@@ -40,12 +40,15 @@
     "@aws-sdk/client-s3": "^3.1045.0",
     "@aws-sdk/s3-request-presigner": "^3.1045.0",
     "undici": "7.30.0",
-    "zod": "^3.23.6"
+    "zod": "^3.23.6",
+    "@ton/core": "0.63.1"
   },
   "devDependencies": {
     "@aiag/typescript-config": "*",
     "@types/node": "^22.0.0",
     "tsup": "^8.0.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "@ton/ton": "16.3.0",
+    "@ton/crypto": "3.3.0"
   }
 }

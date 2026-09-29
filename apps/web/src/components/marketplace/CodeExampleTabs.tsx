@@ -80,8 +80,8 @@ function buildSamples(model: CatalogModel): Record<Lang, string> {
       return imageSamples(model.slug);
     case 'audio-tts':
       return audioSamples(model.slug);
-    case 'audio-stt':
-      return sttSamples(model.slug);
+    case 'unsupported':
+      return unavailableSamples();
     case 'video':
       return videoSamples(model.slug);
     case 'embedding':
@@ -94,7 +94,7 @@ function buildSamples(model: CatalogModel): Record<Lang, string> {
 function modalityBucket(t: ModelType): string {
   if (t === 'image') return 'image';
   if (t === 'text-to-speech') return 'audio-tts';
-  if (t === 'speech-to-text') return 'audio-stt';
+  if (t === 'speech-to-text') return 'unsupported';
   if (t === 'video') return 'video';
   if (t === 'embedding') return 'embedding';
   return 'chat';

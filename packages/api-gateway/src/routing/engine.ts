@@ -13,6 +13,8 @@ import { errors } from '../lib/errors';
 import { quoteChatMaximum, type TokenPrices } from '../billing/token-quote';
 import { quoteMediaUnits } from '../billing/media-unit-quote';
 import type { ReviewedChatProfile } from '../billing/reviewed-token-profiles';
+import type { ReviewedTranscriptionProfile } from '../billing/reviewed-transcription-profiles';
+import type { ReviewedMediaProfile } from '../billing/reviewed-media-profiles';
 
 export type Upstream = {
   id: string;
@@ -20,12 +22,13 @@ export type Upstream = {
   price_per_1k_input: number;
   price_per_1k_output: number;
   price_per_image?: number;
+  price_per_audio_sec?: number;
   latency_p50_ms: number;
   uptime: number;
   ru_residency: boolean;
 };
 
-export type CandidateBillingFacts = Readonly<{ modelUpstreamId: string; prices: TokenPrices; pricePerImageCents?: string }>;
+export type CandidateBillingFacts = Readonly<{ modelUpstreamId: string; prices: TokenPrices; pricePerImageCents?: string; pricePerAudioSecondCents?: string }>;
 
 /** Validate exact DB text without passing monetary authority through Number. */
 export function parseCandidateBillingFacts(value: unknown): CandidateBillingFacts | null {
@@ -35,11 +38,21 @@ export function parseCandidateBillingFacts(value: unknown): CandidateBillingFact
   try {
     quoteChatMaximum(prices, 1, 1);
     const media = (value as { pricePerImageCents?: unknown }).pricePerImageCents;
+    const audio = (value as { pricePerAudioSecondCents?: unknown }).pricePerAudioSecondCents;
     if (media !== undefined) {
       if (typeof media !== 'string') return null;
       quoteMediaUnits({ priceCentsPerUnit: media, markup: prices.markup }, 1);
     }
-    return Object.freeze({ modelUpstreamId, prices: Object.freeze({ inputCentsPer1k: prices.inputCentsPer1k, outputCentsPer1k: prices.outputCentsPer1k, markup: prices.markup }), ...(media === undefined ? {} : { pricePerImageCents: media }) });
+    if (audio !== undefined) {
+      if (typeof audio !== 'string') return null;
+      quoteMediaUnits({ priceCentsPerUnit: audio, markup: prices.markup }, 1);
+    }
+    return Object.freeze({
+      modelUpstreamId,
+      prices: Object.freeze({ inputCentsPer1k: prices.inputCentsPer1k, outputCentsPer1k: prices.outputCentsPer1k, markup: prices.markup }),
+      ...(media === undefined ? {} : { pricePerImageCents: media }),
+      ...(audio === undefined ? {} : { pricePerAudioSecondCents: audio }),
+    });
   } catch { return null; }
 }
 
@@ -47,6 +60,8 @@ export function parseCandidateBillingFacts(value: unknown): CandidateBillingFact
 export type UpstreamCandidate = Upstream & {
   billing?: CandidateBillingFacts;
   reviewedChatProfile?: ReviewedChatProfile;
+  reviewedTranscriptionProfile?: ReviewedTranscriptionProfile;
+  reviewedMediaProfile?: ReviewedMediaProfile;
   upstream_id: string;
   upstream_model_id: string;
   markup: number;
@@ -74,7 +89,8 @@ export type ApiKeyPolicies = {
 
 // FIX H4.1: explicit metric-aware cost
 export function effCost(u: Upstream, metric: CostMetric = 'chat'): number {
-  if (metric === 'image' || metric === 'video' || metric === 'audio') return u.price_per_image ?? 0.01;
+  if (metric === 'image' || metric === 'video') return u.price_per_image ?? 0.01;
+  if (metric === 'audio') return u.price_per_audio_sec ?? u.price_per_image ?? 0.01;
   if (metric === 'embedding') return u.price_per_1k_input;
   // chat: input-heavy weighted average (70/30)
   return u.price_per_1k_input * 0.7 + u.price_per_1k_output * 0.3;

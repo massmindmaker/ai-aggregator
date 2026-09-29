@@ -27,6 +27,7 @@ import type {
   VideoRequest,
   AudioSpeechRequest,
   AudioTranscriptionRequest,
+  AdmittedMediaRequest,
   MediaJob,
 } from './interface';
 import { logger } from '../lib/logger';
@@ -251,7 +252,20 @@ async function pollOnce(
   return { status: processing ? 'processing' : 'queued', job_id: prefixedJobId };
 }
 
+async function submitReviewedMedia(req:AdmittedMediaRequest):Promise<MediaJob>{
+  if(req.profileId==='kie-nano-banana-2-image-v1'){
+    if(req.routeKind!=='image'||req.modelId!=='nano-banana-2'||Object.keys(req).some(k=>!['profileId','routeKind','modelId','prompt','egressProxyUrl'].includes(k)))throw new Error('reviewed media contract mismatch');
+    return createTask(req.modelId,{prompt:req.prompt,aspect_ratio:'1:1',resolution:'1K',output_format:'jpg',image_input:[]},undefined,req.egressProxyUrl);
+  }
+  if(req.profileId==='kie-kling-3-video-5s-std-v1'){
+    if(req.routeKind!=='video'||req.modelId!=='kling-3.0/video'||req.durationSec!==5||Object.keys(req).some(k=>!['profileId','routeKind','modelId','prompt','durationSec','aspectRatio','imageUrl','egressProxyUrl'].includes(k)))throw new Error('reviewed media contract mismatch');
+    return createTask(req.modelId,{prompt:req.prompt,sound:false,duration:String(req.durationSec),aspect_ratio:req.aspectRatio??'16:9',mode:'std',multi_shots:false,...(req.imageUrl?{image_urls:[req.imageUrl]}:{})},undefined,req.egressProxyUrl);
+  }
+  throw new Error('reviewed media contract mismatch');
+}
+
 export const kieUpstream: UpstreamAdapter = {
+  admittedMedia:Object.freeze({contract:'kie-market-reviewed-media-v1' as const,submit:submitReviewedMedia}),
   async chat(_req: ChatRequest): Promise<ChatResponse> {
     logger.warn({}, 'kie_chat_unsupported');
     throw new Error('this model does not support chat completions');

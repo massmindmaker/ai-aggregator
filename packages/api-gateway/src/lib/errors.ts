@@ -54,6 +54,8 @@ export const errors = {
   rateLimited: (retryAfterSec: number, m = 'Rate limit exceeded') =>
     new AiagError('RATE_LIMITED', 429, m, { retryAfterSec }),
   upstreamError: (m: string) => new AiagError('UPSTREAM_ERROR', 502, m),
+  unsupported: (m = 'Operation unavailable in this execution mode') =>
+    new AiagError('UNSUPPORTED_EXECUTION_CONTRACT', 501, m),
   unavailable: (m: string) => new AiagError('SERVICE_UNAVAILABLE', 503, m),
   overloaded: (m = 'Upstream overloaded') => new AiagError('UPSTREAM_OVERLOADED', 529, m),
 };

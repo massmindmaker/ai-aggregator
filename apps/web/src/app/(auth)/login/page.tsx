@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Alert, AlertDescription } from '@/components/ui/Alert';
 import { Card, CardContent } from '@/components/ui/Card';
+import { TonWalletPanel } from '@/components/ton/TonWalletPanel';
 
 // NextAuth surfaces these via ?error= on /login. Keep messages user-readable
 // and specific enough for the user to take action (not a generic "ошибка").
@@ -216,6 +217,11 @@ function LoginForm() {
             Войти с email
           </Button>
         </form>
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
+          <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">или войти кошельком</span></div>
+        </div>
+        <TonWalletPanel mode="login" />
       </CardContent>
     </Card>
   );

@@ -34,7 +34,6 @@ const ALL_TYPES: ModelType[] = [
   'code',
   'embedding',
   'multimodal',
-  'speech-to-text',
   'text-to-speech',
 ];
 

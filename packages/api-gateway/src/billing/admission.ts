@@ -48,6 +48,21 @@ export async function recordGatewayChargeOutcome(
   return recordGatewayChargeOutcomeInternal(args, client);
 }
 
+export async function readGatewayChargeAdmission(
+  billingRequestId: string,
+  client: SqlClient = defaultSql,
+): Promise<GatewayChargeAdmissionResult> {
+  const id = uuid(billingRequestId);
+  return queryAdmission(
+    client,
+    "admit",
+    client<postgres.Row[]>`SELECT * FROM aiag_gateway_charge_admission_result(
+      ${id}::uuid,
+      FALSE
+    )`,
+  );
+}
+
 export async function markGatewayChargeDispatched(
   args: MarkGatewayChargeDispatchedArgs,
   client: SqlClient = defaultSql,

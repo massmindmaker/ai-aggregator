@@ -4,7 +4,7 @@ vi.mock('../lib/redis', () => ({ makeRedis: () => ({ get, setex }) }));
 vi.mock('../lib/db', () => ({ sql: query }));
 import { resolveModel, projectModelRoutingRows, parseResolvedModelCache, resolveModelWithOverride, setResolveModelOverride, type ResolvedModel } from '../routing/resolver';
 const slug = 'openai/gpt-4o-mini';
-const row = () => ({ slug, type: 'chat', upstream_id: 'openrouter', upstream_model_id: slug, provider: 'openrouter', ru_residency: false, latency_p50_ms: 50, uptime: '0.99', price_per_1k_input: '0.123456789012345678', price_per_1k_output: '0.5', markup: '1.25', price_per_image: null, priority: 1, egress_proxy: null, model_upstream_id: 'f0000000-0000-4000-8000-000000000001', billing_input_cents_per_1k: '0.123456789012345678', billing_output_cents_per_1k: '0.5', billing_markup: '1.25' });
+const row = () => ({ slug, type: 'chat', upstream_id: 'openrouter', upstream_model_id: slug, provider: 'openrouter', ru_residency: false, latency_p50_ms: 50, uptime: '0.99', price_per_1k_input: '0.123456789012345678', price_per_1k_output: '0.5', markup: '1.25', price_per_image: null, price_per_audio_sec: null, priority: 1, egress_proxy: null, model_upstream_id: 'f0000000-0000-4000-8000-000000000001', billing_input_cents_per_1k: '0.123456789012345678', billing_output_cents_per_1k: '0.5', billing_markup: '1.25', billing_audio_cents_per_sec: null });
 afterEach(() => { setResolveModelOverride(null); });
 beforeEach(() => { get.mockReset().mockResolvedValue(null); setex.mockReset(); query.mockReset().mockResolvedValue([row()]); });
 describe('exact resolver and versioned cache', () => {
@@ -45,6 +45,22 @@ describe('exact resolver and versioned cache', () => {
     await expect(resolveModel(slug)).rejects.toThrow('Invalid model routing facts');
     expect(setex).not.toHaveBeenCalled();
   });
+});
+
+it('retains exact audio-second billing text through DB projection and cache', async () => {
+  const audioRow = {
+    ...row(), slug: 'whisper-large-v3', type: 'audio', upstream_id: 'groq',
+    upstream_model_id: 'whisper-large-v3', provider: 'groq',
+    price_per_audio_sec: '0.0030833333', billing_audio_cents_per_sec: '0.0030833333',
+  };
+  query.mockResolvedValueOnce([audioRow]);
+  const model = await resolveModel(audioRow.slug);
+  expect(model.candidates[0]!.billing?.pricePerAudioSecondCents).toBe('0.0030833333');
+  expect(model.candidates[0]!.price_per_audio_sec).toBeCloseTo(0.0030833333, 12);
+  const [sqlParts] = query.mock.calls[0]!;
+  expect(sqlParts.join('')).toContain('mu.price_per_audio_sec::text AS billing_audio_cents_per_sec');
+  const cached = JSON.parse(setex.mock.calls[0]![2]);
+  expect(cached.candidates[0].billing.pricePerAudioSecondCents).toBe('0.0030833333');
 });
 
 it('resolves an existing video model through fresh DB facts', async () => {

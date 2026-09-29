@@ -14,6 +14,7 @@ import {
 } from '@aiag/database/schema';
 import { eq } from '@aiag/database';
 import bcrypt from 'bcryptjs';
+import { authorizeWalletTicket, verifyWalletSession } from './lib/ton-wallet/service';
 
 // Adapter must be attached lazily — at build-time DATABASE_URL is unset and
 // DrizzleAdapter(db) eagerly touches the lazy db Proxy, which throws
@@ -42,7 +43,7 @@ const adapter =
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter,
-  trustHost: true,
+  trustHost: process.env.AUTH_TRUST_HOST === 'true',
   session: {
     strategy: 'jwt',
   },
@@ -89,6 +90,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientId: process.env.VK_CLIENT_ID,
       clientSecret: process.env.VK_CLIENT_SECRET,
     }),
+    Credentials({id:'ton-wallet',name:'TON wallet',credentials:{ticket:{type:'password'}},authorize:authorizeWalletTicket}),
     Credentials({
       name: 'credentials',
       credentials: {
@@ -137,6 +139,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
+        const walletUser=user as typeof user & {tonWalletId?:string};
+        if(walletUser.tonWalletId)token.tonWalletId=walletUser.tonWalletId;else delete token.tonWalletId;
         // Lookup role once on sign-in so server components can show admin
         // affordances (e.g. "Админка" link in header) without each request
         // querying the DB. Refresh on session update if the trigger fires.
@@ -156,6 +160,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.image = session.image;
       }
 
+      if(typeof token.tonWalletId==='string'){
+        try{if(typeof token.id!=='string'||!await verifyWalletSession(token.id,token.tonWalletId))return null;}catch{return null;}
+      }
       return token;
     },
     async session({ session, token }) {

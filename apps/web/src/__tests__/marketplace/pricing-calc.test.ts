@@ -19,7 +19,7 @@ import { GENERATED_CATALOG } from '@/lib/marketplace/catalog.generated';
 
 const gpt = GENERATED_CATALOG.find((m) => m.slug === 'openai/gpt-4o')!;
 const dalle = GENERATED_CATALOG.find((m) => m.slug === 'dalle-3-kie')!;
-const whisper = GENERATED_CATALOG.find((m) => m.slug === 'whisper-large-v3')!;
+const tts = GENERATED_CATALOG.find((m) => m.slug === 'elevenlabs-tts-hf')!;
 const cheapEmbedding = GENERATED_CATALOG.find(
   (m) => m.slug === 'openai/text-embedding-3-small'
 )!;
@@ -28,7 +28,7 @@ describe('fixtures are present in the shipped artifact', () => {
   it.each([
     ['openai/gpt-4o', gpt],
     ['dalle-3-kie', dalle],
-    ['whisper-large-v3', whisper],
+    ['elevenlabs-tts-hf', tts],
     ['openai/text-embedding-3-small', cheapEmbedding],
   ])('%s exists in GENERATED_CATALOG', (_slug, model) => {
     expect(model).toBeDefined();
@@ -69,10 +69,9 @@ describe('estimateCost', () => {
   });
 
   it('audio modality — output equals catalog per-minute price, no markup added', () => {
-    const r = estimateCost(whisper, { minutesPerDay: 100 });
-    // whisper-large-v3.pricing.perMinute = 2.7 (live artifact) — 100 * 2.7 = 270
-    expect(whisper.pricing.perMinute).toBe(2.7);
-    expect(r.perDayCredits).toBe(270);
+    const r = estimateCost(tts, { minutesPerDay: 100 });
+    expect(tts.pricing.perMinute).toBe(32.4);
+    expect(r.perDayCredits).toBe(3240);
   });
 
   it('returns zero on empty usage', () => {

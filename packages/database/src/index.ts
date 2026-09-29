@@ -40,3 +40,9 @@ export type Database = ReturnType<typeof createDb>;
 
 export * from './ton-payment-types';
 export { createTonInvoice, getTonInvoice, expireTonInvoice } from './ton-payments';
+
+export { issueTonWalletChallenge, completeTonWalletProof, consumeTonWalletTicket, listTonWallets, checkTonWalletSession, reserveTonWalletPasswordAttempt, revokeTonWallet, TonWalletAuthError } from "./ton-wallet-auth";
+export type { TonWalletContext, LinkedTonWallet, TonWalletLoginUser } from "./ton-wallet-auth";
+
+export { createTonCheckout,readTonCheckout,claimTonCheckoutSend,recordTonCheckoutClientReport } from "./ton-wallet-checkout";
+export type { TonCheckoutPolicy,TonCheckout,TonCheckoutInput } from "./ton-wallet-checkout";

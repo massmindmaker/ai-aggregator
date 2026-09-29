@@ -57,11 +57,14 @@ describe('effCost', () => {
   it('embedding metric: input-only', () => {
     expect(effCost(yandex, 'embedding')).toBe(0.0008);
   });
-  it('media metrics use the v1 per-job price authority', () => {
-    const media = { ...yandex, price_per_image: 7 };
+  it('image/video use per-job price while audio prefers per-second price', () => {
+    const media = { ...yandex, price_per_image: 7, price_per_audio_sec: 0.003 };
     expect(effCost(media, 'image')).toBe(7);
     expect(effCost(media, 'video')).toBe(7);
-    expect(effCost(media, 'audio')).toBe(7);
+    expect(effCost(media, 'audio')).toBe(0.003);
+  });
+  it('audio falls back to per-job price for legacy TTS candidates', () => {
+    expect(effCost({ ...yandex, price_per_image: 7 }, 'audio')).toBe(7);
   });
 });
 

@@ -34,25 +34,24 @@ async function createRuntime() {
   const {sql}=await import('../lib/db');
   const redisModule=await import('../lib/redis');
   const resolver=await import('../routing/resolver');
+  const mediaProfiles=await import('../billing/reviewed-media-profiles');
   const mapping={image:randomUUID(),video:randomUUID(),audio:randomUUID()};
   resolver.setResolveModelOverride(async(slug)=>{
     const kind=slug.endsWith('/image')?'image':slug.endsWith('/video')?'video':'audio';
+    const image=kind==='image';
     return {
-      slug,
-      type:kind,
-      candidates:[{
-        id:'kie',upstream_id:'kie',upstream_model_id:kind==='video'?'veo-native':kind==='audio'?'suno-native':'image-native',provider:'kie',
-        price_per_1k_input:0,price_per_1k_output:0,price_per_image:0.015,markup:1.8,latency_p50_ms:10,uptime:0.99,ru_residency:false,egress_proxy:null,priority:1,
-        billing:{modelUpstreamId:mapping[kind],prices:{inputCentsPer1k:'0',outputCentsPer1k:'0',markup:'1.8'},pricePerImageCents:'0.015'},
+      slug,type:kind,candidates:[{
+        id:'kie',upstream_id:'kie',upstream_model_id:image?'nano-banana-2':'kling-3.0/video',provider:'kie',
+        price_per_1k_input:0,price_per_1k_output:0,price_per_image:image?4:35,markup:1.2,latency_p50_ms:10,uptime:0.99,ru_residency:false,egress_proxy:null,priority:1,
+        billing:{modelUpstreamId:mapping[kind],prices:{inputCentsPer1k:'0',outputCentsPer1k:'0',markup:'1.2000'},pricePerImageCents:image?'4.00':'35.00'},
+        ...(kind==='audio'?{}:{reviewedMediaProfile:{...(image?mediaProfiles.reviewedMediaProfiles[0]!:mediaProfiles.reviewedMediaProfiles[1]!),modelSlug:slug}}),
       }],
     };
   });
-
-  const {kieUpstream}=await import('../upstreams/kie');
-  const image=vi.spyOn(kieUpstream,'imageGeneration').mockResolvedValue({status:'queued',job_id:'jobs:native-image'});
-  const video=vi.spyOn(kieUpstream,'videoGeneration').mockResolvedValue({status:'queued',job_id:'veo:native-video'});
-  const audio=vi.spyOn(kieUpstream,'audioSpeech').mockResolvedValue({status:'queued',job_id:'suno:native-audio'});
-  const network=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>{throw new Error('stored media native external network forbidden');});
+  const network=vi.spyOn(globalThis,'fetch').mockImplementation(async(_input,init)=>{
+    const body=JSON.parse(String(init?.body??'{}')) as {model?:string};
+    return new Response(JSON.stringify({code:200,msg:'success',data:{taskId:body.model==='nano-banana-2'?'native-image':'native-video'}}),{status:200,headers:{'content-type':'application/json'}});
+  });
   const {app}=await import('../server');
   const {Queue}=await import('bullmq');
   const queue=new Queue('upstream-poll',{connection:{host:'127.0.0.1',port:16379}});
@@ -61,8 +60,7 @@ async function createRuntime() {
   await Promise.all([redisModule.redis.ping(),redisModule.makeRedis('ratelimit').ping()]);
 
   async function close(){
-    resolver.setResolveModelOverride(null);
-    image.mockRestore();video.mockRestore();audio.mockRestore();network.mockRestore();
+    resolver.setResolveModelOverride(null);network.mockRestore();
     await mediaDb.close().catch(()=>{});
     await queue.close().catch(()=>{});
     await sql.end().catch(()=>{});
@@ -70,7 +68,7 @@ async function createRuntime() {
     await client.end().catch(()=>{});await other.end().catch(()=>{});
     restore();
   }
-  return {app,client,other,redis:redisModule.redis,queue,mediaDb,image,video,audio,close};
+  return {app,client,other,redis:redisModule.redis,queue,mediaDb,network,close};
 }
 
 async function createOwner() {
@@ -78,7 +76,7 @@ async function createOwner() {
   const token='sk_aiag_test_'+randomUUID().replaceAll('-','');
   await runtime.client.begin(async(tx)=>{
     await tx`INSERT INTO users(id,email) VALUES(${user}::uuid,${'media-'+user+'@example.test'})`;
-    await tx`INSERT INTO organizations(id,slug,name,owner_id,payg_credits) VALUES(${org}::uuid,${org},'Media native fixture',${user}::uuid,1000)`;
+    await tx`INSERT INTO organizations(id,slug,name,owner_id,payg_credits) VALUES(${org}::uuid,${org},'Media native fixture',${user}::uuid,100000)`;
     await tx`INSERT INTO gateway_api_keys(id,org_id,name,key_hash,key_prefix,rpm_limit,batch_rpm_limit) VALUES(${key}::uuid,${org}::uuid,'Media key',${sha256(token)},${token.slice(0,20)},10000,10000)`;
     await tx`INSERT INTO gateway_quota_org_policies(org_id,enforcement_version,daily_supplier_usd_micro_limit_v2) VALUES(${org}::uuid,2,1000000)`;
     await tx`INSERT INTO gateway_quota_key_policies(api_key_id,org_id) VALUES(${key}::uuid,${org}::uuid)`;
@@ -117,15 +115,14 @@ async function createOwner() {
 
 describe.skipIf(!enabled)('guarded mounted durable async media lifecycle',()=>{
   beforeAll(async()=>{runtime=await createRuntime();},30000);
-  beforeEach(async()=>{owner=await createOwner();runtime.image.mockClear();runtime.video.mockClear();runtime.audio.mockClear();});
+  beforeEach(async()=>{owner=await createOwner();runtime.network.mockClear();});
   afterEach(async()=>{await owner.cleanup();});
   afterAll(async()=>{await runtime?.close();});
 
   it('owns image/video/audio jobs before 202, queues only opaque job ids, settles once, and replays without provider',async()=>{
     const cases=[
-      {path:'/v1/images/generations',id:randomUUID(),body:{model:'native/image',prompt:'cat',n:2},route:'image',retail:'54',provider:runtime.image},
-      {path:'/v1/video/generations',id:randomUUID(),body:{model:'native/video',prompt:'sunset'},route:'video',retail:'27',provider:runtime.video},
-      {path:'/v1/audio/speech',id:randomUUID(),body:{model:'native/audio',input:'hello'},route:'audio_speech',retail:'27',provider:runtime.audio},
+      {path:'/v1/images/generations',id:randomUUID(),body:{model:'native/image',prompt:'cat'},route:'image',retail:'4800'},
+      {path:'/v1/video/generations',id:randomUUID(),body:{model:'native/video',prompt:'sunset',duration_s:5,aspect_ratio:'16:9'},route:'video',retail:'42000'},
     ] as const;
     const tasks:string[]=[];
     for(const item of cases){
@@ -134,7 +131,7 @@ describe.skipIf(!enabled)('guarded mounted durable async media lifecycle',()=>{
       const body=await response.json() as {task_id:string;status:string};
       expect(body.status).toBe('queued'); expect(body.task_id).toMatch(/^task_[0-9a-f]{32}$/); tasks.push(body.task_id);
       expect(JSON.stringify(body)).not.toMatch(/jobs:|veo:|suno:/);
-      expect(item.provider).toHaveBeenCalledTimes(1);
+      expect(runtime.network).toHaveBeenCalledTimes(tasks.length);
       const rows=(await owner.facts()).jobs.filter((row)=>row.task_id===body.task_id);
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({route_kind:item.route,status:'queued',retail:item.retail});
@@ -143,17 +140,16 @@ describe.skipIf(!enabled)('guarded mounted durable async media lifecycle',()=>{
       expect(JSON.stringify(queued?.data)).not.toMatch(/provider|prompt|secret/i);
     }
     let facts=await owner.facts();
-    expect(facts.balance[0]?.payg_credits).toBe('892');
+    expect(facts.balance[0]?.payg_credits).toBe('53200');
     expect(facts.admissions.map((row)=>({route:row.route_kind,state:row.state,authorized:row.authorized}))).toEqual([
-      {route:'image',state:'dispatched',authorized:'54'},
-      {route:'video',state:'dispatched',authorized:'27'},
-      {route:'audio_speech',state:'dispatched',authorized:'27'},
+      {route:'image',state:'dispatched',authorized:'4800'},
+      {route:'video',state:'dispatched',authorized:'42000'},
     ]);
 
-    const providerCalls=runtime.image.mock.calls.length+runtime.video.mock.calls.length+runtime.audio.mock.calls.length;
+    const providerCalls=runtime.network.mock.calls.length;
     const queuedGet=await owner.get(tasks[0]!); expect(queuedGet.status).toBe(200);
     expect(await queuedGet.json()).toMatchObject({task_id:tasks[0],status:'queued'});
-    expect(runtime.image.mock.calls.length+runtime.video.mock.calls.length+runtime.audio.mock.calls.length).toBe(providerCalls);
+    expect(runtime.network.mock.calls.length).toBe(providerCalls);
 
     for(const taskId of tasks){
       const job=(await owner.facts()).jobs.find((row)=>row.task_id===taskId)!;
@@ -161,20 +157,20 @@ describe.skipIf(!enabled)('guarded mounted durable async media lifecycle',()=>{
       await runtime.mediaDb.finalize(owned!,'completed','https://cdn.test/'+taskId);
     }
     facts=await owner.facts();
-    expect(facts.balance[0]?.payg_credits).toBe('892');
+    expect(facts.balance[0]?.payg_credits).toBe('53200');
     expect(facts.admissions.every((row)=>row.state==='settled')).toBe(true);
-    expect(facts.admissions.map((row)=>row.actual).sort()).toEqual(['27','27','54']);
-    expect(facts.ledger).toHaveLength(3);
+    expect(facts.admissions.map((row)=>row.actual).sort()).toEqual(['42000','4800']);
+    expect(facts.ledger).toHaveLength(2);
 
     const completed=await owner.get(tasks[0]!); expect(completed.status).toBe(200);
     expect(await completed.json()).toMatchObject({task_id:tasks[0],status:'completed',output:'https://cdn.test/'+tasks[0]});
     const replay=await owner.post(cases[0].path,cases[0].id,cases[0].body);
-    expect(replay.status).toBe(200); expect(runtime.image).toHaveBeenCalledTimes(1);
-    expect((await owner.facts()).ledger).toHaveLength(3);
+    expect(replay.status).toBe(200); expect(runtime.network).toHaveBeenCalledTimes(providerCalls);
+    expect((await owner.facts()).ledger).toHaveLength(2);
 
     const changed=await owner.post(cases[0].path,cases[0].id,{...cases[0].body,prompt:'changed'});
     expect(changed.status).toBe(409);
-    expect(runtime.image).toHaveBeenCalledTimes(1);
+    expect(runtime.network).toHaveBeenCalledTimes(providerCalls);
   },30000);
 
   it('keeps task reads org-scoped and never polls provider from GET',async()=>{
@@ -184,52 +180,65 @@ describe.skipIf(!enabled)('guarded mounted durable async media lifecycle',()=>{
     const task=String((await created.json() as {task_id:string}).task_id);
     const foreign=await createOwner();
     try{
-      const before=runtime.image.mock.calls.length;
+      const before=runtime.network.mock.calls.length;
       expect((await foreign.get(task)).status).toBe(404);
-      expect(runtime.image.mock.calls.length).toBe(before);
+      expect(runtime.network.mock.calls.length).toBe(before);
     } finally { await foreign.cleanup(); }
   },30000);
   it('releases a rejected admission claim and preserves the insufficient-balance error',async()=>{
     await runtime.client`UPDATE organizations SET payg_credits=0 WHERE id=${owner.org}::uuid`;
-    const before=runtime.image.mock.calls.length;
+    const before=runtime.network.mock.calls.length;
     const response=await owner.post('/v1/images/generations',randomUUID(),{model:'native/image',prompt:'no funds'});
     expect(response.status,await response.clone().text()).toBe(402);
-    expect(runtime.image.mock.calls.length).toBe(before);
+    expect(runtime.network.mock.calls.length).toBe(before);
     const facts=await owner.facts();
     expect(facts.jobs).toHaveLength(0);
     expect(facts.admissions).toHaveLength(0);
   },30000);
 
   it('rejects a model whose registry type does not match the media route before provider dispatch',async()=>{
-    const before=runtime.image.mock.calls.length;
+    const before=runtime.network.mock.calls.length;
     const response=await owner.post('/v1/images/generations',randomUUID(),{model:'native/video',prompt:'wrong route'});
     expect(response.status,await response.clone().text()).toBe(400);
-    expect(runtime.image.mock.calls.length).toBe(before);
+    expect(runtime.network.mock.calls.length).toBe(before);
     expect((await owner.facts()).jobs).toHaveLength(0);
   },30000);
 
   it('rejects malformed JSON before claim, admission, or provider dispatch',async()=>{
-    const before=runtime.image.mock.calls.length;
+    const before=runtime.network.mock.calls.length;
     const response=await runtime.app.fetch(new Request('http://native.test/v1/images/generations',{
       method:'POST',
       headers:{authorization:'Bearer '+owner.token,'content-type':'application/json','idempotency-key':randomUUID()},
       body:'{"model":"native/image","prompt":',
     }));
     expect(response.status,await response.clone().text()).toBe(400);
-    expect(runtime.image.mock.calls.length).toBe(before);
+    expect(runtime.network.mock.calls.length).toBe(before);
     const facts=await owner.facts();
     expect(facts.jobs).toHaveLength(0);
     expect(facts.admissions).toHaveLength(0);
+  },30000);
+
+  it('rejects media BYOK before provider/storage work',async()=>{
+    const before=runtime.network.mock.calls.length;
+    const response=await runtime.app.fetch(new Request('http://native.test/v1/images/generations',{method:'POST',headers:{authorization:'Bearer '+owner.token,'content-type':'application/json','idempotency-key':randomUUID(),'x-upstream-key':'secret'},body:JSON.stringify({model:'native/image',prompt:'cat'})}));
+    expect(response.status).toBe(400);expect(runtime.network.mock.calls.length).toBe(before);expect((await owner.facts()).jobs).toHaveLength(0);
+  },30000);
+
+  it('fails closed for audio speech until a reviewed pricing/request contract exists',async()=>{
+    const before=runtime.network.mock.calls.length;
+    const response=await owner.post('/v1/audio/speech',randomUUID(),{model:'native/audio',input:'hello'});
+    expect(response.status).toBe(503);expect(runtime.network.mock.calls.length).toBe(before);
+    expect((await owner.facts()).jobs).toHaveLength(0);
   },30000);
 
   it('fails closed before media dispatch when egress proxying is configured but worker polling cannot preserve it',async()=>{
     const previous=process.env.AIAG_EGRESS_PROXY_URL;
     process.env.AIAG_EGRESS_PROXY_URL='http://127.0.0.1:18080';
     try{
-      const before=runtime.image.mock.calls.length;
+      const before=runtime.network.mock.calls.length;
       const response=await owner.post('/v1/images/generations',randomUUID(),{model:'native/image',prompt:'proxy required'});
       expect(response.status,await response.clone().text()).toBe(503);
-      expect(runtime.image.mock.calls.length).toBe(before);
+      expect(runtime.network.mock.calls.length).toBe(before);
       expect((await owner.facts()).jobs).toHaveLength(0);
     }finally{
       if(previous===undefined)delete process.env.AIAG_EGRESS_PROXY_URL;else process.env.AIAG_EGRESS_PROXY_URL=previous;

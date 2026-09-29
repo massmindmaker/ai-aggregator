@@ -101,15 +101,23 @@ import { stripProviderBrand } from './strip-provider-brand';
  * playground, search index, ...) ever renders a dirty name even if a future
  * regeneration forgets to, or a supersededByName field carries one through.
  */
+export function isSoldV1Model(model: CatalogModel): boolean {
+  if (model.type === 'speech-to-text' || model.type === 'image' || model.type === 'video' || model.type === 'audio' || model.type === 'text-to-speech') return false;
+  const tags = new Set(model.tags.map((tag) => tag.toLowerCase()));
+  return !tags.has('stt') && !tags.has('transcription');
+}
+
 function getSource(): CatalogModel[] {
   const source = GENERATED_CATALOG.length > 0 ? GENERATED_CATALOG : CATALOG;
-  return source.map((m) => ({
-    ...m,
-    name: stripProviderBrand(m.name) || m.name,
-    ...(m.supersededByName
-      ? { supersededByName: stripProviderBrand(m.supersededByName) || m.supersededByName }
-      : {}),
-  }));
+  return source
+    .filter(isSoldV1Model)
+    .map((m) => ({
+      ...m,
+      name: stripProviderBrand(m.name) || m.name,
+      ...(m.supersededByName
+        ? { supersededByName: stripProviderBrand(m.supersededByName) || m.supersededByName }
+        : {}),
+    }));
 }
 
 /** Foreign-hosted org slugs (trigger transfer warning per 152-ФЗ). */
@@ -331,28 +339,6 @@ export const CATALOG: CatalogModel[] = [
       weeklyRequests: 8500,
       p50LatencyMs: 5100,
       uptimePct: 99.6,
-    },
-  },
-  {
-    slug: 'openai/whisper-large-v3',
-    orgSlug: 'openai',
-    orgName: 'OpenAI',
-    modelSlug: 'whisper-large-v3',
-    name: 'Whisper Large v3',
-    shortDescription: 'Высокоточное распознавание речи на 98 языках.',
-    description: 'Whisper Large v3 — модель распознавания речи на 98 языках с высокой точностью.',
-    type: 'speech-to-text',
-    hostingRegion: 'us',
-    tags: ['аудио', 'транскрипция'],
-    derivedTags: ['cheap'],
-    pricing: { perMinute: 0.6, unit: 'минута' },
-    capabilities: {},
-    stats: {
-      avgRating: 4.7,
-      totalReviews: 540,
-      weeklyRequests: 14000,
-      p50LatencyMs: 3200,
-      uptimePct: 99.8,
     },
   },
   {
