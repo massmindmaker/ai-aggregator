@@ -228,37 +228,11 @@ res.write_to_file("speech.mp3")`,
   };
 }
 
-function sttSamples(slug: string): Record<Lang, string> {
-  return {
-    curl: `curl ${BASE}/v1/audio/transcriptions \\
-  -H "Authorization: Bearer $AIAG_API_KEY" \\
-  -F "model=${slug}" \\
-  -F "file=@audio.mp3"`,
-    node: `import fs from 'node:fs';
-import OpenAI from 'openai';
-
-const client = new OpenAI({
-  apiKey: process.env.AIAG_API_KEY,
-  baseURL: '${BASE}/v1',
-});
-
-const res = await client.audio.transcriptions.create({
-  model: '${slug}',
-  file: fs.createReadStream('audio.mp3'),
-});
-
-console.log(res.text);`,
-    python: `from openai import OpenAI
-
-client = OpenAI(
-    api_key=os.environ["AIAG_API_KEY"],
-    base_url="${BASE}/v1",
-)
-
-with open("audio.mp3", "rb") as f:
-    res = client.audio.transcriptions.create(model="${slug}", file=f)
-print(res.text)`,
-  };
+function unavailableSamples(): Record<Lang, string> {
+  const note =
+    'This modality is not sold in v1 yet. It stays in the catalog as disabled and is ' +
+    'never routed to a paid provider call.';
+  return { curl: note, node: note, python: note };
 }
 
 function videoSamples(slug: string): Record<Lang, string> {

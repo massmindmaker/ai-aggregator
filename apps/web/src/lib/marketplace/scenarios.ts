@@ -82,6 +82,21 @@ export const SCENARIOS: Scenario[] = [
       'Фрагменты:\n"""\n<сюда подставьте top-k из векторного поиска>\n"""',
     tags: ['чат', 'rag', 'enterprise'],
   },
+  {
+    slug: 'product-voiceover',
+    title: 'Озвучка карточки товара',
+    modality: 'tts',
+    shortDescription:
+      'Озвучьте описание товара или рекламного ролика готовым голосом.',
+    longDescription:
+      'Модель text-to-speech принимает текст и возвращает аудио. Ниже — готовый текст для озвучки карточки товара.',
+    // Source of truth at runtime is catalog.generated.ts (GENERATED_CATALOG, 69 models);
+    // the hand-written CATALOG array is only a fallback. Slug must exist in the generated one.
+    recommendedModelSlug: 'elevenlabs-tts-hf',
+    prompt:
+      'Карточка беспроводных наушников Sound Pro X5. Время работы 40 часов, активное шумоподавление, кодеки LDAC и AAC, цена 9990 ₽.',
+    tags: ['аудио', 'маркетинг', 'ecommerce'],
+  },
 ];
 
 export function getAllScenarios(): Scenario[] {

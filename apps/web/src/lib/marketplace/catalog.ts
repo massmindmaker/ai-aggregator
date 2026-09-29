@@ -102,7 +102,11 @@ import { stripProviderBrand } from './strip-provider-brand';
  * regeneration forgets to, or a supersededByName field carries one through.
  */
 export function isSoldV1Model(model: CatalogModel): boolean {
-  if (model.type === 'speech-to-text' || model.type === 'image' || model.type === 'video' || model.type === 'audio' || model.type === 'text-to-speech') return false;
+  // Authority for sold v1 scope is migration 0093_depublish_stt_v1 (depublished_reason
+  // 'v1_scope_stt_deferred'). That guard matches exactly: operation='stt', slug whisper-large-v3,
+  // or latin tags 'stt'/'transcription'. Mirror it and nothing more — Russian tag 'аудио' is
+  // also used by the sold TTS model, and image/video/TTS stay sold (durable async media accepted).
+  if (model.type === 'speech-to-text') return false;
   const tags = new Set(model.tags.map((tag) => tag.toLowerCase()));
   return !tags.has('stt') && !tags.has('transcription');
 }

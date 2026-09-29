@@ -1,0 +1,386 @@
+{
+ "openrouter_payouts": [],
+ "replicate_payouts": [
+  {
+   "t": "Replicate's $350M Business Model: The GitHub of AI Models Becomes Production Infrastructure",
+   "u": "https://fourweekmba.com/replicates-350m-business-model-the-github-of-ai-models-becomes-production-infrastructure/",
+   "d": "Replicate’s $350M Business Model: The GitHub of AI Models Becomes Production Infrastructure BUSINESS MODEL Table of Contents Replicate’s $350M Business Model: The GitHub of AI Models Becomes Productio"
+  },
+  {
+   "t": "Replicate",
+   "u": "https://jimmyresearch.com/entities/replicate/en",
+   "d": "Company Replicate Turn any open-source model (image, video, voice, LLM) into an HTTP API with one click; the dev-first inference platform billed by GPU-second.  1. Core Product / Service Replicate is "
+  },
+  {
+   "t": "Replicate Review 2026",
+   "u": "https://solo-tools.com/en/ai-tools/replicate",
+   "d": "Deployed models can be public or private; public models earn 80% revenue share when other users call them—a monetization path for model creators."
+  },
+  {
+   "t": "Replicate · AI Entrepreneurship Wiki",
+   "u": "https://ai-entrepreneurship.wiki/entries/replicate",
+   "d": "In 2023 Replicate raised a $40 million round led by a16z and joined by NVentures, Heavybit, Sequoia, and Y Combinator 6. The company also reported 2 million signups and 30,000 paying customers, which "
+  },
+  {
+   "t": "Replicate Just Got Acquired by Cloudflare — Should You Still Use It Over WaveSpeedAI?",
+   "u": "https://wavespeed.ai/blog/posts/replicate-review-2026/",
+   "d": "What Is Replicate? Replicate is a cloud platform for running ML models via API. It functions as both an inference platform and a community model marketplace, with 50,000+ public models and ~100 curate"
+  }
+ ],
+ "together_custom": [],
+ "huggingface_inference": [
+  {
+   "t": "Welcome to Inference Providers on the Hub 🔥",
+   "u": "https://huggingface.co/blog/inference-providers",
+   "d": "Burkay Gur burkaygur Follow Zeke Sikelianos zeke Follow Anton McGonnell aton2006 Follow Hassan El Mghari hassanelmghari Follow Simon Brandeis sbrandeis Follow Bertrand Chevrier kramp Follow Julien Cha"
+  },
+  {
+   "t": "Hugging Face offers serverless inferences by third parties, at no extra cost | heise online",
+   "u": "https://www.heise.de/en/news/Hugging-Face-offers-serverless-inferences-by-third-parties-at-no-extra-cost-10261060.html",
+   "d": "Developers can generate tokens for the respective providers via the web interface. Requests via the interface then run via the Hugging Face infrastructure. The company charges the price it pays itself"
+  },
+  {
+   "t": "How to be registered as an inference provider on the Hub? · Hugging Face",
+   "u": "https://huggingface.co/docs/inference-providers/main/register-as-a-provider",
+   "d": "## 4. Billing For routed requests (see figure below), i.e. when users authenticate via HF, our intent is that our users only pay the standard provider API rates. There's no additional markup from us, "
+  },
+  {
+   "t": "Pricing and Billing · Hugging Face",
+   "u": "https://huggingface.co/docs/inference-providers/main/en/pricing",
+   "d": "Access 200+ models from leading AI inference providers with centralized, transparent, pay-as-you-go pricing. No infrastructure management required—just pay for what you use, with no markup from Huggin"
+  },
+  {
+   "t": "Public AI on Hugging Face Inference Providers 🔥",
+   "u": "https://huggingface.co/blog/inference-providers-publicai",
+   "d": "# Public AI on Hugging Face Inference Providers 🔥 Published September 17, 2025 Joseph Low Jolow thelastjosh ... At the time of writing, usage of the Public AI Inference Utility through Hugging Face In"
+  }
+ ],
+ "baseten_modal": [
+  {
+   "t": "Inference at Scale with Dedicated Deployments | Baseten",
+   "u": "https://www.baseten.co/products/dedicated-deployments",
+   "d": "* Product Product\n* Platform Platform\n* Solutions Solutions\n* Developer Developer\n* Resources Resources\n* Pricing Pricing\n  Log in Get started\n  Product\n  Platform\n  Solutions\n  Developer\n  Resources\n"
+  },
+  {
+   "t": "40% price reduction across all instance types",
+   "u": "https://www.baseten.co/resources/changelog/40-price-reduction-across-all-instance-types",
+   "d": "Jul 1, 2023\nGo back\nBase per-minute CPU and GPU pricing is now 40% lower across all instance types, with volume discounts available on our Pro plan. We started getting a better deal from compute provi"
+  },
+  {
+   "t": "Cloud Pricing",
+   "u": "https://baseten.com/pricing",
+   "d": "Deploy custom, fine-tuned, and open-source models\nIncluded in Basic:\nDedicated deployments\nModel APIs\nFast cold starts\nSOC 2 Type II and HIPAA compliant\nEmail and in-app chat support\nDeployment option"
+  },
+  {
+   "t": "Cloud Pricing",
+   "u": "https://www.baseten.co/pricing",
+   "d": "Cloud Pricing\nDedicated Deployments. Only pay for the compute you use, down to the minute. Volume discounts available. Price per. Minute. Hour. GPU Instances. Price. T4. 16"
+  },
+  {
+   "t": "Baseten Pricing 2026: Per-Minute GPU Rates, Token Costs & the ...",
+   "u": "https://www.morphllm.com/baseten-pricing",
+   "d": "Baseten Pricing 2026: Per-Minute GPU Rates, Token Costs & the ...\nDedicated Deployment GPU Rates (July 2026) Every dedicated instance is billed per minute of active compute. Baseten states you pay onl"
+  }
+ ],
+ "deepinfra_groq": [],
+ "anycache_prices": [
+  {
+   "t": "Prompt Caching - Optimize AI Model Costs with Smart Caching",
+   "u": "https://openrouter.ai/docs/features/prompt-caching",
+   "d": "Inspecting cache usage To see how much caching saved on each generation, you can: Click the detail button on the Activity page Use the /api/v1/generation API, documented here Check the prompt_tokens_d"
+  },
+  {
+   "t": "OpenRouter Prompt Caching: Why Your Cache Isn't Hitting",
+   "u": "https://aireiter.com/blog/openrouter-prompt-caching-guide",
+   "d": "One hard limit first: a prompt below the provider’s minimum token floor will never cache, no matter what you configure. What counts as a cache hit on OpenRouter Prompt caching reuses a stable prompt p"
+  },
+  {
+   "t": "OpenRouter Prompt Caching: What Cached Tokens Cost",
+   "u": "https://openrouter.ai/blog/tutorials/prompt-caching-sticky-routing",
+   "d": "Prompt caching fixes that. The provider reads the repeated part of your prompt from cache instead of charging you full price for it every time. Sticky routing keeps that working across turns by sendin"
+  },
+  {
+   "t": "OpenRouter Pricing Explained: Per-Token Costs",
+   "u": "https://ask-coreai.com/blog/openrouter-pricing-explained-per-token-costs",
+   "d": "OpenRouter passes through provider list prices with no token markup — its revenue is a 5.5% fee (minimum $0.80) on credit purchases. Cached input tokens are dramatically cheaper: Claude Sonnet 5 charg"
+  },
+  {
+   "t": "AI Agents Are Burning 5x the Tokens Humans Do. The Real Bill Is Up 18%.",
+   "u": "https://getmegabrain.com/blog/ai-agent-token-cache-economics-2026",
+   "d": "Almost none of them mentioned the second number on the same chart: more than 85% of that agentic token burn is landing on cached prompts, not fresh ones. Cached tokens cost 90% less than fresh ones on"
+  }
+ ],
+ "lmarena_methodology": [
+  {
+   "t": "Does style matter? Disentangling style and substance in ...",
+   "u": "https://www.lmsys.org/blog/2024-08-28-style-control/",
+   "d": "We have answers for you. We controlled for the effect of length and markdown, and indeed, the ranking changed. This is just a first step towards our larger goal of disentangling substance and style in"
+  },
+  {
+   "t": "LMSYS Chatbot Arena Kaggle Competition",
+   "u": "https://arena.ai/blog/lmsys-chatbot-arena-kaggle-competition/",
+   "d": "LMSYS and Kaggle are launching a human preference prediction competition! You are challenged to predict which responses users will prefer in head-to-head battles between Large Language Models (LLMs). "
+  },
+  {
+   "t": "LMArena Research: Does Sentiment Matter in AI?",
+   "u": "https://arena.ai/blog/sentiment-control/",
+   "d": "You may have noticed that recent models on Chatbot Arena appear more emotionally expressive than their predecessors. But does this added sentiment actually improve their rankings on the leaderboard? O"
+  },
+  {
+   "t": "Improving Your Model Ranking on Chatbot Arena by Vote ...",
+   "u": "https://arxiv.org/html/2501.17858v1",
+   "d": "Chatbot Arena is widely popular, but it relies on millions of user votes collected in the wild, which can be noisy and biased. Several strategies have been implemented to enhance the leaderboard’s rel"
+  },
+  {
+   "t": "Chatbot Arena Conversation Dataset Release",
+   "u": "https://arena.ai/blog/chatbot-arena-conversation-dataset-release/",
+   "d": "Since its launch three months ago, Chat ... Arena has become ... evaluation platform that emphasizes large ... -based, and interactive human evaluation ... , we collected ... 3K votes from 19K unique "
+  }
+ ],
+ "livebench_contamination": [
+  {
+   "t": "LiveBench — benchgraph",
+   "u": "https://benchgraph.dev/b/livebench",
+   "d": "LiveBench A monthly-refreshed suite across math, coding, reasoning, data analysis, language and instruction following, graded by automatic ground truth rather than an LLM judge, to limit contamination"
+  },
+  {
+   "t": "LiveBench: The Monthly-Refreshed LLM Benchmark",
+   "u": "https://capitalandcompute.net/ai-benchmarks/livebench",
+   "d": "2026-07-27 LiveBench is a composite benchmark that scores six capability categories at once and refreshes its questions every month. It has no LLM judge and no human voting: every question has a verif"
+  },
+  {
+   "t": "A challenging, contamination-free LLM benchmark.",
+   "u": "http://livebench.ai/",
+   "d": "Contamination-free LLM benchmark A challenging, contamination-free LLM benchmark. 23 objective tasks across 7 categories, refreshed every six months. Pick a release, compare scores down to the subtask"
+  },
+  {
+   "t": "LiveBench — how the benchmark actually works",
+   "u": "https://codepress.dev/benchmarks/livebench",
+   "d": "Reasoning · Coding · Math LiveBench LiveBench — a challenging, contamination-free LLM benchmark Rotating question sets, objective ground truth, and no LLM judge anywhere. Released2024 Built byAbacus.A"
+  },
+  {
+   "t": "LiveBench",
+   "u": "https://app.ashitaorbis.com/understanding-ai/wiki/livebench",
+   "d": "LiveBench Abstract. LiveBench is best understood as a benchmark-lifecycle proposal, not merely another leaderboard: it combines Time-Gated Evaluation, broad task coverage, and objective/verifiable sco"
+  }
+ ],
+ "swebench": [
+  {
+   "t": "SWE-bench Verified",
+   "u": "https://www.swebench.com/verified",
+   "d": "SWE-bench Verified is a human-filtered subset of 500 instances from SWE-bench, created in collaboration with OpenAI. Human annotators reviewed each instance to ensure the problem descriptions are clea"
+  },
+  {
+   "t": "SWE-bench Verified",
+   "u": "https://www.swebench.com/verified.html",
+   "d": "A human-validated subset of 500 SWE-bench instances for reliable evaluation of coding agents and language models. ... SWE-bench Verified is a human-filtered subset of 500 instances from SWE-bench, cre"
+  },
+  {
+   "t": "Why SWE-bench Verified no longer measures frontier coding capabilities | OpenAI",
+   "u": "https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/",
+   "d": "Since we first published SWE-bench Verified in August 2024, the industry has widely used it to measure the progress of models on autonomous software engineering tasks. After its release, SWE-bench Ver"
+  },
+  {
+   "t": "SWE-bench Verified",
+   "u": "https://epoch.ai/benchmarks/swe-bench-verified",
+   "d": "SWE-bench Verified is a human-validated subset of the original SWE-bench dataset, consisting of 500 samples that evaluate AI models’ ability to solve real-world software engineering issues. Epoch eval"
+  },
+  {
+   "t": "SWE-bench Leaderboards",
+   "u": "https://www.swebench.com/",
+   "d": "SWE-bench Leaderboards Each entry reports % Resolved, the percentage of task instances solved. - Open-weights model - Run performed or directly checked by the SWE-bench team ... The default Verified v"
+  }
+ ],
+ "llm_judge_bias": [
+  {
+   "t": "[2604.22891] Quantifying and Mitigating Self-Preference Bias of LLM Judges",
+   "u": "https://arxiv.org/abs/2604.22891",
+   "d": "Skip to main content\narchive\nSearch Submit Donate Log in\nComputer Science > Machine Learning\narXiv:2604.22891 (cs)\n[Submitted on 24 Apr 2026 ( v1 ), last revised 2 Jun 2026 (this version, v4)]\nTitle: "
+  },
+  {
+   "t": "Quantifying and Mitigating Self-Preference Bias of LLM Judges",
+   "u": "https://arxiv.org/html/2604.22891v1",
+   "d": "2.2 Self-preference bias\nThe purpose of this mechanism is to avoid misinterpreting a model’s preference for a specific position (i.e., position bias) as a genuine preference for the content of a respo"
+  },
+  {
+   "t": "Judging the Judges: A Systematic Evaluation of Bias Mitigation Strategies in LLM-as-a-Judge Pipelines",
+   "u": "https://arxiv.org/html/2604.23178v1",
+   "d": "Our key findings: (1) Style bias is the dominant bias (0.76–0.92 across all models), far exceeding position bias ( $\\leq 0.04$ ), yet has received minimal research attention.\nPrior work has documented"
+  },
+  {
+   "t": "[PDF] A Systematic Study of Position Bias in LLM-as-a-Judge",
+   "u": "https://aclanthology.org/2025.ijcnlp-long.18.pdf",
+   "d": "their position within the prompt—compromise\nits reliability. This exploratory study evaluates\nposition bias in LLM judges across pairwise\nand list-wise comparison settings, introducing\nthree metrics: "
+  },
+  {
+   "t": "Beyond the Surface: Measuring Self-Preference in LLM Judgments",
+   "u": "https://aclanthology.org/anthology-files/pdf/emnlp/2025.emnlp-main.86.pdf",
+   "d": "self-preference bias with response quality, as\nhigher-quality responses from the judge model\nmay also lead to positive score differences,\neven in the absence of bias. To address this\nissue, we introdu"
+  }
+ ],
+ "helm": [],
+ "agent_marketplaces": [
+  {
+   "t": "aiagentstore.io",
+   "u": "https://platform.tracxn.com/a/d/company/68da3b05c95bd24868cb36e4/aiagentstore.io?utm_source=parallel&utm_medium=ai#a:about",
+   "d": "Name: aiagentstore.io | Website Url: https://www.aiagentstore.io/ | Primary Sector: Enterprise Applications | Primary Subsector: Data as a Service | Stage: Unfunded | Founded Year: 2025 | Location Cou"
+  },
+  {
+   "t": "Stripe launches the Agentic Commerce Suite to help every business thrive in the AI-enabled commerce era",
+   "u": "https://stripe.com/en-cn/newsroom/news/agentic-commerce-suite",
+   "d": "1. Newsroom\n* News\n* Stories\n* About Stripe\nStripe launches the Agentic Commerce Suite to help every business thrive in the AI-enabled commerce era\nDecember 11, 2025\n*\n*\n*\nSAN FRANCISCO AND DUBLIN—Str"
+  },
+  {
+   "t": "Stripe powers Instant Checkout in ChatGPT and releases Agentic Commerce Protocol co-developed with OpenAI",
+   "u": "https://stripe.com/en-lv/newsroom/news/stripe-openai-instant-checkout",
+   "d": "1. Newsroom\n* News\n* Stories\n* About Stripe\nStripe powers Instant Checkout in ChatGPT and releases Agentic Commerce Protocol co-developed with OpenAI\n29 September 2025\n*\n*\n*\n* ChatGPT users in the Uni"
+  },
+  {
+   "t": "Stripe powers Instant Checkout in ChatGPT and releases Agentic Commerce Protocol codeveloped with OpenAI",
+   "u": "https://stripe.com/newsroom/news/stripe-openai-instant-checkout",
+   "d": "1. Newsroom\n* News\n* Stories\n* About Stripe\nStripe powers Instant Checkout in ChatGPT and releases Agentic Commerce Protocol codeveloped with OpenAI\nSeptember 29, 2025\n*\n*\n*\n* ChatGPT users in the Uni"
+  },
+  {
+   "t": "With Stripe, AWS enables AI agent payments for content owners and publishers",
+   "u": "https://stripe.com/en-at/newsroom/news/aws-waf-and-stripe",
+   "d": "1. Newsroom\n* News\n* Stories\n* About Stripe\nWith Stripe, AWS enables AI agent payments for content owners and publishers\n15 June 2026\n*\n*\n*\nSAN FRANCISCO & LONDON—Stripe today announced that it will b"
+  }
+ ],
+ "gpt_store": [],
+ "aws_marketplace_ai": [
+  {
+   "t": "AWS Marketplace Listing Optimization (GEO) & ACE Co-Sell",
+   "u": "https://aws.amazon.com/marketplace/pp/prodview-bm7kpt5hsxjau",
+   "d": "Vellocity: AWS Marketplace Listing Optimization (GEO) & ACE Co-Sell Info Score and rewrite your AWS Marketplace listing for human buyers and the AI agents building shortlists (generative engine optimi"
+  },
+  {
+   "t": "Listing SaaS API-based AI agent products",
+   "u": "https://docs.aws.amazon.com/marketplace/latest/userguide/listing-saas-ai-agents.html",
+   "d": "Listing SaaS API-based AI agent products - AWS Marketplace Listing SaaS API-based AI agent products As an AWS Marketplace seller, you can add your software as a service (SaaS) API-based AI agent or to"
+  },
+  {
+   "t": "How to list your MCP server on AWS Marketplace",
+   "u": "https://tallyfy.com/how-to-list-mcp-server-aws-marketplace-agentcore",
+   "d": "Listing your MCP server on AWS isn’t really a submission. It’s closer to becoming a vendor. You register as an AWS Marketplace seller, you publish your server in the new AI Agents and Tools category, "
+  },
+  {
+   "t": "AI agent products",
+   "u": "https://docs.aws.amazon.com/marketplace/latest/buyerguide/buyer-ai-agents-products.html",
+   "d": "AI agent products  AI agents and tools in AWS Marketplace help you quickly deploy pre-built, production-ready AI capabilities from trusted partners without months of development work. You can discover"
+  },
+  {
+   "t": "Vellocity — AI GTM Platform for AWS Marketplace Sellers",
+   "u": "https://vell.ai",
+   "d": "AWS Marketplace · Agent-ready Listing Score Buyers decide in your listing. See what they see skip shortlist trust Paste your public listing URL. In ~15 seconds, get a 0–100 score across the seven buye"
+  }
+ ],
+ "54fz_api": [
+  {
+   "t": "Услуги разработки ПО и консультирования - ИП на УСН, принимаем оплату через платежные системы: Яндекс Касса, Робокасса, РБКмани и другие. Изучаем правила применения ККТ по 54 ФЗ.  | Правио (Prav.io)",
+   "u": "https://prav.io/browse/questions/uslugi-razrabotki-po-i-konsultirovaniya-ip-na-usn-prinimaem-oplatu-cherez-platezhnye-sistemy-yandeks-kassa-robokassa-rbkmani-i-drugie-izuchaem-pravila-primeneniya-kkt-po-54-fz",
+   "d": "льтирования - ИП на УСН, принимаем ... Как индивидуальному предпринимателю, занимающемуся разработкой программного обеспечения и консультированием в этой области, продающему услуги через интернет и пр"
+  },
+  {
+   "t": "Отправка чеков сторонней онлайн-кассе: справочник значений параметров для 54-ФЗ — Прием платежей по API ЮKassa",
+   "u": "https://yookassa.ru/developers/payment-acceptance/receipts/54fz/other-services/parameters-values",
+   "d": "Отправка чеков сторонней онлайн-кассе: справочник значений параметров для 54-ФЗ — Прием платежей по API ЮKassa # Отправка чеков сторонней онлайн-кассе: справочник значений параметров Ниже приведены зн"
+  },
+  {
+   "t": "Решения ЮKassa для работы по 54-ФЗ",
+   "u": "https://yookassa.ru/developers/payment-acceptance/receipts/54fz/basics",
+   "d": "Решения ЮKassa для работы по 54-ФЗ — Прием платежей по API ЮKassa ... Только для компаний и ИП При получении платежа за товар или услугу нужно отправлять электронный фискальный чек в налоговую. За каж"
+  },
+  {
+   "t": "Оплата по 54-ФЗ — [Архив] Протокол приема платежей через ЮKassa",
+   "u": "https://yookassa.ru/docs/payment-solution/payments/supplementary/guides/54fz",
+   "d": "Это старая версия API. Переходите на API ЮKassa. По закону 54-ФЗ интернет-магазины обязаны передавать в налоговую фискальные данные (с названиями и ценами товаров, ставкой НДС и другой необходимой инф"
+  },
+  {
+   "t": "Фискализация 54‑ФЗ — чеки и реквизиты в API",
+   "u": "https://api-platezhi.ru/fiskalizatsiya-54-fz/",
+   "d": "Бесшовная фискализация онлайн‑платежей — ключ к соответствию 54‑ФЗ и корректной отчётности перед ФНС. Платёжная платформа api‑platezhi.ru закрывает весь цикл: от приёма оплаты до пробития чека на онла"
+  }
+ ],
+ "152fz_agents": [],
+ "ord_erir": [
+  {
+   "t": "Что такое маркировка рекламы и как маркетологу выполнять новые требования",
+   "u": "https://practicum.yandex.ru/blog/markirovka-reklamy-v-internete/",
+   "d": "Маркетинг • 11 января 2025 • 5 мин чтения Что такое маркировка рекламы и как маркетологу выполнять новые требования Рассказываем, как выполнять требования к маркировке креативов, чтобы не получать штр"
+  },
+  {
+   "t": "Сюрпризы маркировки рекламы в 2025: к чему готовиться?",
+   "u": "https://soldimarketing.ru/zametki/syurprizy-markirovki-reklamy/",
+   "d": "Сюрпризы маркировки рекламы в 2025: к чему готовиться? Что такое маркировка рекламы? **10+**стаж работы в интернет маркетинге 103написано тематических статей социальные сети: Содержание В интернете ре"
+  },
+  {
+   "t": "Закон о маркировке рекламы 2025: как бизнесу избежать штрафов после 1 сентября. Пошаговая инструкция",
+   "u": "https://au-agency.ru/blog/zakon-o-markirovke-reklamy-2025-kak-biznesu-izbezhat-shtrafov-posle-1-sentyabrya-poshagovaya-instrukciya/",
+   "d": "Блог 2 сентября 2025 Закон о маркировке рекламы 2025: как бизнесу избежать штрафов после 1 сентября.\n\nТри главных «нельзя»: что меняет закон о рекламе с осени 2025?  Анатомия маркировки: разбираем цеп"
+  },
+  {
+   "t": "Как маркировать рекламу в 2025 году",
+   "u": "https://netology.ru/blog/01-2024-ad-labeling",
+   "d": "Редакция Медиа Нетологии Поправки в закон «О рекламе», которые обязуют маркировать рекламу в интернете, внесли в 2022 году. С сентября 2023 за нарушение закона можно получить штраф от Роскомнадзора до"
+  },
+  {
+   "t": "Ответственность и штрафы за отсутствие маркировки рекламы в интернете",
+   "u": "https://ord-lab.ru/blog/otvetstvennost_za_shtrafi",
+   "d": "интернете Статья представляет собой исчерпывающий обзор административной ответственности и штрафных санкций за нарушение правил маркировки интернет-рекламы в России. В тексте детально описаны виды пра"
+  }
+ ],
+ "ndfl_selfemployed": [
+  {
+   "t": "Договор авторского заказа с самозанятым",
+   "u": "https://www.consultant.ru/law/podborki/dogovor_avtorskogo_zakaza_s_samozanyatym/",
+   "d": "Статья: Пособия и выплаты по договору ГПХ - 2023(Рябинин В.В.)(\"Актуальные вопросы бухгалтерского учета и налогообложения\", 2023, N 4)Соответственно, начиная с 2023 года никаких различий в порядке обл"
+  },
+  {
+   "t": "Что надо знать учреждению при заключении договора с самозанятым физлицом? | Новости: ГАРАНТ.РУ",
+   "u": "https://www.garant.ru/news/1409378/",
+   "d": "Налог на профессиональный доход относится кспециальным налоговым режимами введен в порядкеэкспериментаотдельным Федеральным законом от 27 ноября 2018 г. № 422-ФЗ \"О проведении эксперимента по установл"
+  },
+  {
+   "t": "Письмо Минфина РФ от 18.07.2024 N 03-04-05/67198 — Редакция от 18.07.2024 — Контур.Норматив",
+   "u": "https://normativ.kontur.ru/document?documentId=478612&moduleId=8",
+   "d": "Учитывая изложенное, в отношении доходов, полученных от предоставления права использования произведения по лицензионному договору, физическое лицо - автор данного произведения вправе применять специал"
+  },
+  {
+   "t": "Договор авторского заказа с самозанятым автором",
+   "u": "https://amulex.ru/docs/contracts/s-samozanyatym/2579.html",
+   "d": "1.1. Автор, применяющий специальный налоговый режим «Налог на профессиональный доход» в соответствии с Федеральным законом № 422-ФЗ, обязуется своим личным творческим трудом создать по заданию Заказчи"
+  },
+  {
+   "t": "Договор авторского заказа с самозанятым",
+   "u": "https://www.freshdoc.ru/dogovor/dogovory_intellektualnoy_sobstvennosti/dogovory_avtorskogo_zakaza/na_kontent_s_samozanyatym/",
+   "d": "В настоящее время специальный налоговый режим \"Налог на профессиональный доход\" введен во всех субъектах РФ (ст. 1 Федерального закона от 27.11.2018 № 422-ФЗ (далее - Закон № 422-ФЗ). ... Согласно Пис"
+  }
+ ],
+ "ton_payment_rf": [
+  {
+   "t": "В Банке России напомнили о запрете на платежи в криптовалюте внутри страны - РИА Новости, 22.08.2026",
+   "u": "https://ria.ru/20260822/platezhi-2112425273.html",
+   "d": "* Платежи в криптовалюте внутри России с 1 сентября остаются под запретом и будут считаться незаконными валютными операциями.\n* Президент России Владимир Путин подписал закон, создающий правовую основ"
+  },
+  {
+   "t": "Криптовалюты в России: лимит 300 тысяч и запрет на платежи",
+   "u": "https://wek.ru/kriptovalyuty-v-rossii-limit-300-tysyach-i-zapret-na-platezhi",
+   "d": "Экономика\nКриптовалюты в России: лимит 300 тысяч и запрет на платежи\nСлужба информации \"Века\" 21.07.2026 в 17:00 310\nГосдума установила лимит на покупку криптовалют для неквалифицированных инвесторов "
+  },
+  {
+   "t": "Совфед утвердил правила для криптообменников и покупки криптовалюты | IF | 24.07.2026",
+   "u": "https://investfuture.ru/articles/sovfed-utverdil-pravila-dlya-kriptoobmennikov-i-pokupki-kriptovalyuty-37381522",
+   "d": "12:10 24.07.2026\nИсточник: ТАСС\nСовфед утвердил правила для криптообменников и покупки криптовалюты\nПравила для криптообменников\nСовфед одобрил закон, который комплексно регулирует обращение цифровых "
+  },
+  {
+   "t": "282-ФЗ и 283-ФЗ о криптовалюте: 12 ловушек для бизнеса, инвесторов и майнеров",
+   "u": "https://www.klerk.ru/user/1963286/703298",
+   "d": "Что изменится в пяти тезисах\nДля тех, у кого есть только 30 секунд:\n1. Принимать криптовалюту в оплату товаров, работ и услуг внутри России по-прежнему нельзя. Исключения — внешнеторговые договоры, ма"
+  },
+  {
+   "t": "Госдума смягчит запрет на криптоплатежи в России",
+   "u": "https://www.tks.ru/politics/2026/07/08/0008/gosduma-smyagchit-zapret-na-kriptoplatezhi-v-rossii",
+   "d": "* Растаможка авто\n* Расчет платежей\n* Таможенный форум\n* Группа в Telegram\n1. Главная страница\n2. Экономика и общество\nГосдума смягчит запрет на криптоплатежи в России\n08 июля 2026 Версия для печати\nК"
+  }
+ ]
+}
