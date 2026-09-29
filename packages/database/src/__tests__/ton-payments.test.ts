@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { createQuote } from "@aiag/shared/ton-payment-contract";
-import { createTonInvoice, settleTonInvoice, type TonPaymentDatabase, type TonSqlClient } from "../index";
+import { settleTonInvoice } from '../ton-reconciliation-internal';
+import { createTonInvoice, type TonPaymentDatabase, type TonSqlClient } from "../index";
 
 const asset = { network: "tvm:-3", kind: "native", decimals: 9 } as const;
 const actor = "00000000-0000-4000-8000-000000000001";

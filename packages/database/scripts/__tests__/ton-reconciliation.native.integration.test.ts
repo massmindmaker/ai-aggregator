@@ -7,13 +7,13 @@ import type { Asset } from "@aiag/shared/ton-payment-contract";
 import {
   createTonInvoice,
   expireTonInvoice,
-  settleTonInvoice,
   type CreateTonInvoiceInput,
   type TonInvoice,
   type TonPaymentDatabase,
   type VerifiedChainCredit,
 } from "../../src";
 import {
+  settleTonInvoice,
   advanceTonReconciliationCursor,
   bindTonReconciliationRecipient,
   claimTonReconciliationLease,

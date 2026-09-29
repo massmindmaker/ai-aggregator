@@ -25,6 +25,7 @@ export type {
 } from "./ton-payment-types";
 
 export {
+  settleTonInvoice,
   advanceTonReconciliationCursor,
   bindTonReconciliationRecipient,
   claimTonReconciliationLease,

@@ -1,3 +1,4 @@
+import { settleTonInvoice } from '../../src/ton-reconciliation-internal';
 import { randomUUID } from "node:crypto";
 import type { Client as PgClient } from "pg";
 import type { Database } from "../../src";
@@ -134,7 +135,7 @@ export async function openTonFixture(options: { initialPayg?: string; initialDeb
   };
   return {
     client, db, ctx: { actorUserId: userId, orgId }, policy, userId, orgId, create, createWithInput: (input) => domain.createTonInvoice(db, { actorUserId: userId, orgId }, input, policy), createInput, verifiedCredit,
-    settle: (invoiceId, credit) => domain.settleTonInvoice(db, invoiceId, credit), expire: (invoiceId) => domain.expireTonInvoice(db, invoiceId), read: (invoiceId) => domain.getTonInvoice(db, { actorUserId: userId, orgId }, invoiceId),
+    settle: (invoiceId, credit) => settleTonInvoice(db, invoiceId, credit), expire: (invoiceId) => domain.expireTonInvoice(db, invoiceId), read: (invoiceId) => domain.getTonInvoice(db, { actorUserId: userId, orgId }, invoiceId),
     async snapshot(invoiceId) {
       const result = await client.query<TonSnapshot>({ text: "SELECT o.payg_credits::text AS payg,o.refund_debt_credits::text AS debt,o.subscription_credits::text AS subscription,i.status,(SELECT count(*)::int FROM gateway_transactions g WHERE g.request_id='ton:invoice:'||i.id::text AND g.type='topup' AND g.source='ton') AS \"receiptCount\",(SELECT count(*)::int FROM ton_chain_events e JOIN ton_invoice_event_decisions d ON d.event_id=e.id WHERE d.invoice_id=i.id) AS \"eventCount\",(SELECT count(*)::int FROM ton_invoice_event_decisions d WHERE d.invoice_id=i.id) AS \"decisionCount\" FROM ton_invoices i JOIN organizations o ON o.id=i.org_id WHERE i.id=$1::uuid", values: [invoiceId] });
       const row = result.rows[0]; if (!row) throw new Error("fixture_snapshot_missing"); return row;

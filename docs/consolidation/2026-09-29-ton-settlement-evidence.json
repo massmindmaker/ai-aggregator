@@ -1,0 +1,194 @@
+{
+  "date": "2026-09-29",
+  "base_commit": "f9bd835",
+  "scope": "Task5 fixture-only settlement/import fence, no runtime activation",
+  "checks": {
+    "resume-native": 0,
+    "resume-ton-core": 0,
+    "task5-final-focused": 0,
+    "task5-final-types": 0,
+    "task5-final-build": 0,
+    "resume-database-types": 0,
+    "resume-db-build": 0,
+    "resume-lint": 0
+  },
+  "native": {
+    "observe_scenarios": 6,
+    "settlement_scenarios": 8,
+    "passed": 14
+  },
+  "unchanged_core": {
+    "passed": 58,
+    "failed": 0
+  },
+  "focused_after_review_fix": 144,
+  "source_review": [
+    {
+      "task": "F-financial-source",
+      "requested_model": "stealth/space-bunny-alpha",
+      "input_sha256": "501d0b272dedc90fc79e11b30d811ba15549667e04ccf25db156e4b7e9cce8d8",
+      "input_bytes": 96603,
+      "started_at": 1790673133.0106483,
+      "http_status": 200,
+      "request_id": "gen-1790673134-BUdaij63JEyldN2JIomV",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "usage": {
+        "prompt_tokens": 25771,
+        "completion_tokens": 1218,
+        "total_tokens": 26989,
+        "cost": 0,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 138,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0,
+          "upstream_inference_prompt_cost": 0,
+          "upstream_inference_completions_cost": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "status": "completed",
+      "elapsed_seconds": 27.673,
+      "verdict": "APPROVE"
+    },
+    {
+      "task": "G-types-recovery-source",
+      "requested_model": "stealth/space-bunny-alpha",
+      "input_sha256": "14154f3193dc58027a5787867720dc27087b7e9e68718e5bd1118fff6b3f9fbb",
+      "input_bytes": 96596,
+      "started_at": 1790673133.0126796,
+      "http_status": 200,
+      "request_id": "gen-1790673134-BtuxagaE2E38OCtM2Jf6",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "usage": {
+        "prompt_tokens": 25767,
+        "completion_tokens": 2045,
+        "total_tokens": 27812,
+        "cost": 0,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 128,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0,
+          "upstream_inference_prompt_cost": 0,
+          "upstream_inference_completions_cost": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "status": "completed",
+      "elapsed_seconds": 57.493,
+      "verdict": "CHANGES_REQUIRED"
+    },
+    {
+      "task": "H-financial-delta",
+      "requested_model": "stealth/space-bunny-alpha",
+      "input_sha256": "4eb241512c511e43193dab1c4a7a1a3141a9c22f339748f6017ce8674598ecef",
+      "input_bytes": 107322,
+      "started_at": 1790673344.8572788,
+      "http_status": 200,
+      "request_id": "gen-1790673345-wPgJpWIqoR7GLMiHLXG4",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "usage": {
+        "prompt_tokens": 28486,
+        "completion_tokens": 432,
+        "total_tokens": 28918,
+        "cost": 0,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 138,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0,
+          "upstream_inference_prompt_cost": 0,
+          "upstream_inference_completions_cost": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "status": "completed",
+      "elapsed_seconds": 9.089,
+      "verdict": "APPROVE"
+    },
+    {
+      "task": "I-types-recheck",
+      "requested_model": "stealth/space-bunny-alpha",
+      "input_sha256": "50179aa92f4250f1b9c943c59025e9841ff161a2757424512ea28723d65c1b36",
+      "input_bytes": 107315,
+      "started_at": 1790673344.8589027,
+      "http_status": 200,
+      "request_id": "gen-1790673345-WXSNW9tfDe4R6YhctuRT",
+      "returned_model": "stealth/space-bunny-alpha",
+      "provider": "Stealth",
+      "usage": {
+        "prompt_tokens": 28482,
+        "completion_tokens": 519,
+        "total_tokens": 29001,
+        "cost": 0,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 138,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0,
+          "upstream_inference_prompt_cost": 0,
+          "upstream_inference_completions_cost": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "status": "completed",
+      "elapsed_seconds": 12.375,
+      "verdict": "APPROVE"
+    }
+  ],
+  "frozen_source": {
+    "apps/worker/src/ton-payment-reconciler.ts": "882e121fd88e4cf282b3176415277f13ac6efaea9a0ae211f7c97866fd0d4d8a",
+    "apps/worker/src/ton-settlement-result.ts": "0d01b48fb3fc507ae5314d539e5d371fb71911b2ca853e97ee1a810ba576f41f",
+    "apps/worker/src/__tests__/ton-payment-import-boundary.test.ts": "c5c2eddfbc9f1d2e9316ca48f2177128dad887c1e7f81aac0a3a07d4968e87d6",
+    "apps/worker/src/__tests__/ton-payment-settlement-flow.test.ts": "81c11d4950c78108b441fd3dd21f968aba9792c0fbb44ea9b9157c2ab901ba32",
+    "apps/worker/src/__tests__/ton-payment-settlement.native.integration.test.ts": "e3c175e5341e449c463b8d7efd385ea7bf1a79f8df0ae9def7430fddc3b9ad0d",
+    "apps/worker/src/__tests__/ton-settlement-result.test.ts": "bf5ffa9e5acaaa2a648e7988732ee15e3b2f65131b0b52a0c0758a3127410f99",
+    "apps/worker/src/__tests__/ton-settlement.fixture.ts": "57696e31530e73dfd69fea72d4764be91094ebe245dc8d262a39c03690df1a3a",
+    "apps/worker/src/__tests__/ton-settlement.native.fixture.ts": "e59b8a4d4dcda196c2767485ca380bcc7a35064796653b2f34cdf87a6004ddaa",
+    "apps/worker/tsconfig.ton-recovery-test.json": "77cd7ef302cf9402931ad8284f35113a3f0d40a93c3fcfd554dba23929328d1e",
+    "packages/database/src/index.ts": "560e224b9277dca8ee94c9908f62ad0f532b418e7d29d0d971364e9fd2bfbe9b",
+    "packages/database/src/ton-reconciliation-internal.ts": "5e7fea6a0e7319d5ecb532db0c1e71b5defde28ce535d1a530ba90250e7e70ac",
+    "packages/database/src/__tests__/ton-payments.test.ts": "19be9992d3c21af66d61a39d10298ea2911d87c8c2cece5af451dd77ec237941",
+    "packages/database/scripts/__tests__/ton-payments.native.fixture.ts": "4c4729be9a02f5ad8dbc8e5d49eab0931db402986fac7782f6b88d1e85d8962d",
+    "packages/database/scripts/__tests__/ton-payments.native.integration.test.ts": "b4143bf4ae0d85232f932aaccce59898b13d0ac6d7faeaf49d34e2c3eee2df72",
+    "packages/database/scripts/__tests__/ton-reconciliation.native.integration.test.ts": "7fb82a27f94ac29c83d55a83f337dfeb4cb1eae5c02b7788d31afb2581ae8e2d"
+  },
+  "full_suite": "Will run once on final Task5+Task6 code; not claimed here",
+  "runtime_settlement_enabled": false
+}

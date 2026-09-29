@@ -1,3 +1,4 @@
+import { settleTonInvoice } from '../../src/ton-reconciliation-internal';
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -77,7 +78,7 @@ describe.skipIf(!RUN)("TON invoice native core", () => {
     let entered!: () => void;
     const held = new Promise<void>((resolve) => { entered = resolve; });
     const gate = new Promise<void>((resolve) => { release = resolve; });
-    const settlement = domain.settleTonInvoice({ transaction: (run) => ton.db.transaction(async (tx) => {
+    const settlement = settleTonInvoice({ transaction: (run) => ton.db.transaction(async (tx) => {
       const result = await run(tx);
       entered();
       await gate;
@@ -124,13 +125,13 @@ describe.skipIf(!RUN)("TON invoice native core", () => {
     await f.client.query({ text: `CREATE TRIGGER aiag_fixture_rub_gate BEFORE UPDATE ON ${table} FOR EACH ROW EXECUTE FUNCTION aiag_fixture_rub_gate()`, values: [] });
     await f.client.query({ text: "SELECT pg_advisory_lock($1,$2)", values: [718200, 1] });
     let rubWork: Promise<unknown> | undefined;
-    let settlement: ReturnType<typeof domain.settleTonInvoice> | undefined;
+    let settlement: ReturnType<typeof settleTonInvoice> | undefined;
     try {
       rubWork = phase === "claim"
         ? refunds.claimTopupRefund(payment.paymentId, 100, context, rub.refundDb)
         : refunds.finalizeTopupRefundProof(existing!.kind === "claimed" ? existing!.claim.claimId : "", { paymentId: payment.providerPaymentId, orderId: payment.providerOrderId, externalRequestId: existing!.kind === "claimed" ? existing!.claim.providerKey : "", status: "REFUNDED", originalAmountKopecks: 100, newAmountKopecks: 0 }, rub.refundDb);
       await expectBlocked(f.client, rubPid, gatePid);
-      settlement = domain.settleTonInvoice(ton.db, invoice.invoiceId, f.verifiedCredit(invoice));
+      settlement = settleTonInvoice(ton.db, invoice.invoiceId, f.verifiedCredit(invoice));
       await expectBlocked(f.client, tonPid, rubPid);
     } finally {
       await f.client.query({ text: "SELECT pg_advisory_unlock($1,$2)", values: [718200, 1] });
@@ -266,7 +267,7 @@ describe.skipIf(!RUN)("TON invoice native core", () => {
     const clients = await Promise.all(Array.from({ length: 20 }, () => f.openSecondary()));
     let results;
     try {
-      results = await Promise.all(clients.map(({ db }) => domain.settleTonInvoice(db, invoice.invoiceId, credit)));
+      results = await Promise.all(clients.map(({ db }) => settleTonInvoice(db, invoice.invoiceId, credit)));
     } finally {
       await Promise.all(clients.map(({ close }) => close()));
     }
@@ -453,12 +454,12 @@ describe.skipIf(!RUN)("TON invoice native core", () => {
         throw new Error("TON_FIXTURE_ACK_LOST");
       },
     };
-    await expect(domain.settleTonInvoice(ackLossDb, invoice.invoiceId, f.verifiedCredit(invoice))).rejects.toThrow("TON_FIXTURE_ACK_LOST");
+    await expect(settleTonInvoice(ackLossDb, invoice.invoiceId, f.verifiedCredit(invoice))).rejects.toThrow("TON_FIXTURE_ACK_LOST");
     await f.setOrgState("0");
     if (!committed || typeof committed !== "object" || !("receipt" in committed)) throw new Error("fixture_ack_commit_missing");
     const retryClient = await f.openSecondary();
     try {
-      const retry = await domain.settleTonInvoice(retryClient.db, invoice.invoiceId, f.verifiedCredit(invoice));
+      const retry = await settleTonInvoice(retryClient.db, invoice.invoiceId, f.verifiedCredit(invoice));
       expect(retry).toEqual({ kind: "already_settled", receipt: committed.receipt });
     } finally { await retryClient.close(); }
   });
@@ -547,7 +548,7 @@ describe.skipIf(!RUN)("TON invoice native core", () => {
     try {
       const [, settlement] = await Promise.all([
         f.expire(invoice.invoiceId),
-        domain.settleTonInvoice(secondary.db, invoice.invoiceId, f.verifiedCredit(invoice)),
+        settleTonInvoice(secondary.db, invoice.invoiceId, f.verifiedCredit(invoice)),
       ]);
       expect(settlement).toMatchObject({ kind: "review_required", reason: "late_payment" });
     } finally { await secondary.close(); }

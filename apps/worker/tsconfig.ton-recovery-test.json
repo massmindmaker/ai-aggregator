@@ -5,7 +5,10 @@
     "noEmit": true,
     "declaration": false,
     "declarationMap": false,
-    "types": ["node", "vitest/globals"],
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
     "resolveJsonModule": true
   },
   "include": [
@@ -15,7 +18,14 @@
     "src/__tests__/ton-recovery.fixture.ts",
     "src/__tests__/ton-payment-reconciler*.test.ts",
     "src/__tests__/ton-payment-bootstrap.test.ts",
-    "src/__tests__/ton-payment-recovery-boundary.test.ts"
+    "src/__tests__/ton-payment-recovery-boundary.test.ts",
+    "src/ton-settlement-result.ts",
+    "src/__tests__/ton-settlement*.ts",
+    "src/__tests__/ton-payment-settlement*.ts",
+    "src/__tests__/ton-payment-import-boundary.test.ts"
   ],
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

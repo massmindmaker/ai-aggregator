@@ -1,5 +1,7 @@
+import { parseTonSettlementResult } from "./ton-settlement-result.js";
 import type {
   TonInvoice,
+  TonSettlementResult,
   VerifiedChainCredit,
   TonObservationInput,
   TonObservationResult,
@@ -150,16 +152,47 @@ function stopped(
   return { kind: "stopped", reason, processed, pagesAdvanced };
 }
 
-/** One source, at most four whole eight-item pages. Claim/ACKed advance are the only cursor authority. */
-export async function reconcileTonInvoices(
-  input: {
-    source: TonReconciliationSource;
-    limit: number;
-    signal: AbortSignal;
-  },
+export interface TonFixtureSettlementDeps {
+  mode: "settle";
+  settleVerifiedCredit(
+    invoiceId: string,
+    credit: VerifiedChainCredit,
+  ): Promise<TonSettlementResult>;
+}
+type SourceInput = {
+  source: TonReconciliationSource;
+  limit: number;
+  signal: AbortSignal;
+};
+/** Observation entrypoint never acquires settlement from injected dependency extras. */
+export function reconcileTonInvoices(
+  input: SourceInput,
   deps: TonObserveReconcilerDeps,
   budget = new TonOperationBudget(input.signal),
   onItem?: (id: string, result: TonReconcileItemResult) => void,
+): Promise<TonReconcileSourceResult> {
+  return reconcileSource(input, deps, budget, onItem);
+}
+/** Explicit fixture-only caller. Not accepted by environment configuration or runtime bootstrap. */
+export async function reconcileTonInvoicesWithFixtureSettlement(
+  input: SourceInput,
+  deps: TonObserveReconcilerDeps,
+  settlement: TonFixtureSettlementDeps,
+  budget = new TonOperationBudget(input.signal),
+): Promise<TonReconcileSourceResult> {
+  const hook = object(settlement);
+  exact(hook, ["mode", "settleVerifiedCredit"]);
+  if (hook.mode !== "settle" || typeof hook.settleVerifiedCredit !== "function")
+    throw Error("TON_INVALID_FIXTURE_SETTLEMENT");
+  return reconcileSource(input, deps, budget, undefined, settlement);
+}
+/** One source, at most four whole eight-item pages. Claim and ACKed advance are cursor authority. */
+async function reconcileSource(
+  input: SourceInput,
+  deps: TonObserveReconcilerDeps,
+  budget: TonOperationBudget,
+  onItem?: (id: string, result: TonReconcileItemResult) => void,
+  settlement?: TonFixtureSettlementDeps,
 ): Promise<TonReconcileSourceResult> {
   request(input, ["source", "limit", "signal"]);
   let source: TonReconciliationSource;
@@ -438,6 +471,45 @@ export async function reconcileTonInvoices(
           result: outcome,
         });
         budget.check();
+        if (settlement && verified.kind === "verified") {
+          if (
+            invoice.asset.kind !== "native" ||
+            verified.credit.asset.kind !== "native" ||
+            verified.credit.network !== "tvm:-3"
+          )
+            throw new TonRunStopped("db_error");
+          await renew();
+          budget.check();
+          const raw = await budget.db(() =>
+            settlement.settleVerifiedCredit(invoice.invoiceId, verified.credit),
+          );
+          let result: TonSettlementResult;
+          try {
+            result = parseTonSettlementResult(raw, invoice);
+          } catch {
+            budget.mutationOutcome = "unknown";
+            throw new TonRunStopped("db_error");
+          }
+          budget.check();
+          if (result.kind === "not_found")
+            throw new TonRunStopped("settlement_not_found");
+          // Credit may already be committed; loss of scan ownership stops only subsequent work.
+          await renew();
+          budget.check();
+          if (result.kind === "evidence_conflict") {
+            await observe({
+              ...common,
+              invoiceId: invoice.invoiceId,
+              result: {
+                kind: "review_required",
+                reason: "settlement_evidence_conflict",
+                evidenceDigest: verified.evidenceDigest,
+              },
+              snapshot: { ...snapshot, eventId: result.eventId },
+            });
+            budget.check();
+          }
+        }
         onItem?.(
           invoice.invoiceId,
           verified.kind === "verified"
@@ -491,14 +563,18 @@ export async function reconcileTonInvoices(
         );
         if (released !== "released" && released !== "lease_lost") {
           budget.mutationOutcome = "unknown";
-          answer = stopped("db_error", processed, pagesAdvanced);
+          if (answer.kind !== "stopped")
+            answer = stopped("db_error", processed, pagesAdvanced);
         }
       } catch (error) {
-        answer = stopped(
-          error instanceof TonRunStopped ? error.reason : "db_error",
-          processed,
-          pagesAdvanced,
-        );
+        // Preserve a known primary stop; sticky budget uncertainty still reports lost cleanup ACK.
+        if (answer.kind !== "stopped") {
+          answer = stopped(
+            error instanceof TonRunStopped ? error.reason : "db_error",
+            processed,
+            pagesAdvanced,
+          );
+        }
       }
     }
   }
