@@ -67,25 +67,40 @@ Agents Market: агент сам выбирает и покупает модел
 
 - **TON-роли и восстановление** (`3135690`): отдельный worker-login, NOLOGIN-владелец
   функции, запрет прямого DML; настоящая `pg_dump`/`pg_restore` репетиция. Локально, не прод.
+  **Ревью: APPROVE.**
+- **TON wallet/checkout** (`bc721b5`): proof-контракт, wallet auth, checkout/invoice,
+  TonConnect UI. **Ревью: APPROVE** после двух исправлений (см. «Что НЕ сделано», п.1).
+  Пункты 1–5 плана выполнены, пункт 6 (review) — теперь тоже закрыт.
+- **STT/transcription** (`23ba43e`, миграции `0093`–`0095`): durable state machine,
+  exactly-once settlement на уровне БД и HTTP identity, Groq upstream. **Ревью: APPROVE.**
+- **Reviewed media** (image/video, `0095`): process-owned профили, пин моделей, markup 1.2,
+  всё выключено. **Ревью: APPROVE.**
 - **Mintlify-документация**: 10 страниц, PR не смержен.
 - **Read-only preflight прав PostgreSQL** (`32fadef`): диагностика допуска, **не** настройка
-  прод-ролей; `runtimeSettlementAllowed` всегда false.
+  прод-ролей; `runtimeSettlementAllowed` всегда false. Ревью: APPROVE.
 - **Наблюдение/восстановление TON** (`c6112a3`), settlement/startup (`9e84bfb`, `d38143f`).
 - **Авторский цикл** (`ace7213`): версии, модерация, точные начисления, возврат,
   операторское восстановление. 2683 PASS / 0 FAIL.
 - Локально приняты: durable chat, embeddings, completions, streaming, BYOK, async media, batches.
+- **Скорекард AG-6**: `docs/product/acceptance/AG-P6.md` — что закрыто, что нет.
 
 ## Что НЕ сделано — не выдавать за готовое
 
-1. **Незакрытое независимое ревью** — авторского пакета (`ace7213`), TON wallet/checkout
-   (пункт 6 плана) и волны STT. Все три модели Codex на cooldown до 04.10; ревью ведётся
-   через Space Bunny Alpha. Это главный открытый риск: код зелёный, но без независимого взгляда.
-2. **STT/transcription** — код и миграции `0093`/`0094`/`0095` реализованы и проверены,
-   **тесты зелёные** (исторический «1 FAIL» оказался устаревшим ожиданием, а не недоделанным
-   гардом — гард в `0093`/`0094` работает). Но STT **намеренно вне продаваемой v1**
-   (`v1_scope_stt_deferred`), mapping держится `enabled = FALSE`, `501` не считается
-   реализацией. Открыто: план активации с гейтом, продуктовое решение по биллингу длительности,
-   чекпоинт/evidence в `docs/consolidation/`. План: `docs/superpowers/plans/2026-09-30-stt-durable-transcription.md`.
+1. **Независимое ревью — фактически проведено 29.09 через Space Bunny Alpha.** Читай
+   `.superpowers/sdd/` (это ignored, но на диске): финальные вердикты — **APPROVE**
+   для TON checkout (`P-final-checkout-post-lock`) и для reviewed-media/STT
+   (`P-media-final-rereview`). Две конкретные находки найдены и исправлены: (1) отчёт
+   клиента в `send-once.ts` выдавался за «кошелёк принял транзакцию» без разбора реального
+   результата SDK; (2) гонка в триггере `aiag_ton_checkout_immutable()` — валидация шла обычными
+   `SELECT` без блокировки организации. Обе закрыты (см. `P-`/`Q-` отчёты).
+   **Осталось непроверенным:** независимое ревью волны после моих коммитов 30.09
+   (`ecdcce1` — правки каталога и sold-v1 scope), потому что ревью шло до них.
+2. **STT/transcription** — код и миграции `0093`/`0094`/`0095` реализованы, тесты зелёные
+   (исторический «1 FAIL» оказался устаревшим ожиданием, а не недоделанным гардом; гард
+   работает). Reviewed-media ревью: **APPROVE**, профили остаются выключены в БД и скрыты в
+   маркетплейсе, TTS fail-closed. Но STT **намеренно вне продаваемой v1**
+   (`v1_scope_stt_deferred`), mapping `enabled = FALSE`, `501` не считается реализацией.
+   Открыто: план активации с гейтом, продуктовое решение по `billableMs`, чекпоинт/evidence.
 3. **Все три скорекарда: 108/108 UNVERIFIED.** Формальная приёмка не велась ни разу.
 4. **Все 14 сквозных сценариев INT-01…INT-14: UNVERIFIED.**
 5. TON: production credentials, testnet/mainnet, реальные выплаты — нет. Runtime settlement
@@ -116,20 +131,23 @@ Worker отправляет `tools`/`tool_choice`, а legacy gateway chat их *
 
 ## Ближайшие шаги в порядке
 
-1. **Независимое ревью** трёх волн: авторский пакет (`ace7213`), TON wallet/checkout,
-   STT (`0093`–`0095`). Space Bunny Alpha — основной путь, Codex на cooldown до 04.10.
-2. TON: реальное разделение DB principal/credentials + приёмка, затем browser acceptance
-   кошелька/checkout, затем внешний testnet.
-3. Продуктовое решение по биллингу длительности STT и гейт активации, если владелец
-   вообще хочет STT в составе v1.
-4. AG-5 остальные модальности → AG-6 backup/restore на отдельном стенде → AG-7 сквозная приёмка.
-5. Заполнять скорекарды по мере принятия волн — иначе 108/108 недостижимо. Это самая
+1. **Независимое ревью только моих коммитов 30.09** (`ecdcce1`: фильтр `isSoldV1Model`,
+   TTS-сценарий, `unavailableSamples`, sold-v1 тест). Всё до них уже получило APPROVE.
+2. **Закрыть AG-6** по `docs/product/acceptance/AG-P6.md`: репетиция restore на **отдельном**
+   стенде, opening balances при cutover, сквозная observability tenant→run→request→charge.
+3. **AG-7** — сквозная приёмка: покупатель/автор/админ, browser acceptance кошелька, claims на
+   сайте сверены с runtime, мобильная и клавиатурная проверка, pilot decision.
+4. TON: разделение DB principal/credentials в развёрнутом сервисе (не только локальный стенд).
+5. Продуктовое решение по `billableMs` и гейт активации STT — только если владелец вообще
+   хочет STT в составе v1.
+6. **Заполнять скорекарды** по мере принятия волн — иначе 108/108 недостижимо. Самая
    недооценённая работа: 324 строки, все пустые, при тысячах зелёных тестов.
-6. Arena: PE-T2 (opt-in binding → DB evaluation jobs) — единственный принятый
-   architecture-prerequisite; затем PE-T3…T6, TON-призы (AR-TON1–3), leaderboard/appeals,
-   blind arena, экспорт в Aggregator.
-7. Agents Market: AM-W1 (HTTP-каталог вместо SQL) → AM-W2/3 → W4a/W4b (две релизные
-   поверхности: Web и TMA) → W5–W7. Оценка 25–45 дней + 15–30 на приёмки.
+7. Юридический блокер: приём TON как оплаты услуг от резидентов РФ запрещён (ч.5 ст.14 259-ФЗ).
+   Нужен юрист до публичного запуска кошелька. Не техническая задача, но блокирует релиз.
+8. Arena: PE-T2 (opt-in binding → DB evaluation jobs); затем PE-T3…T6, TON-призы, leaderboard.
+9. Agents Market: AM-W1 (HTTP-каталог вместо SQL) → AM-W2/3 → W4a/W4b → W5–W7. 25–45 дней
+   + 15–30 на приёмки. **Незакоммиченные планы Wave6–10 лежат untracked в репозитории Arena —
+   закоммитить, это единственный носитель дизайна остатка.**
 
 ## Известные блокеры среды (30.09.2026)
 
