@@ -1,0 +1,77 @@
+{
+  "date": "2026-09-29",
+  "base_commit": "fe6b10fb7cb8607623f7fd7e2c262b0fff6b6cbe",
+  "source_commit": "c6112a37997430f282ce9ce25aa2dd6d5a623d3d",
+  "branch": "feat/ag-author-version-20260928",
+  "scope": "TON3 Task4 observe-only local candidate; not live payments or full service release",
+  "unit": {
+    "passed": 2756,
+    "skipped": 506,
+    "failed": 0,
+    "files_passed": 212,
+    "files_skipped": 36,
+    "exit_code": 0
+  },
+  "focused": {
+    "passed": 304,
+    "failed": 0,
+    "new_unit_tests": 73,
+    "existing_provider_verifier_tests": 231
+  },
+  "native": {
+    "passed": 6,
+    "failed": 0,
+    "database": "owned disposable local PostgreSQL18",
+    "provider": "synthetic controlled evidence",
+    "money_granted": 0,
+    "ton_settlement_events": 0,
+    "closed_and_dropped": true
+  },
+  "checks": {
+    "verified-focused": 0,
+    "verified-types": 0,
+    "verified-test-types": 0,
+    "verified-build": 0,
+    "verified-lint": 0,
+    "verified-native": 0,
+    "verified-unit": 0,
+    "verified-lock": 0,
+    "verified-audit": 0,
+    "verified-diff": 0
+  },
+  "historical_migration_changes": 0,
+  "dependency_changes": 0,
+  "shared_worker_index_changed": false,
+  "runtime_activated": false,
+  "independent_review": {
+    "status": "not_obtained",
+    "note": "Narrow review brief prepared; no confirmed GLM/ZCode dispatch or independent approval. Previous Codex review was quota-blocked."
+  },
+  "not_performed": [
+    "Task5 fixture settlement and root export fencing",
+    "Task6 shared worker startup",
+    "worker-only database authorization gate",
+    "wallet login/link/checkout",
+    "new provider RPC capture",
+    "live testnet or mainnet transfers",
+    "production deploy/migrations"
+  ],
+  "log_sha256": {
+    "verified-unit": "6a4c716bd95da4f822861c44ab4473ce6c22bc5bf4e39490e31f14ab229e2841",
+    "verified-native": "ebf26d68606459549a664f58e14cfe7d67e9480c36497d584ed3b0463a16350b",
+    "verified-focused": "a1744c32b9c984654dde81e1b5942bed2ea5d5493df5cffa4565c37bb212c8ef"
+  },
+  "source_files": {
+    "apps/worker/src/__tests__/ton-payment-bootstrap.test.ts": "2ac5873057d4f0780b50bdf02e1d4f94ee60df8b62c10bc775c86cef8bf12d51",
+    "apps/worker/src/__tests__/ton-payment-reconciler-deadlines.test.ts": "974a90f8ec2f1d9160bf0410e0ecd930d527376d1f8d19c03f69b8fc822a6c00",
+    "apps/worker/src/__tests__/ton-payment-reconciler.native.integration.test.ts": "d93f66df5770e86c38ca54c650a421289e04c8ce2bab29adce0c5d1b37782c19",
+    "apps/worker/src/__tests__/ton-payment-reconciler.test.ts": "2b3b9ce0e9808dc607a62e74daa65fbed4fb5f49b08d21d0b241513fd245819c",
+    "apps/worker/src/__tests__/ton-payment-recovery-boundary.test.ts": "544847ba0a012e52c6f6d0006940a4af55f97146f04c0a62d6dae2d6af9be174",
+    "apps/worker/src/__tests__/ton-recovery.fixture.ts": "aab0f98fa2af5866b341d45e9b21b2d640fdf888daf5959ae23ed002f089d78c",
+    "apps/worker/src/ton-payment-bootstrap.ts": "626437a4c77cb48b1293b42e161e7f9e5c505d02a36e7e0eb05ebe11e4621901",
+    "apps/worker/src/ton-payment-reconciler.ts": "d00aa13c2b851e4ca5b89db6f77dee531a69c633a998590a4482005bc7493950",
+    "apps/worker/src/ton-recovery-contract.ts": "437e9a5948ad5ad98c2cc6bbfa7b1061e0ee55a180f3aabac779fce9ce6870da",
+    "apps/worker/src/ton-recovery-control.ts": "fe27a38da23ef150ef1b74bede601af9f0f167c2fd2b1293fa9e194363e66e71",
+    "apps/worker/tsconfig.ton-recovery-test.json": "0be0a8f6f53ce9a8110e6fdec39c31933a19543e6a450baae4c46fd34908039a"
+  }
+}
