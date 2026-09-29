@@ -1,0 +1,147 @@
+{
+  "date": "2026-09-29",
+  "base_commit": "2b83fa6",
+  "source_commit": "313569044cdc491d3126e6d28c88b6d4e65a11f5",
+  "unit": {
+    "passed": 2897,
+    "failed": 0,
+    "skipped": 536,
+    "files_passed": 222,
+    "files_skipped": 41
+  },
+  "new_checks": {
+    "unit": 35,
+    "native_actual_postgresql": 21,
+    "total": 56
+  },
+  "legacy_ton_core": {
+    "passed": 58,
+    "failed": 0,
+    "skipped": 0,
+    "fresh_migrations": 72,
+    "noop_migrations": 72,
+    "canonical_unchanged": true,
+    "owned_database_dropped": true
+  },
+  "exit_codes": {
+    "registered-native-final": 0,
+    "registered-types": 0,
+    "registered-lint": 0,
+    "native-and-core-final": 0,
+    "types-final": 0,
+    "db-types-final": 0,
+    "lint-final": 0,
+    "db-build-final": 0,
+    "worker-types-final": 0,
+    "worker-build-final": 0,
+    "full-unit": 0,
+    "frozen-lock": 0,
+    "audit-final": 0
+  },
+  "source_sha256": {
+    "packages/database/src/ton-payments.ts": "69dae1bf403dd8b12823cd39353c64b3ec1ae5cb9541941c42dd97d88e7eeb70",
+    "packages/database/src/ton-reconciliation-internal.ts": "70f6029eddcd2f4ece8dc2fd168b35cf78bf582549f3337a8cdb35106bee732a",
+    "packages/database/src/__tests__/ton-settlement-worker-client.test.ts": "f6a6372570a3e3873f93fa753d381a4c1ff607c2c04c73d6703ba8a95e969d63",
+    "packages/database/scripts/ton-worker-boundary.ts": "1fefa2384c59973193d60e2cba1b696afd20ba86f06ec3cd704c53018fe65d8e",
+    "packages/database/scripts/ton-worker-restore.ts": "19e52f407d994db18615fbddf8289b06fe0d279978d4092f2c2083ea12f0bb36",
+    "packages/database/scripts/owned-pg-cleanup.ts": "4f7d388730c1399f673be7ffa392ec013222ae90416e738e3a672d37f76554d8",
+    "packages/database/scripts/__tests__/owned-pg-cleanup.test.ts": "83700ef3a491afc7b7fa3f1ea94380f516dd4f0ca615a4075de948dc09003633",
+    "packages/database/scripts/__tests__/ton-worker-boundary.native.fixture.ts": "9777dedf3dcb45748d6245e973d35316150f30ed96f1490b1220d28eba1075d1",
+    "packages/database/scripts/__tests__/ton-worker-restore.test.ts": "308b81d7e715d4dc4cc7fbb0f6fe5c2db912c70666bce7a62f7b2bb54f8166a0",
+    "packages/database/scripts/__tests__/ton-worker-boundary.native.integration.test.ts": "0182438fd714717ec7d16a009e1d37ea237f8a21c93c98dcfa2d760c3153ef26",
+    "packages/database/scripts/__tests__/ton-worker-restore.native.integration.test.ts": "2cef9fbb910c071d2c13fd52e9b050478999b375de632fe167af40c9ed0e761b",
+    "packages/database/scripts/__tests__/ton-worker-boundary.test.ts": "cde8ad82a399248d694414c4740555d7a0c848ef591683e39185866a0660902b",
+    "packages/database/scripts/__tests__/ton-worker-boundary-safety.native.integration.test.ts": "0b9619d58a073e149c352d612e8e7949f532bc38330d935e05150cd52f40c483",
+    "packages/api-gateway/src/__tests__/server-startup-egress.test.ts": "0e33d0a70ccb64c449a2fda64424227e9d068a4577f7b1b2d695de5d6a2a079b"
+  },
+  "model_calls": [
+    {
+      "task": "A-security-design",
+      "model": "stealth/space-bunny-alpha",
+      "status": "completed",
+      "request_id": "gen-1790681286-3msKwvEFiAAc0fIrzx20",
+      "reported_cost": 0
+    },
+    {
+      "task": "B-native-test-design",
+      "model": "stealth/space-bunny-alpha",
+      "status": "completed",
+      "request_id": "gen-1790681286-UuFL00vdM3LIlIALxs9w",
+      "reported_cost": 0
+    },
+    {
+      "task": "C-security-source",
+      "model": "stealth/space-bunny-alpha",
+      "status": "completed",
+      "request_id": "gen-1790682238-y1Jrzb3UWKCfC7hSxkgy",
+      "reported_cost": 0
+    },
+    {
+      "task": "D-types-source",
+      "model": "stealth/space-bunny-alpha",
+      "status": "completed",
+      "request_id": "gen-1790682238-52ChvbqQPJd0sFKXCayV",
+      "reported_cost": 0
+    },
+    {
+      "task": "E-security-recheck",
+      "model": "stealth/space-bunny-alpha",
+      "status": "completed",
+      "request_id": "gen-1790682884-7rUKybdA0Nap5FYMusaE",
+      "reported_cost": 0
+    },
+    {
+      "task": "F-types-recheck",
+      "model": "stealth/space-bunny-alpha",
+      "status": "completed",
+      "request_id": "gen-1790682884-LaUfROtOuG8FkCsmOddo",
+      "reported_cost": 0
+    },
+    {
+      "task": "G-cleanup-final",
+      "model": "stealth/space-bunny-alpha",
+      "status": "completed",
+      "request_id": "gen-1790683180-VBuDFLgBfUs7wcrCVKRn",
+      "reported_cost": 0
+    },
+    {
+      "task": "H-final-restore-review",
+      "model": "stealth/space-bunny-alpha",
+      "status": "completed",
+      "request_id": "gen-1790683416-NvoDI7Kb35iuzBG5VE54",
+      "reported_cost": 0
+    },
+    {
+      "task": "I-final-control-flow",
+      "model": "stealth/space-bunny-alpha",
+      "status": "completed",
+      "request_id": "gen-1790683597-EHlhroQKlLUGpCenpJrX",
+      "reported_cost": 0
+    },
+    {
+      "task": "J-restore-confirmation",
+      "model": "stealth/space-bunny-alpha",
+      "status": "completed",
+      "request_id": "gen-1790683847-zhFQ5jLd4YEIBqFO1xZv",
+      "reported_cost": 0
+    }
+  ],
+  "model_reported_total_cost": 0,
+  "independent_review": {
+    "financial_boundary": "E-security-recheck APPROVE",
+    "restore_after_fixes": "J-restore-confirmation APPROVE",
+    "limitation": "automated selected-source review, not human financial audit"
+  },
+  "production_changes": false,
+  "runtime_settlement_enabled": false,
+  "restoration_scope": "same controlled disposable PostgreSQL cluster; existing global roles, exact owners/ACLs and ledger snapshot preserved",
+  "not_accepted": [
+    "deployed credential separation and Web/API compatibility under those roles",
+    "live TON chain transfer",
+    "wallet/login/link/checkout",
+    "remaining sold modalities/transcription",
+    "full product release/pilot",
+    "off-host/cross-cluster production recovery",
+    "Arena implementation"
+  ]
+}

@@ -4,6 +4,8 @@
 
 ## Текущая стадия
 
+**29.09 · Роли и восстановление:** [локальный worker-only settlement и pg_dump/pg_restore с владельцами/правами](../consolidation/2026-09-29-ton-roles-and-restore-checkpoint.md) приняты на source3135690. Разделённые настоящие тестовые логины, прямые запреты DML/core, atomic/replay и восстановленная копия проверены. Production credentials, wallet/login/link/checkout и реальный testnet всё ещё OPEN. AG-6 получил локальную restore-репетицию, но не off-host SLA.
+
 **29.09 · Документация и preflight:** [10страниц Mintlify в PR и диагностика эффективных PostgreSQL прав](../consolidation/2026-09-29-documentation-privileges-and-product-status.md). Read-only preflight реализован; реальное разделение ролей/credentials и runtime settlement остаются OPEN. Не подменять эту границу зелёными локальными тестами.
 
 **TON29.09:** [Tasks5/6 приняты локально](../consolidation/2026-09-29-ton-settlement-and-startup.md): отдельный fixture-путь одного начисления и replay, source export fence, disabled-by-default observe startup и bounded cleanup. Независимые автоматизированные source reviews выполнены. AG-4 остаётся OPEN до DB ACL, wallet/checkout и внешней testnet-приёмки; runtime settlement не включён.

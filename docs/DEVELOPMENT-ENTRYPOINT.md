@@ -1,5 +1,7 @@
 # AI Aggregator: начать разработку здесь
 
+**29.09 · Новый checkpoint:** [worker-only PostgreSQL и настоящее восстановление с ACL](consolidation/2026-09-29-ton-roles-and-restore-checkpoint.md): source3135690, full2897PASS/536SKIP, new56(21native), legacyTON58. Это локальная граница и репетиция, не production credentials/оплата. Следующий поток — wallet/link/login/checkout; затем остаток release и только после этого Arena.
+
 **29.09 · Документация и права БД:** [Mintlify PR1, проверенный read-only preflight и остаток по трём продуктам](consolidation/2026-09-29-documentation-privileges-and-product-status.md). Source `32fadef`, unit2862PASS/515SKIP, новые22проверки, strict types/lint/audit0. Preflight не выдаёт разрешение settlement и не настраивает production roles. Следующий gate — реальное разделение DB principal/credentials и положительная/отрицательная приёмка, затем wallet/checkout.
 
 **Последнее продолжение29.09 · TON Tasks5/6:** [проверенное начисление/replay в тестовом контуре и запуск observe-only worker](consolidation/2026-09-29-ton-settlement-and-startup.md). Source `9e84bfb` + `d38143f`; unit2841PASS/514SKIP, native14, прежнее TON core58, focused407, types/build/lint/audit0. Отдельные автоматизированные финансовое/TS/startup source reviews APPROVE. По умолчанию TON выключен; runtime settlement не подключён. Следующий gate — DB-principal/ACL proof, затем кошелёк/checkout и внешняя приёмка.
