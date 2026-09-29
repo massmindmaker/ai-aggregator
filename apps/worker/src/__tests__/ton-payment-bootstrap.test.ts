@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { startTonObservationFromEnv } from "../ton-payment-bootstrap.js";
+import { startTonObservationFromEnv, startTonReconciliationFromEnv } from "../ton-payment-bootstrap.js";
 import { fixture, deferred } from "./ton-recovery.fixture";
 const env = () => ({
   TON_RECONCILIATION_MODE: "observe",
@@ -200,4 +200,19 @@ describe("disabled and observe-only TON bootstrap", () => {
       mutationOutcome: "unknown",
     });
   });
+  it('provides the worker entrypoint with a disabled no-resource handle',async()=>{
+    const f=setup();const handle=await startTonReconciliationFromEnv({...f,env:{}});
+    expect(f.makeDatabase).not.toHaveBeenCalled();expect(f.makeProvider).not.toHaveBeenCalled();
+    expect(await handle.close()).toEqual({kind:'closed',mutationOutcome:'known'});
+  });
+  it('redacts initialization failures at the worker boundary',async()=>{
+    const f=setup();f.makeDatabase.mockRejectedValueOnce(new Error('postgresql://private:secret@private-host/db'));
+    await expect(startTonReconciliationFromEnv({...f,env:env()})).rejects.toThrow('TON_RECONCILIATION_STARTUP_REFUSED');
+    expect(f.makeProvider).not.toHaveBeenCalled();
+  });
+  it.each(['settle','unknown'])('entrypoint rejects mode %s before creating any TON resource',async mode=>{
+    const f=setup();await expect(startTonReconciliationFromEnv({...f,env:{...env(),TON_RECONCILIATION_MODE:mode}})).rejects.toThrow('TON_RECONCILIATION_STARTUP_REFUSED');
+    expect(f.makeDatabase).not.toHaveBeenCalled();expect(f.makeProvider).not.toHaveBeenCalled();
+  });
+
 });

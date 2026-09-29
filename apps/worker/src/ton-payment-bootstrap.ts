@@ -225,3 +225,14 @@ export async function startTonObservationFromEnv(
     },
   };
 }
+
+
+/** Stable process-boundary error: never carries a provider response or connection string. */
+export class TonReconciliationStartupError extends Error {
+  constructor(){super('TON_RECONCILIATION_STARTUP_REFUSED');this.name='TonReconciliationStartupError';}
+}
+/** Runtime entrypoint remains strictly disabled|observe; it has no settlement capability. */
+export async function startTonReconciliationFromEnv(options:TonObservationStartupDeps={}):Promise<{close():Promise<TonCloseResult>}>{
+  try{return await startTonObservationFromEnv(options);}
+  catch{throw new TonReconciliationStartupError();}
+}

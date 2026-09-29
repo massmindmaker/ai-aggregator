@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "../../../..");
 const read = (path: string) => readFileSync(resolve(root, path), "utf8");
 describe("observe-only recovery ownership", () => {
-  it("does not introduce a runtime TON settlement call or shared-worker startup", () => {
+  it("keeps settlement absent while allowing one disabled-by-default observation bootstrap", () => {
     for (const file of [
       "ton-payment-reconciler.ts",
       "ton-payment-bootstrap.ts",
@@ -16,9 +16,9 @@ describe("observe-only recovery ownership", () => {
         /\bsettleTonInvoice\s*\(|aiag_settle_ton_invoice_v1/,
       );
     }
-    expect(read("apps/worker/src/index.ts")).not.toMatch(
-      /startTonObservationFromEnv|ton-payment-bootstrap/,
-    );
+    const entry=read("apps/worker/src/index.ts");
+    expect(entry.match(/await startTonReconciliationFromEnv\(/g)).toHaveLength(1);
+    expect(entry).not.toMatch(/settleTonInvoice|ton-reconciliation-internal|createToncenterV3Provider/);
   });
   it("loads the internal database API only through the validated bootstrap", () => {
     const sources = [

@@ -22,7 +22,8 @@
     "src/ton-settlement-result.ts",
     "src/__tests__/ton-settlement*.ts",
     "src/__tests__/ton-payment-settlement*.ts",
-    "src/__tests__/ton-payment-import-boundary.test.ts"
+    "src/__tests__/ton-payment-import-boundary.test.ts",
+    "src/__tests__/ton-worker-entry.test.ts"
   ],
   "exclude": [
     "node_modules",

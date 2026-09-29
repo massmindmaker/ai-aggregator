@@ -12,6 +12,7 @@
 import { createServer } from 'node:http';
 import { loadSharedEnv } from './env.js';
 import { logger } from './logger.js';
+import { startTonReconciliationFromEnv, TonReconciliationStartupError, type TonCloseResult } from './ton-payment-bootstrap.js';
 import {
   logGatewaySettlementRecoveryBoundaryFailure,
   startGatewaySettlementRecoveryFromEnv,
@@ -30,8 +31,23 @@ import { runEvaluation } from './eval-runner/runner.js';
 import { startInternalProbe } from './probes/internal-probe.js';
 import { startCatalogSyncCron } from './catalog/sync-cron.js';
 
+let tonReconciliation: Awaited<ReturnType<typeof startTonReconciliationFromEnv>> | undefined;
+let tonClosing: Promise<TonCloseResult | undefined> | undefined;
+function closeTonReconciliation(): Promise<TonCloseResult | undefined> {
+  if (!tonReconciliation) return Promise.resolve(undefined);
+  tonClosing ??= Promise.resolve().then(() => tonReconciliation!.close()).then(result => {
+    logger.info({ component: 'ton-reconciliation', result }, 'TON reconciliation closed');
+    return result;
+  });
+  return tonClosing;
+}
+
 async function main(): Promise<void> {
   loadSharedEnv();
+  tonReconciliation = await startTonReconciliationFromEnv({
+    env: process.env,
+    onResult: (sourceId, result) => logger.info({ component: 'ton-reconciliation', sourceId, result }, 'TON reconciliation observation'),
+  });
   // These modules import gateway runtime/storage bindings. Load them only
   // after shared env is present so DATABASE_URL is captured correctly.
   const { startBatchProcessWorker } = await import('./queues/batch-process.js');
@@ -164,15 +180,30 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // Graceful shutdown
   // ---------------------------------------------------------------------------
-  const shutdown = async (signal: string): Promise<void> => {
-    logger.info({ signal }, 'shutdown initiated');
-    internalProbe.stop();
-    server.close();
-    await Promise.all(workers.map((w) => w.close()));
-    await mediaDb.close();
-    await connection.quit();
-    logger.info('shutdown complete');
-    process.exit(0);
+  let shuttingDown: Promise<void> | undefined;
+  const shutdown = (signal: string): Promise<void> => {
+    shuttingDown ??= (async () => {
+      logger.info({ signal }, 'shutdown initiated');
+      let clean = true;
+      try { internalProbe.stop(); server.close(); } catch { clean = false; }
+      // Await all owners even when one close fails. TON's close has its own finite budgets.
+      const results = await Promise.allSettled([
+        closeTonReconciliation(),
+        ...workers.map(w => Promise.resolve().then(() => w.close())),
+      ]);
+      const ton = results[0];
+      if (results.some(result => result.status === 'rejected')) clean = false;
+      if (ton.status === 'fulfilled' && ton.value &&
+          (ton.value.kind !== 'closed' || ton.value.mutationOutcome !== 'known')) clean = false;
+      const resources = await Promise.allSettled([
+        Promise.resolve().then(() => mediaDb.close()),
+        Promise.resolve().then(() => connection.quit()),
+      ]);
+      if (resources.some(result => result.status === 'rejected')) clean = false;
+      logger.info({ clean }, 'shutdown complete');
+      process.exit(clean ? 0 : 1);
+    })();
+    return shuttingDown;
   };
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
@@ -181,8 +212,12 @@ async function main(): Promise<void> {
   logger.info('aiag-worker started');
 }
 
-main().catch((err) => {
-  if (!logGatewaySettlementRecoveryBoundaryFailure(logger, err)) {
+main().catch(async (err) => {
+  try { await closeTonReconciliation(); }
+  catch { logger.error({ component: 'ton-reconciliation', classification: 'close_failed' }, 'TON reconciliation cleanup failed'); }
+  if (err instanceof TonReconciliationStartupError) {
+    logger.fatal({ component: 'ton-reconciliation', classification: 'startup_refused' }, 'TON reconciliation startup refused');
+  } else if (!logGatewaySettlementRecoveryBoundaryFailure(logger, err)) {
     logger.fatal({ err }, 'worker bootstrap failed');
   }
   process.exit(1);
