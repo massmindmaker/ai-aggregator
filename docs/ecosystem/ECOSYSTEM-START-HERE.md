@@ -142,8 +142,13 @@ Worker отправляет `tools`/`tool_choice`, а legacy gateway chat их *
    деньги не влияет (settlement считается из зафиксированного `billableMs`). Не покрыто
    ревью: `ton-payments.ts`, `ton-reconciliation-internal.ts`, скрипты boundary/restore
    (~1900 строк), фронт-компоненты.
-2. **Закрыть AG-6** по `docs/product/acceptance/AG-P6.md`: репетиция restore на **отдельном**
-   стенде, opening balances при cutover, сквозная observability tenant→run→request→charge.
+2. **Закрыть AG-6** по `docs/product/acceptance/AG-P6.md`. Отдельный off-cluster стенд
+   **доказан**: два независимых кластера PostgreSQL 18 (source 15432 / dest 15433);
+   `pg_restore` без ролей падает `role does not exist`, после `CREATE ROLE` проходит,
+   владелец таблицы сохраняется. Осталось формализовать в коде и тестах, затем opening
+   balances при cutover и сквозная observability tenant→run→request→charge.
+   План: `docs/superpowers/plans/2026-09-30-ag6-offcluster-restore.md`,
+   прогресс: `.superpowers/sdd/2026-09-30-ag6-offcluster-restore/progress.md`.
 3. **AG-7** — сквозная приёмка: покупатель/автор/админ, browser acceptance кошелька, claims на
    сайте сверены с runtime, мобильная и клавиатурная проверка, pilot decision.
 4. TON: разделение DB principal/credentials в развёрнутом сервисе (не только локальный стенд).
