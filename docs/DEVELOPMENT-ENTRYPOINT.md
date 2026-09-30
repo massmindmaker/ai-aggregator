@@ -91,3 +91,59 @@ Aggregator владеет Web, gateway, model catalog, consumer/author money и 
 ## Latest continuation — 19 September 2026
 
 Read `docs/consolidation/2026-09-19-catalog-continuation.md` and `docs/superpowers/plans/2026-09-19-ai-hub-resume.md` before repeating catalogue work. Local consumer/134-test contract gate and4-test native smoke are verified; full native acceptance, legacy test failures, TON WIP and real AM integration remain open.
+
+## Чекпойнт — 30 сентября 2026 (волна синхронизации, ревью, безопасность)
+
+**Всё ниже НЕ закоммичено.** Три репозитория, ~92 изменённых пути. Откат — `git diff`.
+
+### Money-контур: закрыт Critical и доказан на живой БД
+Обход идемпотентности: клиентский `X-Request-Id` был финансовой идемпотентностью на
+legacy-маршруте (режим по умолчанию) — фиксированный заголовок давал неограниченный
+бесплатный inference. Цепочка: `middleware/request-id.ts:10` → `billing/settle.ts:102` →
+`functions/settle-charge.sql` без `org_id` → глобальный UNIQUE `(request_id, source)` из
+`0004_gateway_core.sql:222` → `config.ts:28`. Исправлено: трассировочный и серверный
+settlement-id разведены (`stl_<uuid>`), org-скоуп в обеих копиях SQL, миграция
+`0096_settle_idempotency_org_scope.sql`. **Требует на VPS:** `0096`; ОТДЕЛЬНО
+`CREATE OR REPLACE` функции (0058 применена); пересобрать `packages/database/dist`.
+Breaking: повтор того же `X-Request-Id` теперь списывается заново.
+
+### Безопасность: три находки закрыты
+- **KYC-гейт** (`payouts/[id]/approve/route.ts:71`) проверял наличие `kyc_type` вместо
+  статуса — при `kyc_status='rejected'` выплата проходила. Теперь по статусу.
+- **`setRole`** в админе не требовал второго фактора в момент выдачи `admin`.
+- **PII-трансбордер**: `setPiiResolveModel` не вызывался вовсе; regex не знал
+  kie/fal/replicate/openrouter/huggingface; `stored-media`/`stored-transcription` не делали
+  PII-проверку. Regex удалён, единый источник `FOREIGN_PROVIDERS`, резолвер fail-closed.
+  **Изменение поведения: STT и media с ПДн → 403 при дефолтной политике ключа.**
+
+### Конкурсный контур выпилен и уехал в Arena
+Шаги 1–7, коммит `00446de`, откат — тег `pre-contest-removal`. Таблицы оставлены мёртвыми
+намеренно (FK `models.derived_from_contest_id`). Агрегатор больше не владеет оценкой,
+лидербордом и призами.
+
+### Авторские модели в каталоге + контракт worker→gateway
+`GET /v1/catalog` и `GET /v1/models` теперь разделять не могут — общий предикат допуска
+`catalog/author-admission.ts`. Воркер Agents Market шлёт `Idempotency-Key`, персистит
+квитанцию и **fail-closed при отсутствии авторитетных заголовков биллинга** (раньше
+выдумывал цену). `0055` обязательна ДО деплоя воркера — иначе полная остановка биллинга.
+
+### Legacy chat больше не теряет инструменты молча
+`tools`/`tool_choice` уходили в legacy-маршрут, где таких полей нет, и просто исчезали при
+200. Теперь явный 501 ДО выбора модели и префлайта баланса.
+
+### Что НЕ сделано — не выдавать за сделанное
+- Прод-конфигурация БД отсутствует; всё принятие шло на локальных стендах.
+- TON settlement выключен, кредитов нет, testnet/mainnet не пройден. **Купить inference
+  в проде нельзя** — это главный блокер пилота.
+- `AUTHOR_CHAT_ENABLED` по умолчанию `"0"` → авторские модели в проде недоступны.
+- KYC-контур сознательно не строится (решение владельца) → выплаты авторам невозможны.
+- Скорекарды (108/108) и 14 сквозных INT-сценариев: **не велись ни разу**.
+- Arena: PE-T3…T6 не начаты.
+
+### Методологический вывод сессии
+Три места прошли приёмку зелёными, будучи сломанными: SQL с утонувшим в комментарии
+`SELECT` при 18 мокнутых тестах; проверка ограничений, проходившая и со снятым
+ограничением; непроцитированный glob, молча сокращавший прогон до одного файла.
+**Правила:** SQL проверяется только применением к живой БД; фикстуре нужны реальные
+FK-цели и уникальный ключ на кейс; единственный способ узнать, что тест кусается — снять
+ограничение и убедиться, что нужный тест падает. Подробно: `.serena/memories/aiag_antipatterns.md`.

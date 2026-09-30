@@ -58,7 +58,20 @@
 | Вызов модели покупателем | **Aggregator** | `/v1/chat/completions`, `handleAuthorChat` | ✅ локально принято |
 | Начисление автору | **Aggregator** | `author_credit_ledger`, `author_request_bindings` (0089) | ✅ принято |
 | Выплата автору | **Aggregator** | `packages/database/src/schema/earnings.ts`, `api/admin/payouts/**` | ⚠️ в тестах, не проведена в проде |
-| KYC-гейт выплат | **Aggregator** | `kyc_documents`, `/admin/kyc-queue`, `/dashboard/kyc` | ✅ остался, это не конкурс |
+| KYC-гейт выплат | **Aggregator** | `kyc_documents`, `/admin/kyc-queue`, `/dashboard/kyc` | ⏸️ **отложено решением владельца 30.09** |
+
+**⏸️ KYC — РЕШЕНИЕ ВЛАДЕЛЬЦА 30.09.2026: контур не строим.** Не дефект, не долг:
+сознательно отложено. Что при этом фактически верно:
+- Гейт в `payouts/[id]/approve/route.ts` теперь проверяет **статус верификации**
+  (`kyc_status !== 'verified'`), а не наличие поля. Старый код при
+  `kyc_status='rejected'` выплату пропускал — это был настоящий баг и он закрыт.
+- Самого контура подачи документов нет: `users.kyc_type` не пишется ни одним роутом,
+  `kyc_documents` не имеет INSERT. **Это ожидаемо при отложенном KYC.**
+- Следствие: выплаты авторам невозможны до появления контура — при отложенном KYC это
+  приемлемо. Гейт остаётся защитой на будущее: когда контур появится, он уже будет
+  проверять статус, а не наличие поля.
+- **Не переигрывать:** не предлагать KYC как блокер и не «чинить» контур без прямого
+  указания владельца.
 | Финализация начислений | **Aggregator** | `apps/worker/src/queues/finalize-earnings-cron.ts` | ✅ осталась, полностью неконкурсная |
 | **Создание конкурса** | **Arena** | `challenges` + `challenge_policy_versions` (с digest) | 🚚 было и в Aggregator, осталось в Arena |
 | **Регистрация участников и команды** | **Arena** | `enrollments`, `teams`, `invitations` | 🚚 было и в Aggregator, осталось в Arena |

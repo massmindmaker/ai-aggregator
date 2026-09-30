@@ -22,3 +22,30 @@
 - **Симптом:** компонент минта/transfer не видит `mintFeeTon` (undefined) — комиссия минта недоступна в дочернем компоненте.
 - **Причина:** значение не проброшено через props в дочерний компонент.
 - **Фикс:** пробросить проп `mintFeeTon` вниз по дереву до места использования.
+
+## Обход идемпотентности billing через клиентский X-Request-Id (Critical, 30.09.2026)
+- **Симптом:** клиент с одним API-ключом, шлющий фиксированный `X-Request-Id`, получает неограниченный бесплатный inference. Коллизия между организациями даёт org B бесплатный запрос либо HTTP 500.
+- **Причина (цепочка проверена построчно):** `middleware/request-id.ts:10` брал клиентский `X-Request-Id` без валидации → `billing/settle.ts:102` передавал его как `_request_id` → `src/functions/settle-charge.sql:267-274` идемпотентность искала `WHERE request_id = _request_id AND type='api_usage'` **БЕЗ `org_id`** (возвращает `idempotent=TRUE`, списания нет) → `migrations/0004_gateway_core.sql:222` UNIQUE-индекс `(request_id, source)` **глобальный** → `config.ts:28` `GATEWAY_HTTP_EXECUTION_MODE` по умолчанию **`legacy`**.
+- **Фикс:** `request-id.ts` разделяет идентичности — `requestId` остаётся трассировкой (валидируется `/^[A-Za-z0-9._:-]{1,64}$/`, 64 = VARCHAR `request_id`, невалидное **подменяется**), `settlementRequestId = stl_<uuid>` **всегда серверный** и только он идёт в деньги. Org-скоуп добавлен в SQL; новая миграция `0096_settle_idempotency_org_scope.sql` пересоздаёт индекс на `(org_id, request_id, source)` ЯВНЫМ `DROP` (не `IF NOT EXISTS`, иначе молчаливый no-op на старом имени). Побочно закрыт SSE-дефект: ошибка settle проглатывалась → бесплатный ответ (теперь mint, не throw).
+- **Побочный баг в самом фиксе:** `SELECT` утонул в `-- ...byte-identical.  SELECT` → функция не парсилась, при 18 зелёных моках. См. `mem:aiag_antipatterns`.
+- **Breaking:** повтор того же `X-Request-Id` теперь списывается заново.
+- **Доказано на живой БД:** org B с чужим `request_id` списан (1000→900), не идемпотентен; A повтор — идемпотентен; строки леджера по одной на организацию.
+- **Требует на VPS:** применить `0096`; **отдельно** переопределить функцию (0058 уже применена, `CREATE OR REPLACE` вручную); пересобрать `packages/database/dist`.
+
+## KYC-гейт выплаты проверял наличие поля, а не статус (30.09.2026)
+- **Симптом:** автор с `kyc_status='rejected'` и непустым `kyc_type` проходил `approve` — считался налог, выплата помечалась `paid`.
+- **Причина:** `payouts/[id]/approve/route.ts:71` проверял `if (!row.kyc_type)`; `row.kyc_status` читался в том же SELECT, но в гейт не входил.
+- **Фикс:** гейт `kyc_status !== 'verified' || !kyc_type`; `payouts/process` теперь отсекает недопустимых авторов в том же INSERT.
+- **Решение владельца:** KYC-контур НЕ строим (см. `docs/ecosystem/FUNCTIONAL-MATRIX.md`). Выплаты невозможны до его появления — принято.
+
+## Legacy chat молча терял tools/tool_choice (30.09.2026)
+- **Симптом:** агент отправлял `tools`, провайдер их не получал, ответ 200 — цикл работал с неверным результатом.
+- **Причина:** `ChatBody` в `routes/v1/chat.ts` не имел этих полей; дефолтный маршрут воркера — legacy. 501 давал только stored-маршрут.
+- **Фикс:** `rejectUnsupportedExecutionFeatures()` → 501 ДО `resolveModelWithOverride`/префлайта баланса/`getUpstream`; воркер больше не фолбэчит на OpenRouter при 501.
+- **Важно:** stored-маршрут отклоняет `tools` ТОЖЕ — перевод дефолта на stored заменил бы тихий 200 на 501 и НЕ починил бы цикл.
+
+## PII-трансбордер: резолвер не вызывался, regex не знал 5 провайдеров (30.09.2026)
+- **Симптом:** prompt с ПДн уходил на `kie.ai` и др. без проверки; `model: "kie/..."` не распознавался как трансбордер.
+- **Причина:** `setPiiResolveModel` заделан, но не вызывался в production (ветка резолва мертва); рукописный regex `^(openai|anthropic|together|mistral|google|cohere)\/` расходился с `FOREIGN_PROVIDERS` (нет kie/fal/replicate/openrouter/huggingface); `stored-media`/`stored-transcription` не вызывали PII-фильтр вовсе.
+- **Фикс:** regex удалён, паттерн выводится из `FOREIGN_PROVIDERS` (единый источник); резолвер включён, его отказ — fail-closed; новый `stored-pii-residency.ts` сужает кандидатов до `ru_residency === true`.
+- **Изменение поведения:** STT и media с ПДн → 403 при ключе с дефолтной политикой. Требует продуктового решения владельца.
