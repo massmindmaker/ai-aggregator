@@ -28,6 +28,8 @@ import { storedMedia } from './routes/v1/stored-media';
 import { storedTranscription } from './routes/v1/stored-transcription';
 import { storedBatches } from './routes/v1/stored-batches';
 import { catalogRoute } from './routes/v1/catalog';
+import { usage } from './routes/v1/usage';
+import { organizationKeys } from './routes/v1/organization-keys';
 import { catalogHttpBoundary } from './catalog/http-contract';
 import { adminProxy } from './routes/admin/proxyTest';
 import { adminCatalog } from './routes/admin/catalog';
@@ -91,6 +93,30 @@ app.get('/', (c) =>
 // fixed public error envelope while every other v1 route retains its own one.
 app.use('/v1/catalog', catalogHttpBoundary);
 app.use('/v1/catalog/', catalogHttpBoundary);
+// ---- /v1/usage + /v1/organization -----------------------------------------
+// Mounted on the ROOT app, ahead of both execution-mode assemblies, because
+// their contracts differ and neither fits:
+//
+//  - The stored-mode assembly copies GET handlers one by one and rewrites
+//    their error envelope; the legacy assembly hangs keyLimits (the per-key
+//    monthly cost cap) off every /v1/* path. A buyer must still be able to
+//    READ its receipts while its spending is blocked, so /v1/usage must not
+//    sit behind that cap — hence its own mount with auth + RPM only.
+//  - /v1/organization/keys is a POST that mints credentials. In stored mode
+//    an unlisted POST falls through to the "unsupported execution" envelope,
+//    which would report a 403/400 from the mint guard as a 501 storage
+//    outage. Own mount keeps the real status.
+//
+// Both still authenticate with the same requireApiKey and the same
+// fresh gateway_api_keys lookup as every other /v1 route: orgId comes from
+// the verified key row, never from the request.
+app.use('/v1/usage/*', requireApiKey);
+app.use('/v1/usage/*', rateLimit);
+app.route('/v1/usage', usage);
+app.use('/v1/organization/*', requireApiKey);
+app.use('/v1/organization/*', rateLimit);
+app.route('/v1/organization', organizationKeys);
+
 if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
   // Early cache policy includes auth, RPM, unsupported routes and 404 responses.
   app.use('/v1/*', async (c, next) => {
