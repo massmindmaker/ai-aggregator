@@ -23,6 +23,10 @@ import {
   type CatalogModel,
 } from '@/lib/marketplace/catalog';
 import { formatPriceLabel } from '@/lib/marketplace/pricing-calc';
+import {
+  SOLD_CAPABILITIES,
+  isChatRunnable,
+} from '@/lib/marketplace/sold-contract';
 import { ModelCard } from '@/components/marketplace/ModelCard';
 import { CodeExampleTabs } from '@/components/marketplace/CodeExampleTabs';
 
@@ -284,8 +288,9 @@ export default async function ModelDetailPage({ params: paramsPromise }: RoutePa
                     </p>
                     <Alert>
                       <AlertDescription>
-                        Наценка шлюза уже включена в цену. Оплата в рублях
-                        с баланса — без комиссии банка и VPN.
+                        Наценка шлюза уже включена в цену. Списание идёт в
+                        кредитах (1 кредит = 1 цент), пополнение — картой РФ,
+                        СБП или по счёту.
                       </AlertDescription>
                     </Alert>
                     <Button variant="outline" asChild>
@@ -312,31 +317,21 @@ export default async function ModelDetailPage({ params: paramsPromise }: RoutePa
                           value={`${model.capabilities.maxOutputTokens.toLocaleString('ru-RU')} токенов`}
                         />
                       )}
-                      <SpecRow
-                        label="Streaming"
-                        value={model.capabilities.streaming ? 'да' : 'нет'}
-                      />
-                      <SpecRow
-                        label="Tool-calling"
-                        value={model.capabilities.tools ? 'да' : 'нет'}
-                      />
-                      <SpecRow
-                        label="Vision"
-                        value={model.capabilities.vision ? 'да' : 'нет'}
-                      />
-                      <SpecRow
-                        label="JSON schema"
-                        value={model.capabilities.jsonSchema ? 'да' : 'нет'}
-                      />
-                      <SpecRow
-                        label="p50 latency"
-                        value={`${model.stats.p50LatencyMs} ms`}
-                      />
-                      <SpecRow
-                        label="Uptime"
-                        value={`${model.stats.uptimePct}%`}
-                      />
+                      {SOLD_CAPABILITIES.map((cap) => (
+                        <SpecRow
+                          key={cap.id}
+                          label={cap.label}
+                          value={cap.supported ? 'да' : 'нет'}
+                        />
+                      ))}
                     </dl>
+                    <p className="text-xs text-muted-foreground mt-4">
+                      Возможности исполнения взяты из контракта, который
+                      действительно обслуживает шлюз (см.{' '}
+                      <code className="font-mono">/v1/catalog</code>), а не из
+                      карточки провайдера. Рейтинг, uptime и p50 latency появятся
+                      здесь, когда появится телеметрия запросов.
+                    </p>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -364,12 +359,21 @@ export default async function ModelDetailPage({ params: paramsPromise }: RoutePa
                 <div className="font-mono text-lg">
                   {formatPriceLabel(model)}
                 </div>
-                <Button asChild className="w-full">
-                  <Link href={`/marketplace/${model.orgSlug}/${model.modelSlug}/playground`}>
-                    <Play className="h-4 w-4 me-1" aria-hidden />
-                    Попробовать в Playground
-                  </Link>
-                </Button>
+                {isChatRunnable(model.type) ? (
+                  <Button asChild className="w-full">
+                    <Link href={`/marketplace/${model.orgSlug}/${model.modelSlug}/playground`}>
+                      <Play className="h-4 w-4 me-1" aria-hidden />
+                      Попробовать в Playground
+                    </Link>
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Playground работает только с чат-моделями (он вызывает{' '}
+                    <code className="font-mono">/v1/chat/completions</code>).
+                    Эту модель вызывайте её собственным эндпоинтом — пример
+                    запроса на вкладке «API».
+                  </p>
+                )}
                 <Button variant="outline" asChild className="w-full">
                   <Link href="/dashboard">
                     <Code2 className="h-4 w-4 me-1" aria-hidden />
@@ -381,28 +385,12 @@ export default async function ModelDetailPage({ params: paramsPromise }: RoutePa
 
             <Card>
               <CardContent className="p-5 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Рейтинг</span>
-                  <span className="font-medium">
-                    {model.stats.avgRating.toFixed(1)} ({model.stats.totalReviews})
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Запросов / нед.</span>
-                  <span className="font-medium">
-                    {model.stats.weeklyRequests.toLocaleString('ru-RU')}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Uptime</span>
-                  <span className="font-medium">{model.stats.uptimePct}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">p50 latency</span>
-                  <span className="font-medium">
-                    {model.stats.p50LatencyMs} ms
-                  </span>
-                </div>
+                <div className="font-semibold">Метрики</div>
+                <p className="text-muted-foreground">
+                  Рейтинг, число запросов, uptime и latency мы пока не
+                  показываем: измерительной системы ещё нет, а любое число здесь
+                  было бы выдуманным. Ориентируйтесь на цену и контракт выше.
+                </p>
               </CardContent>
             </Card>
 

@@ -13,9 +13,10 @@ import pg from "pg";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const authorMode = process.argv.includes("--author");
 const a11yMode = process.argv.includes("--a11y");
+const buyerMode = process.argv.includes("--buyer");
 const output = resolve(
   root,
-  a11yMode
+  a11yMode || buyerMode
     ? ".superpowers/sdd/2026-09-30-ag7-acceptance"
     : authorMode
       ? ".superpowers/sdd/2026-09-28-ag-author-version-v1"
@@ -142,11 +143,13 @@ try {
       resolve(root, "node_modules/@playwright/test/cli.js"),
       "test",
       "--config=" +
-      (a11yMode
-        ? "playwright.a11y-owned.config.ts"
-        : authorMode
-          ? "playwright.author-owned.config.ts"
-          : "playwright.owned.config.ts"),
+      (buyerMode
+        ? "playwright.buyer-owned.config.ts"
+        : a11yMode
+          ? "playwright.a11y-owned.config.ts"
+          : authorMode
+            ? "playwright.author-owned.config.ts"
+            : "playwright.owned.config.ts"),
     ],
     {
       cwd: root,

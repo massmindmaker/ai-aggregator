@@ -1,6 +1,6 @@
 import * as React from 'react';
 import Link from 'next/link';
-import { TrendingUp, TrendingDown, Shield, Globe } from 'lucide-react';
+import { Shield, Globe } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
@@ -9,11 +9,7 @@ import {
   isForeignHosted,
 } from '@/lib/marketplace/catalog';
 import { formatPriceLabel } from '@/lib/marketplace/pricing-calc';
-import {
-  placeholderRuns,
-  placeholderTrend,
-  placeholderHue,
-} from '@/lib/marketplace/placeholders';
+import { placeholderHue } from '@/lib/marketplace/placeholders';
 
 interface ModelCardProps {
   model: CatalogModel;
@@ -47,30 +43,9 @@ function ProviderAvatar({ model }: { model: CatalogModel }) {
   );
 }
 
-function TrendChip({ trend }: { trend: number }) {
-  if (trend === 0) return null;
-  const up = trend > 0;
-  const Icon = up ? TrendingUp : TrendingDown;
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-0.5 text-[11px] font-medium tabular-nums',
-        up ? 'text-emerald-500' : 'text-red-500'
-      )}
-      title="Изменение за неделю (placeholder)"
-    >
-      <Icon className="h-3 w-3" aria-hidden />
-      {up ? '+' : ''}
-      {trend.toFixed(1)}%
-    </span>
-  );
-}
-
 export function ModelCard({ model }: ModelCardProps) {
   const foreign = isForeignHosted(model.orgSlug);
   const href = `/marketplace/${model.orgSlug}/${model.modelSlug}`;
-  const runs = placeholderRuns(model.slug);
-  const trend = placeholderTrend(model.slug);
 
   return (
     <Link
@@ -117,7 +92,6 @@ export function ModelCard({ model }: ModelCardProps) {
                 </span>
               )}
             </div>
-            <TrendChip trend={trend} />
           </div>
 
           {/* Description */}
@@ -140,16 +114,15 @@ export function ModelCard({ model }: ModelCardProps) {
             </div>
           )}
 
-          {/* Stats row */}
+          {/* Price row. Request counts / ratings are intentionally absent:
+              they came from a slug hash (placeholders.ts), not telemetry, so
+              printing them as numbers would be inventing demand. */}
           <div className="mt-auto pt-2 border-t border-border flex items-center justify-between gap-2">
             <span className="text-[12px] font-mono text-amber-500 truncate">
               {formatPriceLabel(model)}
             </span>
-            <span
-              className="text-[11px] text-muted-foreground tabular-nums shrink-0"
-              title="Запросов за неделю (placeholder)"
-            >
-              {runs} runs
+            <span className="text-[11px] text-muted-foreground shrink-0">
+              {model.hostingRegion === 'ru' ? 'хостинг РФ' : model.orgName}
             </span>
           </div>
         </CardContent>

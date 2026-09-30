@@ -100,32 +100,37 @@ function modalityBucket(t: ModelType): string {
   return 'chat';
 }
 
+/**
+ * 🔴 AG-7 (2026-09-30): every chat sample used to set `stream: true`. The sold
+ * catalog contract pins `parameters.stream = { const: false }` and the chat
+ * handler answers `unsupported_execution_contract` (501) for a streaming
+ * request — so the copy-paste sample a buyer tried first was guaranteed to
+ * fail. The samples below are the plain (non-streaming) request the contract
+ * actually executes.
+ */
 function chatSamples(slug: string): Record<Lang, string> {
   return {
     curl: `curl ${BASE}/v1/chat/completions \\
-  -H "Authorization: Bearer $AIAG_API_KEY" \\
+  -H "Authorization: Bearer ***" \\
   -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: $(uuidgen)" \\
   -d '{
     "model": "${slug}",
-    "stream": true,
     "messages": [{"role": "user", "content": "Привет!"}]
   }'`,
     node: `import OpenAI from 'openai';
 
 const client = new OpenAI({
-  apiKey: process.env.AIAG_API_KEY,
+  apiKey: proces...KEY,
   baseURL: '${BASE}/v1',
 });
 
-const stream = await client.chat.completions.create({
+const res = await client.chat.completions.create({
   model: '${slug}',
   messages: [{ role: 'user', content: 'Привет!' }],
-  stream: true,
 });
 
-for await (const chunk of stream) {
-  process.stdout.write(chunk.choices[0]?.delta?.content ?? '');
-}`,
+console.log(res.choices[0]?.message?.content ?? '');`,
     python: `from openai import OpenAI
 
 client = OpenAI(
@@ -133,13 +138,11 @@ client = OpenAI(
     base_url="${BASE}/v1",
 )
 
-stream = client.chat.completions.create(
+resp = client.chat.completions.create(
     model="${slug}",
     messages=[{"role": "user", "content": "Привет!"}],
-    stream=True,
 )
-for chunk in stream:
-    print(chunk.choices[0].delta.content or "", end="")`,
+print(resp.choices[0].message.content)`,
   };
 }
 

@@ -11,6 +11,7 @@ import {
   getScenarioBySlug,
 } from '@/lib/marketplace/scenarios';
 import { getModelBySlug } from '@/lib/marketplace/catalog';
+import { isChatRunnable } from '@/lib/marketplace/sold-contract';
 import { CopyButton } from '@/components/marketplace/CopyButton';
 
 interface Params {
@@ -98,14 +99,24 @@ export default async function ScenarioDetailPage({ params: paramsPromise }: Para
                   <div className="text-xs text-muted-foreground">
                     {model.orgName}
                   </div>
-                  <Button asChild size="sm" className="w-full mt-2">
-                    <Link
-                      href={`/marketplace/${model.orgSlug}/${model.modelSlug}/playground`}
-                    >
-                      <Copy className="h-3 w-3 me-1" aria-hidden />
-                      Открыть в Playground
-                    </Link>
-                  </Button>
+                  {/* 🔴 AG-7: the playground posts to /v1/chat/completions, so
+                      it can only run chat models. Offering it for the image /
+                      embedding / tts scenarios was a guaranteed failure. */}
+                  {isChatRunnable(model.type) ? (
+                    <Button asChild size="sm" className="w-full mt-2">
+                      <Link
+                        href={`/marketplace/${model.orgSlug}/${model.modelSlug}/playground`}
+                      >
+                        <Copy className="h-3 w-3 me-1" aria-hidden />
+                        Открыть в Playground
+                      </Link>
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Этот сценарий выполняется собственным эндпоинтом модели,
+                      а не через чат — в Playground его запустить нельзя.
+                    </p>
+                  )}
                   <Button asChild size="sm" variant="outline" className="w-full">
                     <Link href={`/marketplace/${model.orgSlug}/${model.modelSlug}`}>
                       Страница модели

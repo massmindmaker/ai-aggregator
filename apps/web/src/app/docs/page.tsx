@@ -206,7 +206,15 @@ print(resp.choices[0].message.content)`}
                 </li>
                 <li>
                   <code className="font-mono text-primary">stream</code> —
-                  потоковая выдача (SSE)
+                  всегда{' '}
+                  <code className="font-mono text-primary">false</code>.
+                  Потоковая выдача (SSE) в текущем контракте не поддерживается:
+                  ответ приходит одним JSON-объектом
+                </li>
+                <li>
+                  <code className="font-mono text-primary">Idempotency-Key</code> —
+                  обязательный заголовок, чтобы повтор запроса не списывал
+                  кредиты дважды
                 </li>
               </ul>
             </section>
@@ -251,7 +259,7 @@ print(resp.choices[0].message.content)`}
                 </li>
                 <li>
                   <div className="font-semibold text-primary font-mono">
-                    claude-sonnet-4, claude-opus-4
+                    claude-sonnet-4-6, claude-opus-4-8
                   </div>
                   <p className="text-sm text-muted-foreground">
                     Anthropic. Для длинного контекста и кода.
@@ -259,7 +267,7 @@ print(resp.choices[0].message.content)`}
                 </li>
                 <li>
                   <div className="font-semibold text-primary font-mono">
-                    yandexgpt-pro, gigachat-max
+                    yandexgpt-pro, gigachat-pro
                   </div>
                   <p className="text-sm text-muted-foreground">
                     RU-residency. Для 152-ФЗ-критичных задач.
@@ -267,10 +275,11 @@ print(resp.choices[0].message.content)`}
                 </li>
                 <li>
                   <div className="font-semibold text-primary font-mono">
-                    flux-1.1-pro, sdxl, whisper-large-v3
+                    flux-pro-1-1, stable-diffusion-3-5
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Картинки и аудио. Хостим в РФ.
+                    Картинки. Медиа-модели вызываются своими эндпоинтами, а не
+                    <code className="font-mono"> /v1/chat/completions</code>.
                   </p>
                 </li>
               </ul>
@@ -279,17 +288,26 @@ print(resp.choices[0].message.content)`}
             <section id="examples" className="scroll-mt-24 mb-12">
               <h2 className="text-2xl font-semibold mb-3">Примеры</h2>
               <h3 className="text-xl font-semibold mt-4 mb-2">
-                Стриминг ответа
+                Обычный запрос
               </h3>
               <CodeBlock lang="python">
-{`stream = client.chat.completions.create(
+{`resp = client.chat.completions.create(
     model="gpt-4o-mini",
     messages=[{"role": "user", "content": "Расскажи историю"}],
-    stream=True,
 )
-for chunk in stream:
-    print(chunk.choices[0].delta.content or "", end="", flush=True)`}
+print(resp.choices[0].message.content)`}
               </CodeBlock>
+              <p className="text-sm text-muted-foreground">
+                Стриминг в текущем контракте не поддерживается: параметр{' '}
+                <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs">
+                  stream
+                </code>{' '}
+                жёстко зафиксирован на{' '}
+                <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs">
+                  false
+                </code>
+                , и запрос с ним будет отклонён.
+              </p>
             </section>
 
             <section id="sdk" className="scroll-mt-24 mb-12">

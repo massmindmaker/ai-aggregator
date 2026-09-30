@@ -197,15 +197,8 @@ export const ALL_PROVIDERS: ReadonlyArray<{
   },
 ];
 
-export const TIERS = {
-  basic: { name: 'Basic', monthly: 990, yearly: 9900, credits: 1200 },
-  starter: { name: 'Starter', monthly: 2490, yearly: 24900, credits: 3200 },
-  pro: { name: 'Pro', monthly: 6990, yearly: 69900, credits: 10000 },
-} as const;
-
-export type TierId = keyof typeof TIERS;
-
-export function getTier(tierId: string): (typeof TIERS)[TierId] | null {
-  if (tierId in TIERS) return TIERS[tierId as TierId];
-  return null;
-}
+// 🔴 AG-7 (2026-09-30): the tier table moved to `./tiers` so marketing pages
+// (home, /pricing) can render tiers and prices without importing this module —
+// which pulls the Tinkoff/YooKassa acquiring SDKs in at module scope. Re-
+// exported here so every existing `getTier` / `TIERS` caller keeps working.
+export { TIERS, getTier, TIER_ORDER, type TierId } from './tiers';

@@ -26,15 +26,17 @@ interface Props {
   onClose?: () => void;
 }
 
+// 🔴 AG-7 (2026-09-30): this list used to include `code`, `multimodal` and
+// `text-to-speech` — types no entry in `catalog.generated.ts` ever has
+// (`code` exists only as a TAG; `speech-to-text` was withdrawn from sale by
+// migration 0093). Each of those checkboxes produced an empty results page.
+// The list is now exactly the types the live catalog contains.
 const ALL_TYPES: ModelType[] = [
   'llm',
   'image',
   'audio',
   'video',
-  'code',
   'embedding',
-  'multimodal',
-  'text-to-speech',
 ];
 
 const REGIONS: Array<{ value: HostingRegion; label: string }> = [
@@ -44,13 +46,12 @@ const REGIONS: Array<{ value: HostingRegion; label: string }> = [
   { value: 'global', label: 'Global CDN' },
 ];
 
-const CAPS: Array<{ value: MarketplaceFilters['capabilities'][number]; label: string }> = [
-  { value: 'streaming', label: 'Streaming' },
-  { value: 'tools', label: 'Function calling' },
-  { value: 'vision', label: 'Vision' },
-  { value: 'jsonSchema', label: 'JSON Schema' },
-  { value: 'batch', label: 'Batch API' },
-];
+// 🔴 AG-7: the "Возможности" filter group is gone entirely. Every capability
+// it offered (Streaming, Function calling, Vision, JSON Schema, Batch API) is
+// declared `false` by the contract the gateway actually executes
+// (public-catalog.ts:638-651), so filtering by them could only ever surface
+// models the buyer cannot use. `MarketplaceFilters.capabilities` stays in the
+// URL schema so old shared links keep parsing; nothing writes it any more.
 
 export function FilterPanel({ orgs, tags, className, onClose }: Props) {
   const router = useRouter();
@@ -135,20 +136,6 @@ export function FilterPanel({ orgs, tags, className, onClose }: Props) {
             checked={filters.regions.includes(r.value)}
             label={r.label}
             onChange={() => toggleInArray(filters.regions, r.value, 'regions')}
-          />
-        ))}
-      </FilterGroup>
-
-      <FilterGroup label="Возможности">
-        {CAPS.map((c) => (
-          <CheckRow
-            key={c.value}
-            id={`cap-${c.value}`}
-            checked={filters.capabilities.includes(c.value)}
-            label={c.label}
-            onChange={() =>
-              toggleInArray(filters.capabilities, c.value, 'capabilities')
-            }
           />
         ))}
       </FilterGroup>

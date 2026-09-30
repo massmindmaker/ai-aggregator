@@ -90,6 +90,13 @@ export async function POST(req: NextRequest) {
     return fallbackMock(modelSlug, prompt);
   }
 
+  // 🔴 AG-7 (2026-09-30): this used to ask the gateway for `stream: true`.
+  // The sold v1 contract pins `parameters.stream = { const: false }` and the
+  // chat handler answers `unsupported_execution_contract` (501), so every
+  // playground request failed while the page advertised "real model, same as
+  // the API". It also omitted `Idempotency-Key`, which the contract requires.
+  // Request the plain (non-streaming) completion and re-frame the single
+  // assistant message as one delta — the browser-side SSE shape is unchanged.
   let upstreamRes: Response;
   try {
     upstreamRes = await fetch(`${gatewayUrl}/v1/chat/completions`, {
@@ -98,10 +105,11 @@ export async function POST(req: NextRequest) {
         'content-type': 'application/json',
         authorization: `Bearer ${systemKey}`,
         'x-aiag-playground': '1',
+        'idempotency-key': `pg_${crypto.randomUUID()}`,
       },
       body: JSON.stringify({
         model: modelSlug,
-        stream: true,
+        stream: false,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 800,
       }),
@@ -111,40 +119,35 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'gateway_unreachable' }, { status: 502 });
   }
 
-  if (!upstreamRes.ok || !upstreamRes.body) {
+  if (!upstreamRes.ok) {
     await refundPlaygroundHit(ip);
     return Response.json({ error: `gateway_${upstreamRes.status}` }, { status: 502 });
   }
 
-  // Stream SSE from gateway → client in our delta format
+  let text: string;
+  try {
+    const payload = (await upstreamRes.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>;
+    };
+    const content = payload.choices?.[0]?.message?.content;
+    text = typeof content === 'string' ? content : '';
+  } catch {
+    await refundPlaygroundHit(ip);
+    return Response.json({ error: 'gateway_bad_response' }, { status: 502 });
+  }
+
   const encoder = new TextEncoder();
-  const upstreamBody = upstreamRes.body;
   const stream = new ReadableStream({
     async start(controller) {
-      const reader = upstreamBody.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n');
-          buf = lines.pop() ?? '';
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const raw = line.slice(6).trim();
-            if (raw === '[DONE]') continue;
-            try {
-              const chunk = JSON.parse(raw);
-              const delta = chunk?.choices?.[0]?.delta?.content;
-              if (typeof delta === 'string' && delta) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`));
-              }
-            } catch { /* skip malformed */ }
-          }
+        if (text) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ delta: text })}\n\n`),
+          );
         }
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`),
+        );
       } finally {
         controller.close();
       }

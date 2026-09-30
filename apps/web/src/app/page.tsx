@@ -18,13 +18,25 @@ import { filtersToSearchParams } from '@/lib/marketplace/filters';
  * the hardcoded "400+ моделей" claimed ~6x the real catalog. `getAllModels`
  * and `getAllOrgs` are synchronous pure reads over the generated catalog
  * (no DB, no network), so module scope is safe here.
+ *
+ * 🔴 AG-7 (2026-09-30): the same rule now applies to PRICES and to the tier
+ * cards below. This file used to print hand-typed "0.2 ₽ / 1k tok" strings and
+ * five subscription tiers (Basic/Starter/Growth/Pro/Business) that the billing
+ * code does not know: prices are billed in CREDITS (pricing-calc.ts docblock)
+ * and `TIERS` in lib/payments/providers.ts has exactly three ids
+ * (basic|starter|pro) — Growth/Business returned 400 BAD_TIER at checkout.
+ * Both blocks are now derived from those two modules.
  */
+
+import { getModelBySlug } from '@/lib/marketplace/catalog';
+import { formatPriceLabel } from '@/lib/marketplace/pricing-calc';
+import { TIERS, TIER_ORDER, type TierId } from '@/lib/payments/tiers';
 
 export const metadata: Metadata = {
   title:
-    'AI-Aggregator — любая AI-модель, один API, оплата в ₽',
+    'AI-Aggregator — любая AI-модель, один API, оплата картой РФ',
   description:
-    'Подключайте любую AI-модель через OpenAI-совместимый API. GPT-5, Claude, Flux, Veo, Whisper и открытые модели. Оплата картой РФ, СБП, по счёту. Deploy в РФ-регионе.',
+    'Подключайте AI-модели через OpenAI-совместимый API. GPT-5, Claude, Flux, Veo и открытые модели. Оплата картой РФ, СБП, по счёту. Deploy в РФ-регионе.',
 };
 
 /**
@@ -49,31 +61,31 @@ const scenarios: Array<{
   {
     icon: '💬',
     title: 'Chatbot / Support',
-    desc: 'GPT-5, Claude, DeepSeek. Streaming, tool calls, контекст 200k.',
+    desc: 'GPT-5, Claude, DeepSeek. Контекст до 200k, один OpenAI-совместимый endpoint.',
     filter: { types: ['llm'] },
   },
   {
     icon: '📄',
     title: 'RAG / Docs',
-    desc: 'Embedding + reranker + LLM. Русские модели ЯндексGPT, GigaChat.',
+    desc: 'Embedding-модели для индексации плюс LLM для ответа. Русские: ЯндексGPT, GigaChat.',
     filter: { types: ['embedding'] },
   },
   {
     icon: '</>',
     title: 'Code / DevTool',
-    desc: 'Claude Sonnet, DeepSeek-Coder, Qwen2.5-Coder. FIM, large ctx.',
+    desc: 'Claude Sonnet, DeepSeek, Qwen — по тегу «code» в каталоге.',
     filter: { tags: ['code'] },
   },
   {
     icon: '🖼',
     title: 'Image / Avatar',
-    desc: 'SDXL, Flux, Imagen 4, Midjourney. ControlNet, IP-Adapter.',
+    desc: 'Flux, Imagen, Midjourney, Stable Diffusion — генерация изображений.',
     filter: { types: ['image'] },
   },
   {
     icon: '🎙',
     title: 'Audio / Voice',
-    desc: 'Whisper, ElevenLabs, Suno, XTTS. STT, TTS, voice cloning.',
+    desc: 'ElevenLabs, Suno — синтез речи и генерация музыки.',
     filter: { types: ['audio'] },
   },
 ];
@@ -115,40 +127,52 @@ interface HeroStat {
 // invented. Re-add only when backed by real telemetry.
 const heroStats: HeroStat[] = []; // счётчики убраны по решению основателя (2026-08-23)
 
-const topModels = [
-  {
-    code: 'G5',
-    title: 'GPT-5',
-    provider: 'openai',
-    chips: ['chat', 'vision', 'tools'],
-    desc: 'Флагманская multimodal LLM с 1M ctx, reasoning и tool use.',
-    price: '0.2 ₽ / 1k tok',
-  },
-  {
-    code: 'SD',
-    title: 'SDXL 1.0',
-    provider: 'stability-ai',
-    chips: ['image', 'open'],
-    desc: 'Генерация 1024×1024 за ~2 сек. LoRA, ControlNet, IP-Adapter.',
-    price: '0.04 ₽ / img',
-  },
-  {
-    code: 'C4',
-    title: 'Claude Sonnet 4.7',
-    provider: 'anthropic',
-    chips: ['chat', '200k ctx'],
-    desc: 'Лучший coding LLM, agentic workflows, artifact mode.',
-    price: '0.35 ₽ / 1k tok',
-  },
-  {
-    code: 'FX',
-    title: 'Flux 1.1 Pro',
-    provider: 'black-forest-labs',
-    chips: ['image', 'photo'],
-    desc: 'Фотореалистичная генерация, превосходит MJ v6 на людях.',
-    price: '0.12 ₽ / img',
-  },
+/** Slugs for the decorative floating cards — resolved against the live catalog. */
+const FLOATING_MODEL_SLUGS = [
+  'openai/gpt-5-5',
+  'flux-pro-1-1',
+  'elevenlabs-tts-hf',
 ];
+
+/**
+ * 🔴 AG-7 (2026-09-30): these were four hand-written cards with hand-typed
+ * prices in rubles ("0.2 ₽ / 1k tok" for a model the catalog prices at 0.9
+ * credits/1k). Prices are now read from the same catalog the marketplace uses
+ * and printed by `formatPriceLabel`, which renders CREDITS ("кр") — the unit
+ * billing actually charges in. Slugs are resolved through `getModelBySlug`, so
+ * a card can only render if that model is in the catalog right now.
+ */
+const TOP_MODEL_SLUGS: Array<{ slug: string; code: string }> = [
+  { slug: 'openai/gpt-5-5', code: 'G5' },
+  { slug: 'anthropic/claude-sonnet-4-6', code: 'C4' },
+  { slug: 'flux-pro-1-1', code: 'FX' },
+  { slug: 'stable-diffusion-3-5', code: 'SD' },
+];
+
+const topModels = TOP_MODEL_SLUGS.flatMap(({ slug, code }) => {
+  const model = getModelBySlug(slug);
+  if (!model) return [];
+  return [
+    {
+      code,
+      slug: model.slug,
+      title: model.name,
+      provider: model.orgName,
+      chips: [MODEL_TYPE_CHIP[model.type] ?? model.type],
+      price: formatPriceLabel(model),
+      href: `/marketplace/${model.orgSlug}/${model.modelSlug}`,
+    },
+  ];
+});
+
+/** Chip text for the "горячее сейчас" cards, from the real model type. */
+const MODEL_TYPE_CHIP: Record<string, string> = {
+  llm: 'chat',
+  image: 'image',
+  video: 'video',
+  audio: 'audio',
+  embedding: 'embedding',
+};
 
 const steps = [
   {
@@ -205,8 +229,14 @@ const compareRows = [
     ],
   },
   {
+    // 🔴 AG-7: this row used to advertise chat + image + audio. `/v1/catalog`
+    // can only mark `chat` and `embedding` models `available`
+    // (public-catalog.ts:519-521) — image/video/audio resolve to
+    // unavailable('no_admitted_deployment'). Media is served by its own
+    // endpoints, so the honest claim is the two catalog types, not three
+    // modalities.
     feat: 'Каталог моделей',
-    us: { kind: 'check', text: `✓ LLM + image + audio` },
+    us: { kind: 'check', text: '✓ LLM + эмбеддинги в /v1/catalog' },
     cells: [
       { kind: 'check', text: '✓ 1000+ (image heavy)' },
       { kind: 'check', text: '✓ 500k+ (часто без API)' },
@@ -251,39 +281,41 @@ const cellColor: Record<string, string> = {
   meh: 'var(--ink-muted)',
 };
 
-const pricingTiers = [
-  {
-    tier: 'Basic',
-    price: <>990<span style={{ color: 'var(--accent)', fontSize: 14 }}>₽</span><span className="text-[11px] font-normal" style={{ color: 'var(--ink-muted)' }}> / мес</span></>,
-    desc: '+1000₽ на баланс. Все модели. Email-поддержка.',
+/**
+ * 🔴 AG-7 (2026-09-30): this block used to advertise five tiers — Basic 990,
+ * Starter 2490, **Growth 4490**, Pro 6990, **Business 29900** — and per-tier
+ * promises ("+1000₽ на баланс", "-10% на запросы", "5 API-ключей", "Retention
+ * логов 90 дней") that exist nowhere in the code. Growth and Business are not
+ * in `TIERS` at all: `getTier()` returned null and checkout answered 400
+ * BAD_TIER, i.e. two of the five cards on the home page were unpurchasable.
+ *
+ * Now every card is generated from `TIERS` (lib/payments/tiers.ts) — the same
+ * table `api/subscriptions/create` charges from — and the only promise made is
+ * the one the code implements: a monthly credit allotment. Credits, not rubles
+ * on a balance: the webhook grants `tier.credits` credits (1 credit = 1 cent).
+ */
+const pricingTiers = TIER_ORDER.map((id: TierId) => {
+  const tier = TIERS[id];
+  return {
+    id,
+    tier: tier.name,
+    featured: id === 'starter',
+    price: (
+      <>
+        {tier.monthly.toLocaleString('ru-RU')}
+        <span style={{ color: 'var(--accent)', fontSize: 14 }}>₽</span>
+        <span
+          className="text-[11px] font-normal"
+          style={{ color: 'var(--ink-muted)' }}
+        >{' '}
+          / мес
+        </span>
+      </>
+    ),
+    desc: `${tier.credits.toLocaleString('ru-RU')} кредитов в месяц на все модели каталога. Без подписки — pay-per-request по факту.`,
     cta: 'Подключить',
-  },
-  {
-    tier: 'Starter',
-    featured: true,
-    price: <>2 490<span style={{ color: 'var(--accent)', fontSize: 14 }}>₽</span><span className="text-[11px] font-normal" style={{ color: 'var(--ink-muted)' }}> / мес</span></>,
-    desc: '+2700₽. -10% на запросы. Приоритет в очереди.',
-    cta: 'Выбрать',
-  },
-  {
-    tier: 'Growth',
-    price: <>4 490<span style={{ color: 'var(--accent)', fontSize: 14 }}>₽</span><span className="text-[11px] font-normal" style={{ color: 'var(--ink-muted)' }}> / мес</span></>,
-    desc: '+5000₽. -15% цена. 5 API-ключей. SLA 99.9%.',
-    cta: 'Выбрать',
-  },
-  {
-    tier: 'Pro',
-    price: <>6 990<span style={{ color: 'var(--accent)', fontSize: 14 }}>₽</span><span className="text-[11px] font-normal" style={{ color: 'var(--ink-muted)' }}> / мес</span></>,
-    desc: '+8000₽. -20% цена. Custom rate limit. Slack-поддержка.',
-    cta: 'Выбрать',
-  },
-  {
-    tier: 'Business',
-    price: <>29 900<span style={{ color: 'var(--accent)', fontSize: 14 }}>₽</span><span className="text-[11px] font-normal" style={{ color: 'var(--ink-muted)' }}> / мес</span></>,
-    desc: '+35 000₽. -25% цена. Договор ООО. Dedicated.',
-    cta: 'Связаться',
-  },
-];
+  };
+});
 
 export default function HomePage() {
   return (
@@ -312,35 +344,36 @@ export default function HomePage() {
           style={{ top: '40%', right: '10%', zIndex: 0, animationDelay: '6s' }}
         />
 
-        {/* Floating model cards (right side) — hidden on mobile via CSS */}
+        {/* Floating model cards (right side) — hidden on mobile via CSS.
+            Prices come from the catalog via formatPriceLabel (credits, "кр"),
+            and the slugs are resolved from the live catalog, so a card can
+            only render for a model that is actually listed. AG-7 replaced the
+            hand-typed ruble prices here — including the card for the
+            transcription model, unsold since migration 0093. */}
         <div
           className="aiag-floating-cards absolute inset-0 pointer-events-none"
           style={{ zIndex: 0 }}
         >
-          <div className="aiag-float-card fc-1">
-            <div className="font-semibold mb-1 text-[12px]" style={{ color: 'var(--ink)' }}>
-              stability-ai / sdxl
-            </div>
-            <div style={{ color: 'var(--ink-muted)' }}>
-              image · <span style={{ color: 'var(--accent)' }}>0.04 ₽</span>/img
-            </div>
-          </div>
-          <div className="aiag-float-card fc-2">
-            <div className="font-semibold mb-1 text-[12px]" style={{ color: 'var(--ink)' }}>
-              openai / gpt-5
-            </div>
-            <div style={{ color: 'var(--ink-muted)' }}>
-              chat · <span style={{ color: 'var(--accent)' }}>0.2 ₽</span>/1k tok
-            </div>
-          </div>
-          <div className="aiag-float-card fc-3">
-            <div className="font-semibold mb-1 text-[12px]" style={{ color: 'var(--ink)' }}>
-              whisper / large-v3
-            </div>
-            <div style={{ color: 'var(--ink-muted)' }}>
-              audio · <span style={{ color: 'var(--accent)' }}>0.08 ₽</span>/мин
-            </div>
-          </div>
+          {FLOATING_MODEL_SLUGS.map((slug, i) => {
+            const model = getModelBySlug(slug);
+            if (!model) return null;
+            return (
+              <div key={slug} className={`aiag-float-card fc-${i + 1}`}>
+                <div
+                  className="font-semibold mb-1 text-[12px]"
+                  style={{ color: 'var(--ink)' }}
+                >
+                  {model.orgSlug} / {model.modelSlug}
+                </div>
+                <div style={{ color: 'var(--ink-muted)' }}>
+                  {model.type} ·{' '}
+                  <span style={{ color: 'var(--accent)' }}>
+                    {formatPriceLabel(model)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <div
@@ -374,7 +407,7 @@ export default function HomePage() {
                   background: 'var(--accent)',
                 }}
               />
-              оплата в ₽ · без VPN
+              оплата картой РФ · без VPN
             </span>
 
             <h1
@@ -392,7 +425,7 @@ export default function HomePage() {
               <br />
               One API.
               <br />
-              Payment in <span style={{ color: 'var(--accent)' }}>₽.</span>
+              Card payments in <span style={{ color: 'var(--accent)' }}>RU.</span>
             </h1>
 
             <p
@@ -406,9 +439,9 @@ export default function HomePage() {
                 '--fade-delay': '1000ms',
               } as CSSProperties}
             >
-              Подключайте любую AI-модель через OpenAI-совместимый API. GPT-5,
-              Claude, Flux, Veo, Whisper и открытые модели. Оплата
-              картой РФ, СБП, по счёту. Deploy в РФ-регионе.
+              Подключайте AI-модели через OpenAI-совместимый API. GPT-5,
+              Claude, Flux, Veo и открытые модели. Пополнение картой РФ, СБП
+              или по счёту, списание в кредитах. Deploy в РФ-регионе.
             </p>
 
             <div className="flex gap-3.5 flex-wrap">
@@ -661,7 +694,7 @@ export default function HomePage() {
                 Горячее сейчас
               </h2>
               <p style={{ fontSize: 17, color: 'var(--ink-muted)', maxWidth: 600 }}>
-                Модели из каталога. Цены в ₽, деплой в РФ-регионе.
+                Модели из каталога. Списание в кредитах, деплой в РФ-регионе.
               </p>
             </div>
             <Link
@@ -683,8 +716,8 @@ export default function HomePage() {
           >
             {topModels.map((m) => (
               <Link
-                key={m.title}
-                href="/marketplace"
+                key={m.slug}
+                href={m.href}
                 className="block transition-all hover:-translate-y-1 cursor-pointer"
                 style={{
                   background: 'var(--bg-elev)',
@@ -745,7 +778,7 @@ export default function HomePage() {
                     minHeight: 36,
                   }}
                 >
-                  {m.desc}
+                  {m.title} — {m.provider}. Цена и доступность — из каталога.
                 </div>
                 <div
                   className="flex items-center font-mono"
@@ -1045,8 +1078,9 @@ export default function HomePage() {
               Pay-as-you-go или депозит
             </h2>
             <p style={{ fontSize: 17, color: 'var(--ink-muted)', maxWidth: 600 }}>
-              Платите за фактическое использование. Подписки дают бонус к
-              балансу и снижение цены запроса до -25%.
+              Платите за фактическое использование: цена запроса одна и та же
+              вне зависимости от тарифа. Подписка даёт ежемесячный запас
+              кредитов.
             </p>
           </div>
 
@@ -1181,7 +1215,7 @@ export default function HomePage() {
         >
           Любая модель. Один API.
           <br />
-          <span style={{ color: 'var(--accent)' }}>Оплата в ₽.</span>
+              <span style={{ color: 'var(--accent)' }}>Оплата картой РФ.</span>
         </h2>
         <p
           style={{
@@ -1253,8 +1287,8 @@ export default function HomePage() {
                 maxWidth: 320,
               }}
             >
-              Маркетплейс AI-моделей с OpenAI-совместимым API. Оплата в рублях.
-              Deploy в РФ-регионе.
+              Маркетплейс AI-моделей с OpenAI-совместимым API. Пополнение
+              картой РФ и СБП, списание в кредитах. Deploy в РФ-регионе.
             </p>
           </div>
 

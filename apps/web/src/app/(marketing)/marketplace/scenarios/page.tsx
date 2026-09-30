@@ -14,11 +14,14 @@ export const metadata: Metadata = {
   alternates: { canonical: '/marketplace/scenarios' },
 };
 
+// 🔴 AG-7 (2026-09-30): this legend carried a speech-recognition key, but
+// transcription is not a modality any sold scenario has (`ScenarioModality` is
+// chat|image|tts|embedding) and it was withdrawn from sale by migration
+// 0093_depublish_stt_v1. The key could never match a rendered card.
 const MODALITY_LABEL: Record<string, string> = {
   chat: 'Чат',
   image: 'Изображения',
   tts: 'Синтез речи',
-  stt: 'Распознавание речи',
   embedding: 'Эмбеддинги',
 };
 

@@ -102,8 +102,11 @@ export default async function PlaygroundPage({ params: paramsPromise }: RoutePar
                   <li>Реальная модель через боевой шлюз, без регистрации</li>
                 </ul>
                 <p className="text-xs text-muted-foreground pt-2">
-                  Ответы не заготовлены: playground обращается к той же
-                  модели, что и API.
+                  Playground вызывает ту же модель через тот же шлюз, что и API.
+                  В локальной среде без настроенного{' '}
+                  <code className="font-mono">GATEWAY_SYSTEM_API_KEY</code>{' '}
+                  вместо ответа модели приходит демонстрационная заглушка —
+                  на боевом сервере такой режим выключен.
                 </p>
               </CardContent>
             </Card>

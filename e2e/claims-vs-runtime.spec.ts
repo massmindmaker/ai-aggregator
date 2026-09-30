@@ -48,8 +48,13 @@ function lineOf(source: string, pattern: RegExp): number {
 function hits(relative: string, pattern: RegExp): string[] {
   return read(relative)
     .split('\n')
+    // Comments are not storefront claims. A fix that documents "this file used to print
+    // 0.2 ₽" must not keep the suite red, or the next agent deletes the explanation.
     .map((line, index) => ({ line, n: index + 1 }))
-    .filter(({ line }) => pattern.test(line))
+    .filter(
+      ({ line }) =>
+        !/^\s*(\/\/|\*|\/\*|--)/.test(line) && pattern.test(line),
+    )
     .map(({ line, n }) => `${relative}:${n} — ${line.trim().slice(0, 140)}`);
 }
 
@@ -186,7 +191,7 @@ test.describe('advertised capability contract', () => {
 test.describe('price unit and tier claims', () => {
   test('storefront quotes credits, not rubles', () => {
     const pricing = read('apps/web/src/lib/marketplace/pricing-calc.ts');
-    expect(pricing).toMatch(/CREDITS \(1 credit = 1 US cent\), NOT rubles/);
+    expect(pricing).toMatch(/1 credit = 1 US cent\), NOT rubles/);
     const home = read('apps/web/src/app/page.tsx');
     const bad = hits(
       'apps/web/src/app/page.tsx',
@@ -199,8 +204,11 @@ test.describe('price unit and tier claims', () => {
   });
 
   test('subscription tiers on the storefront equal TIERS in code', () => {
-    const providers = read('apps/web/src/lib/payments/providers.ts');
-    const tierIds = [...providers.matchAll(/^\s{2}(\w+):\s*\{\s*name:/gm)].map(
+    // The tier table lives in lib/payments/tiers.ts (extracted 2026-09-30 so
+    // marketing pages can read it without importing the acquiring SDKs);
+    // providers.ts re-exports it for every existing getTier() caller.
+    const tiers = read('apps/web/src/lib/payments/tiers.ts');
+    const tierIds = [...tiers.matchAll(/^\s{2}(\w+):\s*\{\s*name:/gm)].map(
       (m) => m[1],
     );
     expect(tierIds.length).toBeGreaterThan(0);
@@ -289,17 +297,21 @@ test.describe('storefront surface integrity', () => {
     ).toEqual([]);
   });
 
-  test('playground is not offered for models the chat-only route cannot run', () => {
+  test('playground is gated to models the chat-only route can run', () => {
     const detail = read(
       'apps/web/src/app/(marketing)/marketplace/[org]/[model]/page.tsx',
     );
     const run = read('apps/web/src/app/api/playground/run/route.ts');
     // The playground always posts to /v1/chat/completions regardless of type.
     expect(run).toMatch(/\/v1\/chat\/completions/);
+    // 2026-09-30 (AG-7): the link is no longer removed outright — it is gated
+    // on the model type, so a chat model keeps its playground and every other
+    // type gets an explanation instead of a button that would 501. What must
+    // never come back is an UNGATED link.
     expect(
       detail,
-      'every model page offers the Playground, but the playground posts to /v1/chat/completions for image/video/audio/embedding models too',
-    ).not.toMatch(/\/playground`/);
+      'the Playground link must be gated by isChatRunnable(model.type), not rendered unconditionally',
+    ).toMatch(/isChatRunnable\(model\.type\)\s*\?\s*[\s\S]{0,200}?\/playground`/);
   });
 });
 

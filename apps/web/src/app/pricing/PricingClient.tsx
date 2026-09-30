@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
+import { TIERS, TIER_ORDER, type TierId } from '@/lib/payments/tiers';
 
 interface Tier {
   id: string; // 'basic'|'starter'|'pro'
@@ -23,62 +24,73 @@ interface Tier {
   isContact?: boolean;
 }
 
-// Финальные тарифы из Knowledge/14-pricing-validation.md
-// Free-тариф убран (founder 2026-07-17): регистрация не начисляла баланс —
-// карточка обещала то, чего код не делал. См. /CLAUDE.md founder decisions.
-const tiers: Tier[] = [
-  {
-    id: 'basic',
-    name: 'Basic',
-    monthlyPrice: 990,
-    yearlyPrice: 9900,
+/**
+ * 🔴 AG-7 (2026-09-30): prices and credit counts used to be re-typed here,
+ * duplicating `TIERS` — so the pricing page could drift from what checkout
+ * actually charges. They are now read from the same table
+ * (`@/lib/payments/tiers`, re-exported by providers.ts) that
+ * `api/subscriptions/create` uses. The `tiers` array below carries only what
+ * the code does NOT know: id → tier mapping, tagline and feature copy.
+ *
+ * Every feature claim here must be backed by code. The rpm line was the worst
+ * offender: 60 / 300 / 500 were advertised, but the gateway enforces
+ * `gateway_api_keys.rpm_limit` (DEFAULT 60, migration 0004) per API-key row
+ * and nothing in apps/web ever writes that column from the subscription — so
+ * all three tiers actually get 60. `RPM_LIMIT` below is the single enforced
+ * value; upgrade it only together with the gateway column write.
+ */
+const RPM_LIMIT = 60;
+
+const TIER_COPY: Record<
+  TierId,
+  { tagline: string; features: string[]; cta: string; isPopular?: boolean }
+> = {
+  basic: {
     tagline: 'Для пет-проектов и MVP',
-    credits: '1 200 кредитов / мес',
     features: [
-      'Все модели платформы',
-      '60 запросов в минуту',
-      'Webhooks и события',
-      'Чат-поддержка в Telegram',
+      'Все модели каталога',
+      `${RPM_LIMIT} запросов в минуту на ключ`,
+      'Единый OpenAI-совместимый API',
     ],
     cta: 'Подписаться на Basic',
-    ctaHref: '/register?plan=basic',
   },
-  {
-    id: 'starter',
-    name: 'Starter',
-    monthlyPrice: 2490,
-    yearlyPrice: 24900,
+  starter: {
     tagline: 'Для растущих команд',
-    credits: '3 200 кредитов / мес',
     features: [
       'Всё из Basic',
-      'Приоритет в роутинге',
-      '300 запросов в минуту',
-      'BYOK для своих API-ключей',
-      'Аналитика расходов',
+      `${RPM_LIMIT} запросов в минуту на ключ`,
+      'Единый OpenAI-совместимый API',
     ],
     cta: 'Подписаться на Starter',
-    ctaHref: '/register?plan=starter',
     isPopular: true,
   },
-  {
-    id: 'pro',
-    name: 'Pro',
-    monthlyPrice: 6990,
-    yearlyPrice: 69900,
+  pro: {
     tagline: 'Для продуктовых команд',
-    credits: '10 000 кредитов / мес',
     features: [
       'Всё из Starter',
-      '500 запросов в минуту',
-      'Retention логов 90 дней',
-      'Выделенный менеджер',
-      'Custom rate-limits',
+      `${RPM_LIMIT} запросов в минуту на ключ`,
+      'Единый OpenAI-совместимый API',
     ],
     cta: 'Подписаться на Pro',
-    ctaHref: '/register?plan=pro',
   },
-];
+};
+
+const tiers: Tier[] = TIER_ORDER.map((id) => {
+  const tier = TIERS[id];
+  const copy = TIER_COPY[id];
+  return {
+    id,
+    name: tier.name,
+    monthlyPrice: tier.monthly,
+    yearlyPrice: tier.yearly,
+    tagline: copy.tagline,
+    credits: `${tier.credits.toLocaleString('ru-RU')} кредитов / мес`,
+    features: copy.features,
+    cta: copy.cta,
+    ctaHref: `/register?plan=${id}`,
+    isPopular: copy.isPopular,
+  };
+});
 
 type ProviderId = 'tinkoff' | 'yookassa' | 'sbp';
 
@@ -181,8 +193,9 @@ export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClie
             Платите за то, что используете
           </h1>
           <p className="mt-4 text-lg text-muted-foreground">
-            Pay-per-request в рублях. Подписки дают бонус-кредиты, повышенный
-            rate-limit и приоритет в роутинге.
+            Pay-per-request, списание в кредитах (1 кредит = 1 цент). Подписка
+            даёт ежемесячный запас кредитов — цена запроса от тарифа не
+            зависит.
           </p>
 
           <div className="mt-8 inline-flex items-center gap-3 rounded-full border border-border bg-card p-1.5 px-4">
@@ -357,8 +370,8 @@ export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClie
               Business / Enterprise
             </h3>
             <p className="text-muted-foreground mt-2">
-              SLA 99.5%, выделенные ресурсы, счёт юрлицу, кастомные SLA и
-              roadmap. От 29 900 ₽/мес.
+              Условия для крупных объёмов, юрлиц и SLA обсуждаем отдельно —{' '}
+              напишите нам, соберём расчёт под вашу нагрузку.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
