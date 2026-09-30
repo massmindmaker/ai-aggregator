@@ -125,6 +125,8 @@ describe('resumeAfterFirst with streamSseAndSettle', () => {
             cost_limit_monthly_rub: null,
           },
           requestId: 'request-1',
+          settlementRequestId:
+            'stl_11111111-2222-4333-8444-555555555555',
           byok: false,
         },
       ),

@@ -14,7 +14,7 @@ vi.mock('../middleware/auth-plan04', () => ({
 }));
 vi.mock('../middleware/rate-limit-plan04', () => ({ rateLimit: async (_c: unknown, next: () => Promise<void>) => next(), rpmOnly: async (_c: unknown, next: () => Promise<void>) => { calls.rpm(); await next(); } }));
 vi.mock('../middleware/key-limits', () => ({ keyLimits: async (_c: unknown, next: () => Promise<void>) => next() }));
-vi.mock('../middleware/pii-filter', () => ({ piiFilter: async (_c: unknown, next: () => Promise<void>) => next() }));
+vi.mock('../middleware/pii-filter', () => ({ piiFilter: async (_c: unknown, next: () => Promise<void>) => next(), setPiiResolveModel: vi.fn() }));
 vi.mock('../middleware/model-status-check', () => ({ modelStatusMiddleware: () => async (_c: unknown, next: () => Promise<void>) => next() }));
 vi.mock('../routes/v1/stored-batches', async () => {
   const { Hono } = await import('hono');

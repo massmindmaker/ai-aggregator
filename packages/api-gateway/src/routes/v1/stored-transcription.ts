@@ -14,6 +14,7 @@ import {
 } from '../../billing/reviewed-transcription-profiles';
 import { quoteReviewedTranscription } from '../../billing/stored-transcription-wav';
 import { createStoredTranscriptionAttempt } from '../../billing/stored-transcription-attempt';
+import { evaluateResidencyPolicy, StoredMediaPiiError } from '../../billing/stored-pii-residency';
 
 export const storedTranscription = new Hono();
 const deadline = () => new Date(Date.now() + 5 * 60_000).toISOString();
@@ -67,8 +68,30 @@ storedTranscription.post('/audio/transcriptions', async (c) => {
     throw errors.unavailable('Transcription capability unavailable');
 
   const policies = (key.policies ?? {}) as ApiKeyPolicies;
+  // F-3 (security review): raw voice audio IS personal data and this route had
+  // no residency check at all — it dispatched to groq (ru_residency=false)
+  // under the default key policy. There is no text to regex here, so the
+  // payload is declared PII by construction: unless the key explicitly sets
+  // allow_pii_transborder, only RU-resident candidates may be used, and an
+  // empty pool is a 403 BEFORE any provider/admission work.
+  let pool = reviewedCandidates;
+  try {
+    pool = [
+      ...evaluateResidencyPolicy({
+        policy: policies,
+        text: captured.identity.language ?? '',
+        hits: [],
+        candidates: reviewedCandidates,
+        piiByConstruction: true,
+      }).candidates,
+    ];
+  } catch (error) {
+    if (error instanceof StoredMediaPiiError)
+      throw errors.forbidden('PII detected; transborder blocked by policy');
+    throw error;
+  }
   const requestedMode = (policies.default_mode ?? 'auto') as Mode;
-  const candidate = pickUpstream(reviewedCandidates, requestedMode, policies, 'audio');
+  const candidate = pickUpstream(pool, requestedMode, policies, 'audio');
   const profile = profileFor(model.slug, model.type, candidate);
   if (!profile) throw errors.unavailable('Transcription capability unavailable');
   if (

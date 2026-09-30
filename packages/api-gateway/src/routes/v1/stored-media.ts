@@ -10,6 +10,8 @@ import { createStoredMediaAttempt } from '../../billing/stored-media-attempt';
 import { readMediaJob } from '../../billing/media-job-storage';
 import { enqueueOwnedMediaPoll } from '../../lib/media-queue';
 import type { ReviewedMediaProfile } from '../../billing/reviewed-media-profiles';
+import { detectPii } from '../../lib/pii';
+import { evaluateResidencyPolicy, StoredMediaPiiError } from '../../billing/stored-pii-residency';
 
 export const storedMedia=new Hono();
 const deadline=()=>new Date(Date.now()+30*60_000).toISOString();
@@ -42,8 +44,20 @@ async function submit(c:any,routeKind:StoredMediaRouteKind){
   const reviewed=model.candidates.filter(candidate=>profileFor(model.slug,model.type,routeKind,candidate)!==null);
   if(reviewed.length===0)throw errors.unavailable('Media capability unavailable');
   const policies=(key.policies??{}) as ApiKeyPolicies;
+  // F-3 (security review): the prompt used to leave for kie.ai without any PII
+  // check. Fail closed — narrow to RU-resident candidates when the prompt
+  // carries PII and the key has no allow_pii_transborder, 403 when none remain.
+  // Runs BEFORE pickUpstream so the provider is never chosen for a blocked prompt.
+  let pool=reviewed;
+  try{
+    pool=[...evaluateResidencyPolicy({policy:policies,text:String(identity.body.prompt??''),
+      hits:detectPii(String(identity.body.prompt??'')),candidates:reviewed}).candidates];
+  }catch(error){
+    if(error instanceof StoredMediaPiiError)throw errors.forbidden('PII detected; transborder blocked by policy');
+    throw error;
+  }
   const mode=(identity.requestedMode??policies.default_mode??'auto') as Mode;
-  const candidate=pickUpstream(reviewed,mode,policies,expectedType);
+  const candidate=pickUpstream(pool,mode,policies,expectedType);
   const profile=profileFor(model.slug,model.type,routeKind,candidate);
   if(!profile||candidate.provider!=='kie'||candidate.egress_proxy||process.env.AIAG_EGRESS_PROXY_URL)
     throw errors.unavailable('Media capability unavailable');

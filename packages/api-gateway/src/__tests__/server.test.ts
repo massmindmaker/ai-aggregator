@@ -77,7 +77,7 @@ vi.mock('../egress-executor', () => ({ registerGatewayEgressExecutor: vi.fn() })
 vi.mock('../middleware/auth-plan04', () => ({ requireApiKey: async (c: any, next: () => Promise<void>) => { legacyOrder.push('auth'); c.set('apiKey', { id: '30000000-0000-4000-8000-000000000001', org_id: '40000000-0000-4000-8000-000000000001', policies: {}, rpm_limit: 10, batch_rpm_limit: 1, daily_usd_cap: null, model_whitelist: [], ru_residency_only: false }); await next(); } }));
 vi.mock('../middleware/rate-limit-plan04', () => ({ rateLimit: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('rate'); await next(); }, rpmOnly: vi.fn() }));
 vi.mock('../middleware/key-limits', () => ({ keyLimits: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('key'); await next(); } }));
-vi.mock('../middleware/pii-filter', () => ({ piiFilter: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('pii'); await next(); } }));
+vi.mock('../middleware/pii-filter', () => ({ piiFilter: async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('pii'); await next(); }, setPiiResolveModel: vi.fn() }));
 vi.mock('../middleware/model-status-check', () => ({ modelStatusMiddleware: () => async (_c: unknown, next: () => Promise<void>) => { legacyOrder.push('model'); await next(); } }));
 vi.mock('../routes/v1/chat', async () => { const { Hono } = await import('hono'); return { chat: new Hono().post('/completions', c => { legacyOrder.push('legacy-chat'); c.header('x-aiag-charged-usd-micro','123'); return c.json({legacy:true}); }) }; });
 vi.mock('../catalog/public-catalog', () => ({

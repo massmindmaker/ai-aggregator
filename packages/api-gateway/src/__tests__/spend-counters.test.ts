@@ -253,6 +253,7 @@ describe('chat STREAM path settles AND moves the counters', () => {
         key,
         sessionId: 'sess-stream',
         requestId: 'req-stream-1',
+        settlementRequestId: 'stl_11111111-2222-4333-8444-555555555555',
         byok: false,
       });
     });

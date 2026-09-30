@@ -78,7 +78,11 @@ async function createOwner(){
   await runtime.client.begin(async(tx:any)=>{
     await tx`INSERT INTO users(id,email) VALUES(${user}::uuid,${'stt-'+user+'@example.test'})`;
     await tx`INSERT INTO organizations(id,slug,name,owner_id,payg_credits) VALUES(${org}::uuid,${org},'STT fixture',${user}::uuid,1000)`;
-    await tx`INSERT INTO gateway_api_keys(id,org_id,name,key_hash,key_prefix,rpm_limit,batch_rpm_limit) VALUES(${key}::uuid,${org}::uuid,'STT key',${sha256(token)},${token.slice(0,20)},10000,10000)`;
+    // F-3: raw audio is PII by construction. The reviewed STT upstream (groq)
+    // is not RU-resident, so the residency gate blocks it unless the key
+    // explicitly accepts transborder PII. This fixture asserts the durable
+    // lifecycle, so it opts in explicitly.
+    await tx`INSERT INTO gateway_api_keys(id,org_id,name,key_hash,key_prefix,rpm_limit,batch_rpm_limit,policies) VALUES(${key}::uuid,${org}::uuid,'STT key',${sha256(token)},${token.slice(0,20)},10000,10000,'{"allow_pii_transborder":true}'::jsonb)`;
     await tx`INSERT INTO gateway_quota_org_policies(org_id,enforcement_version,daily_supplier_usd_micro_limit_v2) VALUES(${org}::uuid,2,1000000)`;
     await tx`INSERT INTO gateway_quota_key_policies(api_key_id,org_id) VALUES(${key}::uuid,${org}::uuid)`;
   });
