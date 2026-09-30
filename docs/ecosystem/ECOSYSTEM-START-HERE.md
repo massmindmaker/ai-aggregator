@@ -3,6 +3,41 @@
 Дата среза: **30.09.2026**. Это единственная точка входа по всей экосистеме из трёх
 репозиториев. Задача файла — не дать агенту начать работу заново.
 
+## Конкурсный контур уехал в Arena (30.09.2026) — прочитать первым
+
+Решение владельца: **конкурсная площадка живёт в Arena, Aggregator контур убрал.**
+Выпиливание выполнено шагами 1–7 плана
+[`docs/superpowers/plans/2026-09-30-remove-contest-contour.md`](../superpowers/plans/2026-09-30-remove-contest-contour.md).
+Причина и граница — в записке
+[2026-09-30-contest-removal-boundary.md](./2026-09-30-contest-removal-boundary.md).
+
+- **Убрано из Aggregator:** воркер-оценка и `close-contests-cron`, 7 API-роутов
+  `api/contests/**` и `api/admin/contests/**`, схема `contests`/`evaluations`/`prize_awards`,
+  UI `/contests/**`, `/dashboard/{submissions,wins}`, `/admin/contests/**`,
+  `/admin/moderation/submissions`, `/contest-host-agreement`, режим дашборда `participant`.
+  Редиректы (301, `apps/web/next.config.mjs`): `/contests*` → `/marketplace`,
+  `/admin/contests*` → `/admin`, `/contest-host-agreement` → `/author-agreement`,
+  `/dashboard/{submissions,wins}` → `/dashboard`,
+  `/admin/moderation/submissions` → `/admin/moderation/models`.
+- **Мост публикации сохранён как конкурсонезависимый:**
+  `POST /api/admin/models/from-submission` (`apps/web/src/app/api/admin/models/from-submission/route.ts`)
+  — вставка строки в `models` от имени автора без `contest_id`/`final_rank`,
+  `derived_from_contest_id` = NULL.
+- **Осталось в Aggregator — авторская экономика:** `author_earnings`/`payouts`/
+  `author_tier_history` (`packages/database/src/schema/earnings.ts`),
+  `api/admin/payouts/**`, `dashboard/earnings`, `dashboard/payouts`, KYC-гейт выплат,
+  `finalize-earnings-cron.ts`, каталог `models`/`ai_models`/`models-marketplace`.
+  Это **не конкурс** — это начисление за продажу модели.
+- **Таблицы в БД остались мёртвыми намеренно.** `DROP TABLE` не делался: миграция
+  `0014_contest_marketplace.sql` добавила `models.derived_from_contest_id → contests(id)`,
+  поэтому удаление таблиц задевало бы каталог моделей. Откат — тег `pre-contest-removal`.
+- **Runbook конкурса переехал:** [`ops/runbook/contest-lifecycle.md`](../../ops/runbook/contest-lifecycle.md)
+  в Aggregator — заглушка; рабочая версия
+  `/home/bob/Projects/aiarena/docs/ops/runbook/contest-lifecycle.md`.
+
+Не искать в этом репозитории код конкурса, не «восстанавливать» его и не описывать
+`/contests` как функцию Aggregator. Если задача про конкурс — читать Arena.
+
 ## Жёсткий порядок чтения
 
 1. Этот файл (состояние и что делать дальше).
@@ -81,6 +116,11 @@ Agents Market: агент сам выбирает и покупает модел
 - **Наблюдение/восстановление TON** (`c6112a3`), settlement/startup (`9e84bfb`, `d38143f`).
 - **Авторский цикл** (`ace7213`): версии, модерация, точные начисления, возврат,
   операторское восстановление. 2683 PASS / 0 FAIL.
+- **Выпиливание конкурсного контура** (30.09, шаги 1–7 плана
+  [`2026-09-30-remove-contest-contour.md`](../superpowers/plans/2026-09-30-remove-contest-contour.md)):
+  код конкурса удалён, авторская экономика и каталог не тронуты, таблицы оставлены мёртвыми,
+  редиректы `/contests*` → `/marketplace`. Откат — тег `pre-contest-removal`.
+  **Не пересоздавать контур здесь.**
 - Локально приняты: durable chat, embeddings, completions, streaming, BYOK, async media, batches.
 - **Скорекард AG-6**: `docs/product/acceptance/AG-P6.md` — что закрыто, что нет.
 
@@ -159,6 +199,11 @@ Worker отправляет `tools`/`tool_choice`, а legacy gateway chat их *
 7. Юридический блокер: приём TON как оплаты услуг от резидентов РФ запрещён (ч.5 ст.14 259-ФЗ).
    Нужен юрист до публичного запуска кошелька. Не техническая задача, но блокирует релиз.
 8. Arena: PE-T2 (opt-in binding → DB evaluation jobs); затем PE-T3…T6, TON-призы, leaderboard.
+   **Это стал единственным владельцем конкурсного трека** — после выпиливания из Aggregator
+   оценка, лидерборд и призы делаются только здесь. Три реально недостающие функции:
+   **оценка (persistence результата), лидерборд по score, призы/выплаты.** Плюс публикация
+   победившей версии: Arena инициирует, Aggregator исполняет через
+   `POST /api/admin/models/from-submission`.
 9. Agents Market: AM-W1 (HTTP-каталог вместо SQL) → AM-W2/3 → W4a/W4b → W5–W7. 25–45 дней
    + 15–30 на приёмки. **Незакоммиченные планы Wave6–10 лежат untracked в репозитории Arena —
    закоммитить, это единственный носитель дизайна остатка.**

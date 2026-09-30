@@ -15,7 +15,7 @@ The active product consists of the Next.js web app, API gateway, Aggregator asyn
 
 Agent templates, Telegram Mini App flows, crypto membership and agent execution belong to `/home/bob/Projects/agents-market`. Contests, evaluations, battles and prizes belong to `/home/bob/Projects/aiarena`.
 
-The current web app and `apps/worker` still contain historical contest and marketplace surfaces. They remain only until audited extraction. UI or docs must not present those retained paths as proof that Aggregator owns the other products.
+The web app and `apps/worker` no longer contain contest surfaces. The contest contour was removed on 2026-09-30; `/contests*` and the related admin paths now permanently redirect to `/marketplace` and `/admin`. Do not describe them as retained or as evidence that Aggregator owns Arena. Authors publish and sell models through `/dashboard/models`; publishing a winning Arena version is initiated in Arena and executed by `POST /api/admin/models/from-submission`.
 
 ## Product truth
 

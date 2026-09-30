@@ -18,7 +18,36 @@ The web app authenticates a customer and manages organizations, keys and payment
 
 Migrations remain ordered and append-only. Historical TMA/Agents Market migrations are retained because deleting an applied migration would make schema history unreproducible. They are marked as cross-product legacy ownership and new Agents Market schema changes belong in `/home/bob/Projects/agents-market`.
 
-`apps/worker` retains contest evaluation and contest-closing modules pending an audited transfer to `/home/bob/Projects/aiarena`. Aggregator-native catalog, polling, email and webhook jobs remain here.
+Aggregator-native catalog, polling, email and webhook jobs remain in `apps/worker`; the historical contest worker modules that used to sit beside them were removed on 2026-09-30 (see the next section).
+
+## Contest contour removed (2026-09-30)
+
+The contest contour no longer exists in this repository. Contest creation, enrollment,
+submissions, evaluation, leaderboard and prize payouts belong to
+`/home/bob/Projects/aiarena`; see `docs/consolidation/arena-boundary.md` and
+`docs/ecosystem/2026-09-30-contest-removal-boundary.md`.
+
+Removed: the `contest-eval` queue, `close-contests-cron.ts`, the `eval-runner/**` modules,
+the `api/contests/**` and `api/admin/contests/**` routes, the `contests`, `evaluations`,
+`prize_awards` and `contest_submissions` Drizzle tables, the contest UI surfaces, the
+`participant` dashboard mode, and the optional `contestSubmissionId` field of
+`ArtifactManifest`. `apps/web/next.config.mjs` permanently redirects `/contests*` to
+`/marketplace`, `/admin/contests*` to `/admin`, `/contest-host-agreement` to
+`/author-agreement`, `/dashboard/submissions` and `/dashboard/wins` to `/dashboard`, and
+`/admin/moderation/submissions` to `/admin/moderation/models`.
+
+Retained deliberately: the author economy — `author_earnings`, `payouts`,
+`author_tier_history`, `finalize-earnings-cron.ts`, admin payout routes, the KYC gate and
+the model catalog. Author accrual is driven by paid gateway usage, not by contests.
+
+The publishing half of the retired contest route survives as the contest-independent
+admin route `POST /api/admin/models/from-submission`, which inserts a `models` row for a
+given author with `derived_from_contest_id` set to NULL.
+
+The contest database tables remain in place and are now dead. Dropping them is not safe
+yet: migration `0014_contest_marketplace.sql` added
+`models.derived_from_contest_id uuid REFERENCES contests(id)`, so `DROP TABLE contests`
+would touch the model catalog. Rollback point is the git tag `pre-contest-removal`.
 
 ## Local verification
 

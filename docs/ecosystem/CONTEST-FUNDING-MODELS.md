@@ -4,6 +4,32 @@
 Aggregator. Это восстанавливает конструкцию, которую владелец помнил, и фиксирует её, чтобы
 она не потерялась снова.
 
+## Статус документа: описаны для Arena, не для Aggregator
+
+**Конкурсная часть из Aggregator выпилена 30.09.2026** (план
+[`2026-09-30-remove-contest-contour.md`](../superpowers/plans/2026-09-30-remove-contest-contour.md),
+шаги 1–7; граница — [2026-09-30-contest-removal-boundary.md](./2026-09-30-contest-removal-boundary.md)).
+Всё, что ниже описано про **депозиты, `prize_pool_rub`, `prize_distribution`,
+`closeContestsCron`, `prize_awards` и призовые уведомления**, — это конструкция
+конкурсной площадки, которая теперь принадлежит **`/home/bob/Projects/aiarena`**.
+В Aggregator из этого осталось **ничего из перечисленного**: cron `closeContestsCron`,
+таблица `prize_awards` и роуты конкурса удалены; таблицы в БД остались мёртвыми.
+
+Что **не** уехало и по-прежнему живёт в Aggregator: `author_earnings`,
+`author_credit_ledger`, `payouts`, `author_tier_history` и
+`finalize-earnings-cron.ts` — это **начисление за продажу модели**, другой механизм
+с другой семантикой. Любая правка этого файла не должна задеть его.
+
+Документ остаётся здесь как **источник требований для Arena**, а не как описание
+функциональности Aggregator. Актуальные требования Arena живут в
+`/home/bob/Projects/aiarena/docs/ecosystem/arena.md` (блоки AR-02, AR-07, AR-09) и
+`/home/bob/Projects/aiarena/docs/superpowers/plans/2026-09-07-ton-prize-ledger.md`.
+
+**Одно предупреждение о переносе.** Механика `closeContestsCron` из спеки Phase 14
+описывает `UPDATE contests SET status = 'closed'`, но значения `'closed'` нет в enum
+`contest_status`. В исходном коде это был баг: такой запрос упал бы с ошибкой типа.
+Не переносить её в Arena как есть — у Arena своя схема, надо проверить свои значения.
+
 ## Два разных механизма — их нельзя смешивать
 
 ### 1. Коммерческий конкурс — «заносят бабки и депонируют»

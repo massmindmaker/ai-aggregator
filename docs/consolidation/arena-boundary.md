@@ -1,5 +1,39 @@
 # AI Arena: граница консолидации и первый пакет
 
+## Обновление 30.09.2026: конкурсный контур уехал из Aggregator
+
+Граница, которую этот документ описывал, **закреплена действием**. Решение владельца:
+конкурсная площадка живёт в Arena. Из Aggregator выпилены воркер-оценка,
+`close-contests-cron`, `eval-runner/**`, 7 API-роутов конкурса, схема
+`contests`/`evaluations`/`prize_awards`, конкурсный UI, `/contest-host-agreement`,
+режим дашборда `participant` и поле `contestSubmissionId` в `ArtifactManifest`.
+Планы и доказательства: [`/home/bob/Projects/ai-aggregator/docs/superpowers/plans/2026-09-30-remove-contest-contour.md`](/home/bob/Projects/ai-aggregator/docs/superpowers/plans/2026-09-30-remove-contest-contour.md)
+и [записка о причине и границе](/home/bob/Projects/ai-aggregator/docs/ecosystem/2026-09-30-contest-removal-boundary.md).
+
+Что это меняет для Arena:
+
+1. **Переносить конкурсный код нечего.** Arena уже покрывает 8 из 12 конкурсных функций,
+   причём 6 строже, чем было в Aggregator (policy с digest и заморозкой, регистрация с
+   принятой версией политики, команды и инвайты, immutable версии с тремя хешами,
+   append-only отбор с receipt, модерация).
+2. **Три функции Arena должна построить сама:** оценка с persistence результата,
+   лидерборд по score, призы и выплаты. Плюс скрытый финальный набор.
+3. **Публикация победившей модели.** Инициатива — Arena, исполнение — Aggregator:
+   `POST /api/admin/models/from-submission` в Aggregator вставляет строку в `models` от
+   имени автора без конкурсных полей, `derived_from_contest_id` = NULL. Общего HTTP-контракта
+   `POST /v1/publication-drafts` ещё нет — это открытая работа на границе.
+4. **Денежный контур не делить пополам.** Начисление автору за продажу модели
+   (`author_earnings` / `author_credit_ledger`) осталось в Aggregator и к конкурсу
+   отношения не имеет. Призы — разная сущность со своей книгой в Arena.
+5. **Runbook конкурса переехал:** `/home/bob/Projects/aiarena/docs/ops/runbook/contest-lifecycle.md`.
+   В Aggregator по тому же пути осталась заглушка со ссылкой.
+6. **Баг не переносить.** `close-contests-cron` писал `contests.status = 'closed'`, а такого
+   значения нет в enum `contest_status`; такой запрос упал бы с ошибкой типа. В Arena своя
+   схема — проверить свои значения статусов, не копировать механику.
+
+Разделы ниже описывают состояние консолидации на момент их написания и сохранены как
+история; актуальное состояние Arena — в `/home/bob/Projects/aiarena/docs/`.
+
 ## Канонический корень и Git
 
 - Канонический репозиторий уже расположен в `/home/bob/Projects/aiarena`: это Git worktree ветки `wave2`, HEAD `d087933` (`chore(memory): purge .chrome-test junk...`). В корне нет remote и submodule.

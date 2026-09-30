@@ -1,20 +1,17 @@
-# Contest lifecycle runbook
+# Contest lifecycle runbook — перенесён в Arena
 
-B2B sponsor inbound → brief negotiation → dataset curation → private test-set split →
-legal contract → prize pool escrow → launch announcement → submission review →
-eval run → leaderboard freeze → winner announcement → payout processing → post-mortem.
+Этот runbook описывал конкурсы, которых в AI Aggregator больше нет. Конкурсный контур
+выпилен из продукта 30.09.2026 (план
+[`docs/superpowers/plans/2026-09-30-remove-contest-contour.md`](../../docs/superpowers/plans/2026-09-30-remove-contest-contour.md),
+шаги 1–7; граница — [записка](../../docs/ecosystem/2026-09-30-contest-removal-boundary.md)).
 
-## Stages
+**Рабочая версия:** `/home/bob/Projects/aiarena/docs/ops/runbook/contest-lifecycle.md`
 
-1. **Inbound** — email от заказчика, заполняется form `/contests/request` или лично.
-2. **Brief** — call, zero-draft brief в `docs/launch/contest-<N>-brief.md`.
-3. **Dataset** — 70/15/15 split (train/valid/**private test**); private test закрыт на S3 admin-only.
-4. **Legal** — контракт по `/contest-host-agreement` + 15% org. fee.
-5. **Escrow** — призовой фонд на отдельный счёт, double-sign-off на payout.
-6. **Announcement** — Telegram, ODS, blog. Обычно T-14 дней до дедлайна.
-7. **Submission review** — auto-scoring + admin модерация borderline cases.
-8. **Eval run** — приватный test-set выполняется в изолированной sandbox'е.
-9. **Freeze** — leaderboard зафиксирован.
-10. **Winner announcement** — blog + TG + email победителям.
-11. **Payout** — через 10 рабочих дней (НДФЛ handled самозанятыми/ИП самими).
-12. **Post-mortem** — `docs/contests/<N>-postmortem.md`.
+В Aggregator остались и остаются: каталог моделей и авторская экономика —
+начисление за продажу модели (`author_earnings` / `author_credit_ledger`), выплаты
+(`api/admin/payouts/**`), KYC-гейт выплат и cron
+`apps/worker/src/queues/finalize-earnings-cron.ts`. Публикация модели автором —
+`/dashboard/models`. Это не конкурс, поэтому runbook конкурса сюда не относится.
+
+Не восстанавливать конкурсный код в этом репозитории. Откат, если понадобится, —
+тег `pre-contest-removal`.

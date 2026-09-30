@@ -1,7 +1,8 @@
 # Матрица функционала экосистемы: кто чем владеет
 
 Дата: 30.09.2026. Решение владельца, зафиксированное здесь как основание:
-**авторские начисления остаются в Aggregator**, конкурсная площадка уезжает в Arena.
+**авторские начисления остаются в Aggregator**, конкурсная площадка живёт в Arena.
+Выпиливание из Aggregator выполнено 30.09.2026; ниже — состояние после него.
 
 ## Решение в одну фразу
 
@@ -26,52 +27,78 @@
                          ▲
         ┌────────────────┴───────────────────┐
         │  вход 2: из конкурса                │
-        │  ARENA → publication-drafts (HTTP)   │
+        │  ARENA (инициация, HTTP)            │
+        │  → POST /api/admin/models/from-submission
         │  автор нажал «опубликовать» в конкурсе│
         └─────────────────────────────────────┘
 ```
 
 Ключевое: вход 2 **не создаёт второй кошелёк и второй каталог**. Arena говорит
 «этот участник выиграл с этой версией» — Aggregator делает всё остальное.
+Планируемый идемпотентный публичный вход `POST /v1/publication-drafts` **не реализован**;
+сейчас это админский роут Aggregator, который вызывает оператор.
 
 ## Матрица: функция → владелец → где живёт сейчас
+
+Состояние на 30.09.2026 **после** выпиливания конкурсного контура из Aggregator
+(шаги 1–7 плана [`2026-09-30-remove-contest-contour.md`](../superpowers/plans/2026-09-30-remove-contest-contour.md)).
+Причина и граница: [2026-09-30-contest-removal-boundary.md](./2026-09-30-contest-removal-boundary.md).
+Легенда статуса: 🚚 = **уехало в Arena** (в Aggregator больше нет ни кода, ни поверхности),
+⚠️ = осталось с ограничением, ✅ = работает, ❌ = отсутствует.
 
 | Функция | Владелец | Где сейчас | Статус |
 |---|---|---|---|
 | Публикация модели автором (с улицы) | **Aggregator** | `POST /api/models/request-publish` | ✅ работает |
-| Публикация из конкурса | **Aggregator** (исполнение) / **Arena** (инициация) | `POST /api/admin/contests/[slug]/publish-submission` | ⚠️ в Aggregator, конкурсная часть уезжает |
+| Публикация выигравшей версии (инициация) | **Arena** | HTTP-вызов к Aggregator | 🚚 инициация — в Arena; исполнение — в Aggregator |
+| Публикация выигравшей версии (исполнение) | **Aggregator** | `POST /api/admin/models/from-submission` | ✅ конкурсонезависимый роут, `derived_from_contest_id` = NULL |
 | Версия модели, неизменяемая | **Aggregator** | `author_model_versions` (0087–0090) | ✅ принято, ревью APPROVE |
 | Модерация модели | **Aggregator** | `/admin/author-models`, `/admin/author-requests` | ✅ принято |
 | Цена и версия продажи | **Aggregator** | `author_price_policies` | ✅ принято |
 | Публичный каталог | **Aggregator** | `GET /v1/catalog` | ⚠️ **не содержит авторских моделей** — блокер |
 | Вызов модели покупателем | **Aggregator** | `/v1/chat/completions`, `handleAuthorChat` | ✅ локально принято |
 | Начисление автору | **Aggregator** | `author_credit_ledger`, `author_request_bindings` (0089) | ✅ принято |
-| Выплата автору | **Aggregator** | `earnings.ts` | ⚠️ в тестах, не проведена в проде |
-| **Создание конкурса** | **Arena** | `challenges` + `challenge_policy_versions` (с digest) | ✅ есть в Arena |
-| **Регистрация участников и команды** | **Arena** | `enrollments`, `teams`, `invitations` | ✅ есть в Arena |
-| **Отправка решения** | **Arena** | `submission_scopes`, `submission_versions` (artifactSha256) | ✅ есть в Arena |
-| **Отбор финальных версий** | **Arena** | `submission_selection_revisions` (receiptSha256) | ✅ есть в Arena |
-| **Оценка (evaluation)** | **Arena** | PE-T1 — чистый scorer, **persistence нет** | ⚠️ главный пробел Arena |
-| **Лидерборд** | **Arena** | нет (в Aggregator читает пустую таблицу) | ❌ |
-| **Призы / prize ledger** | **Arena** | нет в Arena; в Aggregator есть `prize_awards` | ❌ уезжает |
-| **Оценка защиты от утечки (hidden final)** | **Arena** | нет | ❌ |
+| Выплата автору | **Aggregator** | `packages/database/src/schema/earnings.ts`, `api/admin/payouts/**` | ⚠️ в тестах, не проведена в проде |
+| KYC-гейт выплат | **Aggregator** | `kyc_documents`, `/admin/kyc-queue`, `/dashboard/kyc` | ✅ остался, это не конкурс |
+| Финализация начислений | **Aggregator** | `apps/worker/src/queues/finalize-earnings-cron.ts` | ✅ осталась, полностью неконкурсная |
+| **Создание конкурса** | **Arena** | `challenges` + `challenge_policy_versions` (с digest) | 🚚 было и в Aggregator, осталось в Arena |
+| **Регистрация участников и команды** | **Arena** | `enrollments`, `teams`, `invitations` | 🚚 было и в Aggregator, осталось в Arena |
+| **Отправка решения** | **Arena** | `submission_scopes`, `submission_versions` (artifactSha256) | 🚚 было и в Aggregator, осталось в Arena |
+| **Отбор финальных версий** | **Arena** | `submissionSelectionRevisions` (`submission_selection_revisions`, receiptSha256) | 🚚 было и в Aggregator, осталось в Arena |
+| **Оценка (evaluation)** | **Arena** | persistence результата нет | 🚚 из Aggregator; ❌ в Arena — главный пробел |
+| **Лидерборд** | **Arena** | `/leaderboard` ранжирует по активности, не по score | 🚚 из Aggregator; ⚠️ в Arena — score ещё нет |
+| **Призы / prize ledger** | **Arena** | нет | 🚚 из Aggregator; ❌ в Arena |
+| **Оценка защиты от утечки (hidden final)** | **Arena** | нет | 🚚 из Aggregator; ❌ в Arena |
 | Слепые сравнения, голоса, рейтинг | **Arena** | нет | ❌ |
-| Покупка моделей агентом из Market | **Agents Market** | воркер есть, `Idempotency-Key` не шлёт | ⚠️ несовместим с контрактом |
+| Покупка моделей агентом из Market | **Agents Market** | воркер есть, `Idempotency-Key` не шлёт | ⚠️ несовместимо с контрактом |
 | Найм и запуск агента, бюджеты | **Agents Market** | `agent-runner.ts`, `settleRun` (CAS) | ✅ зрелый |
 | Каталог моделей для агента | **Agents Market** через Aggregator HTTP | 3 маршрута читают БД Aggregator прямым SQL | ❌ граница нарушена |
 
-## Что меняется при выпиливании конкурса из Aggregator
+**Итог по строкам:** из Aggregator уехала вся конкурсная группа — создание,
+регистрация, отправка, отбор, оценка, лидерборд, призы и hidden final. Авторское начисление, выплата, KYC и каталог — **не уехали**, это ядро
+Aggregator. Уехавший конкурсный код был мёртвым: воркер-заглушка не писал оценки,
+а `close-contests-cron` обновлял `contests.status = 'closed'` — значения нет в enum
+`contest_status`, то есть запрос упал бы с ошибкой типа. Переноса данных в волне не было:
+конкурсные таблицы оставлены в БД нетронутыми.
 
-| Было в Aggregator | Становится |
+## Что изменилось при выпиливании конкурса из Aggregator (выполнено)
+
+| Было в Aggregator | Стало (30.09.2026) |
 |---|---|
-| `api/contests/**`, `api/admin/contests/**` | удаляется, функция переходит в Arena |
-| `schema/contests.ts`, `evaluations.ts`, `prize-awards.ts` | удаляются из схемы; **применённые миграции остаются** |
-| `queues/contest-eval.ts`, `close-contests-cron.ts`, `eval-runner/**` | удаляются |
-| Лидерборд читает `contest_submissions.public_score` | удаляется; лидерборд в Arena |
-| `author_earnings`, `earnings.ts`, начисление за модели | **ОСТАЁТСЯ** — это не конкурс, это продажа моделей |
-| `contest_submissions.published_model_id` | удаляется; связь «конкурс → каталог» заменяется на HTTP-вызов `POST /v1/publication-drafts` |
+| `api/contests/**`, `api/admin/contests/**` (7 роутов) | удалено; функция в Arena |
+| `schema/contests.ts`, `evaluations.ts`, `prize-awards.ts` | удалены из схемы; **применённые миграции и таблицы остались** |
+| `queues/contest-eval.ts`, `close-contests-cron.ts`, `eval-runner/**` | удалены |
+| Лидерборд читает `contest_submissions.public_score` | удалён; лидерборд в Arena |
+| UI `(marketing)/contests/**`, `admin/contests/**`, `dashboard/submissions`, `dashboard/wins`, `admin/moderation/submissions`, `(legal)/contest-host-agreement` | удалены; редиректы в `next.config.mjs` |
+| Режим дашборда `participant` | удалён |
+| `author_earnings`, `earnings.ts`, начисление за модели | **ОСТАЛОСЬ** — это не конкурс, это продажа моделей |
+| `contest_submissions.published_model_id` | удалено; вставка в `models` вынесена в `POST /api/admin/models/from-submission` |
+| `models.derived_from_contest_id` | осталось в схеме, всегда NULL; таблица `contests` жива мёртвой ради FK |
 
-## Как лучше сделать — рекомендация
+## Как лучше сделать — рекомендация (писалась до выпиливания; факт в таблице выше)
+
+Рекомендация 1 («сначала HTTP-вход, потом убрать конкурс») **выбрана другой порядок**:
+конкурс убран первым, потому что он был мёртвым (воркер-заглушка, баг в enum), а данные
+переносить было нечего. HTTP-вход `POST /v1/publication-drafts` остаётся открытым.
 
 **1. Не удалять код сразу. Сначала ввести HTTP-вход, потом убрать конкурс.**
 
@@ -103,16 +130,21 @@ Arena получает `author_consent_id` и версию, Aggregator дела�
 авторский кошелёк и начисления остаются в одном месте, а Arena не получает ещё одну
 финансовую книгу.
 
-## Порядок работ после согласования
+## Порядок работ
 
-| Волна | Работа | Где |
-|---|---|---|
-| **0** | Проверить наличие данных в конкурсных таблицах; разделить payout-смыслы | Aggregator |
-| **1a** | `POST /v1/publication-drafts` | Aggregator |
-| **1b** | Авторские модели в `/v1/catalog` | Aggregator |
-| **1c** | `Idempotency-Key` + персист `billing_request_id` | Agents Market |
-| **1d** | HTTP-адаптер вместо 3 прямых SQL | Agents Market |
-| **2** | Выпилить конкурсный код из Aggregator | Aggregator |
-| **3** | Arena: PE-T2 (persistence оценок), лидерборд, призы | Arena |
-| **4** | Arena: вызов `publication-drafts` при публикации из конкурса | Arena |
-| **5** | Per-agent ключ, чтобы агент покупал | Aggregator + Market |
+| Волна | Работа | Где | Факт на 30.09.2026 |
+|---|---|---|---|
+| **0** | Проверить наличие данных в конкурсных таблицах; разделить payout-смыслы | Aggregator | ✅ разделение `prize_awards` / `author_credit_ledger` подтверждено. Запись результата read-only SQL в репозитории не найдена — проверить перед любым `DROP TABLE` |
+| **1** | Выпилить конкурсный код (шаги 1–7 плана) | Aggregator | ✅ выполнено, откат — тег `pre-contest-removal` |
+| **1a** | `POST /v1/publication-drafts` (идемпотентный вход по `manifest_digest`) | Aggregator | ❌ **не реализован.** Есть только админский `POST /api/admin/models/from-submission` |
+| **1b** | Авторские модели в `/v1/catalog` | Aggregator | ❌ не сделано — по-прежнему блокер |
+| **1c** | `Idempotency-Key` + персист `billing_request_id` | Agents Market | ❌ не сделано |
+| **1d** | HTTP-адаптер вместо 3 прямых SQL | Agents Market | ❌ не сделано |
+| **2** | Arena: persistence оценок, лидерборд по score, призы | Arena | ❌ не начато; `/leaderboard` сейчас ранжирует по активности |
+| **3** | Arena: вызов публикации у Aggregator с согласием автора | Arena | ❌ не начато |
+| **4** | Per-agent ключ, чтобы агент покупал | Aggregator + Market | ❌ не сделано |
+
+**Что из этого реально блокирует.** Пока нет `POST /v1/publication-drafts` и авторских
+моделей в `/v1/catalog`, цикл «конкурс → продажа → доход» не работает: Arena сможет
+выбрать победителя, но покупатель не увидит его модель в каталоге, а начисление автору
+не начнётся. Это самая важная оставшаяся работа на границе двух продуктов.

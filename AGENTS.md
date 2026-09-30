@@ -11,7 +11,7 @@ This repository is the canonical working root for **AI Aggregator**. Current top
 
 Agents Market lives at `/home/bob/Projects/agents-market` with independent `apps/web`, `apps/tma` and `apps/worker`. AI Arena lives at `/home/bob/Projects/aiarena`. Do not add either product's active application code back here.
 
-Some contest evaluation files remain in `apps/worker` and historical contest/TMA migrations remain in `packages/database/migrations`. They are preserved for ordered migration history and an audited Arena transfer; their presence does not make this repository the canonical Arena or Agents Market root.
+The contest contour was removed from this repository on 2026-09-30; contests, evaluation, leaderboard and prizes are owned by `/home/bob/Projects/aiarena`. Do not reintroduce them. Historical contest migrations remain in `packages/database/migrations` and the contest tables remain in the database as dead tables, because `0014_contest_marketplace.sql` created the FK `models.derived_from_contest_id -> contests(id)`; that history does not make this repository the canonical Arena root. What stays here is the author economy — `author_earnings`, `author_credit_ledger`, payouts, the KYC gate and `finalize-earnings-cron.ts` — plus the model catalog. See `docs/ecosystem/2026-09-30-contest-removal-boundary.md`.
 
 ## Required engineering rules
 
