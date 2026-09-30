@@ -20,7 +20,10 @@ import { closeOwnedPgClient } from "./owned-pg-cleanup";
  *
  * Guards, identical in spirit to `ton-worker-restore.ts`: AIAG_TEST_DATABASE=1,
  * 127.0.0.1 only, no password in any connection string, source and destination
- * ports must differ, and every failure is a `TON_RESTORE_*` code.
+ * ports must differ, a SUPERUSER on both sides (the catalogs this compares are
+ * filtered for ordinary roles, so an under-privileged snapshot would compare
+ * equal while missing whole objects), and every failure is a `TON_RESTORE_*`
+ * code.
  */
 import { Client } from "pg";
 import { randomUUID, createHash } from "node:crypto";
@@ -34,20 +37,57 @@ import { promisify } from "node:util";
 const exec = promisify(execFile);
 const repository = fileURLToPath(new URL("../../../", import.meta.url));
 const ROLE = /^[a-z][a-z0-9_]{0,62}$/;
-const IDENT = /^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/;
 const MAX_ARCHIVE_BYTES = 128 * 1024 * 1024;
+/**
+ * The source database name this module is allowed to dump. Deliberately NOT a
+ * generic `/[a-z][a-z0-9_]*`: combined with an arbitrary 127.0.0.1 port and
+ * AIAG_TEST_DATABASE=1, a permissive pattern turns the rehearsal into "dump
+ * whatever local database the caller names" — including a developer's own
+ * postgres on 5432. Only this project's test-cluster database names qualify.
+ */
+const SOURCE_DATABASE = /^\/(aiag_source|aiag_offcluster|aiag_author_http|aiag_restore|aiag_test)_[a-z0-9]{8,40}$/;
 
 function fail(code: string): never {
   throw Error(code);
 }
 
-/** Owner + ACL surface of everything a dump can be expected to reproduce. */
-const AUTHORITY_SQL = `SELECT 'schema' AS kind,n.nspname::text AS name,pg_catalog.pg_get_userbyid(n.nspowner)::text AS owner,coalesce(n.nspacl::text,'') AS acl,''::text AS detail FROM pg_catalog.pg_namespace n WHERE n.nspname IN('public','aiag_ton_worker')
-  UNION ALL SELECT 'relation',n.nspname||'.'||c.relname,pg_catalog.pg_get_userbyid(c.relowner),coalesce(c.relacl::text,''),c.relkind::text FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('public','aiag_ton_worker') AND c.relkind IN('r','p','v','m','S')
-  UNION ALL SELECT 'column',n.nspname||'.'||c.relname||'.'||a.attname,pg_catalog.pg_get_userbyid(c.relowner),a.attacl::text,'' FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid=a.attrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('public','aiag_ton_worker') AND a.attacl IS NOT NULL AND a.attnum>0 AND NOT a.attisdropped
-  UNION ALL SELECT 'function',n.nspname||'.'||p.proname||'('||pg_catalog.pg_get_function_identity_arguments(p.oid)||')',pg_catalog.pg_get_userbyid(p.proowner),coalesce(p.proacl::text,''),p.prosecdef::text||':'||coalesce(p.proconfig::text,'')||':'||encode(sha256(convert_to(p.prosrc,'UTF8')),'hex') FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('public','aiag_ton_worker')
-  UNION ALL SELECT 'type',n.nspname||'.'||t.typname,pg_catalog.pg_get_userbyid(t.typowner),coalesce(t.typacl::text,''),t.typtype::text FROM pg_catalog.pg_type t JOIN pg_catalog.pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname IN('public','aiag_ton_worker')
+/**
+ * Owner + ACL surface of everything a dump can be expected to reproduce.
+ *
+ * `grantees` is computed with `aclexplode` + `pg_get_userbyid` instead of by
+ * splitting the ACL text: a role name is quoted in that text precisely because
+ * it may contain a comma or a quote, so `split(",")` mangles those names.
+ *
+ * Catalog visibility is a precondition of this query being complete, and it is
+ * NOT satisfied by a non-superuser application role: `pg_class`/`pg_proc` are
+ * filtered to objects that role holds some privilege on (measured: 0
+ * foreign-owned relations where the superuser sees them all). A snapshot taken
+ * through such a role is blind by construction, and two blind snapshots compare
+ * equal while both miss whole objects. `restoreOffCluster` therefore requires a
+ * superuser on the SOURCE side — the same rule the single-cluster reference
+ * (`ton-worker-restore.ts`) already enforces — and refuses the rehearsal with
+ * `TON_RESTORE_SOURCE_NOT_SUPERUSER` instead of emitting a proof that hides
+ * missing objects.
+ */
+const AUTHORITY_SQL = `SELECT 'schema' AS kind,n.nspname::text AS name,pg_catalog.pg_get_userbyid(n.nspowner)::text AS owner,(SELECT coalesce(array_agg(DISTINCT pg_catalog.pg_get_userbyid(g.grantee) ORDER BY pg_catalog.pg_get_userbyid(g.grantee))::text[],'{}') FROM aclexplode(n.nspacl) g WHERE g.grantee<>0) AS grantees,''::text AS detail FROM pg_catalog.pg_namespace n WHERE n.nspname IN('public','aiag_ton_worker')
+  UNION ALL SELECT 'relation',n.nspname||'.'||c.relname,pg_catalog.pg_get_userbyid(c.relowner),(SELECT coalesce(array_agg(DISTINCT pg_catalog.pg_get_userbyid(g.grantee) ORDER BY pg_catalog.pg_get_userbyid(g.grantee))::text[],'{}') FROM aclexplode(c.relacl) g WHERE g.grantee<>0),c.relkind::text FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('public','aiag_ton_worker') AND c.relkind IN('r','p','v','m','S')
+  UNION ALL SELECT 'column',n.nspname||'.'||c.relname||'.'||a.attname,pg_catalog.pg_get_userbyid(c.relowner),(SELECT coalesce(array_agg(DISTINCT pg_catalog.pg_get_userbyid(g.grantee) ORDER BY pg_catalog.pg_get_userbyid(g.grantee))::text[],'{}') FROM aclexplode(a.attacl) g WHERE g.grantee<>0),'' FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid=a.attrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('public','aiag_ton_worker') AND a.attacl IS NOT NULL AND a.attnum>0 AND NOT a.attisdropped
+  UNION ALL SELECT 'function',n.nspname||'.'||p.proname||'('||pg_catalog.pg_get_function_identity_arguments(p.oid)||')',pg_catalog.pg_get_userbyid(p.proowner),(SELECT coalesce(array_agg(DISTINCT pg_catalog.pg_get_userbyid(g.grantee) ORDER BY pg_catalog.pg_get_userbyid(g.grantee))::text[],'{}') FROM aclexplode(p.proacl) g WHERE g.grantee<>0),p.prosecdef::text||':'||coalesce(p.proconfig::text,'')||':'||encode(sha256(convert_to(p.prosrc,'UTF8')),'hex') FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('public','aiag_ton_worker')
+  UNION ALL SELECT 'type',n.nspname||'.'||t.typname,pg_catalog.pg_get_userbyid(t.typowner),(SELECT coalesce(array_agg(DISTINCT pg_catalog.pg_get_userbyid(g.grantee) ORDER BY pg_catalog.pg_get_userbyid(g.grantee))::text[],'{}') FROM aclexplode(t.typacl) g WHERE g.grantee<>0),t.typtype::text FROM pg_catalog.pg_type t JOIN pg_catalog.pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname IN('public','aiag_ton_worker')
   ORDER BY kind,name`;
+
+/**
+ * Role memberships the restore does NOT reproduce. `pg_dump` never emits
+ * cluster-global grants, so these rows are invisible to a dump and invisible
+ * to the owner/ACL comparison above — yet they decide the EFFECTIVE rights of
+ * every login after a cutover. The failure direction that matters for money is
+ * "access disappears after cutover", so the module refuses the rehearsal
+ * outright rather than reporting a proof that hides it.
+ */
+const MEMBERSHIP_SQL = `SELECT pg_catalog.pg_get_userbyid(m.roleid)::text AS granted,pg_catalog.pg_get_userbyid(m.member)::text AS member,m.admin_option::text AS admin_option
+  FROM pg_catalog.pg_auth_members m
+  WHERE pg_catalog.pg_get_userbyid(m.roleid) NOT LIKE 'pg\\_%' AND pg_catalog.pg_get_userbyid(m.member) NOT LIKE 'pg\\_%'
+  ORDER BY granted,member`;
 
 /** Row counts, owners/ACLs and the money surface of one cluster. */
 export async function readRestoreSnapshot(client: Client) {
@@ -68,6 +108,13 @@ export async function readRestoreSnapshot(client: Client) {
     ).rows[0].count;
   }
   const authority = (await client.query(AUTHORITY_SQL)).rows;
+  // Memberships are part of the authority surface precisely because pg_dump
+  // does NOT carry them: they are the part a restore silently drops.
+  const memberships = (await client.query(MEMBERSHIP_SQL)).rows as {
+    granted: string;
+    member: string;
+    admin_option: string;
+  }[];
   const financial = (
     await client.query(
       `SELECT jsonb_build_object('invoices',(SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY i.id),'[]'::jsonb) FROM public.ton_invoices i),'receipts',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM public.gateway_transactions t WHERE t.source='ton'),'apiUsage',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM public.gateway_transactions t WHERE t.type='api_usage'),'admissions',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',a.billing_request_id::text,'state',a.state,'authorized',a.authorized_max_credits::text,'actual',coalesce(a.actual_cost_credits,0)::text) ORDER BY a.billing_request_id),'[]'::jsonb) FROM public.gateway_charge_admissions a),'balances',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',o.id,'payg',o.payg_credits::text,'subscription',o.subscription_credits::text,'debt',o.refund_debt_credits::text) ORDER BY o.id),'[]'::jsonb) FROM public.organizations o))::text AS json`,
@@ -76,9 +123,25 @@ export async function readRestoreSnapshot(client: Client) {
   return {
     counts,
     authority,
+    memberships,
     tablesCompared: Object.keys(counts).length,
     financialDigest: createHash("sha256").update(financial).digest("hex"),
   };
+}
+
+/**
+ * Stable text of the membership surface, for equality comparison across the
+ * two clusters. `granted -> member` is the direction that grants rights, so a
+ * difference here is a difference in effective privileges after cutover.
+ */
+function membershipKey(rows: readonly {
+  granted: string;
+  member: string;
+  admin_option: string;
+}[]): string {
+  return rows
+    .map((r) => `${r.granted}->${r.member}:${r.admin_option}`)
+    .join("|");
 }
 
 function equivalent(a: unknown, b: unknown): boolean {
@@ -108,6 +171,8 @@ export interface OffClusterRestoreProof {
   ownershipAndGrantsPreserved: true;
   financialSnapshotIdentical: true;
   sourceUnchanged: true;
+  roleAttributesVerified: true;
+  membershipsIdentical: true;
   rolesRecreatedOnDestination: string[];
   destinationDatabase: string;
   destinationRemoved: boolean;
@@ -155,26 +220,31 @@ function assertPort(value: unknown, code: string): number {
   return value as number;
 }
 
-/** Grantee of one ACL item (`name=arw/grantor`), or null for PUBLIC/empty. */
-function aclGrantee(item: string): string | null {
-  const eq = item.indexOf("=");
-  if (eq < 0) return null;
-  const raw = item.slice(0, eq).trim().replace(/^"|"$/g, "");
-  if (raw === "" || raw === "PUBLIC") return null;
-  return raw;
+/**
+ * Grantees of one authority row, as a sorted JSON array.
+ *
+ * Parsed from the `grantees` column the AUTHORITY_SQL above produces with
+ * `aclexplode` + `pg_get_userbyid`, never by splitting the ACL text on ",": a
+ * role name is quoted inside that text precisely because it may contain a
+ * comma or a double quote, so splitting mangles (and under-reports) it.
+ */
+function grantees(acl: string): string[] {
+  if (typeof acl !== "string") return [];
+  const parsed: unknown = JSON.parse(acl);
+  return Array.isArray(parsed)
+    ? parsed.filter((v): v is string => typeof v === "string")
+    : [];
 }
 
 export function rolesRequiredByAuthority(
-  authority: readonly { owner: string; acl: string }[],
+  authority: readonly { owner: string; grantees: string }[],
 ): string[] {
   const names = new Set<string>();
   for (const row of authority) {
     if (ROLE.test(row.owner) && !row.owner.startsWith("pg_"))
       names.add(row.owner);
-    for (const item of row.acl.split(",")) {
-      const grantee = aclGrantee(item);
-      if (grantee !== null && ROLE.test(grantee) && !grantee.startsWith("pg_"))
-        names.add(grantee);
+    for (const grantee of grantees(row.grantees)) {
+      if (ROLE.test(grantee) && !grantee.startsWith("pg_")) names.add(grantee);
     }
   }
   return [...names].sort();
@@ -199,9 +269,13 @@ async function readRoleAttributes(
   if (names.length === 0) return [];
   return (
     await client.query(
+      // No duplicated columns: `rolinherit AS canlogin` alongside
+      // `rolcanlogin AS canlogin_raw` aliased the SAME boolean twice, and the
+      // misleading `canlogin` alias invited reading the inherit flag as the
+      // login flag. Each catalog column is selected once, under its own name.
       `SELECT rolname::text AS name,rolsuper AS superuser,rolinherit AS inherit,
               rolcreaterole AS "createRole",rolcreatedb AS createdb,
-              rolinherit AS canlogin,rolcanlogin AS canlogin_raw,
+              rolcanlogin AS canlogin,
               rolreplication AS replication,rolbypassrls AS bypassrls,
               rolconnlimit AS connlimit
          FROM pg_catalog.pg_roles WHERE rolname = ANY($1::text[]) ORDER BY rolname`,
@@ -213,23 +287,58 @@ async function readRoleAttributes(
     inherit: r.inherit === true,
     createRole: r.createRole === true,
     createdb: r.createdb === true,
-    login: r.canlogin_raw === true,
+    login: r.canlogin === true,
     replication: r.replication === true,
     bypassrls: r.bypassrls === true,
     connlimit: Number(r.connlimit),
   }));
 }
 
+/** The eight catalog attributes, compared field by field. */
+function sameAttributes(a: RoleAttributes, b: RoleAttributes): boolean {
+  return (
+    a.name === b.name &&
+    a.superuser === b.superuser &&
+    a.inherit === b.inherit &&
+    a.createRole === b.createRole &&
+    a.createdb === b.createdb &&
+    a.login === b.login &&
+    a.replication === b.replication &&
+    a.bypassrls === b.bypassrls &&
+    a.connlimit === b.connlimit
+  );
+}
+
 /**
  * Replay a settled charge on the restored cluster: the already-recorded outcome
  * must come back unchanged, with no second receipt. One request, one immutable
  * outcome — across the cutover, not just inside one cluster.
+ *
+ * This calls `aiag_settle_admitted_gateway_charge`, the one function here that
+ * moves money, so it carries the same guards `target()` applies to every other
+ * connection: AIAG_TEST_DATABASE=1 and a loopback-only server address. The
+ * `settled -> RETURN FALSE` guard inside the function body means a settled
+ * admission is a no-op, but an admission in state `outcome_recorded` WILL debit
+ * — so the call is gated before it reaches the function at all rather than
+ * relying on the row state the caller happened to pick.
  */
 export async function replayOldPaymentOnRestored(
   client: Client,
   orgId: string,
   billingRequestId: string,
 ): Promise<{ didTransition: boolean; state: string; receipts: number }> {
+  const server = (
+    await client.query(
+      "SELECT host(inet_server_addr())::text AS host,inet_server_port()::int AS port,current_database()::text AS database",
+    )
+  ).rows[0];
+  if (
+    process.env.AIAG_TEST_DATABASE !== "1" ||
+    typeof server?.host !== "string" ||
+    server.host !== "127.0.0.1" ||
+    !Number.isInteger(server?.port)
+  )
+    fail("TON_RESTORE_LOCAL_ONLY");
   const replay = (
     await client.query(
       "SELECT did_transition, state FROM public.aiag_settle_admitted_gateway_charge($1::uuid,$2::uuid)",
@@ -271,11 +380,7 @@ export async function restoreOffCluster(
   const sourcePort = assertPort(options.sourcePort, "TON_RESTORE_PORT_INVALID");
   const destPort = assertPort(options.destPort, "TON_RESTORE_PORT_INVALID");
   if (sourcePort === destPort) fail("TON_RESTORE_SAME_CLUSTER");
-  const source = target(
-    options.sourceUrl,
-    sourcePort,
-    /^\/[a-z][a-z0-9_]{0,62}$/,
-  );
+  const source = target(options.sourceUrl, sourcePort, SOURCE_DATABASE);
   const admin = target(options.destinationAdminUrl, destPort, /^\/postgres$/);
   const extra = options.roles ?? [];
   if (
@@ -310,7 +415,7 @@ export async function restoreOffCluster(
     const identity = (
       await Promise.all([
         sourceClient.query(
-          `SELECT current_database() AS name,inet_server_port()::int AS port,host(inet_server_addr()) AS host,current_user::text AS user`,
+          `SELECT current_database() AS name,inet_server_port()::int AS port,host(inet_server_addr()) AS host,current_user::text AS user,(SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname=current_user) AS superuser`,
         ),
         adminClient.query(
           `SELECT current_database() AS name,inet_server_port()::int AS port,host(inet_server_addr()) AS host,current_user::text AS user,(SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname=current_user) AS admin`,
@@ -327,11 +432,33 @@ export async function restoreOffCluster(
       identity[1].admin !== true
     )
       fail("TON_RESTORE_LOCAL_ONLY");
+    // Catalog visibility is a PRECONDITION of the comparison below, not a
+    // nicety. A non-superuser's `pg_class`/`pg_proc` are filtered to objects it
+    // holds a privilege on, so a source snapshot taken through such a role
+    // silently omits every foreign-owned object — and a second equally blind
+    // snapshot on the destination compares EQUAL to it, yielding
+    // `restored_off_cluster_and_verified` for an object set that was never
+    // actually compared. The single-cluster reference
+    // (`ton-worker-restore.ts:123-128`) already required rolsuper here;
+    // requiring it on the source restores that guarantee.
+    if (identity[0].superuser !== true)
+      fail("TON_RESTORE_SOURCE_NOT_SUPERUSER");
+
     // Different ports are not enough: prove the two servers are two clusters.
+    // `system_identifier` alone is not enough either — it is inherited by a
+    // pg_basebackup/PITR stand, which is the NORMAL off-host topology, so an
+    // identifier match must not be reported as "same cluster" when the two
+    // servers are in fact separate lineages. The data directory and the
+    // postmaster start time are compared alongside it: identical identifier
+    // WITH identical lineage means one server reachable on two ports
+    // (SAME_CLUSTER), while an identical identifier with a different data
+    // directory is a physical clone (CLUSTER_LINEAGE_SAME) — a different
+    // failure with a different fix, and the wrong code sends the operator to
+    // the wrong runbook.
     const clusters = await Promise.all(
       [sourceClient, adminClient].map((c) =>
         c.query(
-          "SELECT system_identifier::text AS id FROM pg_catalog.pg_control_system()",
+          `SELECT system_identifier::text AS id,current_setting('data_directory') AS data_directory,pg_postmaster_start_time()::text AS started FROM pg_catalog.pg_control_system()`,
         ),
       ),
     );
@@ -339,10 +466,24 @@ export async function restoreOffCluster(
     const destinationClusterId = clusters[1].rows[0]?.id;
     if (
       typeof sourceClusterId !== "string" ||
-      typeof destinationClusterId !== "string" ||
-      sourceClusterId === destinationClusterId
+      typeof destinationClusterId !== "string"
     )
       fail("TON_RESTORE_SAME_CLUSTER");
+    if (sourceClusterId === destinationClusterId) {
+      const sameDataDirectory =
+        clusters[0].rows[0]?.data_directory ===
+          clusters[1].rows[0]?.data_directory;
+      const sameStartTime =
+        clusters[0].rows[0]?.started === clusters[1].rows[0]?.started;
+      // Same identifier, same data directory and same start time: one server
+      // reachable on two ports. Same identifier but a different data directory
+      // or start time: a physical clone that inherited the identifier.
+      fail(
+        sameDataDirectory && sameStartTime
+          ? "TON_RESTORE_SAME_CLUSTER"
+          : "TON_RESTORE_CLUSTER_LINEAGE_SAME",
+      );
+    }
 
     const before = await readRestoreSnapshot(sourceClient);
     if (before.tablesCompared < 100) fail("TON_RESTORE_SNAPSHOT_EMPTY");
@@ -440,13 +581,22 @@ export async function restoreOffCluster(
       ).rows.map((r) => String(r.name)),
     );
     for (const role of sourceRoles) {
-      if (present.has(role.name) || role.superuser) continue;
+      if (role.superuser) continue;
+      if (present.has(role.name)) continue;
+      // Every option below is emitted EXACTLY ONCE per mutually exclusive
+      // pair. `CREATE ROLE ... LOGIN ... NOLOGIN` is not a harmless duplicate:
+      // PostgreSQL rejects the whole statement with `conflicting or redundant
+      // options` (verified on PG18), so a single NOLOGIN role anywhere in the
+      // authority surface — such as the NOLOGIN function owner this project
+      // uses — used to abort the entire rehearsal. The pairs are
+      // LOGIN/NOLOGIN, INHERIT/NOINHERIT, CREATEROLE/NOCREATEROLE,
+      // CREATEDB/NOCREATEDB, REPLICATION/NOREPLICATION, BYPASSRLS/NOBYPASSRLS;
+      // each branch below selects one side of exactly one pair.
       const attributes = [
-        "LOGIN",
+        role.login ? "LOGIN" : "NOLOGIN",
         role.inherit ? "INHERIT" : "NOINHERIT",
         role.createRole ? "CREATEROLE" : "NOCREATEROLE",
         role.createdb ? "CREATEDB" : "NOCREATEDB",
-        role.login ? "" : "NOLOGIN",
         role.replication ? "REPLICATION" : "NOREPLICATION",
         role.bypassrls ? "BYPASSRLS" : "NOBYPASSRLS",
         role.connlimit >= 0 ? "CONNECTION LIMIT " + role.connlimit : "",
@@ -480,6 +630,38 @@ export async function restoreOffCluster(
     );
     const missing = [...new Set(required)].filter((n) => !foundAfter.has(n));
     if (missing.length !== 0) fail("TON_RESTORE_ROLES_MISSING");
+
+    // Attribute verification, for EVERY required role — the ones this run
+    // created AND the ones that were already on the destination cluster.
+    //
+    // Existence alone proves nothing: `CREATE ROLE` not throwing only shows the
+    // statement parsed. A role that already existed on the destination is
+    // skipped by the loop above, so its attributes were never checked at all,
+    // and a source superuser that exists on the destination as an ordinary role
+    // passed silently. Both are privilege changes across a cutover, so the
+    // destination attributes are read back and compared field by field against
+    // the source snapshot; any difference is an explicit mismatch, never a
+    // quiet pass.
+    const destAttributes = new Map(
+      (
+        await readRoleAttributes(
+          adminClient,
+          sourceRoles.map((r) => r.name),
+        )
+      ).map((r) => [r.name, r]),
+    );
+    for (const sourceRole of sourceRoles) {
+      const destRole = destAttributes.get(sourceRole.name);
+      if (!destRole) fail("TON_RESTORE_ROLES_MISSING");
+      // A superuser is never created here, so the destination's copy of that
+      // name is not ours to compare attribute-for-attribute: if the name
+      // exists but is NOT a superuser there, the source privileged login has
+      // silently degraded and the proof would be false.
+      if (sourceRole.superuser && !destRole.superuser)
+        fail("TON_RESTORE_ROLE_ATTRIBUTES_MISMATCH");
+      if (!sourceRole.superuser && !sameAttributes(sourceRole, destRole))
+        fail("TON_RESTORE_ROLE_ATTRIBUTES_MISMATCH");
+    }
 
     // (5) the restore itself.
     const restoredUrl = `postgres://${admin.username}@127.0.0.1:${destPort}/${destination}`;
@@ -519,6 +701,14 @@ export async function restoreOffCluster(
       fail("TON_RESTORE_SNAPSHOT_MISMATCH");
     if (after.financialDigest !== before.financialDigest)
       fail("TON_RESTORE_FINANCIAL_MISMATCH");
+    // Role memberships. `pg_dump` does not carry them (they are cluster
+    // globals, not database objects), so the owner/ACL and row-count checks
+    // above all pass while effective privileges are missing on the restored
+    // cluster. For money the dangerous direction is not a double debit but
+    // "the worker's access disappears at cutover", so this module refuses to
+    // emit a proof that hides the difference instead of papering over it.
+    if (membershipKey(after.memberships) !== membershipKey(before.memberships))
+      fail("TON_RESTORE_MEMBERSHIP_MISMATCH");
     if (options.verify) await options.verify(restoredUrl);
     if (!equivalent(await readRestoreSnapshot(sourceClient), before))
       fail("TON_RESTORE_SOURCE_CHANGED");
@@ -530,6 +720,8 @@ export async function restoreOffCluster(
       ownershipAndGrantsPreserved: true,
       financialSnapshotIdentical: true,
       sourceUnchanged: true,
+      roleAttributesVerified: true,
+      membershipsIdentical: true,
       rolesRecreatedOnDestination: createdRoles,
       destinationDatabase: destination,
       destinationRemoved: !keep,
