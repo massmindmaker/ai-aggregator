@@ -60,6 +60,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       reason?: string;
       amountRub?: number;
       role?: string;
+      confirmAdminGrant?: boolean;
     };
 
     const target = await db.query.users.findFirst({ where: eq(users.id, id) });
@@ -109,8 +110,34 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         if (!['user', 'developer', 'admin', 'moderator'].includes(role)) {
           return NextResponse.json({ error: 'BAD_ROLE' }, { status: 400 });
         }
-        await db.execute(sql`UPDATE users SET role = ${role}::user_role WHERE id = ${id}`);
-        await audit(admin.email, 'user.set_role', 'user', id, { role });
+        // F-2 (security review): granting 'admin' is a privilege escalation.
+        // Minimum — never let an admin hand the role to itself (a hijacked or
+        // borrowed session must not be able to self-promote, and a genuine
+        // admin who needs a second one is a manual DB/ops action, not an API
+        // call). Second — require an explicit, reasoned, separately-confirmed
+        // step for granting admin to somebody else.
+        if (role === 'admin' && target.id === admin.id) {
+          return NextResponse.json({ error: 'SELF_ADMIN_GRANT_FORBIDDEN' }, { status: 403 });
+        }
+        if (role === 'admin') {
+          if (body.confirmAdminGrant !== true) {
+            return NextResponse.json({ error: 'ADMIN_GRANT_CONFIRMATION_REQUIRED' }, { status: 428 });
+          }
+          if (typeof body.reason !== 'string' || body.reason.trim().length < 10) {
+            return NextResponse.json({ error: 'REASON_REQUIRED' }, { status: 400 });
+          }
+        }
+        await db.execute(sql`
+          UPDATE users SET role = ${role}::user_role
+          WHERE id = ${id}::uuid
+            AND role IS DISTINCT FROM ${role}::user_role
+        `);
+        await audit(admin.email, 'user.set_role', 'user', id, {
+          role,
+          from: target.role,
+          reason: body.reason,
+          self: target.id === admin.id,
+        });
         break;
       }
       default:

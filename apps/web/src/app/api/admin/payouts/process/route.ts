@@ -14,10 +14,22 @@ export async function POST(req: NextRequest) {
     }
 
     let created = 0;
+    let skippedUnverifiedKyc = 0;
     for (const userId of ids) {
-      // Sum locked accruals into a single payout row
+      // F-1 (security review): this route never looked at KYC, so an author
+      // with kyc_status='none'/'rejected' could still be batched into a
+      // 'processing' payout (and its accruals locked) — the batch was created
+      // before approve's gate ever ran. Same rule as approve: only a verified
+      // KYC with a kyc_type may enter the payout pipeline. The check lives in
+      // the same statement as the INSERT so the author cannot race an update.
       const result = await db.execute(sql`
-        WITH agg AS (
+        WITH eligible_author AS (
+          SELECT 1 FROM users
+          WHERE id = ${userId}::uuid
+            AND kyc_status = 'verified'
+            AND kyc_type IS NOT NULL
+        ),
+        agg AS (
           SELECT COALESCE(SUM(author_share_rub), 0)::numeric AS total,
                  MIN(period_month) AS min_p, MAX(period_month) AS max_p
           FROM author_earnings WHERE author_id = ${userId} AND status = 'accruing'
@@ -26,7 +38,7 @@ export async function POST(req: NextRequest) {
         SELECT ${userId}::uuid, total, 'RUB', 'processing',
                COALESCE(min_p::timestamp, NOW()), COALESCE(max_p::timestamp, NOW()),
                jsonb_build_object('initiated_by', ${admin.email}, 'bulk', true)
-        FROM agg WHERE total > 0
+        FROM agg, eligible_author WHERE total > 0
         RETURNING id::text
       `);
       const rows = (result as unknown as { rows?: unknown[] }).rows ?? result;
@@ -38,10 +50,17 @@ export async function POST(req: NextRequest) {
           WHERE author_id = ${userId} AND status = 'accruing'
         `);
         await audit(admin.email, 'payout.process', 'user', userId, {});
+      } else {
+        // Either nothing to pay or the author is not KYC-verified; both must
+        // leave an audit trail so a silent skip is not mistaken for a payout.
+        skippedUnverifiedKyc++;
+        await audit(admin.email, 'payout.process_skipped', 'user', userId, {
+          reason: 'kyc_not_verified_or_no_accruals',
+        });
       }
     }
 
-    return NextResponse.json({ ok: true, created });
+    return NextResponse.json({ ok: true, created, skipped: skippedUnverifiedKyc });
   } catch (e) {
     if (e instanceof AdminAuthError) {
       return NextResponse.json({ error: e.code }, { status: e.code === 'UNAUTHORIZED' ? 401 : 403 });

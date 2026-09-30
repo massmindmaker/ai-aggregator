@@ -12,7 +12,7 @@ import { AiagError, applyAiagErrorHandler, errors } from './lib/errors';
 import { requireApiKey } from './middleware/auth-plan04';
 import { rateLimit, rpmOnly } from './middleware/rate-limit-plan04';
 import { keyLimits } from './middleware/key-limits';
-import { piiFilter } from './middleware/pii-filter';
+import { piiFilter, setPiiResolveModel } from './middleware/pii-filter';
 import { modelStatusMiddleware } from './middleware/model-status-check';
 import { requestIdMiddleware } from './middleware/request-id';
 import { chat } from './routes/v1/chat';
@@ -32,6 +32,7 @@ import { catalogHttpBoundary } from './catalog/http-contract';
 import { adminProxy } from './routes/admin/proxyTest';
 import { adminCatalog } from './routes/admin/catalog';
 import { registerGatewayEgressExecutor } from './egress-executor';
+import { resolveModelWithOverride } from './routing/resolver';
 
 import { storedChat, respondStoredChat, unsupportedStoredExecution } from './routes/v1/stored-chat';
 import { fixedStoredChatHttpError } from './billing/stored-chat-http-contract';
@@ -41,6 +42,14 @@ import { storedCompletions } from './routes/v1/stored-completions';
 // server-node.ts imports this module directly in production, so startup wiring
 // must live on this path rather than relying on the package barrel (index.ts).
 registerGatewayEgressExecutor();
+
+// F-3 (security review): the PII filter's resolver seam existed but was never
+// called anywhere in production, so transborder was decided purely by a
+// hand-written slug-prefix regex that was missing kie/fal/replicate/openrouter/
+// huggingface/groq. Wire it to the same resolver the router uses so residency
+// comes from the actual candidate rows. resolveModelWithOverride (not
+// resolveModel) keeps the harness/test override honoured.
+setPiiResolveModel(resolveModelWithOverride);
 
 const bootTime = Date.now();
 

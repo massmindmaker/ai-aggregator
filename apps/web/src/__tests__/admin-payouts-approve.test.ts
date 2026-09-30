@@ -144,6 +144,89 @@ describe('POST /api/admin/payouts/[id]/approve', () => {
     expect(j.error).toBe('KYC_REQUIRED');
   });
 
+  it('returns 422 KYC_REQUIRED when kyc_type exists but kyc_status=rejected (F-1)', async () => {
+    asAdmin();
+    dbExecute.mockResolvedValueOnce({
+      rows: [
+        {
+          id: PAYOUT_ID,
+          user_id: 'author-uuid',
+          amount: '10000',
+          status: 'pending',
+          // Rejection path: kyc_type stays set, only kyc_status flips.
+          kyc_status: 'rejected',
+          kyc_type: 'individual',
+          tax_id: '500100732259',
+          bank_details: null,
+          kyc_verified_at: null,
+        },
+      ],
+    });
+    const r = (await approveRoute(emptyReq(), {
+      params: paramsP(PAYOUT_ID),
+    })) as Response;
+    expect(r.status).toBe(422);
+    const j = await r.json();
+    expect(j.error).toBe('KYC_REQUIRED');
+    expect(j.kyc_status).toBe('rejected');
+    // No money may move: neither the payouts UPDATE nor the audit INSERT.
+    expect(dbTransaction).not.toHaveBeenCalled();
+    expect(txExecute).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 KYC_REQUIRED when kyc_status=pending and kyc_type is set (F-1)', async () => {
+    asAdmin();
+    dbExecute.mockResolvedValueOnce({
+      rows: [
+        {
+          id: PAYOUT_ID,
+          user_id: 'author-uuid',
+          amount: '10000',
+          status: 'pending',
+          kyc_status: 'pending',
+          kyc_type: 'self_employed',
+          tax_id: '500100732259',
+          bank_details: null,
+          kyc_verified_at: null,
+        },
+      ],
+    });
+    const r = (await approveRoute(emptyReq(), {
+      params: paramsP(PAYOUT_ID),
+    })) as Response;
+    expect(r.status).toBe(422);
+    const j = await r.json();
+    expect(j.error).toBe('KYC_REQUIRED');
+    expect(j.kyc_status).toBe('pending');
+    expect(dbTransaction).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 KYC_REQUIRED when kyc_status is verified but kyc_type is null (F-1)', async () => {
+    asAdmin();
+    dbExecute.mockResolvedValueOnce({
+      rows: [
+        {
+          id: PAYOUT_ID,
+          user_id: 'author-uuid',
+          amount: '10000',
+          status: 'pending',
+          kyc_status: 'verified',
+          kyc_type: null,
+          tax_id: null,
+          bank_details: null,
+          kyc_verified_at: '2026-01-01',
+        },
+      ],
+    });
+    const r = (await approveRoute(emptyReq(), {
+      params: paramsP(PAYOUT_ID),
+    })) as Response;
+    expect(r.status).toBe(422);
+    const j = await r.json();
+    expect(j.error).toBe('KYC_REQUIRED');
+    expect(dbTransaction).not.toHaveBeenCalled();
+  });
+
   it('happy path физлицо: computes 13% tax, runs 3 tx mutations, returns net_rub', async () => {
     asAdmin();
     dbExecute.mockResolvedValueOnce({

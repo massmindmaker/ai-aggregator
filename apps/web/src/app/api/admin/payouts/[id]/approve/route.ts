@@ -68,8 +68,20 @@ export async function POST(
         { status: 409 }
       );
     }
-    if (!row.kyc_type) {
-      return NextResponse.json({ error: 'KYC_REQUIRED' }, { status: 422 });
+    // F-1 (security review): the gate must be on the VERIFICATION STATUS, not
+    // on the mere presence of kyc_type. `kyc/[id]/reject` flips kyc_status to
+    // 'rejected' while leaving kyc_type populated, so the old presence check
+    // let a rejected author through: tax was computed and the payout marked
+    // 'paid'. Verified status is the only state that author_earnings may be
+    // settled from.
+    if (row.kyc_status !== 'verified' || !row.kyc_type) {
+      return NextResponse.json(
+        {
+          error: 'KYC_REQUIRED',
+          kyc_status: row.kyc_status,
+        },
+        { status: 422 }
+      );
     }
 
     const amount = Number(row.amount);

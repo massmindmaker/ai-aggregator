@@ -10,6 +10,19 @@
  *
  * Resolver hook: `setResolveModel(fn)` lets tests/harness inject model info
  * without hitting Postgres.
+ *
+ * F-3 (security review):
+ *   1. The transborder slug pattern is now DERIVED from FOREIGN_PROVIDERS
+ *      (middleware/transborderGate.ts) instead of a second hand-written regex.
+ *      The old literal `^(openai|anthropic|together|mistral|google|cohere)\/`
+ *      silently treated `kie/…`, `fal/…`, `replicate/…`, `openrouter/…`,
+ *      `huggingface/…` and `groq/…` as RU-local, so a prompt with an email
+ *      sailed through to kie.ai unchecked. One list, one truth.
+ *   2. The resolver seam is actually wired at boot (see server.ts
+ *      `setPiiResolveModel(resolveModelWithOverride)`), so residency comes from
+ *      the same candidate rows the router will use rather than from a string
+ *      prefix. On resolver failure we now FAIL CLOSED (treat as transborder)
+ *      instead of falling back to a prefix guess.
  */
 import type { MiddlewareHandler } from 'hono';
 import { extractText, detectPii, sha256 } from '../lib/pii';
@@ -18,6 +31,7 @@ import { errors } from '../lib/errors';
 import { logger } from '../lib/logger';
 import type { AuthenticatedApiKey } from './auth-plan04';
 import type { ResolvedModel } from '../routing/resolver';
+import { FOREIGN_PROVIDERS } from './transborderGate';
 
 type ResolveModelFn = (slug: string) => Promise<ResolvedModel>;
 
@@ -25,6 +39,17 @@ let resolveModelFn: ResolveModelFn | null = null;
 
 export function setPiiResolveModel(fn: ResolveModelFn | null): void {
   resolveModelFn = fn;
+}
+
+// Built once from the single source of truth. Values are provider orgs
+// ([a-z0-9-]+) escaped for regex safety.
+const FOREIGN_SLUG_PATTERN = new RegExp(
+  `^(?:${[...FOREIGN_PROVIDERS].map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})/`
+);
+
+/** Exported for tests: is this model slug served by a known foreign provider? */
+export function slugLooksTransborder(modelSlug: string): boolean {
+  return FOREIGN_SLUG_PATTERN.test(modelSlug);
 }
 
 export const piiFilter: MiddlewareHandler = async (c, next) => {
@@ -51,17 +76,18 @@ export const piiFilter: MiddlewareHandler = async (c, next) => {
   const key = c.get('apiKey' as never) as AuthenticatedApiKey | undefined;
   const modelSlug = typeof body.model === 'string' ? body.model : '';
 
-  // Determine transborder: use resolver if available; default isTransborder=true
-  // when slug prefix hints non-RU (e.g. 'openai/', 'anthropic/') to fail-safe.
-  let isTransborder = /^(openai|anthropic|together|mistral|google|cohere)\//.test(
-    modelSlug
-  );
+  // Determine transborder: prefer the resolver (same candidate rows the router
+  // uses). Default is the provider-prefix hint — fail-safe for foreign orgs.
+  let isTransborder = slugLooksTransborder(modelSlug);
   if (resolveModelFn && modelSlug) {
     try {
       const model = await resolveModelFn(modelSlug);
       const first = model.candidates[0];
       isTransborder = !(first?.ru_residency ?? false);
     } catch (e) {
+      // Fail closed: if residency cannot be established, assume the prompt
+      // leaves the country. Previously the prefix guess silently allowed it.
+      isTransborder = true;
       logger.warn({ err: String(e), modelSlug }, 'pii_resolve_model_failed');
     }
   }
