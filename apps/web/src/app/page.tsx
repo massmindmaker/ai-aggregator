@@ -256,8 +256,8 @@ const compareRows = [
   // per-competitor numbers, none of which are measured anywhere. Restore only
   // with a real latency benchmark behind it.
   {
-    feat: 'Конкурсы / кастом-модели',
-    us: { kind: 'check', text: '✓ open contests + 70% ML-инженеру' },
+    feat: 'Кастом-модели / авторская публикация',
+    us: { kind: 'check', text: '✓ публикация из кабинета + 70% ML-инженеру' },
     cells: [
       { kind: 'cross', text: '✗' },
       { kind: 'cross', text: '✗' },
