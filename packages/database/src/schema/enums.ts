@@ -93,16 +93,6 @@ export const requestStatusEnum = pgEnum('request_status', [
   'cancelled',
 ]);
 
-// Contest status
-export const contestStatusEnum = pgEnum('contest_status', [
-  'draft',
-  'upcoming',
-  'active',
-  'evaluation',
-  'completed',
-  'cancelled',
-]);
-
 // HTTP Methods
 export const httpMethodEnum = pgEnum('http_method', [
   'GET',

@@ -16,11 +16,7 @@ export * from './subscriptions';
 // Payments
 export * from './payments';
 
-// Contests
-export * from './contests';
-
-// Plan 07 Supply: evaluations, earnings, payouts, tier history
-export * from './evaluations';
+// Plan 07 Supply: earnings, payouts, tier history
 export * from './earnings';
 
 // Marketplace Requests
@@ -44,7 +40,6 @@ export * from './incidents';
 
 // Phase 14 — Contest → Marketplace pipeline + KYC + prize awards
 export * from './kyc';
-export * from './prize-awards';
 // `models-marketplace` exports the gateway `models` table. Importers MUST use
 // a named import (e.g. `import { models } from '@aiag/database/schema/models-marketplace'`)
 // to avoid colliding with the legacy `aiModels` symbol from `./ai-models`.
