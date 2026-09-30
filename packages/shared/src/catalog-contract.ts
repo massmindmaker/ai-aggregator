@@ -7,6 +7,16 @@ export const CATALOG_MAX_CURSOR_BYTES = 1024;
 export const CATALOG_MAX_TEXT_LENGTH = 128;
 export const CATALOG_ACCEPTED_MAX_TOKENS = Number.MAX_SAFE_INTEGER;
 
+/**
+ * Author-version invocation bounds. These mirror the runtime authority in
+ * `authorChatRequestSchema` (packages/shared/src/author-probe.ts); the catalog
+ * must advertise exactly what the author endpoint accepts, never more.
+ */
+export const CATALOG_AUTHOR_MAX_OUTPUT_TOKENS = 4096;
+export const CATALOG_AUTHOR_DEFAULT_OUTPUT_TOKENS = 1024;
+export const CATALOG_AUTHOR_MAX_MESSAGES = 64;
+export const CATALOG_AUTHOR_MAX_BODY_BYTES = 32768;
+
 export type Sha256Revision = `sha256:${string}`;
 export type Uuid = string;
 export type CatalogMode =
@@ -166,6 +176,110 @@ export interface CatalogRetailEmbeddingsPricingV1 extends Omit<CatalogRetailToke
   }>;
 }
 
+/**
+ * Additive v1 extension: an explicitly admitted author version. It is never an
+ * ordinary upstream deployment — `ownedBy` is fixed to "author", the deployment
+ * contract is its own, and the price is the author's approved fixed
+ * microcredits-per-request, not a per-token upstream tariff.
+ */
+export interface CatalogRetailAuthorRequestPricingV1 {
+  readonly revision: Sha256Revision;
+  readonly currency: "USD";
+  readonly settlementUnit: "microcredit";
+  readonly microcreditsPerUsdCent: "1000";
+  readonly rates: Readonly<{
+    request: Readonly<{ amount: string; unit: "microcredit_per_request" }>;
+  }>;
+  readonly actualCharge: Readonly<{
+    formulaVersion: "author-fixed-microcredits-v1";
+    rounding: "exact_microcredit_per_request";
+  }>;
+  readonly maximumAuthorization: Readonly<{
+    formula: "request_rate";
+    rounding: "exact_microcredit_per_request";
+  }>;
+  readonly quoteSemantics: "terms_only_quote_created_at_admission";
+}
+
+export interface CatalogAuthorInvocationV1 {
+  readonly method: "POST";
+  readonly path: "/v1/chat/completions";
+  readonly authorization: "bearer_api_key";
+  readonly contentType: "application/json";
+  readonly maxBodyBytes: typeof CATALOG_AUTHOR_MAX_BODY_BYTES;
+  readonly requestBody: Readonly<{
+    unknownFields: "reject";
+    unknownMessageFields: "reject";
+    unsupportedExecutionFields: readonly [
+      "tools",
+      "functions",
+      "tool_choice",
+      "modalities",
+      "audio",
+      "input_audio",
+    ];
+    multimodalMessageContent: "reject";
+  }>;
+  readonly headers: CatalogInvocationV1["headers"];
+  readonly parameters: Readonly<{
+    model: Readonly<{ required: true; const: string }>;
+    messages: Readonly<{
+      required: true;
+      minItems: 1;
+      maxItems: typeof CATALOG_AUTHOR_MAX_MESSAGES;
+      roles: readonly ["system", "user", "assistant"];
+      content: "nonempty_string";
+    }>;
+    stream: Readonly<{
+      required: false;
+      const: false;
+      normalizedDefault: false;
+    }>;
+    max_tokens: Readonly<{
+      required: false;
+      type: "integer";
+      minimum: 1;
+      acceptedMaximum: typeof CATALOG_AUTHOR_MAX_OUTPUT_TOKENS;
+      effectiveMaximum: typeof CATALOG_AUTHOR_MAX_OUTPUT_TOKENS;
+      configuredDefault: typeof CATALOG_AUTHOR_DEFAULT_OUTPUT_TOKENS;
+      defaultApplied: typeof CATALOG_AUTHOR_DEFAULT_OUTPUT_TOKENS;
+      normalization: "clamp_to_effective_max";
+    }>;
+    aiag_mode: CatalogInvocationV1["parameters"]["aiag_mode"];
+  }>;
+}
+
+export interface CatalogAvailableAuthorItemV1 {
+  readonly object: "catalog.model";
+  readonly model: CatalogModelIdentityV1;
+  readonly availability: CatalogAvailableItemV1["availability"];
+  readonly ownedBy: "author";
+  readonly deployment: Readonly<{
+    id: Uuid;
+    configurationRevision: Sha256Revision;
+    contract: "stored-author-chat-v1";
+  }>;
+  readonly invocation: CatalogAuthorInvocationV1;
+  readonly capabilities: readonly [
+    Readonly<{
+      id: "chat.completions.stored.author.v1";
+      inputModalities: readonly ["text"];
+      outputModalities: readonly ["text"];
+      streaming: false;
+      toolCalling: false;
+      structuredOutput: false;
+      asynchronous: false;
+      storedResult: true;
+      usageReceipt: true;
+      requestDependentRestrictions: readonly ["pii_transborder"];
+      /** The author manifest declares no context window; never invent one. */
+      contextWindowTokens: null;
+      maxOutputTokens: typeof CATALOG_AUTHOR_MAX_OUTPUT_TOKENS;
+    }>,
+  ];
+  readonly pricing: CatalogRetailAuthorRequestPricingV1;
+}
+
 export interface CatalogUnavailableItemV1 {
   readonly object: "catalog.model";
   readonly model: CatalogModelIdentityV1;
@@ -240,7 +354,11 @@ export interface CatalogAvailableEmbeddingsItemV1 {
   readonly pricing: CatalogRetailEmbeddingsPricingV1;
 }
 
-export type CatalogItemV1 = CatalogUnavailableItemV1 | CatalogAvailableItemV1 | CatalogAvailableEmbeddingsItemV1;
+export type CatalogItemV1 =
+  | CatalogUnavailableItemV1
+  | CatalogAvailableItemV1
+  | CatalogAvailableEmbeddingsItemV1
+  | CatalogAvailableAuthorItemV1;
 
 export interface CatalogResponseV1 {
   readonly schemaVersion: 1;
@@ -650,10 +768,141 @@ const availableEmbeddingsItemSchema = z.object({
     context.addIssue({ code: z.ZodIssueCode.custom, message: "invocation model must match model slug" });
 });
 
+const authorPricingSchema = z
+  .object({
+    revision: sha256RevisionSchema,
+    currency: z.literal("USD"),
+    settlementUnit: z.literal("microcredit"),
+    microcreditsPerUsdCent: z.literal("1000"),
+    rates: z
+      .object({
+        request: z
+          .object({
+            amount: canonicalDecimalSchema,
+            unit: z.literal("microcredit_per_request"),
+          })
+          .strict(),
+      })
+      .strict(),
+    actualCharge: z
+      .object({
+        formulaVersion: z.literal("author-fixed-microcredits-v1"),
+        rounding: z.literal("exact_microcredit_per_request"),
+      })
+      .strict(),
+    maximumAuthorization: z
+      .object({
+        formula: z.literal("request_rate"),
+        rounding: z.literal("exact_microcredit_per_request"),
+      })
+      .strict(),
+    quoteSemantics: z.literal("terms_only_quote_created_at_admission"),
+  })
+  .strict();
+
+const authorInvocationSchema = z
+  .object({
+    method: z.literal("POST"),
+    path: z.literal("/v1/chat/completions"),
+    authorization: z.literal("bearer_api_key"),
+    contentType: z.literal("application/json"),
+    maxBodyBytes: z.literal(CATALOG_AUTHOR_MAX_BODY_BYTES),
+    requestBody: invocationSchema.shape.requestBody,
+    headers: invocationSchema.shape.headers,
+    parameters: z
+      .object({
+        model: invocationSchema.shape.parameters.shape.model,
+        messages: z
+          .object({
+            required: z.literal(true),
+            minItems: z.literal(1),
+            maxItems: z.literal(CATALOG_AUTHOR_MAX_MESSAGES),
+            roles: z.tuple([
+              z.literal("system"),
+              z.literal("user"),
+              z.literal("assistant"),
+            ]),
+            content: z.literal("nonempty_string"),
+          })
+          .strict(),
+        stream: invocationSchema.shape.parameters.shape.stream,
+        max_tokens: z
+          .object({
+            required: z.literal(false),
+            type: z.literal("integer"),
+            minimum: z.literal(1),
+            acceptedMaximum: z.literal(CATALOG_AUTHOR_MAX_OUTPUT_TOKENS),
+            effectiveMaximum: z.literal(CATALOG_AUTHOR_MAX_OUTPUT_TOKENS),
+            configuredDefault: z.literal(CATALOG_AUTHOR_DEFAULT_OUTPUT_TOKENS),
+            defaultApplied: z.literal(CATALOG_AUTHOR_DEFAULT_OUTPUT_TOKENS),
+            normalization: z.literal("clamp_to_effective_max"),
+          })
+          .strict(),
+        aiag_mode: invocationSchema.shape.parameters.shape.aiag_mode,
+      })
+      .strict(),
+  })
+  .strict();
+
+const authorCapabilitySchema = z
+  .object({
+    id: z.literal("chat.completions.stored.author.v1"),
+    inputModalities: z.tuple([z.literal("text")]),
+    outputModalities: z.tuple([z.literal("text")]),
+    streaming: z.literal(false),
+    toolCalling: z.literal(false),
+    structuredOutput: z.literal(false),
+    asynchronous: z.literal(false),
+    storedResult: z.literal(true),
+    usageReceipt: z.literal(true),
+    requestDependentRestrictions: z.tuple([z.literal("pii_transborder")]),
+    contextWindowTokens: z.null(),
+    maxOutputTokens: z.literal(CATALOG_AUTHOR_MAX_OUTPUT_TOKENS),
+  })
+  .strict();
+
+const availableAuthorItemSchema = z
+  .object({
+    object: z.literal("catalog.model"),
+    model: modelSchema,
+    availability: availableAvailabilitySchema,
+    ownedBy: z.literal("author"),
+    deployment: z
+      .object({
+        id: uuidSchema,
+        configurationRevision: sha256RevisionSchema,
+        contract: z.literal("stored-author-chat-v1"),
+      })
+      .strict(),
+    invocation: authorInvocationSchema,
+    capabilities: z.tuple([authorCapabilitySchema]),
+    pricing: authorPricingSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.model.type !== "chat")
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "author item requires a chat model",
+      });
+    if (value.invocation.parameters.model.const !== value.model.slug)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "invocation model must match model slug",
+      });
+    const descriptor = value.invocation.parameters.max_tokens;
+    if (descriptor.defaultApplied !== Math.min(descriptor.configuredDefault, descriptor.effectiveMaximum))
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "defaultApplied must be clamped to effectiveMaximum",
+      });
+  });
+
 export const catalogItemV1Schema = z.union([
   unavailableItemSchema,
   availableItemSchema,
   availableEmbeddingsItemSchema,
+  availableAuthorItemSchema,
 ]);
 
 export const catalogResponseV1Schema = z

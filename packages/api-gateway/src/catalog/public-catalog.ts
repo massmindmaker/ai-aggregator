@@ -1,15 +1,22 @@
 import { createHash } from 'node:crypto';
 import {
   CATALOG_ACCEPTED_MAX_TOKENS,
+  CATALOG_AUTHOR_DEFAULT_OUTPUT_TOKENS,
+  CATALOG_AUTHOR_MAX_BODY_BYTES,
+  CATALOG_AUTHOR_MAX_MESSAGES,
+  CATALOG_AUTHOR_MAX_OUTPUT_TOKENS,
   CATALOG_SCHEMA_VERSION,
   catalogModes,
   encodeCatalogCursor,
+  type CatalogAvailableAuthorItemV1,
   type CatalogAvailableItemV1,
   type CatalogAvailableEmbeddingsItemV1,
+  type CatalogAuthorInvocationV1,
   type CatalogCursorV1,
   type CatalogItemV1,
   type CatalogMode,
   type CatalogResponseV1,
+  type CatalogRetailAuthorRequestPricingV1,
   type CatalogUnavailableItemV1,
   type CatalogUnavailableReason,
   type Sha256Revision,
@@ -27,13 +34,15 @@ import type { ResolvedModel } from '../routing/resolver';
 import { getUpstream } from '../upstreams/registry';
 import type { UpstreamAdapter } from '../upstreams/interface';
 import { projectCatalogRetailTokenPricing } from './retail-token-pricing';
-import { projectCatalogRetailEmbeddingsPricing } from './retail-token-pricing';
+import { projectCatalogRetailEmbeddingsPricing, projectCatalogRetailAuthorRequestPricing } from './retail-token-pricing';
+import { authorChatEnabled, authorVersionListed } from './author-admission';
 import { findReviewedEmbeddingProfile, reviewedEmbeddingProfiles } from '../billing/reviewed-embedding-profiles';
 import { prepareStoredEmbeddingQuote } from '../billing/embedding-candidate-quote';
 import { STORED_EMBEDDINGS_REQUEST_BODY_LIMIT_BYTES } from '../billing/stored-embeddings-http-contract';
 
 export const CATALOG_MAX_CANDIDATES_PER_MODEL = 16;
 export const CATALOG_MAX_CANDIDATES_PER_PAGE = 512;
+export const CATALOG_MAX_AUTHOR_VERSIONS_PER_PAGE = 100;
 
 type ExecutionMode =
   | 'legacy'
@@ -52,10 +61,16 @@ type MechanicsReadiness = Readonly<{
   forceMockExcluded: boolean;
 }>;
 
+type AuthorChatReadiness = Readonly<{
+  enabled: boolean;
+  endpointKeyConfigured: boolean;
+}>;
+
 export type CatalogRuntimeCapture = Readonly<{
   executionMode: ExecutionMode;
   cachingMultiplier: string;
   configuredDefaultMaxOutputTokens: number;
+  authorChat: AuthorChatReadiness;
   mechanics: readonly MechanicsReadiness[];
   runtimeProjectionRevision: Sha256Revision;
 }>;
@@ -65,6 +80,11 @@ export type CatalogModelRow = Readonly<{
   slug: unknown;
   type: unknown;
   status: unknown;
+  /** Admitted author version for this model, or null for an ordinary upstream model. */
+  author_version_id: unknown;
+  author_manifest_digest: unknown;
+  author_price_microcredits: unknown;
+  author_policy_digest: unknown;
 }>;
 
 export type CatalogCandidateRow = Readonly<{
@@ -87,6 +107,7 @@ export type CatalogCandidateRow = Readonly<{
 
 type CatalogReader = Readonly<{
   readRevision(): Promise<unknown>;
+  readAuthorRevision(): Promise<unknown>;
   readModels(after: CatalogCursorV1['after'] | null, limitPlusOne: number): Promise<readonly CatalogModelRow[]>;
   readCandidates(modelIds: readonly string[]): Promise<readonly CatalogCandidateRow[]>;
 }>;
@@ -118,6 +139,9 @@ export function capturePublicCatalogRuntime(source: Readonly<{
   cachingMultiplier?: string;
   configuredDefaultMaxOutputTokens?: number;
   forceMock?: boolean;
+  /** Availability of the author execution contract; overrides exist for tests only. */
+  authorChatEnabled?: boolean;
+  authorEndpointKeyConfigured?: boolean;
   getAdapter?: (adapterKey: string) => UpstreamAdapter;
 }> = {}): CatalogRuntimeCapture {
   const executionMode = source.executionMode ?? config.GATEWAY_HTTP_EXECUTION_MODE;
@@ -164,11 +188,16 @@ export function capturePublicCatalogRuntime(source: Readonly<{
         });
       }),
   );
+  const authorChat: AuthorChatReadiness = Object.freeze({
+    enabled: source.authorChatEnabled ?? authorChatEnabled(),
+    endpointKeyConfigured: source.authorEndpointKeyConfigured ?? Boolean(process.env.AUTHOR_ENDPOINT_KEK),
+  });
   const publicRuntimeTuple = Object.freeze({
     schemaVersion: CATALOG_SCHEMA_VERSION,
     executionMode,
     cachingMultiplier,
     configuredDefaultMaxOutputTokens,
+    authorChat,
     request: Object.freeze({
       maxBodyBytes: REQUEST_BODY_LIMIT_BYTES,
       acceptedMaximum: CATALOG_ACCEPTED_MAX_TOKENS,
@@ -185,6 +214,7 @@ export function capturePublicCatalogRuntime(source: Readonly<{
     executionMode,
     cachingMultiplier,
     configuredDefaultMaxOutputTokens,
+    authorChat,
     mechanics,
     runtimeProjectionRevision: digest(publicRuntimeTuple),
   });
@@ -199,23 +229,61 @@ function defaultTransactionRunner<T>(work: (reader: CatalogReader) => Promise<T>
         `;
         return rows[0]?.revision;
       },
+      /**
+       * The 0073 revision trigger set covers only `models`/`model_upstreams`/
+       * `upstreams`, so author admission changes would leave cursors valid while
+       * the advertised price is stale. Migrations are out of scope here, so the
+       * author facts are folded into the catalog revision as bounded aggregates.
+       */
+      async readAuthorRevision() {
+        const rows = await tx<readonly { revision: unknown }[]>`
+          SELECT concat_ws('|',
+                   (SELECT count(*)::text FROM author_model_versions),
+                   coalesce((SELECT max(updated_at)::text FROM author_model_versions), ''),
+                   coalesce((SELECT max(approved_at)::text FROM author_price_policies), ''),
+                   (SELECT count(*)::text FROM author_probe_operations WHERE state = 'succeeded'),
+                   (SELECT count(*)::text FROM users u
+                     WHERE (NOT u.is_active OR u.is_banned)
+                       AND EXISTS (SELECT 1 FROM author_model_versions v WHERE v.author_user_id = u.id))
+                 ) AS revision
+        `;
+        return rows[0]?.revision;
+      },
       async readModels(after, limitPlusOne) {
+        // Author versions have no `model_upstreams` row, so they can never appear
+        // through the candidate join. They are admitted here under exactly the
+        // same predicate `/v1/models` uses, so the two public lists cannot drift.
         return tx<CatalogModelRow[]>`
-          SELECT id::text AS id, slug, type, status
-            FROM models
-           WHERE enabled = TRUE
-             AND status IN ('live', 'frozen')
-             AND slug <> 'whisper-large-v3'
-             AND lower(coalesce(metadata->>'operation','')) <> 'stt'
+          SELECT m.id::text AS id, m.slug, m.type, m.status,
+                 a.version_id AS author_version_id,
+                 a.manifest_digest AS author_manifest_digest,
+                 a.price_microcredits AS author_price_microcredits,
+                 a.policy_digest AS author_policy_digest
+            FROM models m
+            LEFT JOIN LATERAL (
+              SELECT v.id::text AS version_id,
+                     v.manifest_digest,
+                     p.price_microcredits::text AS price_microcredits,
+                     p.policy_digest
+                FROM author_model_versions v
+                JOIN author_price_policies p ON p.version_id = v.id
+               WHERE v.id = m.current_author_version_id
+                 AND v.model_id = m.id
+                 AND ${authorVersionListed(tx)}
+            ) a ON TRUE
+           WHERE m.enabled = TRUE
+             AND m.status IN ('live', 'frozen')
+             AND m.slug <> 'whisper-large-v3'
+             AND lower(coalesce(m.metadata->>'operation','')) <> 'stt'
              AND NOT EXISTS (
-               SELECT 1 FROM unnest(tags) tag
+               SELECT 1 FROM unnest(m.tags) tag
                 WHERE lower(tag) IN ('stt','transcription')
              )
              AND (
                ${after?.slug ?? null}::text IS NULL
-               OR (slug, id) > (${after?.slug ?? null}::text, ${after?.modelId ?? null}::uuid)
+               OR (m.slug, m.id) > (${after?.slug ?? null}::text, ${after?.modelId ?? null}::uuid)
              )
-           ORDER BY slug ASC, id ASC
+           ORDER BY m.slug ASC, m.id ASC
            LIMIT ${limitPlusOne}
         `;
       },
@@ -293,7 +361,20 @@ function parseDbRevision(value: unknown): string {
   return value;
 }
 
-type ValidModel = Readonly<{ id: string; slug: string; type: ResolvedModel['type']; status: 'live' | 'frozen' }>;
+type ValidModel = Readonly<{
+  id: string;
+  slug: string;
+  type: ResolvedModel['type'];
+  status: 'live' | 'frozen';
+  /** Non-null only for a model whose current author version is admitted. */
+  author: ValidAuthorVersion | null;
+}>;
+type ValidAuthorVersion = Readonly<{
+  versionId: string;
+  manifestDigest: string;
+  priceMicrocredits: string;
+  policyDigest: string;
+}>;
 type ValidCandidate = Readonly<{
   modelId: string;
   deploymentId: string;
@@ -308,12 +389,37 @@ type ValidCandidate = Readonly<{
   priority: number;
 }>;
 
+const DIGEST = /^sha256:[0-9a-f]{64}$/;
+
+function validateAuthorVersion(row: CatalogModelRow): ValidAuthorVersion | null {
+  if (row.author_version_id === null || row.author_version_id === undefined) return null;
+  const priceMicrocredits = decimalValue(row.author_price_microcredits);
+  const manifestDigest = textValue(row.author_manifest_digest, 71);
+  const policyDigest = textValue(row.author_policy_digest, 71);
+  // The DB constraint already bounds this; an admitted price of zero or a
+  // non-digest identity must never be advertised as purchasable.
+  if (!DIGEST.test(manifestDigest) || !DIGEST.test(policyDigest) || !/^[1-9][0-9]*$/.test(priceMicrocredits))
+    throw new PublicCatalogError('catalog_unavailable');
+  return Object.freeze({
+    versionId: uuidValue(row.author_version_id),
+    manifestDigest,
+    priceMicrocredits,
+    policyDigest,
+  });
+}
+
 function validateModel(row: CatalogModelRow): ValidModel {
   const type = textValue(row.type, 20);
   const status = row.status;
   if (!MODEL_TYPES.includes(type as ResolvedModel['type']) || (status !== 'live' && status !== 'frozen'))
     throw new PublicCatalogError('catalog_unavailable');
-  return Object.freeze({ id: uuidValue(row.id), slug: textValue(row.slug, 128), type: type as ResolvedModel['type'], status });
+  return Object.freeze({
+    id: uuidValue(row.id),
+    slug: textValue(row.slug, 128),
+    type: type as ResolvedModel['type'],
+    status,
+    author: validateAuthorVersion(row),
+  });
 }
 
 function validateCandidate(row: CatalogCandidateRow): ValidCandidate | null {
@@ -507,12 +613,147 @@ function projectEmbeddingModel(
   });
 }
 
+/**
+ * Projects one admitted author version. It is deliberately NOT an upstream
+ * candidate: there is no `model_upstreams` row, no reviewed profile and no
+ * per-token tariff, so the deployment identity is the author version and the
+ * price is the approved fixed per-request amount.
+ */
+function projectAuthorModel(
+  model: ValidModel,
+  runtime: CatalogRuntimeCapture,
+  normalized: ReturnType<typeof normalizeStoredChatFreshPolicy>,
+): CatalogItemV1 {
+  const author = model.author;
+  if (!author) return unavailable(model, 'no_admitted_deployment');
+  if (model.status === 'frozen') return unavailable(model, 'model_frozen');
+  if (normalized.whitelist.length && !normalized.whitelist.includes(model.slug))
+    return unavailable(model, 'key_policy_excludes_model');
+  // Author chat is a stored-mode contract; legacy execution cannot serve it.
+  if (runtime.executionMode === 'legacy') return unavailable(model, 'runtime_contract_unavailable');
+  if (model.type !== 'chat') return unavailable(model, 'no_admitted_deployment');
+  if (!runtime.authorChat.enabled) return unavailable(model, 'runtime_contract_unavailable');
+  // Without the endpoint KEK the author token envelope cannot be decrypted, so
+  // the version is admitted in the DB but not executable here.
+  if (!runtime.authorChat.endpointKeyConfigured)
+    return unavailable(model, 'service_configuration_unavailable');
+  // Author hosting residency is not independently verified; mirror the exact
+  // runtime policy in author-chat.ts `checkPolicy` instead of guessing RU-ness.
+  if (
+    normalized.policy.forbid_non_ru ||
+    normalized.policy.default_mode === 'ru-only' ||
+    normalized.policy.blocked_providers?.includes('author') ||
+    (normalized.policy.allowed_providers?.length &&
+      !normalized.policy.allowed_providers.includes('author'))
+  )
+    return unavailable(model, 'key_policy_excludes_model');
+
+  let pricing: CatalogRetailAuthorRequestPricingV1;
+  try {
+    pricing = projectCatalogRetailAuthorRequestPricing(author.priceMicrocredits);
+  } catch {
+    return unavailable(model, 'retail_pricing_unavailable');
+  }
+  const effectiveMaximum: number = CATALOG_AUTHOR_MAX_OUTPUT_TOKENS;
+  const configuredDefault: number = CATALOG_AUTHOR_DEFAULT_OUTPUT_TOKENS;
+  const maxMessages: number = CATALOG_AUTHOR_MAX_MESSAGES;
+  // Author chat serves one endpoint, so only `auto` is actually selectable; the
+  // ru-only case is already rejected above, never advertised.
+  const defaultRequested = (normalized.policy.default_mode ?? 'auto') as CatalogMode;
+  const effectiveDefault = defaultRequested;
+  const authorAvailableValues: readonly CatalogMode[] = Object.freeze(
+    catalogModes.filter((mode) => mode === 'auto' || mode === defaultRequested),
+  );
+  const invocation: CatalogAuthorInvocationV1 = Object.freeze({
+    method: 'POST' as const,
+    path: '/v1/chat/completions' as const,
+    authorization: 'bearer_api_key' as const,
+    contentType: 'application/json' as const,
+    maxBodyBytes: CATALOG_AUTHOR_MAX_BODY_BYTES,
+    requestBody: Object.freeze({
+      unknownFields: 'reject' as const,
+      unknownMessageFields: 'reject' as const,
+      unsupportedExecutionFields: Object.freeze(['tools', 'functions', 'tool_choice', 'modalities', 'audio', 'input_audio'] as const),
+      multimodalMessageContent: 'reject' as const,
+    }),
+    headers: Object.freeze({
+      idempotencyKey: Object.freeze({ name: 'Idempotency-Key' as const, required: true as const, pattern: '^[A-Za-z0-9._:-]{1,128}$' as const }),
+      sessionId: Object.freeze({ name: 'X-AIAG-Session-Id' as const, required: false as const, pattern: '^[A-Za-z0-9._:-]{1,128}$' as const }),
+      upstreamKey: Object.freeze({ name: 'X-Upstream-Key' as const, allowed: false as const, rejection: 'UNSUPPORTED_EXECUTION_CONTRACT' as const }),
+    }),
+    parameters: Object.freeze({
+      model: Object.freeze({ required: true as const, const: model.slug }),
+      messages: Object.freeze({
+        required: true as const, minItems: 1 as const, maxItems: maxMessages as typeof CATALOG_AUTHOR_MAX_MESSAGES,
+        roles: Object.freeze(['system', 'user', 'assistant'] as const), content: 'nonempty_string' as const,
+      }),
+      stream: Object.freeze({ required: false as const, const: false as const, normalizedDefault: false as const }),
+      max_tokens: Object.freeze({
+        required: false as const, type: 'integer' as const, minimum: 1 as const,
+        acceptedMaximum: effectiveMaximum as typeof CATALOG_AUTHOR_MAX_OUTPUT_TOKENS,
+        effectiveMaximum: effectiveMaximum as typeof CATALOG_AUTHOR_MAX_OUTPUT_TOKENS,
+        configuredDefault: configuredDefault as typeof CATALOG_AUTHOR_DEFAULT_OUTPUT_TOKENS,
+        defaultApplied: Math.min(configuredDefault, effectiveMaximum) as typeof CATALOG_AUTHOR_DEFAULT_OUTPUT_TOKENS,
+        normalization: 'clamp_to_effective_max' as const,
+      }),
+      // The author endpoint has no provider fan-out, so only the modes it can
+      // actually honour are advertised as available values.
+      aiag_mode: Object.freeze({
+        required: false as const,
+        values: catalogModes,
+        availableValues: authorAvailableValues,
+        defaultRequested,
+        effectiveDefault,
+        requiresExplicitAvailableValue: !authorAvailableValues.includes(effectiveDefault),
+      }),
+    }),
+  });
+  const result: CatalogAvailableAuthorItemV1 = Object.freeze({
+    object: 'catalog.model',
+    model: modelIdentity(model),
+    availability: Object.freeze({ state: 'available', scope: 'advertised_contract', reason: null, liveUpstreamHealthChecked: false }),
+    ownedBy: 'author',
+    deployment: Object.freeze({
+      id: author.versionId,
+      configurationRevision: digest({
+        schemaVersion: 1,
+        model: [model.id, model.slug, model.type],
+        deploymentId: author.versionId,
+        binding: [author.manifestDigest, author.policyDigest],
+        invocation: [CATALOG_AUTHOR_MAX_BODY_BYTES, CATALOG_AUTHOR_MAX_MESSAGES, CATALOG_AUTHOR_MAX_OUTPUT_TOKENS, CATALOG_AUTHOR_DEFAULT_OUTPUT_TOKENS],
+        runtime: [runtime.executionMode, runtime.authorChat.enabled, runtime.authorChat.endpointKeyConfigured],
+      }),
+      contract: 'stored-author-chat-v1',
+    }),
+    invocation,
+    capabilities: Object.freeze([Object.freeze({
+      id: 'chat.completions.stored.author.v1' as const,
+      inputModalities: Object.freeze(['text'] as const),
+      outputModalities: Object.freeze(['text'] as const),
+      streaming: false as const,
+      toolCalling: false as const,
+      structuredOutput: false as const,
+      asynchronous: false as const,
+      storedResult: true as const,
+      usageReceipt: true as const,
+      requestDependentRestrictions: Object.freeze(['pii_transborder'] as const),
+      contextWindowTokens: null as null,
+      maxOutputTokens: CATALOG_AUTHOR_MAX_OUTPUT_TOKENS as typeof CATALOG_AUTHOR_MAX_OUTPUT_TOKENS,
+    })] as const),
+    pricing,
+  });
+  return result;
+}
+
 function projectModel(
   model: ValidModel,
   rawCandidates: readonly CatalogCandidateRow[],
   runtime: CatalogRuntimeCapture,
   normalized: ReturnType<typeof normalizeStoredChatFreshPolicy>,
 ): CatalogItemV1 {
+  // An admitted author version is sold as itself, never blended with upstream
+  // candidates: it has no reviewed profile and no per-token tariff.
+  if (model.author) return projectAuthorModel(model, runtime, normalized);
   if (model.status === 'frozen') return unavailable(model, 'model_frozen');
   if (normalized.whitelist.length && !normalized.whitelist.includes(model.slug))
     return unavailable(model, 'key_policy_excludes_model');
@@ -665,6 +906,14 @@ function projectModel(
   return result;
 }
 
+const AUTHOR_REVISION = /^[0-9|]{1,512}$/;
+
+function authorRevisionValue(value: unknown): string {
+  if (typeof value !== 'string' || !AUTHOR_REVISION.test(value))
+    throw new PublicCatalogError('catalog_unavailable');
+  return value;
+}
+
 function keyPolicyRevision(normalized: ReturnType<typeof normalizeStoredChatFreshPolicy>): Sha256Revision {
   const sorted = (values: readonly string[] | undefined) => values ? [...values].sort() : undefined;
   return digest({
@@ -699,6 +948,7 @@ export async function readPublicCatalog(args: Readonly<{
   try {
     return await transaction(async (reader) => {
       const dbRevision = parseDbRevision(await reader.readRevision());
+      const authorRevision = authorRevisionValue(await reader.readAuthorRevision());
       const modelRows = await reader.readModels(args.cursor?.after ?? null, args.limit + 1);
       if (modelRows.length > args.limit + 1) throw new PublicCatalogError('catalog_unavailable');
       const models = modelRows.map(validateModel);
@@ -714,7 +964,7 @@ export async function readPublicCatalog(args: Readonly<{
       if (candidateRows.length > CATALOG_MAX_CANDIDATES_PER_PAGE || [...counts.values()].some((count) => count > CATALOG_MAX_CANDIDATES_PER_MODEL))
         throw new PublicCatalogError('catalog_unavailable');
 
-      const catalogRevision = digest([1, dbRevision, runtime.runtimeProjectionRevision, keyPolicyRevision(normalized)]);
+      const catalogRevision = digest([1, dbRevision, authorRevision, runtime.runtimeProjectionRevision, keyPolicyRevision(normalized)]);
       if (args.cursor && args.cursor.catalogRevision !== catalogRevision)
         throw new PublicCatalogError('revision_changed');
       const pageModels = models.slice(0, args.limit);

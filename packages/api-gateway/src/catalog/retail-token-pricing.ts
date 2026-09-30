@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
-import type { CatalogRetailEmbeddingsPricingV1, CatalogRetailTokenPricingV1 } from '@aiag/shared/catalog-contract';
+import type {
+  CatalogRetailAuthorRequestPricingV1,
+  CatalogRetailEmbeddingsPricingV1,
+  CatalogRetailTokenPricingV1,
+} from '@aiag/shared/catalog-contract';
 import {
   calculateTokenCharge,
   quoteChatMaximum,
@@ -10,6 +14,36 @@ import {
 const DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
 const MAX_DIGITS = 38;
 const MAX_FRACTION_DIGITS = 18;
+
+/**
+ * Projects an approved author price policy into exact public terms. The author's
+ * per-request microcredits are the authority; nothing is derived per token and
+ * no author share or rights metadata is retained.
+ */
+export function projectCatalogRetailAuthorRequestPricing(
+  priceMicrocredits: string,
+): CatalogRetailAuthorRequestPricingV1 {
+  const amount = normalizeProduct(priceMicrocredits, '1');
+  if (amount === '0') throw new RangeError('Author price must be positive');
+  const publicTerms = Object.freeze({
+    currency: 'USD' as const,
+    settlementUnit: 'microcredit' as const,
+    microcreditsPerUsdCent: '1000' as const,
+    rates: Object.freeze({
+      request: Object.freeze({ amount, unit: 'microcredit_per_request' as const }),
+    }),
+    actualCharge: Object.freeze({
+      formulaVersion: 'author-fixed-microcredits-v1' as const,
+      rounding: 'exact_microcredit_per_request' as const,
+    }),
+    maximumAuthorization: Object.freeze({
+      formula: 'request_rate' as const,
+      rounding: 'exact_microcredit_per_request' as const,
+    }),
+    quoteSemantics: 'terms_only_quote_created_at_admission' as const,
+  });
+  return Object.freeze({ revision: revision(publicTerms), ...publicTerms });
+}
 
 function parseDecimal(value: string, positive: boolean): { digits: bigint; scale: number } {
   if (typeof value !== 'string' || !DECIMAL.test(value))

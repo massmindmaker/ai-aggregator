@@ -17,7 +17,8 @@ import {
 
 const state = vi.hoisted(() => ({
   revision: '7',
-  models: [] as Array<{ id: string; slug: string; type: string; status: string }>,
+  authorRevision: '0|||0|0',
+  models: [] as Array<Record<string, unknown>>,
   candidates: [] as Array<Record<string, unknown>>,
   keys: {} as Record<string, unknown | null>,
   failRevision: false,
@@ -31,9 +32,17 @@ vi.mock('../lib/db', () => {
       if (state.failRevision) throw new Error('storage-diagnostic-secret');
       return [{ revision: state.revision }];
     }
+    // Author-admission aggregates; matched before the model page query because
+    // the model page itself joins `author_model_versions` in a lateral.
+    if (query.includes('concat_ws')) {
+      return [{ revision: state.authorRevision }];
+    }
     if (query.includes('FROM models')) {
-      const afterSlug = values[0] as string | null;
-      const afterId = values[2] as string | null;
+      // The page query interpolates the author-admission fragment first, so the
+      // cursor parameters are the trailing non-fragment values.
+      const parameters = values.filter((value) => typeof value === 'string' || value === null);
+      const afterSlug = parameters[0] as string | null;
+      const afterId = parameters[1] as string | null;
       const sorted = [...state.models].sort((a, b) => a.slug === b.slug ? a.id.localeCompare(b.id) : a.slug.localeCompare(b.slug));
       return sorted.filter(m => afterSlug === null || m.slug > afterSlug || (m.slug === afterSlug && m.id > afterId!)).slice(0, Number(values.at(-1)));
     }
@@ -41,6 +50,9 @@ vi.mock('../lib/db', () => {
       if (state.failCandidates) throw new Error('storage-diagnostic-secret');
       return state.candidates.filter(row => (values[0] as string[]).includes(row.model_id as string));
     }
+    // Nested admission fragment: postgres.js inlines it into the parent query,
+    // so this double just discards it like the other interpolated values.
+    if (query.includes('author_probe_operations')) return [];
     throw new Error('Unexpected SQL in catalogue HTTP test');
   }, { array: (value: unknown) => value });
   return { sql: { begin: async (_isolation: string, work: (sql: typeof tx) => unknown) => work(tx) } };
@@ -56,6 +68,8 @@ vi.mock('../middleware/key-limits', () => ({
 }));
 vi.mock('../middleware/pii-filter', () => ({
   piiFilter: async (_c: unknown, next: () => Promise<void>) => { await next(); },
+  // server.ts wires the resolver seam at boot (F-3); the mock must mirror it.
+  setPiiResolveModel: vi.fn(),
 }));
 vi.mock('../middleware/model-status-check', () => ({
   modelStatusMiddleware: () => async (_c: unknown, next: () => Promise<void>) => { await next(); },
@@ -89,7 +103,11 @@ const apiKeyRow = {
 const modelId = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const deploymentId = (n: number) => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-const model = (n: number, slug: string) => ({ id: modelId(n), slug, type: 'chat', status: 'live' });
+const model = (n: number, slug: string) => ({
+  id: modelId(n), slug, type: 'chat', status: 'live',
+  author_version_id: null, author_manifest_digest: null,
+  author_price_microcredits: null, author_policy_digest: null,
+});
 
 const candidate = (n: number, slugRowId: string) => ({
   model_id: slugRowId,
@@ -109,6 +127,15 @@ const candidate = (n: number, slugRowId: string) => ({
   priority: 100,
 });
 
+/** An admitted author version. It has no `model_upstreams` row in production. */
+const authorModel = (n: number, slug: string) => ({
+  ...model(n, slug),
+  author_version_id: `50000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+  author_manifest_digest: `sha256:${'a'.repeat(64)}`,
+  author_price_microcredits: '2500',
+  author_policy_digest: `sha256:${'b'.repeat(64)}`,
+});
+
 function seedTwoModels(): void {
   state.models = [model(1, 'openai/gpt-4o-mini'), model(2, 'zeta/second-model')];
   state.candidates = [candidate(1, modelId(1)), candidate(2, modelId(2))];
@@ -116,10 +143,15 @@ function seedTwoModels(): void {
 
 // This hook imports the full real server graph. Give only boot a60s budget;
 // provider and HTTP contract timeouts remain unchanged.
-async function boot(mode: 'legacy' | 'stored_chat_only'): Promise<ServerApp> {
+async function boot(
+  mode: 'legacy' | 'stored_chat_only',
+  authorChat: { enabled: boolean; key: boolean } = { enabled: false, key: false },
+): Promise<ServerApp> {
   vi.resetModules();
   vi.stubEnv('NODE_ENV', 'test');
   vi.stubEnv('GATEWAY_HTTP_EXECUTION_MODE', mode);
+  vi.stubEnv('AUTHOR_CHAT_ENABLED', authorChat.enabled ? '1' : '0');
+  vi.stubEnv('AUTHOR_ENDPOINT_KEK', authorChat.key ? 'test-author-kek' : '');
   const auth = await import('../middleware/auth-plan04');
   auth.setApiKeyResolver(async (plain) => (state.keys[plain] as typeof apiKeyRow | undefined) ?? null);
   const { app } = await import('../server');
@@ -202,6 +234,55 @@ describe('public catalog producer-consumer over the real HTTP chain', () => {
       expect(text).not.toMatch(/provider|markup|metadata|egress|secret|key_hash/i);
       const parsed = JSON.parse(text) as CatalogResponseV1;
       expect(parsed.object).toBe('catalog.list');
+    });
+  });
+
+  describe('stored_chat_only with author chat: author versions are purchasable over HTTP', () => {
+    let app: ServerApp;
+    beforeAll(async () => {
+      app = await boot('stored_chat_only', { enabled: true, key: true });
+    }, 60_000);
+    beforeEach(() => {
+      state.models = [authorModel(3, 'author/cool-model')];
+      state.candidates = [];
+    });
+
+    it('parses an author-owned available item strictly in the consumer', async () => {
+      const result = await consumePublicCatalog({
+        baseUrl: 'http://gateway.test', apiKey: validKey,
+        fetch: consumerFetch(app), pageLimit: 20,
+      });
+      expect(result.pages).toBe(1);
+      const item = result.items[0]!;
+      expect(item.availability.state).toBe('available');
+      if (!('ownedBy' in item)) throw new Error('expected an author item');
+      expect(item.ownedBy).toBe('author');
+      expect(item.deployment).toMatchObject({ contract: 'stored-author-chat-v1' });
+      expect(item.pricing?.rates).toEqual({ request: { amount: '2500', unit: 'microcredit_per_request' } });
+      expect(result.preflight.invocationPath).toBe('/v1/chat/completions');
+      expect(result.preflight.settlementUnit).toBe('microcredit');
+    });
+  });
+
+  describe('stored_chat_only with author chat disabled: the same version is not purchasable', () => {
+    let app: ServerApp;
+    beforeAll(async () => {
+      app = await boot('stored_chat_only', { enabled: false, key: true });
+    }, 60_000);
+    beforeEach(() => {
+      state.models = [authorModel(3, 'author/cool-model')];
+      state.candidates = [];
+    });
+
+    it('advertises the author version as unavailable with no pricing', async () => {
+      const result = await consumePublicCatalog({
+        baseUrl: 'http://gateway.test', apiKey: validKey,
+        fetch: consumerFetch(app), pageLimit: 20,
+      });
+      const item = result.items[0]!;
+      expect(item.availability).toMatchObject({ state: 'unavailable', reason: 'runtime_contract_unavailable' });
+      expect(item.pricing).toBeNull();
+      expect(item.deployment).toBeNull();
     });
   });
 

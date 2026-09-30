@@ -44,6 +44,8 @@ const runtime = (overrides: Parameters<typeof capturePublicCatalogRuntime>[0] = 
     cachingMultiplier: '0.5',
     configuredDefaultMaxOutputTokens: 4096,
     forceMock: false,
+    authorChatEnabled: true,
+    authorEndpointKeyConfigured: true,
     getAdapter: () => adapter(),
     ...overrides,
   });
@@ -64,8 +66,23 @@ const model = (overrides: Partial<CatalogModelRow> = {}): CatalogModelRow => ({
   slug: 'openai/gpt-4o-mini',
   type: 'chat',
   status: 'live',
+  author_version_id: null,
+  author_manifest_digest: null,
+  author_price_microcredits: null,
+  author_policy_digest: null,
   ...overrides,
 });
+
+/** An admitted author version: no `model_upstreams` row exists for it in production. */
+const authorModel = (overrides: Partial<CatalogModelRow> = {}): CatalogModelRow =>
+  model({
+    slug: 'author/cool-model',
+    author_version_id: '50000000-0000-4000-8000-000000000001',
+    author_manifest_digest: `sha256:${'a'.repeat(64)}`,
+    author_price_microcredits: '2500',
+    author_policy_digest: `sha256:${'b'.repeat(64)}`,
+    ...overrides,
+  });
 
 const candidate = (overrides: Partial<CatalogCandidateRow> = {}): CatalogCandidateRow => ({
   model_id: modelId,
@@ -88,12 +105,14 @@ const candidate = (overrides: Partial<CatalogCandidateRow> = {}): CatalogCandida
 
 function runner(args: Readonly<{
   revision?: unknown;
+  authorRevision?: unknown;
   models?: readonly CatalogModelRow[];
   candidates?: readonly CatalogCandidateRow[];
   calls?: string[];
 }> = {}): CatalogTransactionRunner {
   return async (work) => work({
     async readRevision() { args.calls?.push('revision'); return args.revision ?? '1'; },
+    async readAuthorRevision() { args.calls?.push('authorRevision'); return args.authorRevision ?? '0|||0|0'; },
     async readModels() { args.calls?.push('models'); return args.models ?? [model()]; },
     async readCandidates() { args.calls?.push('candidates'); return args.candidates ?? [candidate()]; },
   });
@@ -209,10 +228,106 @@ describe('public catalog projector', () => {
     }
   });
 
-  it('checks revision, models and raw candidates in fixed transaction order', async () => {
+  it('checks revision, author revision, models and raw candidates in fixed transaction order', async () => {
     const calls: string[] = [];
     await read({ transaction: runner({ calls }) });
-    expect(calls).toEqual(['revision', 'models', 'candidates']);
+    expect(calls).toEqual(['revision', 'authorRevision', 'models', 'candidates']);
+  });
+
+  it('advertises an admitted author version as its own author-owned deployment', async () => {
+    const response = parseCatalogResponseV1(await read({
+      transaction: runner({ models: [authorModel()], candidates: [] }),
+    }));
+    const item = response.data[0]!;
+    expect(item.availability.state).toBe('available');
+    if (item.availability.state !== 'available' || !('ownedBy' in item))
+      throw new Error('expected an author item');
+    expect(item.ownedBy).toBe('author');
+    expect(item.deployment).toMatchObject({
+      id: '50000000-0000-4000-8000-000000000001',
+      contract: 'stored-author-chat-v1',
+    });
+    expect(item.pricing?.rates).toEqual({ request: { amount: '2500', unit: 'microcredit_per_request' } });
+    expect(item.invocation?.parameters.max_tokens).toMatchObject({
+      effectiveMaximum: 4096, configuredDefault: 1024, defaultApplied: 1024,
+    });
+    expect(item.capabilities[0]).toMatchObject({
+      id: 'chat.completions.stored.author.v1', contextWindowTokens: null,
+    });
+    // An author version is never dressed as an ordinary upstream deployment.
+    expect(item.pricing).not.toHaveProperty('rates.input');
+    expect(JSON.stringify(item)).not.toMatch(/markup|egress|provider|token_envelope/i);
+  });
+
+  it('reprices an author version on a policy change while keeping its deployment identity', async () => {
+    const before = (await read({ transaction: runner({ models: [authorModel()], candidates: [] }) })).data[0]!;
+    const repriced = (await read({
+      transaction: runner({ models: [authorModel({ author_price_microcredits: '4000' })], candidates: [] }),
+    })).data[0]!;
+    expect(repriced.model.id).toBe(before.model.id);
+    if (before.pricing === null || repriced.pricing === null) throw new Error('expected available');
+    expect(repriced.deployment?.configurationRevision).toBe(before.deployment?.configurationRevision);
+    expect(repriced.pricing.revision).not.toBe(before.pricing.revision);
+    expect(repriced.pricing.rates.request.amount).toBe('4000');
+  });
+
+  it.each([
+    ['author chat disabled', runtime({ authorChatEnabled: false }), 'runtime_contract_unavailable'],
+    ['endpoint key missing', runtime({ authorEndpointKeyConfigured: false }), 'service_configuration_unavailable'],
+    ['legacy execution', runtime({ executionMode: 'legacy' }), 'runtime_contract_unavailable'],
+    ['frozen', runtime(), 'model_frozen'],
+  ] as const)('author version stays unadvertised when %s', async (_name, capture, reason) => {
+    const modelRow = _name === 'frozen' ? authorModel({ status: 'frozen' }) : authorModel();
+    const result = await read({ runtime: capture, transaction: runner({ models: [modelRow], candidates: [] }) });
+    expect(result.data[0]!.availability).toMatchObject({ state: 'unavailable', reason });
+  });
+
+  it.each([
+    ['whitelist', { ...key(), model_whitelist: ['other'] } as AuthenticatedApiKey],
+    ['ru-only key', key({ default_mode: 'ru-only' })],
+    ['ru-residency-only key', { ...key(), ru_residency_only: true } as AuthenticatedApiKey],
+    ['blocked author provider', key({ blocked_providers: ['author'] })],
+    ['allowed providers without author', key({ allowed_providers: ['openrouter'] })],
+  ] as const)('author version is key-policy excluded for %s', async (_name, apiKey) => {
+    const result = await read({ key: apiKey, transaction: runner({ models: [authorModel()], candidates: [] }) });
+    expect(result.data[0]!.availability).toMatchObject({ state: 'unavailable', reason: 'key_policy_excludes_model' });
+  });
+
+  it('fails closed on a malformed author identity or a zero price', async () => {
+    for (const overrides of [
+      { author_manifest_digest: 'not-a-digest' },
+      { author_policy_digest: 'not-a-digest' },
+      { author_price_microcredits: '0' },
+      { author_version_id: 'not-a-uuid' },
+    ]) {
+      await expect(
+        read({ transaction: runner({ models: [authorModel(overrides)], candidates: [] }) }),
+      ).rejects.toMatchObject({ kind: 'catalog_unavailable' });
+    }
+  });
+
+  it('never lets an author version advertise a non-chat operation', async () => {
+    // `AuthorManifestV1` pins `model.type` to the literal "chat" (zod), so an
+    // admitted author version can never be an STT/transcription deployment; the
+    // catalog projector refuses every other type regardless of the DB row.
+    for (const type of ['embedding', 'audio', 'image', 'video', 'completion']) {
+      const result = await read({
+        transaction: runner({ models: [authorModel({ type })], candidates: [] }),
+      });
+      expect(result.data[0]!.availability).toMatchObject({ state: 'unavailable', reason: 'no_admitted_deployment' });
+    }
+  });
+
+  it('folds author admission facts into the catalog revision so cursors cannot outlive a policy change', async () => {
+    const models = [
+      authorModel(),
+      authorModel({ id: '10000000-0000-4000-8000-000000000009', slug: 'author/next' }),
+    ];
+    const first = await read({ limit: 1, transaction: runner({ authorRevision: '1|||0|0', models }) });
+    const cursor = decodeCatalogCursor(first.page.nextCursor!);
+    await expect(
+      read({ limit: 1, cursor, transaction: runner({ authorRevision: '2|||0|0', models }) }),
+    ).rejects.toMatchObject({ kind: 'revision_changed' });
   });
 
   it('accepts exactly 16 raw candidates but rejects 17 before malformed pricing projection', async () => {

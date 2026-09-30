@@ -163,6 +163,58 @@ describe("catalog contract v1", () => {
     expect(() => parseCatalogResponseV1(wrong)).toThrow();
   });
 
+  it("accepts the strict author-version union and refuses to weaken it", () => {
+    const candidate = cloneResponse();
+    const item = itemAt(candidate, 0);
+    objectAt(item, "model").type = "chat";
+    objectAt(item, "model").slug = "author/cool-model";
+    item.ownedBy = "author";
+    objectAt(item, "deployment").contract = "stored-author-chat-v1";
+    objectAt(item, "deployment").id = "50000000-0000-4000-8000-000000000001";
+    const invocation = objectAt(item, "invocation");
+    const parameters = objectAt(invocation, "parameters");
+    invocation.maxBodyBytes = 32768;
+    objectAt(parameters, "model").const = "author/cool-model";
+    parameters.max_tokens = {
+      required: false, type: "integer", minimum: 1, acceptedMaximum: 4096,
+      effectiveMaximum: 4096, configuredDefault: 1024, defaultApplied: 1024,
+      normalization: "clamp_to_effective_max",
+    };
+    objectAt(parameters, "messages").maxItems = 64;
+    item.capabilities = [{
+      id: "chat.completions.stored.author.v1", inputModalities: ["text"], outputModalities: ["text"],
+      streaming: false, toolCalling: false, structuredOutput: false, asynchronous: false,
+      storedResult: true, usageReceipt: true, requestDependentRestrictions: ["pii_transborder"],
+      contextWindowTokens: null, maxOutputTokens: 4096,
+    }];
+    item.pricing = {
+      revision: `sha256:${"c".repeat(64)}`, currency: "USD", settlementUnit: "microcredit",
+      microcreditsPerUsdCent: "1000",
+      rates: { request: { amount: "2500", unit: "microcredit_per_request" } },
+      actualCharge: { formulaVersion: "author-fixed-microcredits-v1", rounding: "exact_microcredit_per_request" },
+      maximumAuthorization: { formula: "request_rate", rounding: "exact_microcredit_per_request" },
+      quoteSemantics: "terms_only_quote_created_at_admission",
+    };
+    const parsed = parseCatalogResponseV1(candidate).data[0]!;
+    expect(parsed.availability.state).toBe("available");
+    if (!("ownedBy" in parsed)) throw new TypeError("expected an author item");
+    expect(parsed.ownedBy).toBe("author");
+
+    // An author item may not borrow the upstream deployment contract, drop its
+    // ownership marker, claim a context window, or price per token.
+    for (const mutate of [
+      (value: JsonObject) => { objectAt(itemAt(value, 0), "deployment").contract = "stored-plaintext-chat-v1"; },
+      (value: JsonObject) => { delete itemAt(value, 0).ownedBy; },
+      (value: JsonObject) => { asObject(asArray(itemAt(value, 0).capabilities, "capabilities")[0], "capabilities[0]").contextWindowTokens = 8192; },
+      (value: JsonObject) => { objectAt(itemAt(value, 0), "pricing", "rates").input = { amount: "1", unit: "microcredit_per_token" }; },
+      (value: JsonObject) => { objectAt(itemAt(value, 0), "model").type = "embedding"; },
+    ]) {
+      const broken = structuredClone(candidate);
+      mutate(broken);
+      expect(() => parseCatalogResponseV1(broken)).toThrow();
+    }
+  });
+
   it("pins a synthetic full page and a coherent canonical next cursor", () => {
     const parsed = parseFixture();
     expect(parsed.data).toHaveLength(parsed.page.limit);
