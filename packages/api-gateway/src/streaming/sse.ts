@@ -36,7 +36,14 @@ export type StreamSettleOpts = {
   key: SpendCounterArgs['key'];
   /** `x-aiag-session-id`, forwarded so the per-session budget accumulates. */
   sessionId?: string | null;
+  /** Trace id — logs and the `X-Request-Id` echo only. NEVER a money key. */
   requestId: string;
+  /**
+   * Server-minted `stl_<uuid>` from `c.get('settlementRequestId')`. This is the
+   * ONLY id that reaches `settleCharge` — see billing/settle.ts for why the
+   * client header must not.
+   */
+  settlementRequestId: string;
   byok: boolean;
 };
 
@@ -131,7 +138,8 @@ export async function streamSseAndSettle(
       if (costCredits > 0) {
         await settleCharge({
           orgId: opts.key.org_id,
-          requestId: opts.requestId,
+          settlementRequestId: opts.settlementRequestId,
+          traceRequestId: opts.requestId,
           costCredits,
           metadata: {
             model_slug: opts.model.slug,

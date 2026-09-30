@@ -27,7 +27,10 @@ completions.post('/', async (c) => {
   const bodyRaw = c.get('rawBody' as never) as CompletionBody | undefined;
   const body: CompletionBody = bodyRaw ?? ((await c.req.json()) as CompletionBody);
   const key = c.get('apiKey' as never) as AuthenticatedApiKey;
+  // Trace id: echoed, logged, PII-correlated. NEVER a money key.
   const requestId = c.get('requestId' as never) as string;
+  // Server-minted `stl_<uuid>` — the only id legacy settlement sees.
+  const settlementRequestId = c.get('settlementRequestId' as never) as string;
   const byokKey = c.req.header('x-upstream-key');
   const byok = Boolean(byokKey);
   const policies = (key.policies ?? {}) as ApiKeyPolicies;
@@ -84,7 +87,8 @@ completions.post('/', async (c) => {
   if (costCredits > 0) {
     await settleCharge({
       orgId: key.org_id,
-      requestId,
+      settlementRequestId,
+      traceRequestId: requestId,
       costCredits,
       metadata: {
         model_slug: body.model,

@@ -14,8 +14,10 @@
 --  - SELECT FOR UPDATE on organizations row serializes per-org concurrent calls.
 --  - Idempotency check INSIDE lock (before UPDATE) eliminates TOCTOU (FIX C2).
 --  - Two conditional INSERTs (source='subscription' + source='payg') per spec (C1).
---  - Partial UNIQUE (request_id, source) WHERE type='api_usage' ensures
---    idempotency at the row level (see migration 0004_gateway_core.sql).
+--  - Partial UNIQUE (org_id, request_id, source) WHERE type='api_usage'
+--    ensures idempotency at the row level (0004_gateway_core.sql, re-scoped to
+--    org_id by 0096_settle_idempotency_org_scope.sql). The lookup below was
+--    org-scoped on 2026-09-30 for the same reason as the credits twin.
 --
 -- Phase 14: appended accrue_author_earnings hook (spec §5 Step 5).
 --
@@ -74,7 +76,8 @@ BEGIN
     COALESCE(SUM(CASE WHEN source = 'payg'         THEN ABS(delta) END), 0)
     INTO _existing_sub, _existing_payg
   FROM gateway_transactions
-  WHERE request_id = _request_id
+  WHERE org_id = _org_id
+    AND request_id = _request_id
     AND type = 'api_usage'
     AND source IN ('subscription', 'payg');
 
@@ -199,8 +202,17 @@ $$;
 --  - SELECT FOR UPDATE on organizations row serializes per-org concurrent calls.
 --  - Idempotency check INSIDE the lock (before UPDATE) — no TOCTOU.
 --  - Two conditional INSERTs (source='subscription' + source='payg').
---  - Partial UNIQUE (request_id, source) WHERE type='api_usage' backs
---    idempotency at the row level (migration 0004_gateway_core.sql).
+--  - Partial UNIQUE (org_id, request_id, source) WHERE type='api_usage' backs
+--    idempotency at the row level (migration 0004_gateway_core.sql, re-scoped
+--    to org_id by 0096_settle_idempotency_org_scope.sql).
+--
+-- ORG SCOPE (2026-09-30, Critical money fix): the idempotency lookup filters
+-- `org_id = _org_id`. It used to match on `request_id` alone, so ANY org that
+-- reused another org's request_id got `idempotent=TRUE` and a free inference.
+-- The gateway now also only ever passes a server-minted `stl_<uuid>` here
+-- (never the client's X-Request-Id), so a replayed header cannot suppress a
+-- charge either. Both changes are required: SQL scopes the identity, the
+-- gateway owns it.
 --  - Dual-bucket order UNCHANGED: subscription_credits first (it expires),
 --    then payg_credits for the remainder.
 --
@@ -264,12 +276,20 @@ BEGIN
   -- Idempotency check INSIDE lock (same pattern as aiag_settle_charge).
   -- Reuses gateway_transactions (api_usage rows). If rows exist — return
   -- existing values, no UPDATE.
+  --
+  -- ORG SCOPE (2026-09-30, Critical money fix): `org_id = _org_id` was ADDED
+  -- here. Matching on `request_id` alone let any org that reused another org's
+  -- request_id settle as idempotent and get inference for free. BOTH copies of
+  -- this body (src/functions/settle-charge.sql and
+  -- migrations/0058_settle_charge_credits_fn.sql, the one prod actually runs)
+  -- must stay byte-identical.
   SELECT
     COALESCE(SUM(CASE WHEN source = 'subscription' THEN ABS(delta) END), 0),
     COALESCE(SUM(CASE WHEN source = 'payg'         THEN ABS(delta) END), 0)
     INTO _existing_sub, _existing_payg
   FROM gateway_transactions
-  WHERE request_id = _request_id
+  WHERE org_id = _org_id
+    AND request_id = _request_id
     AND type = 'api_usage'
     AND source IN ('subscription', 'payg');
 

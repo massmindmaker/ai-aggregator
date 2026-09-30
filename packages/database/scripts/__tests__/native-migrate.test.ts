@@ -59,16 +59,17 @@ describe("native ordered migrator", () => {
   it("discovers the complete immutable history in deterministic order", async () => {
     const migrations = await discoverNativeMigrations();
 
-    expect(migrations).toHaveLength(95);
+    // 96 = the 0096 org-scope idempotency index that closed the money bypass.
+    expect(migrations).toHaveLength(96);
     expect(migrations[0].version).toBe("drizzle/0000_moaning_the_fury.sql");
     expect(migrations[1].version).toBe("migrations/0004_gateway_core.sql");
     expect(migrations[2].version).toBe(
       "migrations/0004_seed_test_upstreams.sql",
     );
     expect(migrations.at(-1)?.version).toBe(
-      "migrations/0095_reviewed_media_pilot.sql",
+      "migrations/0096_settle_idempotency_org_scope.sql",
     );
-    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(95);
+    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(96);
   });
 
   it("removes only an outer transaction wrapper owned by a historical file", () => {

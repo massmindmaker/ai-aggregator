@@ -15,10 +15,55 @@
  */
 import { sql as defaultSql } from '../lib/db';
 import { errors } from '../lib/errors';
+import { newSettlementRequestId } from '../middleware/request-id';
+
+/**
+ * Server-minted settlement identity — `stl_<uuid>`, produced by
+ * `requestIdMiddleware` as `c.get('settlementRequestId')`.
+ *
+ * CRITICAL (2026-09-30): this MUST NOT be the client `X-Request-Id`. The
+ * legacy path used to settle under the raw header, and since
+ * `aiag_settle_charge_credits` treats an existing `(request_id, source)`
+ * api_usage row as "already charged", a client replaying one fixed header got
+ * `idempotent=TRUE` on every later request — unlimited free inference, no
+ * privilege needed. The trace id stays trace-only (`logRequest`, PII rows,
+ * the `X-Request-Id` echo).
+ *
+ * `assertServerSettlementId` below enforces the shape so a call site that
+ * passes the trace id fails loudly instead of silently re-opening the hole.
+ */
+export const SETTLEMENT_ID_RE = /^stl_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Mints a settlement id when the caller supplied none.
+ *
+ * Deliberately NOT a throw: on the SSE path a settle error is caught and
+ * logged, so a missing id that raised would turn into a delivered-but-free
+ * answer. Minting keeps the charge happening. It can never widen the hole —
+ * the value is server-generated and therefore not replayable.
+ */
+export function assertServerSettlementId(id: unknown): string {
+  if (id === undefined || id === null) return newSettlementRequestId();
+  if (typeof id !== 'string' || !SETTLEMENT_ID_RE.test(id)) {
+    // A non-empty value that is not server-shaped means something client-
+    // derived reached the money boundary. Refuse it rather than charge under
+    // an identity the caller chose.
+    throw errors.badRequest('settlementRequestId must be a server-minted stl_<uuid>');
+  }
+  return id;
+}
 
 export type SettleArgs = {
   orgId: string;
-  requestId: string;
+  /** Server-minted (`stl_<uuid>`). NEVER the client's X-Request-Id. */
+  settlementRequestId: string;
+  /**
+   * Optional trace id (`c.get('requestId')`) — written into
+   * `gateway_transactions.metadata.trace_request_id` so the ledger row stays
+   * traceable to the `X-Request-Id` the client saw. Never used as a lookup or
+   * uniqueness key.
+   */
+  traceRequestId?: string;
   /**
    * Whole MICRO-credits (1 credit = 1 US cent = 1000 micro). Integer — see
    * calcCostCredits/calcByokFeeCredits in lib/pricing.ts. Callers MUST guard
@@ -86,6 +131,15 @@ export async function settleCharge(
   args: SettleArgs,
   client: typeof defaultSql = defaultSql
 ): Promise<SettleResult> {
+  // Fail closed BEFORE any SQL: a client-shaped id reaching here is either a
+  // call-site regression or an active attempt to reopen the replay hole.
+  const settlementRequestId = assertServerSettlementId(args.settlementRequestId);
+  // The ledger row keeps the trace id visible in metadata without ever letting
+  // it act as a financial key.
+  const metadata =
+    args.traceRequestId === undefined
+      ? (args.metadata ?? {})
+      : { ...(args.metadata ?? {}), trace_request_id: args.traceRequestId };
   try {
     const rows = await client<
       Array<{
@@ -99,9 +153,9 @@ export async function settleCharge(
       SELECT sub_portion, payg_portion, new_sub, new_payg, idempotent
       FROM aiag_settle_charge_credits(
         ${args.orgId}::uuid,
-        ${args.requestId},
+        ${settlementRequestId},
         ${args.costCredits}::bigint,
-        ${JSON.stringify(args.metadata ?? {})}::jsonb
+        ${JSON.stringify(metadata)}::jsonb
       )
     `;
     const row = rows[0];
@@ -119,6 +173,11 @@ export async function settleCharge(
     if (code === 'P0002') throw errors.badRequest('Unknown organization');
     if (code === 'P0003') throw errors.paymentRequired();
     if (code === 'P0004') throw errors.unavailable('Concurrent modification');
+    // 23505 = unique_violation on gateway_transactions_api_usage_uniq. With the
+    // org-scoped index and server-minted ids this should be unreachable; if it
+    // ever fires it is a genuine identity collision inside ONE org, and a 500
+    // would report it as an unknown fault. Fail as an explicit conflict.
+    if (code === '23505') throw errors.unavailable('Duplicate settlement');
     throw e;
   }
 }

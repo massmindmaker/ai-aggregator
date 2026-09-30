@@ -1273,4 +1273,84 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       await client.query({ text: "ROLLBACK", values: [] });
     }
   });
+  // CRITICAL money fix (2026-09-30) — the SQL half of the legacy idempotency
+  // hole. `aiag_settle_charge_credits` decided "already charged" by matching
+  // `request_id` ALONE, so org B reusing org A's request_id was settled as
+  // idempotent and got inference for free (and its own INSERT then blew up
+  // with 23505 → 500). Requires migration 0096 (org-scoped UNIQUE index),
+  // which is in the ordered sequence, so `db:test:migrate` covers it.
+  it("scopes settlement idempotency by org, so a reused request_id is not free", async () => {
+    const userId = randomUUID();
+    const orgA = randomUUID();
+    const orgB = randomUUID();
+    // One request id, two orgs — the collision a client forces by numbering
+    // its requests from 1.
+    const sharedRequestId = `native-crossorg-${randomUUID()}`;
+
+    await client.query({ text: "BEGIN", values: [] });
+    try {
+      await client.query({
+        text: "INSERT INTO public.users (id, email, name) VALUES ($1::uuid, $2, $3)",
+        values: [userId, `native-crossorg-${userId}@example.test`, "Cross-org fixture"],
+      });
+      for (const [orgId, slug] of [
+        [orgA, "a"],
+        [orgB, "b"],
+      ] as const) {
+        await client.query({
+          text: `
+            INSERT INTO public.organizations (
+              id, slug, name, owner_id, subscription_credits, payg_credits
+            ) VALUES ($1::uuid, $2, $3, $4::uuid, $5::bigint, $6::bigint)
+          `,
+          values: [orgId, `native-crossorg-${slug}-${orgId}`, `Cross-org ${slug}`, userId, 0, 50],
+        });
+      }
+
+      const settle = (orgId: string, scenario: string) =>
+        client.query<{
+          idempotent: boolean;
+          payg_portion: string;
+          new_payg: string;
+        }>({
+          text: `SELECT * FROM public.aiag_settle_charge_credits($1::uuid, $2::varchar, $3::bigint, $4::jsonb)`,
+          values: [orgId, sharedRequestId, 10, JSON.stringify({ scenario })],
+        });
+
+      const a = await settle(orgA, "org-a");
+      // THE BYPASS: same request_id, different org. Pre-fix this returned
+      // idempotent=TRUE and left orgB's balance untouched — a free inference.
+      const b = await settle(orgB, "org-b");
+
+      expect(a.rows[0].idempotent).toBe(false);
+      expect(b.rows[0].idempotent).toBe(false);
+      expect(a.rows[0].payg_portion).toBe("10");
+      expect(b.rows[0].payg_portion).toBe("10");
+      // Each org was debited its own 10 — B did not ride on A's receipt.
+      expect(a.rows[0].new_payg).toBe("40");
+      expect(b.rows[0].new_payg).toBe("40");
+
+      // Both rows coexist: the org-scoped UNIQUE index permits it, which also
+      // proves 0096 is applied (the old global index would have raised 23505).
+      const ledger = await client.query<{ org_id: string }>({
+        text: `
+          SELECT org_id::text
+          FROM public.gateway_transactions
+          WHERE request_id = $1 AND type = 'api_usage'
+          ORDER BY org_id
+        `,
+        values: [sharedRequestId],
+      });
+      expect(ledger.rows.map((r) => r.org_id)).toEqual([orgA, orgB].sort());
+
+      // Same org, same request_id → still idempotent. The fix re-owns
+      // idempotency rather than deleting it.
+      const replay = await settle(orgA, "org-a-replay");
+      expect(replay.rows[0].idempotent).toBe(true);
+      expect(replay.rows[0].new_payg).toBe("40");
+    } finally {
+      await client.query({ text: "ROLLBACK", values: [] });
+    }
+  });
+
 });

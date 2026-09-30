@@ -65,13 +65,75 @@ type ChatBody = {
   messages: Array<{ role: string; content: unknown }>;
   stream?: boolean;
   aiag_mode?: Mode;
+  // Execution-contract parameters the legacy route CANNOT honour. They are typed
+  // only so they can be REJECTED: see `rejectUnsupportedExecutionFeatures`.
+  tools?: unknown;
+  tool_choice?: unknown;
+  functions?: unknown;
+  function_call?: unknown;
+  parallel_tool_calls?: unknown;
+  modalities?: unknown;
+  audio?: unknown;
+  input_audio?: unknown;
 };
+
+/**
+ * P0 — an unsupported execution contract must be REFUSED, never silently dropped.
+ *
+ * `ChatBody` used to declare only model/messages/stream/aiag_mode, so `tools` /
+ * `tool_choice` in a request body were simply not part of the shape this route
+ * reads. Nothing rejected them: the upstream adapter was called with the same
+ * argument set either way, and the caller received a normal, well-formed
+ * completion that simply contained no tool calls. An agent loop driving that
+ * request concluded the model had decided to answer in prose — and the run
+ * "succeeded" with a wrong result and the user's money spent. Silence is the
+ * worst of the three possible outcomes here: a 400 is a bug report and a 501 is
+ * an explicit refusal, but a 200 is a lie.
+ *
+ * ECOSYSTEM-START-HERE requires the refusal ("Неподдерживаемые параметры должны
+ * явно отклоняться до вызова провайдера"). This fires BEFORE the model is
+ * resolved, before the balance preflight, and long before `getUpstream(...)`,
+ * so no provider is ever called with a contract it would drop.
+ *
+ * Same 501 / `UNSUPPORTED_EXECUTION_CONTRACT` the stored route already returns
+ * for these fields (`billing/stored-chat-http-contract.ts` → hasUnsupportedFeature),
+ * so a client sees one contract across both modes instead of a silent 200 on
+ * legacy and a 501 on stored.
+ *
+ * `Object.hasOwn` rather than a truthiness check: `tools: []` and
+ * `tool_choice: 'none'` are still an execution contract the legacy route cannot
+ * represent, and accepting them would keep the silent-drop behaviour alive for
+ * the exact inputs a caller uses to probe it.
+ */
+const UNSUPPORTED_EXECUTION_FIELDS = [
+  'tools',
+  'tool_choice',
+  'functions',
+  'function_call',
+  'parallel_tool_calls',
+  'modalities',
+  'audio',
+  'input_audio',
+] as const;
+
+export function rejectUnsupportedExecutionFeatures(body: unknown): void {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return;
+  const record = body as Record<string, unknown>;
+  const present = UNSUPPORTED_EXECUTION_FIELDS.filter((name) => Object.hasOwn(record, name));
+  if (present.length === 0) return;
+  throw errors.unsupported(
+    `execution contract unsupported on this route: ${present.join(', ')}`,
+  );
+}
 
 chat.post('/completions', async (c) => {
   const bodyRaw = c.get('rawBody' as never) as ChatBody | undefined;
   const body: ChatBody = bodyRaw ?? ((await c.req.json()) as ChatBody);
   const key = c.get('apiKey' as never) as AuthenticatedApiKey;
+  // Trace id: echoed, logged, PII-correlated. NEVER a money key.
   const requestId = c.get('requestId' as never) as string;
+  // Server-minted `stl_<uuid>` — the only id legacy settlement sees.
+  const settlementRequestId = c.get('settlementRequestId' as never) as string;
   const byokKey = c.req.header('x-upstream-key');
   const byok = Boolean(byokKey);
   const policies = (key.policies ?? {}) as ApiKeyPolicies;
@@ -79,6 +141,9 @@ chat.post('/completions', async (c) => {
   if (!body?.model || !Array.isArray(body.messages)) {
     throw errors.badRequest('model + messages[] required');
   }
+
+  // P0: BEFORE any provider-facing work (resolve, preflight, failover, upstream).
+  rejectUnsupportedExecutionFeatures(body);
 
   // FIX H4.4: forbid_streaming_prompts
   if (body.stream && policies.forbid_streaming_prompts) {
@@ -140,6 +205,7 @@ chat.post('/completions', async (c) => {
       key,
       sessionId,
       requestId,
+      settlementRequestId,
       byok,
     });
   }
@@ -181,7 +247,8 @@ chat.post('/completions', async (c) => {
     if (costCredits > 0) {
       await settleCharge({
         orgId: key.org_id,
-        requestId,
+        settlementRequestId,
+        traceRequestId: requestId,
         costCredits,
         metadata: { model_slug: body.model },
       });
@@ -204,7 +271,8 @@ chat.post('/completions', async (c) => {
     if (costCredits > 0) {
       await settleCharge({
         orgId: key.org_id,
-        requestId,
+        settlementRequestId,
+        traceRequestId: requestId,
         costCredits,
         metadata: {
           model_slug: body.model,

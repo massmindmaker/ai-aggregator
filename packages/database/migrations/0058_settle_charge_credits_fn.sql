@@ -69,12 +69,20 @@ BEGIN
   -- Idempotency check INSIDE lock (same pattern as aiag_settle_charge).
   -- Reuses gateway_transactions (api_usage rows). If rows exist — return
   -- existing values, no UPDATE.
+  --
+  -- ORG SCOPE (2026-09-30, Critical money fix): `org_id = _org_id` was ADDED
+  -- here. Matching on `request_id` alone let any org that reused another org's
+  -- request_id settle as idempotent and get inference for free. BOTH copies of
+  -- this body (src/functions/settle-charge.sql and
+  -- migrations/0058_settle_charge_credits_fn.sql, the one prod actually runs)
+  -- must stay byte-identical.
   SELECT
     COALESCE(SUM(CASE WHEN source = 'subscription' THEN ABS(delta) END), 0),
     COALESCE(SUM(CASE WHEN source = 'payg'         THEN ABS(delta) END), 0)
     INTO _existing_sub, _existing_payg
   FROM gateway_transactions
-  WHERE request_id = _request_id
+  WHERE org_id = _org_id
+    AND request_id = _request_id
     AND type = 'api_usage'
     AND source IN ('subscription', 'payg');
 

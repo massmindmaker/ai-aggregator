@@ -27,7 +27,10 @@ embeddings.post('/', async (c) => {
   const bodyRaw = c.get('rawBody' as never) as EmbeddingsBody | undefined;
   const body: EmbeddingsBody = bodyRaw ?? ((await c.req.json()) as EmbeddingsBody);
   const key = c.get('apiKey' as never) as AuthenticatedApiKey;
+  // Trace id: echoed, logged, PII-correlated. NEVER a money key.
   const requestId = c.get('requestId' as never) as string;
+  // Server-minted `stl_<uuid>` — the only id legacy settlement sees.
+  const settlementRequestId = c.get('settlementRequestId' as never) as string;
   const byok = Boolean(c.req.header('x-upstream-key'));
   const policies = (key.policies ?? {}) as ApiKeyPolicies;
 
@@ -87,7 +90,8 @@ embeddings.post('/', async (c) => {
   if (costCredits > 0) {
     await settleCharge({
       orgId: key.org_id,
-      requestId,
+      settlementRequestId,
+      traceRequestId: requestId,
       costCredits,
       metadata: { model_slug: body.model, input_tokens: resp.usage.prompt_tokens },
     });
