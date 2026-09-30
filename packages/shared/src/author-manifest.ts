@@ -26,7 +26,6 @@ const submissionSchema = z
       .nonnegative()
       .nullable()
       .optional(),
-    contestSubmissionId: z.string().uuid().nullable().optional(),
   })
   .strict();
 

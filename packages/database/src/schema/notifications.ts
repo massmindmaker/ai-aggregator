@@ -30,7 +30,7 @@ export const notifications = pgTable(
     actionLabel: text('action_label'),
 
     // Reference to related entity
-    referenceType: varchar('reference_type', { length: 50 }), // 'model' | 'subscription' | 'payment' | 'contest' | etc.
+    referenceType: varchar('reference_type', { length: 50 }), // 'model' | 'subscription' | 'payment' | etc.
     referenceId: uuid('reference_id'),
 
     // Metadata

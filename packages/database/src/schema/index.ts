@@ -38,7 +38,8 @@ export * from './cookieConsents';
 export * from './humanReviews';
 export * from './incidents';
 
-// Phase 14 — Contest → Marketplace pipeline + KYC + prize awards
+// Phase 14 — author KYC (payout gate). Contest pipeline tables were removed
+// on 2026-09-30 (see docs/superpowers/plans/2026-09-30-remove-contest-contour.md).
 export * from './kyc';
 // `models-marketplace` exports the gateway `models` table. Importers MUST use
 // a named import (e.g. `import { models } from '@aiag/database/schema/models-marketplace'`)

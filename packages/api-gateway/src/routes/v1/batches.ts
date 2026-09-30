@@ -14,8 +14,8 @@
  *      the inline request array for the worker to fan out.
  *
  * bullmq is imported dynamically so a missing dependency / unreachable Redis
- * degrades gracefully (mirrors apps/web contest-submit producer). The batch
- * row is still written, so the batch is recoverable.
+ * degrades gracefully. The batch row is still written, so the batch is
+ * recoverable.
  *
  * Ops note: requires REDIS_URL + a running `batch-process` worker on the VPS
  * to actually execute. The worker consumer is out of scope for this route

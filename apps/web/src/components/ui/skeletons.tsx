@@ -63,7 +63,7 @@ interface SkeletonGridProps {
   className?: string;
 }
 
-/** Skeleton для карточных грид-листингов (marketplace, contests) */
+/** Skeleton для карточных грид-листингов (marketplace, каталог моделей) */
 export function SkeletonGrid({ count = 8, cols = 4, cardHeight = 180, className = '' }: SkeletonGridProps) {
   return (
     <div

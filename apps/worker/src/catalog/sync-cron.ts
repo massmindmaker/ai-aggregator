@@ -7,7 +7,7 @@
  * refreshed back to draft.
  *
  * WEB-007: the SQL template is now EXECUTED through the production database
- * handle (`db.execute`, same seam as close-contests/finalize-earnings crons).
+ * handle (`db.execute`, same seam as the finalize-earnings cron).
  * Previously the tag was invoked without executing, so nothing reached the
  * database while the completion counter still reported rows "upserted".
  */

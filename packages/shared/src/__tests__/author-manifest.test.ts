@@ -11,7 +11,6 @@ const valid = {
   hostedBy: 'author' as const,
   exclusive: false,
   pricingHintPerRequestRub: 1.25,
-  contestSubmissionId: null,
 };
 
 describe('author manifest candidate', () => {

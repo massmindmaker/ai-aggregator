@@ -2,6 +2,11 @@
 
 Generated: 2025-12-09
 
+> **STALE — historical snapshot, not a current state description.** The paths below
+> (`C:/Users/bob/...`, MUI imports) no longer match the repo. Kept for provenance only.
+> Contest-surface notes were removed on 2026-09-30: the contest contour moved to Arena
+> and `/contests*` now 301-redirects to `/marketplace` (see `apps/web/next.config.mjs`).
+
 ## Executive Summary
 
 **Total Pages Found**: 8 page routes + 2 API routes
@@ -162,11 +167,8 @@ Generated: 2025-12-09
 | `/terms` | Login, Register pages | MEDIUM |
 | `/privacy` | Login, Register pages | MEDIUM |
 | `/marketplace/[org]/[model]` | Marketplace cards | CRITICAL |
-| `/contests` | Navigation, Home page | MEDIUM |
 | `/dashboard/request` | Home page | LOW |
 | `/dashboard/api` | Home page | LOW |
-| `/dashboard/contest` | Home page | LOW |
-| `/marketplace/contests` | Home page | LOW |
 
 ---
 
@@ -189,7 +191,7 @@ Generated: 2025-12-09
 **File**: `C:/Users/bob/Projects/aiag/aiag-new/apps/web/src/components/layout/MainNavbar.tsx`
 **Status**: Working
 **Issues**:
-- Links to `/contests` which does not exist
+- _(2026-09-30) the old dead `/contests` link is gone; the surface now 301s to `/marketplace`_
 
 ### ThemeRegistry
 **File**: `C:/Users/bob/Projects/aiag/aiag-new/apps/web/src/theme/ThemeRegistry.tsx`
@@ -235,7 +237,6 @@ Location: apps/web/src/app/(marketing)/marketplace/[org]/[model]/page.tsx
 - `/forgot-password`
 - `/terms`
 - `/privacy`
-- `/contests`
 
 ---
 
