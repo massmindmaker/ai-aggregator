@@ -12,11 +12,14 @@ import pg from "pg";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const authorMode = process.argv.includes("--author");
+const a11yMode = process.argv.includes("--a11y");
 const output = resolve(
   root,
-  authorMode
-    ? ".superpowers/sdd/2026-09-28-ag-author-version-v1"
-    : ".superpowers/sdd/2026-09-28-release-remediation",
+  a11yMode
+    ? ".superpowers/sdd/2026-09-30-ag7-acceptance"
+    : authorMode
+      ? ".superpowers/sdd/2026-09-28-ag-author-version-v1"
+      : ".superpowers/sdd/2026-09-28-release-remediation",
 );
 await mkdir(output, { recursive: true, mode: 0o700 });
 const dbUrl = new URL(process.env.TEST_DATABASE_URL ?? "");
@@ -77,7 +80,7 @@ const env = {
   NEXTAUTH_URL: baseURL,
   AUTH_TRUST_HOST: "true",
   NEXT_TELEMETRY_DISABLED: "1",
-  ...(authorMode
+  ...(authorMode || a11yMode
     ? {
         AIAG_TEST_DATABASE: "1",
         AUTHOR_CHAT_ENABLED: "1",
@@ -138,9 +141,12 @@ try {
     [
       resolve(root, "node_modules/@playwright/test/cli.js"),
       "test",
-      authorMode
-        ? "--config=playwright.author-owned.config.ts"
-        : "--config=playwright.owned.config.ts",
+      "--config=" +
+      (a11yMode
+        ? "playwright.a11y-owned.config.ts"
+        : authorMode
+          ? "playwright.author-owned.config.ts"
+          : "playwright.owned.config.ts"),
     ],
     {
       cwd: root,
