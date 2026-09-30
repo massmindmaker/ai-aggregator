@@ -142,7 +142,7 @@ Worker отправляет `tools`/`tool_choice`, а legacy gateway chat их *
    деньги не влияет (settlement считается из зафиксированного `billableMs`). Не покрыто
    ревью: `ton-payments.ts`, `ton-reconciliation-internal.ts`, скрипты boundary/restore
    (~1900 строк), фронт-компоненты.
-2. **AG-6 — закрыт по существу** (см. `docs/product/acceptance/AG-P6.md`, источник `70b694b`).
+2. **AG-6 — закрыт по существу** (см. `docs/product/acceptance/AG-P6.md`, источник `d2149b9`).
    Сделано: репетиция restore на **отдельном** стенде с ролями (`f98ed41`, нативные 2/2 на двух
    живых кластерах); opening balances при cutover (`8d4468a`, 2/2); модуль сквозной observability
    tenant→run→request→charge (`70b694b`, набор gateway 1254/0). Главная находка стенда:

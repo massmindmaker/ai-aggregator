@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -86,4 +86,33 @@ describeStand("restore-stand smoke", () => {
     expect(out).toContain("removed");
     expect(existsSync(pgdata)).toBe(false);
   });
+
+  // Both commands that delete PGDATA must refuse a directory this script did
+  // not create. Guarding only `start` (commit 36b8cf3) left the identical
+  // hazard reachable through `reset`, which this very file and the runbook use
+  // as an ordinary command — so the asymmetry is asserted here for BOTH.
+  it.each(["start", "reset"])(
+    "%s refuses to wipe a non-empty directory that is not a stand",
+    (mode) => {
+      const foreign = join(
+        mkdtempSync(join(tmpdir(), "aiag-stand-foreign-")),
+        "not-a-stand",
+      );
+      mkdirSync(foreign);
+      const victim = join(foreign, "important-file");
+      writeFileSync(victim, "keep me");
+      try {
+        expect(() =>
+          execFileSync("bash", [script, mode], {
+            env: { ...env, PGDATA: foreign, PGPORT: String(port) },
+            encoding: "utf8",
+            timeout: 120_000,
+          }),
+        ).toThrow();
+        expect(existsSync(victim)).toBe(true);
+      } finally {
+        rmSync(join(foreign, ".."), { recursive: true, force: true });
+      }
+    },
+  );
 });

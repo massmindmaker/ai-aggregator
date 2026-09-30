@@ -984,9 +984,23 @@ async function readLedger(
   //
   // (1) request_id forms. The settlement writes 'gw:'||billing_request_id
   // (0067:588) and the author refund path writes 'author-refund:'||billing
-  // (0089:219-220). This half is an equality on request_id and rides
-  // gateway_transactions_api_usage_uniq (0004:222) / gateway_transactions_
-  // refund_uniq (0066:98). It must not be OR-ed with anything unindexable.
+  // (0089:219-220). It must not be OR-ed with anything unindexable.
+  //
+  // CORRECTION (AG-6 fix round 3): an earlier version of this comment claimed
+  // this half "rides gateway_transactions_api_usage_uniq (0004:222) /
+  // gateway_transactions_refund_uniq (0066:98)". Both are PARTIAL indexes —
+  // `WHERE type = 'api_usage'` (0004:222-224) and `WHERE type = 'refund'`
+  // (0066:98-100) — and this query carries NO predicate on `type`, because it
+  // deliberately has to match both kinds at once. A partial index is only
+  // usable when the planner can prove the query's rows satisfy its predicate,
+  // and here it cannot. So BOTH halves are sequential scans, exactly like (2),
+  // and the "two statements so the seq scan cannot poison the indexable half"
+  // argument below does not hold for this statement. It is kept as its own
+  // statement anyway: the split is what lets (2)'s metadata scan stay separate
+  // from the row shape this one needs, and it costs nothing.
+  // Making this indexable needs a real (request_id) index, not a comment —
+  // deliberately NOT done here: the plan says no new money indexes in this
+  // wave, and a fresh index on the ledger is a migration with its own review.
   const byRequestId = await client`
     SELECT id::text, request_id, type, source, delta::text,
            to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at
@@ -997,8 +1011,9 @@ async function readLedger(
   // (2) metadata forms. A jsonb ->> extraction has NO index on
   // gateway_transactions (nothing in 0004/0066/0072 indexes metadata), so this
   // half is a sequential scan. Kept as its own statement — and therefore its
-  // own plan — so the seq scan cannot poison the indexable half above, and so
-  // the cost is visible and droppable if the money ledger grows.
+  // own plan — so its cost is visible and droppable if the money ledger grows.
+  // (Note: (1) is a seq scan too — see the correction above. Splitting the two
+  // buys plan separation, not an index.)
   const byMetadata = await client`
     SELECT id::text, request_id, type, source, delta::text,
            to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at

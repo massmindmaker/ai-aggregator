@@ -21,6 +21,18 @@ import { createHash } from "node:crypto";
  * `aiag_settle_admitted_gateway_charge`, which own the
  * `UPDATE ... WHERE guard RETURNING` contract.
  *
+ * SCOPE OF THE MONEY SURFACE, since two tasks of this wave disagreed on it:
+ * a TON top-up IS part of it. TON settlement credits
+ * `organizations.payg_credits` (0072:393) and writes its `type='topup',
+ * source='ton'` receipt (0072:399) in the same transaction, under a deferrable
+ * constraint trigger that ties the receipt to the invoice and to the resulting
+ * balance (0072:163-178). `readOpeningBalances` therefore attributes positive
+ * `source='ton'` deltas to the PAYG credits bucket, exactly like
+ * `source='payg'`, and reserves `unattributedDelta` for movement that really
+ * has no bucket — which is what makes the reconciliation a stop signal
+ * instead of a guaranteed false alarm on any database that has ever taken a
+ * TON payment.
+ *
  * Every statement is a prepared statement with bound values, and the caller is
  * responsible for pointing the clients at 127.0.0.1 test clusters.
  */
@@ -77,7 +89,11 @@ export interface BalanceRow {
   /** Holds still outstanding on admissions that never reached `settled`. */
   paygReserves: string;
   subscriptionReserves: string;
-  /** Ledger deltas that cannot be attributed to a credits bucket. */
+  /**
+   * Ledger deltas that cannot be attributed to a credits or debits bucket —
+   * a non-zero movement the ledger cannot explain against any bucket this
+   * reconciliation models. Non-zero means the reconciliation refuses.
+   */
   unattributedDelta: string;
 }
 
@@ -85,6 +101,53 @@ export interface BalanceRow {
  * Current balances plus the derived ledger movement, read in a single pass so
  * the caller can assert `balance = grant + credits - debits - reserves` without
  * trusting the balance column on its own.
+ *
+ * WHY `source='ton'` IS A CREDIT BUCKET, not unattributed movement. The ledger
+ * attribution below is enumerated from the migrations that actually write
+ * `gateway_transactions`, not guessed:
+ *
+ *   - `source='payg'|'subscription'`, delta < 0 — api_usage debits
+ *     (0014:343/348, 0058:119/124, 0067:593/606, 0068:747/760) and the RUB
+ *     topup-refund clawback (apps/web `topup-refund.ts`, type 'refund').
+ *   - `source='payg'|'subscription'`, delta > 0 — the author-charge reversal
+ *     (0089:219-220), which raises the very same bucket.
+ *   - `source='ton'`, delta > 0 — TON settlement (0072:399-403). It is an
+ *     authoritative PAYG credit, NOT movement outside the gateway: the same
+ *     function does `UPDATE organizations SET payg_credits = payg_credits +
+ *     _grant` (0072:393) and writes the receipt, in one transaction.
+ *
+ * An earlier version counted only `source='payg'` as a credit and dumped
+ * everything else into `unattributed`, which made the reconciliation fail on
+ * EVERY database that had ever taken a TON payment — and the runbook reads a
+ * failed reconciliation as "the balance moved outside the gateway authority,
+ * stop the cutover". The procedure therefore refused healthy money forever.
+ *
+ * The database already guarantees part of this, and it is worth being precise
+ * about which part. The deferrable constraint trigger
+ * `aiag_ton_settlement_consistent_v1` (0072:144-169, attached at 0072:185-187
+ * to `ton_invoices`, `ton_invoice_event_decisions` and `gateway_transactions`)
+ * compares a TON receipt field-by-field against its invoice and raises
+ * `TON_SETTLEMENT_INCONSISTENT` on any mismatch. That makes an inconsistent
+ * TON credit/receipt pair unrepresentable — which is why (a) "just exclude it
+ * and trust the trigger" would remove the false stop too.
+ *
+ * But that trigger is NOT a substitute for this reconciliation, and that is
+ * the reason the choice is (b) rather than (a). Its body never reads
+ * `organizations` at all: it proves the receipt is faithful to the invoice, not
+ * that the receipt still agrees with the live `payg_credits` column. The
+ * balance is mutable after settlement — the admin top-up route
+ * (`apps/web/src/app/api/admin/orgs/[id]/route.ts`) issues a bare
+ * `UPDATE organizations SET payg_credits = payg_credits + ...` with no ledger
+ * row at all. Excluding TON from the identity would blind this check to exactly
+ * the drift a cutover must catch. Counting it as a credit keeps the identity
+ * intact: `unattributed` becomes the exact complement of the attributed set, so
+ * a TON receipt that does NOT match the balance is still caught by the balance
+ * comparison (tested), and a row from a source no migration writes still trips
+ * `unattributed` (also tested).
+ *
+ * A NEGATIVE `source='ton'` row is written nowhere — TON has no clawback path
+ * and no refund receipt — so it stays unattributed rather than being silently
+ * treated as a debit.
  */
 export async function readOpeningBalances(
   client: BalanceSqlClient,
@@ -100,8 +163,8 @@ export async function readOpeningBalances(
       ),
       ledger AS (
         SELECT t.org_id,
-          coalesce(sum(t.delta) FILTER (WHERE t.delta > 0 AND t.source = 'payg'), 0)
-            AS payg_credits,
+          coalesce(sum(t.delta) FILTER (WHERE t.delta > 0
+            AND t.source IN ('payg', 'ton')), 0) AS payg_credits,
           coalesce(sum(t.delta) FILTER (WHERE t.delta > 0 AND t.source = 'subscription'), 0)
             AS subscription_credits,
           coalesce(-sum(t.delta) FILTER (WHERE t.delta < 0 AND t.source = 'payg'), 0)
@@ -109,7 +172,10 @@ export async function readOpeningBalances(
           coalesce(-sum(t.delta) FILTER (WHERE t.delta < 0 AND t.source = 'subscription'), 0)
             AS subscription_debits,
           coalesce(sum(t.delta) FILTER (WHERE t.delta <> 0
-            AND t.source NOT IN ('payg', 'subscription')), 0) AS unattributed
+            AND NOT (
+              (t.delta > 0 AND t.source IN ('payg', 'subscription', 'ton'))
+              OR (t.delta < 0 AND t.source IN ('payg', 'subscription'))
+            )), 0) AS unattributed
         FROM public.gateway_transactions t
         WHERE t.org_id = ANY($1::uuid[])
         GROUP BY t.org_id

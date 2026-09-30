@@ -26,21 +26,28 @@ PGPORT="${PGPORT:-15433}"
 export LD_LIBRARY_PATH="$LIB"
 export LANG=C.UTF-8
 
+# Refuse to wipe a directory that does not look like a stand this script created.
+# PGDATA comes from the environment, so an unguarded rm -rf could otherwise take
+# an arbitrary non-empty directory with no prompt at all.
+# Shared by BOTH commands that delete PGDATA: guarding only `start` left the
+# identical hazard reachable through the neighbouring `reset`, which the runbook
+# and the tests' afterEach hooks use as an ordinary command.
+refuse_foreign_pgdata() {
+  if [ -d "$PGDATA" ] && [ -n "$(ls -A "$PGDATA" 2>/dev/null)" ]; then
+    if [ ! -f "$PGDATA/PG_VERSION" ] && [ ! -f "$PGDATA/server.log" ]; then
+      echo "refusing to wipe: $PGDATA exists, is not empty and has no PG_VERSION/server.log" >&2
+      echo "point PGDATA at a fresh path, or remove it yourself if that is really a stand" >&2
+      exit 65
+    fi
+  fi
+}
+
 case "${1:-}" in
   start)
     if [ -f "$PGDATA/postmaster.pid" ]; then
       echo "already running: $PGDATA (use 'reset' first if it is stale)" >&2; exit 0
     fi
-    # Refuse to wipe a directory that does not look like a stand this script created.
-    # PGDATA comes from the environment, so an unguarded rm -rf could otherwise take
-    # an arbitrary non-empty directory with no prompt at all.
-    if [ -d "$PGDATA" ] && [ -n "$(ls -A "$PGDATA" 2>/dev/null)" ]; then
-      if [ ! -f "$PGDATA/PG_VERSION" ] && [ ! -f "$PGDATA/server.log" ]; then
-        echo "refusing to wipe: $PGDATA exists, is not empty and has no PG_VERSION/server.log" >&2
-        echo "point PGDATA at a fresh path, or remove it yourself if that is really a stand" >&2
-        exit 65
-      fi
-    fi
+    refuse_foreign_pgdata
     rm -rf "$PGDATA"; mkdir -p "$PGDATA"; chmod 700 "$PGDATA"
     "$BIN/initdb" -D "$PGDATA" -U postgres -A trust --encoding=UTF8 --locale=C >/dev/null
     # unix_socket_directories inside our own PGDATA: the system dir may be absent or
@@ -57,6 +64,7 @@ case "${1:-}" in
     ;;
   reset)
     "$BIN/pg_ctl" -D "$PGDATA" -m fast -w stop >/dev/null 2>&1 || true
+    refuse_foreign_pgdata
     rm -rf "$PGDATA"
     echo "removed $PGDATA"
     ;;

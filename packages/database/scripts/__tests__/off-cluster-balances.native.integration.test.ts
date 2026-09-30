@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -18,6 +18,7 @@ import {
   type BalanceSqlClient,
   type ChargeInput,
 } from "../off-cluster-balances";
+import { restoreOffCluster } from "../off-cluster-restore";
 import { createPgTestClient } from "../pg-test-client";
 import {
   discoverNativeMigrations,
@@ -35,20 +36,36 @@ const exec = promisify(execFile);
  * cluster AFTER the owning roles have been recreated there — the order a real
  * off-host recovery has to follow.
  *
+ * The cutover is executed by `restoreOffCluster` (Task 2's shipped module),
+ * NOT by a hand-rolled pg_dump/pg_restore here. A local dump proves nothing
+ * about the module the runbook actually ships: a regression inside
+ * `off-cluster-restore.ts` — a dead grantee branch, a skipped role-attribute
+ * comparison — is invisible to a test that never calls it. Two consequences
+ * the module's contract imposes on this fixture, both satisfied below:
+ *
+ *   - the SOURCE side must be a superuser (`TON_RESTORE_SOURCE_NOT_SUPERUSER`,
+ *     off-cluster-restore.ts:504): `pg_class`/`pg_proc` are filtered for an
+ *     ordinary role, so a snapshot taken through the app login is blind and
+ *     would "verify" equal while missing whole objects. Hence `sourceAdminUrl`.
+ *   - the destination database name must match `^aiag_offcluster_[a-f0-9]{32}$`
+ *     (off-cluster-restore.ts:455). The previous fixture used `aiag_dest_*`,
+ *     which the module rejects with `TON_RESTORE_OPTIONS_INVALID`. The module
+ *     also creates the destination database AND the roles itself, so the
+ *     fixture must NOT pre-create either — that ordering is the whole point.
+ *
  * Nothing here touches production, the shared 15432 test cluster, or real
  * money: every credit is a synthetic fixture row, and the only debits are
  * executed by the already-applied settlement functions.
  */
 
 const enabled = process.env.RUN_NATIVE_DB_INTEGRATION === "1";
-const toolsRoot = resolve(
-  __dirname,
-  "../../../../.superpowers/tools/native18/root",
-);
-const bin = join(toolsRoot, "usr/lib/postgresql/18/bin");
 const standScript = resolve(__dirname, "../restore-stand.sh");
-const libPath = join(toolsRoot, "usr/lib/x86_64-linux-gnu");
-const toolsPresent = existsSync(join(bin, "postgres"));
+const toolsPresent = existsSync(
+  join(
+    resolve(__dirname, "../../../../.superpowers/tools/native18/root"),
+    "usr/lib/postgresql/18/bin/postgres",
+  ),
+);
 const describeNative = enabled && toolsPresent ? describe : describe.skip;
 
 const MODEL_SLUG = "openai/gpt-4o-mini";
@@ -56,6 +73,21 @@ const PROMPT_TOKENS = 30;
 /** 0.1 cents/1k prompt x 30 tokens x markup 10 = 30 credits. */
 const EXPECTED_COST = 30n;
 const GRANT = "900000";
+/**
+ * TON grant for the fixture that must reconcile with a top-up in the ledger.
+ *
+ * A STRING, deliberately. `aiag_ton_text_v1` (0072:195-202) raises
+ * TON_INVALID_STRING unless `jsonb_typeof(_j) = 'string'`, and
+ * `aiag_ton_atomic_v1` (0072:210-215) routes every amount through it — so a
+ * JSON number here is rejected before the invoice is even created. The working
+ * TON fixture passes `"9007199254740991"` as a string for the same reason
+ * (ton-payments.native.fixture.ts:118).
+ */
+const TON_GRANT = "12345";
+const TON_GRANT_NUMBER = Number(TON_GRANT);
+const TON_RECIPIENT = `0:${"1".repeat(64)}`;
+const TON_SENDER = `0:${"2".repeat(64)}`;
+const TON_ASSET = { network: "tvm:-3", kind: "native", decimals: 9 };
 
 function freePort(): Promise<number> {
   return new Promise((resolvePort, reject) => {
@@ -87,6 +119,8 @@ async function bootCluster(port: number, pgdata: string) {
 interface Fixture {
   orgId: string;
   apiKeyId: string;
+  /** Owner of the org; also the TON invoice actor. */
+  ownerId: string;
 }
 
 /** Every fixture is created explicitly and its insert must be acknowledged. */
@@ -124,7 +158,7 @@ async function seedOrgWithBalance(
   );
   if (policy.rows[0]?.org_id !== orgId)
     throw Error("OFF_CLUSTER_BALANCES_POLICY_NOT_CREATED");
-  return { orgId, apiKeyId };
+  return { orgId, apiKeyId, ownerId };
 }
 
 function chargeInput(
@@ -144,19 +178,142 @@ function chargeInput(
   };
 }
 
+/**
+ * A REAL TON top-up, driven through the two authoritative SQL functions
+ * (`aiag_create_ton_invoice_v1`, `aiag_settle_ton_invoice_v1`) rather than by
+ * inserting a `gateway_transactions` row directly.
+ *
+ * This matters: the reason `source='ton'` had to be attributed to the PAYG
+ * credits bucket is that migration 0072 moves `payg_credits` and writes the
+ * receipt in ONE transaction. A hand-written ledger row would prove only that
+ * the arithmetic in `readOpeningBalances` tolerates a positive delta — not that
+ * an authoritative top-up reconciles. Here the balance really is raised by the
+ * TON path, so `reconcileOpeningBalances` has to agree with money that moved
+ * for real.
+ */
+async function settleTonTopup(
+  client: Client,
+  fixture: Fixture & { ownerId: string },
+): Promise<number> {
+  const now = Number(
+    (
+      await client.query(
+        "SELECT floor(extract(epoch FROM clock_timestamp())*1000)::text AS now",
+      )
+    ).rows[0]?.now,
+  );
+  const expiresAtMs = now + 600_000;
+  const quote = {
+    schemaVersion: 1,
+    quoteId: `off-cluster-quote-${randomUUID()}`,
+    sourcePrice: { unit: "gateway_microcredits", amountAtomic: TON_GRANT },
+    asset: TON_ASSET,
+    fx: {
+      sourceUnit: "gateway_microcredits",
+      targetAsset: TON_ASSET,
+      numerator: "1",
+      denominator: "1",
+      rounding: "floor",
+      source: "off-cluster-fixture-v1",
+      observedAtMs: now - 1000,
+      expiresAtMs,
+    },
+    additionalFeeAtomic: "0",
+    amountAtomic: TON_GRANT,
+    quotedAtMs: now,
+    expiresAtMs,
+  };
+  const payload = {
+    schemaVersion: 1,
+    purpose: "gateway_topup",
+    ownerId: fixture.ownerId,
+    orgId: fixture.orgId,
+    idempotencyKey: randomUUID(),
+    grantMicrocredits: TON_GRANT,
+    priceRevision: "off-cluster-fixture-v1",
+    quote,
+    recipient: TON_RECIPIENT,
+    expectedSender: TON_SENDER,
+    finalityPolicyId: "off-cluster-fixture-v1",
+    verifierVersion: "off-cluster-fixture-v1",
+  };
+  const created = (
+    await client.query(
+      "SELECT aiag_create_ton_invoice_v1($1::uuid,$2::uuid,$3::jsonb,$4::text) AS result",
+      [
+        fixture.ownerId,
+        fixture.orgId,
+        JSON.stringify(payload),
+        "0".repeat(64),
+      ],
+    )
+  ).rows[0]?.result as { invoiceId: string; reference: string } | undefined;
+  if (typeof created?.invoiceId !== "string")
+    throw Error("OFF_CLUSTER_BALANCES_TON_INVOICE_NOT_CREATED");
+
+  const seed = created.invoiceId.replaceAll("-", "");
+  const credit = {
+    network: "tvm:-3",
+    asset: TON_ASSET,
+    recipient: TON_RECIPIENT,
+    recipientAccount: TON_RECIPIENT,
+    sender: TON_SENDER,
+    amountAtomic: TON_GRANT,
+    reference: created.reference,
+    txHash: `${seed}${seed}`,
+    txLt: "1",
+    messageHash: `${seed.split("").reverse().join("")}${seed.split("").reverse().join("")}`,
+    messageIndex: 0,
+    chainTimeMs: now - 3,
+    observedAtMs: now - 2,
+    verifiedAtMs: now - 1,
+    blockAnchor: "off-cluster-block-v1",
+    masterchainAnchor: "off-cluster-masterchain-v1",
+    executionPathDigest: "5".repeat(64),
+    verifierVersion: "off-cluster-fixture-v1",
+    finalityPolicyId: "off-cluster-fixture-v1",
+    jettonCredit: null,
+  };
+  const settled = (
+    await client.query(
+      "SELECT aiag_settle_ton_invoice_v1($1::uuid,$2::jsonb) AS result",
+      [created.invoiceId, JSON.stringify(credit)],
+    )
+  ).rows[0]?.result as { kind: string } | undefined;
+  if (settled?.kind !== "settled")
+    throw Error("OFF_CLUSTER_BALANCES_TON_NOT_SETTLED");
+  return TON_GRANT_NUMBER;
+}
+
 describeNative("opening balances across an off-cluster cutover", () => {
   let root = "";
   let sourcePort = 0;
   let destinationPort = 0;
   const ownerRole = "ag6_" + randomUUID().replaceAll("-", "");
   const sourceDatabase = "aiag_source_" + randomUUID().replaceAll("-", "");
-  const destinationDatabase = "aiag_dest_" + randomUUID().replaceAll("-", "");
+  // The module mints the destination name itself when `destinationDatabase` is
+  // omitted, and then validates it against `^aiag_offcluster_[a-f0-9]{32}$`
+  // (off-cluster-restore.ts:455). Letting it mint is the only way this fixture
+  // stays in step with the module's contract: a hard-coded `aiag_dest_*` name
+  // is rejected outright, which is exactly the mismatch this fixture used to
+  // hide by not calling the module at all.
   const clientOptions = { ssl: false, connectionTimeoutMillis: 10_000 };
 
   const sourceUrl = () =>
     `postgres://${ownerRole}@127.0.0.1:${sourcePort}/${sourceDatabase}`;
-  const destinationUrl = () =>
-    `postgres://${ownerRole}@127.0.0.1:${destinationPort}/${destinationDatabase}`;
+  /**
+   * `restoreOffCluster` requires a superuser on the SOURCE too, not only on the
+   * destination (`TON_RESTORE_SOURCE_NOT_SUPERUSER`, off-cluster-restore.ts:504):
+   * `pg_class`/`pg_proc` are filtered to objects an ordinary role holds a
+   * privilege on, so a snapshot taken through the app login silently omits
+   * foreign-owned objects and then compares equal to an equally blind
+   * destination snapshot. Fixtures are still seeded through `sourceUrl()` as
+   * the owning role — that is what makes the module recreate it.
+   */
+  const sourceAdminUrl = () =>
+    `postgres://postgres@127.0.0.1:${sourcePort}/${sourceDatabase}`;
+  const destinationAdminUrl = () =>
+    `postgres://postgres@127.0.0.1:${destinationPort}/postgres`;
 
   beforeAll(async () => {
     if (process.env.AIAG_TEST_DATABASE !== "1")
@@ -245,64 +402,31 @@ describeNative("opening balances across an off-cluster cutover", () => {
         );
         expect(before.balances[0].paygDebits).toBe(EXPECTED_COST.toString());
 
-        // --- off-host restore, roles first -------------------------------
-        const destinationAdmin = new Client({
-          connectionString: `postgres://postgres@127.0.0.1:${destinationPort}/postgres`,
-          ...clientOptions,
+        // --- off-host restore through the SHIPPED module ------------------
+        // Not a local pg_dump/pg_restore: the runbook tells the operator to run
+        // `restoreOffCluster`, so that is what has to be exercised here. The
+        // module also creates the destination database and every required role
+        // itself, in the order a real off-host recovery requires — so this
+        // fixture must not pre-create either. `keepDestination` hands the
+        // restored database back for the first-debit assertions below; the
+        // destination cluster is a disposable stand, reset in afterAll.
+        const proof = await restoreOffCluster({
+          sourceUrl: sourceAdminUrl(),
+          destinationAdminUrl: destinationAdminUrl(),
+          sourcePort,
+          destPort: destinationPort,
+          // Not passed: the module must discover ownerRole from the owner/ACL
+          // surface, exactly as it would in a real recovery.
+          keepDestination: true,
         });
-        await destinationAdmin.connect();
-        const archive = join(root, "source.dump");
-        try {
-          const env = {
-            PATH: process.env.PATH ?? "",
-            LANG: "C.UTF-8",
-            LD_LIBRARY_PATH: libPath,
-            PGHOST: "127.0.0.1",
-            PGUSER: ownerRole,
-            PGPASSFILE: "/dev/null",
-            PGCONNECT_TIMEOUT: "5",
-          };
-          await exec(
-            join(bin, "pg_dump"),
-            [
-              "--format=custom",
-              "--no-password",
-              "--file",
-              archive,
-              "--dbname",
-              sourceUrl(),
-            ],
-            { env: { ...env, PGPORT: String(sourcePort) }, timeout: 180_000 },
-          );
-          expect((await stat(archive)).size).toBeGreaterThan(0);
-
-          await destinationAdmin.query(
-            `CREATE ROLE "${ownerRole}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`,
-          );
-          await destinationAdmin.query(
-            `CREATE DATABASE "${destinationDatabase}" OWNER "${ownerRole}" TEMPLATE template0`,
-          );
-          await exec(
-            join(bin, "pg_restore"),
-            [
-              "--exit-on-error",
-              "--single-transaction",
-              "--no-password",
-              "--dbname",
-              destinationUrl(),
-              archive,
-            ],
-            {
-              env: { ...env, PGPORT: String(destinationPort) },
-              timeout: 180_000,
-            },
-          );
-        } finally {
-          await destinationAdmin.end();
-        }
+        expect(proof.kind).toBe("restored_off_cluster_and_verified");
+        expect(proof.rolesRecreatedOnDestination).toContain(ownerRole);
+        expect(proof.destinationDatabase).toMatch(
+          /^aiag_offcluster_[a-f0-9]{32}$/,
+        );
 
         const restored = new Client({
-          connectionString: destinationUrl(),
+          connectionString: proof.restoredUrl,
           ...clientOptions,
         });
         await restored.connect();
@@ -357,6 +481,89 @@ describeNative("opening balances across an off-cluster cutover", () => {
       }
     },
     900_000,
+  );
+
+  it(
+    "reconciles an authoritative TON top-up, and still refuses a real divergence",
+    async () => {
+      const source = new Client({
+        connectionString: sourceUrl(),
+        ...clientOptions,
+      });
+      await source.connect();
+      try {
+        // A TON top-up moves payg_credits and writes its receipt in one
+        // transaction (0072:393-399). If the reconciliation treated
+        // `source='ton'` as unattributed movement, EVERY real database that
+        // ever took a TON payment would report `consistent=false` — the
+        // runbook reads that as "the balance moved outside the gateway
+        // authority, stop the cutover", so the procedure would refuse a
+        // perfectly healthy balance forever.
+        const fixture = await seedOrgWithBalance(source, "0");
+        const grant = await settleTonTopup(source, fixture);
+        expect(grant).toBe(TON_GRANT_NUMBER);
+
+        const tonRow = (
+          await source.query(
+            `SELECT count(*)::int AS n,coalesce(sum(delta),0)::text AS amount
+               FROM public.gateway_transactions
+              WHERE org_id=$1 AND type='topup' AND source='ton'`,
+            [fixture.orgId],
+          )
+        ).rows[0];
+        expect(tonRow).toEqual({ n: 1, amount: TON_GRANT });
+
+        const baseline: Record<string, BalanceBaseline> = {
+          [fixture.orgId]: { payg: "0", subscription: "0" },
+        };
+        const snapshot = await readOpeningSnapshot(source, [fixture.orgId]);
+        // The grant is in the credits bucket and NOT in unattributedDelta.
+        expect(snapshot.balances[0].paygCredits).toBe(TON_GRANT);
+        expect(snapshot.balances[0].unattributedDelta).toBe("0");
+        expect(reconcileOpeningBalances(snapshot, baseline).consistent).toBe(
+          true,
+        );
+
+        // ...and the guard is not weakened: a real divergence still stops.
+        // (a) a ledger movement with no bucket at all (an unknown source, the
+        // shape `unattributedDelta` exists for) trips the reconciliation;
+        await source.query(
+          `INSERT INTO public.gateway_transactions(org_id,request_id,type,source,delta,metadata)
+           VALUES($1,'off-cluster-unknown-source','topup','webhook',7,'{}'::jsonb)`,
+          [fixture.orgId],
+        );
+        const unknownSource = await readOpeningSnapshot(source, [
+          fixture.orgId,
+        ]);
+        expect(unknownSource.balances[0].unattributedDelta).toBe("7");
+        expect(
+          reconcileOpeningBalances(unknownSource, baseline).consistent,
+        ).toBe(false);
+        await source.query(
+          `DELETE FROM public.gateway_transactions
+            WHERE org_id=$1 AND request_id='off-cluster-unknown-source'`,
+          [fixture.orgId],
+        );
+
+        // (b) a credit in the ledger that the balance does not reflect also
+        // stops: attributing `source='ton'` to the credits bucket must not
+        // become a way to make an unbalanced organisation look consistent.
+        await source.query(
+          "UPDATE public.organizations SET payg_credits=payg_credits+500 WHERE id=$1",
+          [fixture.orgId],
+        );
+        const drifted = await readOpeningSnapshot(source, [fixture.orgId]);
+        expect(reconcileOpeningBalances(drifted, baseline).consistent).toBe(
+          false,
+        );
+        const line = reconcileOpeningBalances(drifted, baseline).lines[0];
+        expect(line.expectedPayg).toBe(TON_GRANT);
+        expect(line.observedPayg).toBe(String(TON_GRANT_NUMBER + 500));
+      } finally {
+        await source.end();
+      }
+    },
+    300_000,
   );
 
   it(
