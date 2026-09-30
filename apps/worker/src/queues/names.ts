@@ -4,7 +4,6 @@
  */
 export const QUEUE_NAMES = {
   upstreamPoll: 'upstream-poll',
-  contestEval: 'contest-eval',
   webhookRetry: 'webhook-retry',
   emailSend: 'email-send',
   batchProcess: 'batch-process',

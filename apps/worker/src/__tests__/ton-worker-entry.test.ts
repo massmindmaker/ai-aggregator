@@ -13,12 +13,9 @@ vi.mock('../queues/upstream-poll.js',()=>({startUpstreamPollWorker:()=>({close:m
 vi.mock('../queues/upstream-poll-db.js',()=>({MediaJobDb:class {close=m.mediaClose;}}));
 vi.mock('../queues/media-poll-recovery.js',()=>({startMediaPollRecovery:()=>({close:m.queueClose})}));
 vi.mock('../media-kie.js',()=>({createMediaKieAdapter:()=>null}));
-vi.mock('../queues/contest-eval.js',()=>({startContestEvalWorker:()=>({close:m.queueClose})}));
 vi.mock('../queues/webhook-retry.js',()=>({startWebhookRetryWorker:()=>({close:m.queueClose})}));
 vi.mock('../queues/email-send.js',()=>({startEmailSendWorker:()=>({close:m.queueClose})}));
-vi.mock('../queues/close-contests-cron.js',()=>({startCloseContestsCron:()=>({close:m.queueClose})}));
 vi.mock('../queues/finalize-earnings-cron.js',()=>({startFinalizeEarningsCron:()=>({close:m.queueClose})}));
-vi.mock('../eval-runner/runner.js',()=>({runEvaluation:vi.fn()}));
 vi.mock('../probes/internal-probe.js',()=>({startInternalProbe:()=>({stop:vi.fn()})}));
 vi.mock('../catalog/sync-cron.js',()=>({startCatalogSyncCron:vi.fn()}));
 vi.mock('../queues/batch-process.js',()=>({startBatchProcessWorker:()=>({close:m.queueClose})}));

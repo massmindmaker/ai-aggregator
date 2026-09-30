@@ -4,7 +4,7 @@
  * Wires up:
  *   - Shared .env loading (/srv/aiag/shared/.env on VPS)
  *   - Redis connection
- *   - All BullMQ workers (upstream-poll, contest-eval, webhook-retry, email-send)
+ *   - All BullMQ workers (upstream-poll, webhook-retry, email-send)
  *   - Health probes (upstream + internal)
  *   - HTTP /health on PORT (default 4001) for pm2 / nginx
  *   - Graceful SIGTERM / SIGINT shutdown
@@ -22,12 +22,9 @@ import { startUpstreamPollWorker } from './queues/upstream-poll.js';
 import { MediaJobDb } from './queues/upstream-poll-db.js';
 import { startMediaPollRecovery } from './queues/media-poll-recovery.js';
 import { createMediaKieAdapter } from './media-kie.js';
-import { startContestEvalWorker } from './queues/contest-eval.js';
 import { startWebhookRetryWorker } from './queues/webhook-retry.js';
 import { startEmailSendWorker } from './queues/email-send.js';
-import { startCloseContestsCron } from './queues/close-contests-cron.js';
 import { startFinalizeEarningsCron } from './queues/finalize-earnings-cron.js';
-import { runEvaluation } from './eval-runner/runner.js';
 import { startInternalProbe } from './probes/internal-probe.js';
 import { startCatalogSyncCron } from './catalog/sync-cron.js';
 
@@ -62,7 +59,6 @@ async function main(): Promise<void> {
 
   // ---------------------------------------------------------------------------
   // Queue workers — for now most use stub deps; gateway/web will adopt them.
-  // The contest-eval worker is real (runs python via systemd-run on Linux).
   // ---------------------------------------------------------------------------
   const mediaDb = new MediaJobDb(process.env.DATABASE_URL ?? '');
   const kie = createMediaKieAdapter(process.env);
@@ -80,13 +76,6 @@ async function main(): Promise<void> {
     finalize: (job, status, output, error) => mediaDb.finalize(job, status, output, error),
   });
   const mediaPollRecovery = startMediaPollRecovery(connection, mediaDb);
-  const contestEval = startContestEvalWorker(connection, {
-    run: runEvaluation,
-    sink: async (input) => {
-      // TODO Phase 2: UPDATE evaluations SET status=$1, public_score=$2 WHERE submission_id=$3
-      logger.info(input, 'contest-eval sink (stub)');
-    },
-  });
 
   const webhookRetry = startWebhookRetryWorker(connection);
   const emailSend = startEmailSendWorker(connection);
@@ -94,23 +83,10 @@ async function main(): Promise<void> {
   const batchProcessRecovery = startBatchProcessRecovery(connection);
 
   // ---------------------------------------------------------------------------
-  // Phase 14 crons — closeContestsCron (hourly) + finalizeEarningsCron (daily).
-  // Both lazy-import @aiag/database so the worker still boots when DATABASE_URL
-  // is absent (dev / smoke / CI), matching the internalProbe pingPg pattern.
+  // Phase 14 crons — finalizeEarningsCron (daily). Lazy-imports @aiag/database
+  // so the worker still boots when DATABASE_URL is absent (dev / smoke / CI),
+  // matching the internalProbe pingPg pattern.
   // ---------------------------------------------------------------------------
-  const closeContests = startCloseContestsCron(connection, {
-    runOnce: async () => {
-      if (!process.env.DATABASE_URL) return { contestsProcessed: 0, awardsCreated: 0 };
-      const { createDb, sql } = await import('@aiag/database');
-      const db = createDb(process.env.DATABASE_URL);
-      const { runCloseContestsOnce } = await import('./queues/close-contests-cron.js');
-      return runCloseContestsOnce(
-        db as unknown as Parameters<typeof runCloseContestsOnce>[0],
-        sql as unknown as Parameters<typeof runCloseContestsOnce>[1]
-      );
-    },
-  });
-
   const finalizeEarnings = startFinalizeEarningsCron(connection, {
     runOnce: async () => {
       if (!process.env.DATABASE_URL) return { rowsTransitioned: 0 };
@@ -127,12 +103,10 @@ async function main(): Promise<void> {
   const workers = [
     upstreamPoll,
     mediaPollRecovery,
-    contestEval,
     webhookRetry,
     emailSend,
     batchProcess,
     batchProcessRecovery,
-    closeContests,
     finalizeEarnings,
     ...(gatewaySettlementRecovery === null ? [] : [gatewaySettlementRecovery]),
   ];
