@@ -107,7 +107,22 @@ export async function readRestoreSnapshot(client: Client) {
       )
     ).rows[0].count;
   }
-  const authority = (await client.query(AUTHORITY_SQL)).rows;
+  // Typed at the driver boundary, on purpose. This used to be an untyped
+  // `any[]`, which is what let `grantees: string` survive: nothing connected
+  // the declared type to the value pg-types actually produces, and
+  // `scripts/` is outside the tsconfig `include`, so no compiler ever saw it.
+  // The assertion below is the load-bearing part — it checks the decoded shape
+  // at runtime, so a driver or pg-types change that alters the column type
+  // fails loudly here instead of silently emptying the grantee list.
+  const authority = (await client.query(AUTHORITY_SQL)).rows as AuthorityRow[];
+  for (const row of authority) {
+    if (
+      typeof row.owner !== "string" ||
+      typeof row.name !== "string" ||
+      !Array.isArray(row.grantees)
+    )
+      fail("TON_RESTORE_ACL_UNREADABLE");
+  }
   // Memberships are part of the authority surface precisely because pg_dump
   // does NOT carry them: they are the part a restore silently drops.
   const memberships = (await client.query(MEMBERSHIP_SQL)).rows as {
@@ -220,30 +235,75 @@ function assertPort(value: unknown, code: string): number {
   return value as number;
 }
 
-/**
- * Grantees of one authority row, as a sorted JSON array.
- *
- * Parsed from the `grantees` column the AUTHORITY_SQL above produces with
- * `aclexplode` + `pg_get_userbyid`, never by splitting the ACL text on ",": a
- * role name is quoted inside that text precisely because it may contain a
- * comma or a double quote, so splitting mangles (and under-reports) it.
- */
-function grantees(acl: string): string[] {
-  if (typeof acl !== "string") return [];
-  const parsed: unknown = JSON.parse(acl);
-  return Array.isArray(parsed)
-    ? parsed.filter((v): v is string => typeof v === "string")
-    : [];
+/** One row of AUTHORITY_SQL, as node-pg actually decodes it. */
+export interface AuthorityRow {
+  kind: string;
+  name: string;
+  owner: string;
+  /**
+   * A `text[]` column (OID 1009). pg-types registers 1009 as
+   * `parseStringArray`, so node-pg hands this over as a REAL JS ARRAY of role
+   * names, not as a string. Typing it as `string` here is what let a dead
+   * branch compile: `scripts/` is outside the `include` of
+   * `packages/database/tsconfig.json`, which covers only `src`, so
+   * nothing type-checked this file.
+   */
+  grantees: string[];
+  detail: string;
 }
 
+/**
+ * Grantees of one authority row.
+ *
+ * The column is `text[]` and arrives DECODED — a `string[]` of role names,
+ * produced by `aclexplode` + `pg_get_userbyid` in AUTHORITY_SQL, never by
+ * splitting the ACL text on ",": a role name is quoted inside that text
+ * precisely because it may contain a comma or a double quote, so splitting
+ * mangles (and under-reports) it.
+ *
+ * The parameter is typed `string[]`, NOT `unknown`: that is what makes the
+ * declared type load-bearing, so a future edit that re-types the column as a
+ * `string` is a compile error instead of a silently empty grantee list. The
+ * `Array.isArray` test below still runs, because the value crosses an `as`
+ * cast from the untyped driver boundary and nothing but this function guards
+ * it.
+ *
+ * Returns `undefined` — not `[]` — when the value is not in the shape we
+ * expect. The distinction is the whole point: an empty list is a legitimate
+ * answer for an object nobody was granted on, while an unreadable column means
+ * the ACL surface was never examined. Collapsing the two into `[]` is what
+ * turned this into dead code, and it under-reports the required roles: a role
+ * that appears only in a GRANT goes missing, is never created on the
+ * destination, and `pg_restore --exit-on-error` then dies with `role does not
+ * exist` — the exact failure this module exists to prevent.
+ */
+function grantees(acl: string[]): string[] | undefined {
+  if (!Array.isArray(acl)) return undefined;
+  const names = acl.filter((v): v is string => typeof v === "string");
+  // A text[] of role names is never mixed-type; anything else means the
+  // driver decoded something we did not expect.
+  return names.length === acl.length ? names : undefined;
+}
+
+/**
+ * Every role the dump depends on: object owners plus ACL grantees.
+ *
+ * Refuses rather than under-reporting. A grantee-only role is invisible to
+ * the owner column, so if the grantee parse fails the owner-only result would
+ * look complete and be wrong.
+ */
 export function rolesRequiredByAuthority(
-  authority: readonly { owner: string; grantees: string }[],
+  authority: readonly AuthorityRow[],
 ): string[] {
   const names = new Set<string>();
   for (const row of authority) {
+    if (typeof row.owner !== "string")
+      fail("TON_RESTORE_ACL_UNREADABLE");
     if (ROLE.test(row.owner) && !row.owner.startsWith("pg_"))
       names.add(row.owner);
-    for (const grantee of grantees(row.grantees)) {
+    const listed = grantees(row.grantees);
+    if (listed === undefined) fail("TON_RESTORE_ACL_UNREADABLE");
+    for (const grantee of listed) {
       if (ROLE.test(grantee) && !grantee.startsWith("pg_")) names.add(grantee);
     }
   }
@@ -707,7 +767,22 @@ export async function restoreOffCluster(
     // cluster. For money the dangerous direction is not a double debit but
     // "the worker's access disappears at cutover", so this module refuses to
     // emit a proof that hides the difference instead of papering over it.
-    if (membershipKey(after.memberships) !== membershipKey(before.memberships))
+    // Membership scope: only rows that involve a role this rehearsal is
+    // actually responsible for. Comparing the WHOLE cluster instead makes the
+    // check fail on any destination that has a membership of its own — an
+    // unrelated monitoring group, a vendor login — which on a real destination
+    // is nearly always the case, so the rehearsal would refuse constantly and
+    // teach operators to ignore it. Restricting to `required` keeps the
+    // property finding 4 asked for: a membership that the dump cannot carry
+    // and that touches a role this restore depends on is still a hard stop,
+    // and the money-relevant direction ("the worker's access disappears at
+    // cutover") is unaffected, because such a membership always names a role
+    // the dump references.
+    const relevant = new Set(required);
+    if (
+      membershipKey(after.memberships.filter((m) => relevant.has(m.granted) || relevant.has(m.member))) !==
+      membershipKey(before.memberships.filter((m) => relevant.has(m.granted) || relevant.has(m.member)))
+    )
       fail("TON_RESTORE_MEMBERSHIP_MISMATCH");
     if (options.verify) await options.verify(restoredUrl);
     if (!equivalent(await readRestoreSnapshot(sourceClient), before))

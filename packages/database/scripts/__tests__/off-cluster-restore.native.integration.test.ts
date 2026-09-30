@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -130,6 +130,79 @@ async function bootCluster(port: number, pgdata: string) {
   });
 }
 
+/**
+ * A real physical clone of a running cluster on its own port, via
+ * `pg_basebackup`.
+ *
+ * This is the only way to reach `TON_RESTORE_CLUSTER_LINEAGE_SAME` honestly.
+ * The two cheap guards that stand in for it do not: naming the same cluster
+ * twice is cut by `sourcePort === destPort`, and a TCP proxy is cut by the
+ * declared-port check, because PostgreSQL reports its own real port in
+ * `inet_server_port()` no matter which port was dialled. A basebackup clone
+ * passes BOTH of those — different port, and the proxy's port would report the
+ * master's — while inheriting `system_identifier` and living in a different
+ * data directory. That is exactly the clone topology the branch exists for.
+ */
+async function basebackupClone(
+  sourcePort: number,
+  pgdata: string,
+  port: number,
+): Promise<void> {
+  const bin = join(toolsRoot, "usr/lib/postgresql/18/bin");
+  const lib = join(toolsRoot, "usr/lib/x86_64-linux-gnu");
+  const env = {
+    PATH: process.env.PATH ?? "",
+    LANG: "C.UTF-8",
+    LD_LIBRARY_PATH: lib,
+    PGHOST: "127.0.0.1",
+    PGPORT: String(sourcePort),
+    PGUSER: "postgres",
+    PGPASSFILE: "/dev/null",
+    PGCONNECT_TIMEOUT: "5",
+  };
+  await rm(pgdata, { recursive: true, force: true });
+  await mkdir(pgdata, { recursive: true });
+  await chmod(pgdata, 0o700);
+  await exec(join(bin, "pg_basebackup"), ["--no-password", "-D", pgdata], {
+    env,
+    timeout: 300_000,
+    maxBuffer: 1048576,
+  });
+  // pg_basebackup creates the target at 0750, and this PostgreSQL build
+  // refuses to start a data directory that is not 0700 (`data directory ... has
+  // invalid permissions`) — measured here, not assumed. The stand script does
+  // the same chmod after initdb.
+  await chmod(pgdata, 0o700);
+  // The stand script starts a cluster with its own socket dir and a fixed
+  // set of options; reuse it for the clone so both clusters are configured the
+  // same way and the ONLY difference is the data directory and the port.
+  try {
+    await exec(
+      join(bin, "pg_ctl"),
+      [
+        "-D",
+        pgdata,
+        "-l",
+        join(pgdata, "server.log"),
+        "-o",
+        `-p ${port} -h 127.0.0.1 -c listen_addresses=127.0.0.1 -c fsync=off -c unix_socket_directories='${pgdata}'`,
+        "-w",
+        "start",
+      ],
+      { env, timeout: 180_000, maxBuffer: 1048576 },
+    );
+  } catch (error) {
+    // pg_ctl says only "examine the log"; include it, or a start failure in
+    // CI is undiagnosable.
+    const log = await readFile(join(pgdata, "server.log"), "utf8").catch(
+      () => "(no server.log)",
+    );
+    throw Error(
+      `OFF_CLUSTER_CLONE_START_FAILED\n${String((error as Error).message)}\n${log}`,
+    );
+  }
+}
+
 interface Fixture {
   orgId: string;
   apiKeyId: string;
@@ -193,6 +266,12 @@ describeNative("off-cluster restore into an independent cluster", () => {
   // A NOLOGIN role that owns a table: the NOLOGIN function owner this project
   // actually uses. Its attributes are the ones CREATE ROLE must reproduce.
   const nologinRole = "ag6n_" + randomUUID().replaceAll("-", "").slice(0, 12);
+  // A role that appears ONLY in a GRANT and never as an owner. This is the
+  // case the grantee parse exists for: the owner column cannot see it, so if
+  // the ACL surface is not read correctly it is missing from the required set,
+  // never created on the destination, and pg_restore dies on `role does not
+  // exist` — the exact failure this module exists to prevent.
+  const granteeRole = "ag6g_" + randomUUID().replaceAll("-", "").slice(0, 12);
   const nologinTable = "ag6n_owned_" + randomUUID().replaceAll("-", "").slice(0, 8);
   const sourceDatabase =
     "aiag_source_" + randomUUID().replaceAll("-", "").slice(0, 20);
@@ -278,6 +357,11 @@ describeNative("off-cluster restore into an independent cluster", () => {
       await sourceAdmin.query(
         `CREATE ROLE "${nologinRole}" NOLOGIN NOINHERIT CREATEDB NOSUPERUSER NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 7`,
       );
+      // A plain LOGIN role that will own nothing and only ever appear as a
+      // grantee. Created in beforeAll so it is part of the shared fixture.
+      await sourceAdmin.query(
+        `CREATE ROLE "${granteeRole}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`,
+      );
       await sourceAdmin.query(
         `CREATE DATABASE "${sourceDatabase}" OWNER "${ownerRole}" TEMPLATE template0`,
       );
@@ -305,6 +389,11 @@ describeNative("off-cluster restore into an independent cluster", () => {
       await owner.query(
         `ALTER TABLE public."${nologinTable}" OWNER TO "${nologinRole}"`,
       );
+      // The grantee-only role, reached through a GRANT. It owns nothing, so
+      // the ONLY way it can enter the required set is a correct ACL read.
+      await owner.query(
+        `GRANT SELECT ON public."${nologinTable}" TO "${granteeRole}"`,
+      );
     } finally {
       await owner.end();
     }
@@ -312,6 +401,20 @@ describeNative("off-cluster restore into an independent cluster", () => {
 
   afterAll(async () => {
     if (root === "") return;
+    // The lineage test stops its clone itself, but a failure before that
+    // point would leave a postmaster running and its port bound.
+    await exec(
+      join(toolsRoot, "usr/lib/postgresql/18/bin/pg_ctl"),
+      ["-D", join(root, "clone"), "-m", "immediate", "-w", "stop"],
+      {
+        env: {
+          PATH: process.env.PATH ?? "",
+          LANG: "C.UTF-8",
+          LD_LIBRARY_PATH: join(toolsRoot, "usr/lib/x86_64-linux-gnu"),
+        },
+        timeout: 120_000,
+      },
+    ).catch(() => undefined);
     for (const [port, name] of [
       [destinationPort, "destination"],
       [sourcePort, "source"],
@@ -376,12 +479,36 @@ describeNative("off-cluster restore into an independent cluster", () => {
       const required = rolesRequiredByAuthority(before.authority);
       expect(required).toContain(ownerRole);
       expect(required).toContain(nologinRole);
+      // The grantee-only role is NOT passed through `roles:` below, so it can
+      // only be in this set if the `text[]` grantee column was actually read.
+      // The column arrives from node-pg as a decoded string[]; parsing it as a
+      // JSON string returned [] and silently dropped exactly this role.
+      expect(required).toContain(granteeRole);
+      // Assert the raw decoded shape directly, so a driver or pg-types change
+      // that turns the column back into a string fails here with a clear
+      // message instead of surfacing much later as a missing role.
+      const shape = await pgClient(sourceAdminUrl());
+      try {
+        const row = (
+          await shape.query(
+            `SELECT s.grantees FROM (
+               SELECT array_agg(DISTINCT pg_catalog.pg_get_userbyid(g.grantee))::text[] AS grantees
+                 FROM pg_catalog.pg_class c, pg_catalog.aclexplode(c.relacl) g
+                WHERE c.oid = $1::regclass AND g.grantee <> 0) s`,
+            [`public."${nologinTable}"`],
+          )
+        ).rows[0] as { grantees: unknown };
+        expect(Array.isArray(row.grantees)).toBe(true);
+        expect(row.grantees).toContain(granteeRole);
+      } finally {
+        await shape.end();
+      }
 
       const destination = await destinationAdmin();
       const rolesBefore = (
         await destination.query(
           "SELECT rolname::text AS name FROM pg_catalog.pg_roles WHERE rolname = ANY($1::text[])",
-          [[ownerRole, nologinRole]],
+          [[ownerRole, nologinRole, granteeRole]],
         )
       ).rows;
       await destination.end();
@@ -393,6 +520,8 @@ describeNative("off-cluster restore into an independent cluster", () => {
         destinationAdminUrl: destinationAdminUrl(),
         sourcePort,
         destPort: destinationPort,
+        // Deliberately NOT passing granteeRole: it must be discovered from the
+        // ACL surface, exactly as it would be in a real recovery.
         roles: [ownerRole, nologinRole],
         verify: async (restoredUrl) => {
           verifiedRestoredUrl = restoredUrl;
@@ -448,6 +577,18 @@ describeNative("off-cluster restore into an independent cluster", () => {
                 )
               ).rows[0]?.owner,
             ).toBe(nologinRole);
+            // The grantee-only role exists on the restored cluster and really
+            // holds the GRANT that put it in the required set. This is the
+            // assertion the old build could not make: with the ACL parse dead,
+            // the role was never created and the restore never got this far.
+            expect(
+              (
+                await restored.query(
+                  "SELECT has_table_privilege($1,$2,'SELECT') AS granted",
+                  [granteeRole, `public."${nologinTable}"`],
+                )
+              ).rows[0]?.granted,
+            ).toBe(true);
             // Replay of the old payment on the restored cluster: same receipt,
             // no second debit, no state change.
             const replay = await replayOldPaymentOnRestored(
@@ -486,6 +627,10 @@ describeNative("off-cluster restore into an independent cluster", () => {
       // The roles only existed on the source; the module had to create them here.
       expect(proof.rolesRecreatedOnDestination).toContain(ownerRole);
       expect(proof.rolesRecreatedOnDestination).toContain(nologinRole);
+      // The grantee-only role, created with no help from `roles:`. If the ACL
+      // parse were dead this role would be absent here AND pg_restore would
+      // have aborted with `role does not exist` before the proof was built.
+      expect(proof.rolesRecreatedOnDestination).toContain(granteeRole);
       expect(proof.destinationDatabase).toMatch(
         /^aiag_offcluster_[a-f0-9]{32}$/,
       );
@@ -519,7 +664,7 @@ describeNative("off-cluster restore into an independent cluster", () => {
           (
             await destinationCheck.query(
               "SELECT rolname::text AS name FROM pg_catalog.pg_roles WHERE rolname = ANY($1::text[])",
-              [[ownerRole, nologinRole]],
+              [[ownerRole, nologinRole, granteeRole]],
             )
           ).rows,
         ).toHaveLength(0);
@@ -606,6 +751,77 @@ describeNative("off-cluster restore into an independent cluster", () => {
       await check.end();
     }
   }, 300_000);
+
+  it("refuses a physical clone of the source, which inherits its system identifier", async () => {
+    // The other half of the cluster-identity guard. SAME_CLUSTER covers one
+    // server on two ports; this covers a basebackup/PITR stand, which is the
+    // NORMAL off-host topology: it INHERITS system_identifier, so a naive
+    // identifier comparison would call two separate lineages "the same
+    // cluster" and send the operator to the wrong runbook. The module
+    // distinguishes them by data directory and postmaster start time.
+    //
+    // A real pg_basebackup clone is used, not a stub, because the two cheap
+    // guards cannot reach this branch: the same port twice is cut by
+    // `sourcePort === destPort`, and a TCP proxy is cut by the declared-port
+    // check because PostgreSQL reports its own real port whatever was dialled.
+    // The clone satisfies both of those and still inherits the identifier, so
+    // this is the only arrangement that actually reaches the comparison.
+    const clonePort = await freePort();
+    const cloneData = join(root, "clone");
+    await basebackupClone(sourcePort, cloneData, clonePort);
+    const cloneUrl = `postgres://postgres@127.0.0.1:${clonePort}/postgres`;
+    try {
+      // Precondition, asserted rather than assumed: the clone really does
+      // carry the source's identifier, and really is a different data
+      // directory on a different port. Without this the expected failure code
+      // below would prove nothing — a genuinely independent cluster would also
+      // fail the rehearsal, just with a different code.
+      const master = await pgClient(`postgres://postgres@127.0.0.1:${sourcePort}/postgres`);
+      const clone = await pgClient(cloneUrl);
+      try {
+        const probe = `SELECT system_identifier::text AS id,current_setting('data_directory') AS dir,inet_server_port()::int AS port FROM pg_catalog.pg_control_system()`;
+        const a = (await master.query(probe)).rows[0] as {
+          id: string;
+          dir: string;
+          port: number;
+        };
+        const b = (await clone.query(probe)).rows[0] as {
+          id: string;
+          dir: string;
+          port: number;
+        };
+        expect(b.id).toBe(a.id);
+        expect(b.dir).not.toBe(a.dir);
+        expect(b.port).toBe(clonePort);
+      } finally {
+        await master.end();
+        await clone.end();
+      }
+
+      await expect(
+        restoreOffCluster({
+          sourceUrl: sourceAdminUrl(),
+          destinationAdminUrl: cloneUrl,
+          sourcePort,
+          destPort: clonePort,
+        }),
+      ).rejects.toThrow("TON_RESTORE_CLUSTER_LINEAGE_SAME");
+    } finally {
+      await exec(
+        join(toolsRoot, "usr/lib/postgresql/18/bin/pg_ctl"),
+        ["-D", cloneData, "-m", "immediate", "-w", "stop"],
+        {
+          env: {
+            PATH: process.env.PATH ?? "",
+            LANG: "C.UTF-8",
+            LD_LIBRARY_PATH: join(toolsRoot, "usr/lib/x86_64-linux-gnu"),
+          },
+          timeout: 120_000,
+        },
+      ).catch(() => undefined);
+      await rm(cloneData, { recursive: true, force: true });
+    }
+  }, 600_000);
 
   it("refuses a non-superuser source, whose catalog view would silently skip foreign objects", async () => {
     // pg_class/pg_proc are filtered for an ordinary role, so a snapshot taken
@@ -726,6 +942,48 @@ describeNative("off-cluster restore into an independent cluster", () => {
       await cleanup.query(`DROP ROLE "${existing}"`);
     } finally {
       await cleanup.end();
+    }
+  }, 600_000);
+
+  it("ignores a membership between roles the restore does not depend on", async () => {
+    // Scope check for the membership comparison. Comparing the WHOLE cluster
+    // made the rehearsal fail on any destination that has a membership of its
+    // own, which on a real destination is nearly always true — a monitoring
+    // group, a vendor login — so operators would learn to ignore a hard stop.
+    // A membership touching NEITHER required role is now out of scope.
+    //
+    // The other direction is unchanged and is asserted by the test above: a
+    // membership that names a role the dump depends on still fails, because
+    // pg_dump cannot carry it and effective rights would vanish at cutover.
+    const outsiderGroup = "ag6og_" + randomUUID().replaceAll("-", "").slice(0, 10);
+    const outsiderMember = "ag6om_" + randomUUID().replaceAll("-", "").slice(0, 10);
+    const admin = await destinationAdmin();
+    try {
+      await admin.query(`CREATE ROLE "${outsiderGroup}" NOLOGIN`);
+      await admin.query(`CREATE ROLE "${outsiderMember}" LOGIN`);
+      await admin.query(`GRANT "${outsiderGroup}" TO "${outsiderMember}"`);
+    } finally {
+      await admin.end();
+    }
+    try {
+      const proof = await restoreOffCluster({
+        sourceUrl: sourceAdminUrl(),
+        destinationAdminUrl: destinationAdminUrl(),
+        sourcePort,
+        destPort: destinationPort,
+      });
+      expect(proof.membershipsIdentical).toBe(true);
+    } finally {
+      for (const url of [sourceAdminUrl(), destinationAdminUrl()]) {
+        const c = new Client({ connectionString: url, ...clientOptions });
+        await c.connect();
+        try {
+          await c.query(`DROP ROLE IF EXISTS "${outsiderMember}"`);
+          await c.query(`DROP ROLE IF EXISTS "${outsiderGroup}"`);
+        } finally {
+          await c.end();
+        }
+      }
     }
   }, 600_000);
 
