@@ -59,8 +59,9 @@ describe("native ordered migrator", () => {
   it("discovers the complete immutable history in deterministic order", async () => {
     const migrations = await discoverNativeMigrations();
 
-    // 96 = the 0096 org-scope idempotency index that closed the money bypass.
-    expect(migrations).toHaveLength(96);
+    // 97 = 0097 adds the author-surface catalog revision triggers (0073 never covered
+// the author tables), on top of 0096's org-scope idempotency index.
+    expect(migrations).toHaveLength(97);
     expect(migrations[0].version).toBe("drizzle/0000_moaning_the_fury.sql");
     expect(migrations[1].version).toBe("migrations/0004_gateway_core.sql");
     expect(migrations[2].version).toBe(
