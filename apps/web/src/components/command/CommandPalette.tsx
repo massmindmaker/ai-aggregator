@@ -6,7 +6,6 @@ import { useSession } from 'next-auth/react';
 import {
   Home,
   Boxes,
-  Trophy,
   Settings,
   Users,
   Building,
@@ -44,7 +43,6 @@ const COMMANDS: Command[] = [
   // Navigation
   { id: 'home', label: 'Главная', icon: Home, href: '/', group: 'navigation', keywords: ['домой'] },
   { id: 'marketplace', label: 'Маркетплейс моделей', icon: Boxes, href: '/marketplace', group: 'navigation', keywords: ['модели', 'каталог'] },
-  { id: 'contests', label: 'Конкурсы', icon: Trophy, href: '/contests', group: 'navigation', keywords: ['призы'] },
   { id: 'playground', label: 'Песочница', icon: Play, href: '/playground', group: 'navigation' },
   { id: 'pricing', label: 'Тарифы', icon: CreditCard, href: '/pricing', group: 'navigation', keywords: ['цены'] },
   { id: 'docs', label: 'Документация', icon: FileText, href: '/docs', group: 'docs' },
@@ -56,7 +54,6 @@ const COMMANDS: Command[] = [
   { id: 'billing', label: 'Биллинг', icon: Receipt, href: '/dashboard/billing', group: 'account', keywords: ['оплата'] },
   { id: 'earnings', label: 'Заработок', icon: BarChart, href: '/dashboard/earnings', group: 'account' },
   { id: 'models-mine', label: 'Мои модели', icon: Boxes, href: '/dashboard/models', group: 'account' },
-  { id: 'submissions', label: 'Сабмишены', icon: GitBranch, href: '/dashboard/submissions', group: 'account' },
   { id: 'webhooks', label: 'Webhooks', icon: Webhook, href: '/dashboard/webhooks', group: 'account' },
   { id: 'security', label: 'Безопасность', icon: Shield, href: '/dashboard/security', group: 'account' },
 
@@ -65,7 +62,6 @@ const COMMANDS: Command[] = [
   { id: 'admin-users', label: 'Пользователи (admin)', icon: Users, href: '/admin/users', group: 'admin' },
   { id: 'admin-orgs', label: 'Организации', icon: Building, href: '/admin/orgs', group: 'admin' },
   { id: 'admin-models', label: 'Модели (admin)', icon: Boxes, href: '/admin/models', group: 'admin' },
-  { id: 'admin-contests', label: 'Конкурсы (admin)', icon: Trophy, href: '/admin/contests', group: 'admin' },
   { id: 'admin-jobs', label: 'Async-задачи', icon: GitBranch, href: '/admin/jobs', group: 'admin', keywords: ['queue', 'очередь'] },
   { id: 'admin-worker', label: 'Worker статус', icon: Activity, href: '/admin/worker', group: 'admin' },
   { id: 'admin-routing', label: 'Роутинг', icon: GitBranch, href: '/admin/routing', group: 'admin' },
@@ -79,7 +75,6 @@ const COMMANDS: Command[] = [
 
   // Actions (quick create / external)
   { id: 'new-model', label: 'Создать модель', icon: Boxes, href: '/dashboard/models/new', group: 'actions' },
-  { id: 'new-contest', label: 'Создать конкурс (admin)', icon: Trophy, href: '/admin/contests/new', group: 'actions' },
 ];
 
 const GROUP_LABELS: Record<Command['group'], string> = {
@@ -125,9 +120,7 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
-    const visible = COMMANDS.filter(
-      (c) => isAdmin || (c.group !== 'admin' && c.id !== 'new-contest')
-    );
+    const visible = COMMANDS.filter((c) => isAdmin || c.group !== 'admin');
     return visible
       .map((c) => ({ cmd: c, s: score(c, query) }))
       .filter((x) => x.s > 0)

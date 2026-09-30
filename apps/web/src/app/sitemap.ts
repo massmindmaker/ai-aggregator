@@ -4,7 +4,7 @@ import type { MetadataRoute } from 'next';
  * Plan 08 Task 6 — dynamic sitemap.xml.
  *
  * MVP: статический список основных страниц. При интеграции с БД расширить
- * — добавить все published models и public contests через drizzle query.
+ * — добавить все published models через drizzle query.
  */
 
 const BASE = 'https://ai-aggregator.ru';
@@ -21,12 +21,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/cookies`, lastModified: now, changeFrequency: 'monthly', priority: 0.2 },
     {
       url: `${BASE}/author-agreement`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.3,
-    },
-    {
-      url: `${BASE}/contest-host-agreement`,
       lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.3,

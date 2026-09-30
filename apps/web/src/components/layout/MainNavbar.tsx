@@ -9,7 +9,6 @@ import { AiagLogo } from '@/components/ui/AiagLogo';
 
 const mainMenu = [
   { title: 'Маркетплейс', href: '/marketplace' },
-  { title: 'Конкурсы', href: '/contests' },
   { title: 'Документация', href: '/docs' },
   { title: 'Тарифы', href: '/pricing' },
   // 'Для бизнеса' (/business) HIDDEN 2026-07-17 — founder decision: no

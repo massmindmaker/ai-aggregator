@@ -12,7 +12,6 @@ import {
   Plug,
   Users,
   Building2,
-  Trophy,
   ShieldCheck,
   CreditCard,
   Banknote,
@@ -60,7 +59,6 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/models', label: 'Модели', icon: Boxes },
       { href: '/admin/upstreams', label: 'Аплинки', icon: Plug },
-      { href: '/admin/contests', label: 'Контесты', icon: Trophy },
     ],
   },
   {
@@ -84,7 +82,6 @@ const SECTIONS: NavSection[] = [
     heading: 'Moderation',
     items: [
       { href: '/admin/moderation/models', label: 'Модели', icon: ScanSearch },
-      { href: '/admin/moderation/submissions', label: 'Сабмишены', icon: ScanSearch },
       { href: '/admin/audit', label: 'Аудит', icon: ScrollText },
       { href: '/admin/cohorts', label: 'Когорты', icon: Activity },
     ],

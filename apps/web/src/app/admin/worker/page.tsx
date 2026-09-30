@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Worker — Админка' };
 
-const QUEUE_NAMES = ['upstream-poll', 'contest-eval', 'webhook-retry', 'email-send'] as const;
+const QUEUE_NAMES = ['upstream-poll', 'webhook-retry', 'email-send'] as const;
 type QName = (typeof QUEUE_NAMES)[number];
 
 interface QueueStats {

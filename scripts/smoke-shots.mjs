@@ -7,7 +7,7 @@ import fs from 'node:fs/promises';
 const OUT = process.env.SHOTS_DIR ||
   'C:/Users/боб/brain/Projects/AIAG/Sessions/2026-04-27-screenshots';
 const BASE = 'https://ai-aggregator.ru';
-const PATHS = ['/', '/marketplace', '/pricing', '/contests', '/login',
+const PATHS = ['/', '/marketplace', '/pricing', '/login',
                '/register', '/docs', '/dashboard', '/privacy'];
 
 await fs.mkdir(OUT, { recursive: true });

@@ -13,8 +13,6 @@ import {
   Wallet,
   Banknote,
   ShieldCheck,
-  Trophy,
-  Inbox,
   User,
   Lock,
   Users as UsersIcon,
@@ -28,7 +26,6 @@ import { cn } from '@/lib/utils';
 interface Props {
   isAdmin: boolean;
   hasAuthored: boolean;
-  hasEntered: boolean;
 }
 
 const ITEMS_USER = [
@@ -47,13 +44,6 @@ const ITEMS_AUTHOR = [
   { href: '/dashboard/kyc', label: 'KYC', icon: ShieldCheck },
 ];
 
-const ITEMS_PARTICIPANT = [
-  { href: '/dashboard?mode=participant', label: 'Обзор', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/submissions', label: 'Мои сабмишены', icon: Inbox },
-  { href: '/dashboard/wins', label: 'Победы', icon: Trophy },
-  { href: '/contests', label: 'Конкурсы', icon: Boxes },
-];
-
 const ALWAYS = [
   { href: '/dashboard/profile', label: 'Профиль', icon: User },
   { href: '/dashboard/security', label: 'Безопасность', icon: Lock },
@@ -63,34 +53,30 @@ const ALWAYS = [
 const MODE_CHIPS: { mode: Mode; label: string; emoji: string }[] = [
   { mode: 'user', label: 'User', emoji: '👤' },
   { mode: 'author', label: 'Author', emoji: '🎨' },
-  { mode: 'participant', label: 'Participant', emoji: '🏆' },
 ];
 
-// Shown in place of the Author / Participant chip until the user has earned
-// it — a subtle link to the action that earns it, not a dead end.
-const UNEARNED_CTA: Record<'author' | 'participant', { label: string; href: string }> = {
-  author: { label: 'Опубликовать модель', href: '/dashboard/models/new' },
-  participant: { label: 'Конкурсы', href: '/contests' },
+// Shown in place of the Author chip until the user has earned it — a subtle
+// link to the action that earns it, not a dead end.
+const UNEARNED_AUTHOR_CTA = {
+  label: 'Опубликовать модель',
+  href: '/dashboard/models/new',
 };
 
 function itemsFor(mode: Mode) {
   switch (mode) {
     case 'author':
       return ITEMS_AUTHOR;
-    case 'participant':
-      return ITEMS_PARTICIPANT;
     case 'user':
     default:
       return ITEMS_USER;
   }
 }
 
-export default function DashboardSidebar({ isAdmin, hasAuthored, hasEntered }: Props) {
+export default function DashboardSidebar({ isAdmin, hasAuthored }: Props) {
   const pathname = usePathname() ?? '/dashboard';
   const searchParams = useSearchParams();
   const mode = resolveMode(searchParams.get('mode') ?? undefined, pathname, {
     hasAuthored,
-    hasEntered,
   });
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -125,20 +111,16 @@ export default function DashboardSidebar({ isAdmin, hasAuthored, hasEntered }: P
         </div>
         <div className="flex flex-col gap-1 mb-3">
           {MODE_CHIPS.map((c) => {
-            if (c.mode !== 'user') {
-              const isEarned = c.mode === 'author' ? hasAuthored : hasEntered;
-              if (!isEarned) {
-                const cta = UNEARNED_CTA[c.mode];
-                return (
-                  <Link
-                    key={c.mode}
-                    href={cta.href}
-                    className="flex items-center px-3 py-2 text-[13px] rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
-                  >
-                    {cta.label}
-                  </Link>
-                );
-              }
+            if (c.mode === 'author' && !hasAuthored) {
+              return (
+                <Link
+                  key={c.mode}
+                  href={UNEARNED_AUTHOR_CTA.href}
+                  className="flex items-center px-3 py-2 text-[13px] rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                >
+                  {UNEARNED_AUTHOR_CTA.label}
+                </Link>
+              );
             }
             const active = mode === c.mode;
             return (

@@ -1297,7 +1297,6 @@ export default function HomePage() {
               h: 'Продукт',
               links: [
                 ['Маркетплейс', '/marketplace'],
-                ['Конкурсы', '/contests'],
                 ['Тарифы', '/pricing'],
               ],
             },

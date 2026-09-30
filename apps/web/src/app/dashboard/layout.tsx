@@ -37,11 +37,7 @@ export default async function DashboardLayout({
     <div className="min-h-screen flex flex-col bg-background">
       <MainNavbar />
       <div className="flex-1 flex">
-        <DashboardSidebar
-          isAdmin={isAdmin}
-          hasAuthored={earned.hasAuthored}
-          hasEntered={earned.hasEntered}
-        />
+        <DashboardSidebar isAdmin={isAdmin} hasAuthored={earned.hasAuthored} />
         <main className="aiag-grid-bg-sm flex-1 min-w-0 overflow-x-hidden">{children}</main>
       </div>
     </div>

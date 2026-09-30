@@ -39,7 +39,6 @@ export default async function WebhooksPage() {
             ['payment.refunded', 'Возврат средств'],
             ['model.approved', 'Ваша модель одобрена модератором'],
             ['model.frozen', 'Модель заморожена'],
-            ['contest.win', 'Победа в конкурсе'],
             ['payout.paid', 'Выплата отправлена'],
           ].map(([code, label]) => (
             <li key={code} className="flex gap-3 items-baseline">

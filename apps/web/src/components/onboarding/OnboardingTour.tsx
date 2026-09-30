@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, X, Sparkles, Boxes, Play, Key, Trophy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Sparkles, Boxes, Play, Key, Wallet } from 'lucide-react';
 import { CellsSpot } from '@/components/animations/CellsSpot';
 import Link from 'next/link';
 
@@ -69,11 +69,11 @@ client = OpenAI(
     cta: { label: 'Создать API-ключ', href: '/register' },
   },
   {
-    icon: <Trophy className="w-5 h-5" />,
-    title: 'Конкурсы и призовой фонд',
-    description: 'Решай ML-задачи, попадай в лидерборд и забирай призы. Загружай решение — наш sandbox-evaluator считает score автоматически.',
+    icon: <Wallet className="w-5 h-5" />,
+    title: 'Публикуй модели и получай доход',
+    description: 'Загрузи свою модель в маркетплейс через личный кабинет — после модерации она доступна всем, а начисления автору видны в разделе «Заработок».',
     visual: <CellsSpot width={320} height={180} cellSize={10} />,
-    cta: { label: 'К конкурсам', href: '/contests' },
+    cta: { label: 'Опубликовать модель', href: '/dashboard/models/new' },
   },
 ];
 

@@ -15,6 +15,21 @@ const legacyMarketplaceRedirects = require(
   './src/lib/marketplace/legacy-redirects.generated.json'
 );
 
+// Contest contour removal (2026-09-30): the contests surface moved to Arena,
+// so the old Aggregator URLs must not 404 — they 301 to the surviving
+// equivalent. Hand-maintained, unlike the generated marketplace list above.
+const contestRedirects = [
+  { source: '/contests', destination: '/marketplace' },
+  { source: '/contests/:path*', destination: '/marketplace' },
+  { source: '/admin/contests', destination: '/admin' },
+  { source: '/admin/contests/:path*', destination: '/admin' },
+  { source: '/contest-host-agreement', destination: '/author-agreement' },
+  // Same removal wave: these participant/contest pages went away too.
+  { source: '/dashboard/submissions', destination: '/dashboard' },
+  { source: '/dashboard/wins', destination: '/dashboard' },
+  { source: '/admin/moderation/submissions', destination: '/admin/moderation/models' },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -40,7 +55,7 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
   async redirects() {
-    return legacyMarketplaceRedirects.map((r) => ({
+    return [...legacyMarketplaceRedirects, ...contestRedirects].map((r) => ({
       source: r.source,
       destination: r.destination,
       permanent: true,
