@@ -68,9 +68,9 @@ describe("native ordered migrator", () => {
       "migrations/0004_seed_test_upstreams.sql",
     );
     expect(migrations.at(-1)?.version).toBe(
-      "migrations/0096_settle_idempotency_org_scope.sql",
+      "migrations/0097_author_catalog_revision.sql",
     );
-    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(96);
+    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(97);
   });
 
   it("removes only an outer transaction wrapper owned by a historical file", () => {
