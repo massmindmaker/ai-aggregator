@@ -7,14 +7,15 @@
         "./src/*"
       ]
     },
-    "outDir": "dist",
-    "rootDir": "src"
+    "outDir": "dist"
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "scripts/**/*"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "scripts/__tests__"
   ]
 }
