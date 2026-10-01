@@ -69,13 +69,18 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
   done
 
   for app in "${APPS[@]}"; do
-    case "$app" in
-      web)          run "bun run --cwd '$REPO_ROOT/apps/web' build" ;;
-      gateway)      run "bun run --cwd '$REPO_ROOT/packages/api-gateway' build" ;;
-      worker)       run "bun run --cwd '$REPO_ROOT/apps/worker' build" ;;
-      *)            fail "Unknown app: $app" ;;
-    esac
-  done
+     case "$app" in
+       # Next's webpack cache survives across builds and is not invalidated by a
+       # source reorder, so a stale cache produced a byte-identical bundle that first
+       # failed and then passed on the same commit. Clear it before building web;
+       # it costs a full rebuild and removes a class of flaky deploys.
+       web)          run "rm -rf '$REPO_ROOT/apps/web/.next/cache'"
+                   run "bun run --cwd '$REPO_ROOT/apps/web' build" ;;
+       gateway)      run "bun run --cwd '$REPO_ROOT/packages/api-gateway' build" ;;
+       worker)      run "bun run --cwd '$REPO_ROOT/apps/worker' build" ;;
+       *)            fail "Unknown app: $app" ;;
+     esac
+   done
 else
   log "Skipping build (SKIP_BUILD=1)"
 fi
