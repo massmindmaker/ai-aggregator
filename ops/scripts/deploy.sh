@@ -57,6 +57,20 @@ log "Release tag: $RELEASE"
 log "Apps: ${APPS[*]}"
 log "Target: $SSH_HOST"
 
+# The system bun on this box is 1.3.13, which cannot parse the repo's
+# lockfileVersion 3 and aborts the release install before the swap. A newer bun lives
+# beside it and the system copy is deliberately left alone so rollback is trivial:
+# drop BUN_BIN from the remote PATH and the old one is used again.
+BUN_FALLBACK="/opt/bun-1.4.2/bun"
+if ssh -o ConnectTimeout=5 -o BatchMode=yes "$SSH_HOST" \
+     "[ -x '$BUN_FALLBACK' ] && '$BUN_FALLBACK' --version | grep -q '^1\.4\.'" >/dev/null 2>&1; then
+  log "Using pinned bun: $("$SSH_HOST" "$BUN_FALLBACK" --version 2>/dev/null)"
+  SSH_REMOTE_ENV="PATH=$(dirname "$BUN_FALLBACK"):\$PATH"
+else
+  log "WARNING: pinned bun not found on $SSH_HOST, falling back to the system bun"
+  SSH_REMOTE_ENV=""
+fi
+
 [[ -d "$REPO_ROOT/apps" ]] || fail "Wrong REPO_ROOT: $REPO_ROOT"
 ssh -o ConnectTimeout=5 -o BatchMode=yes "$SSH_HOST" 'echo ok' >/dev/null 2>&1 \
   || fail "Cannot reach $SSH_HOST via SSH (key auth required)"
@@ -110,7 +124,7 @@ run "scp -q '$TARBALL' '$SSH_HOST:/srv/aiag/deploy/tmp/$RELEASE/release.tar.gz'"
 # 5. Atomic swap + pm2 reload + healthcheck (remote)
 log "Atomic swap + pm2 reload"
 APPS_STR="${APPS[*]}"
-ssh "$SSH_HOST" "RELEASE='$RELEASE' APPS='$APPS_STR' KEEP='$KEEP_RELEASES' bash -s" <<'REMOTE'
+ssh "$SSH_HOST" "RELEASE='$RELEASE' APPS='$APPS_STR' KEEP='$KEEP_RELEASES' BUN_DIR='${BUN_FALLBACK%/bun}' bash -s" <<'REMOTE'
 set -euo pipefail
 log() { echo "[remote $(date +%H:%M:%S)] $*"; }
 ECOSYSTEM="/srv/aiag/shared/ecosystem.config.cjs"
@@ -124,7 +138,12 @@ for APP in $APPS; do
   mkdir -p "$TARGET"
   tar -xzf "/srv/aiag/deploy/tmp/$RELEASE/release.tar.gz" -C "$TARGET"
 
-  # Production install from the committed Bun lockfile.
+  # Production install from the committed Bun lockfile. The lockfile is version 3,
+  # which the system bun (1.3.13) refuses to parse, so prefer the pinned 1.4.x
+  # installed beside it. Nothing else on the box depends on this PATH entry.
+  if [ -x "$BUN_DIR/bun" ] && "$BUN_DIR/bun" --version | grep -q '^1\.4\.'; then
+    export PATH="$BUN_DIR:$PATH"
+  fi
   cd "$TARGET"
   bun install --production --frozen-lockfile
 
@@ -143,18 +162,49 @@ for APP in $APPS; do
   # Atomic symlink swap
   ln -sfn "$TARGET" "$CURRENT"
 
+  # Free the port before reloading.
+  #
+  # Next and the gateway both fork a child that holds the listening socket. pm2 restarts
+  # only the process it manages, so the child survives, keeps the port, and the fresh
+  # process dies in a restart loop on EADDRINUSE. The gateway reached 34k restarts
+  # this way while still reporting "online", and /health answered nothing - which is
+  # why health is checked against a measured body size rather than a status code.
+  PORT=$(aiag_pm2 jlist | jq -r ".[] | select(.name==\"$APP\") | .pm2_env.env.PORT // empty")
+  if [[ -n "$PORT" ]]; then
+    for _ in 1 2 3; do
+      HOLDERS=$(ss -ltnp 2>/dev/null \
+        | grep ":$PORT " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)
+      [[ -z "$HOLDERS" ]] && break
+      log "Port $PORT held by $HOLDERS - terminating before reload"
+      for pid in $HOLDERS; do kill -TERM "$pid" 2>/dev/null; done
+      sleep 2
+      for pid in $HOLDERS; do kill -9 "$pid" 2>/dev/null; done
+      sleep 1
+    done
+    if ss -ltnp 2>/dev/null | grep -q ":$PORT "; then
+      log "FATAL: port $PORT still occupied, aborting without touching the symlink"
+      exit 1
+    fi
+  fi
+
   # Reload an existing process or recreate it from the committed contract.
   aiag_pm2_reload_or_create "$APP" "$ECOSYSTEM"
   aiag_pm2 save
 
   # Healthcheck (HTTP /health on PM2-reported port)
-  PORT=$(aiag_pm2 jlist | jq -r ".[] | select(.name==\"$APP\") | .pm2_env.env.PORT // empty")
   if [[ -n "$PORT" ]]; then
     sleep 4
     if ! curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null; then
       log "HEALTH FAILED for $APP — rolling back"
       if [[ -n "$PREV_LINK" ]]; then
         ln -sfn "$PREV_LINK" "$CURRENT"
+        for _ in 1 2 3; do
+          HOLDERS=$(ss -ltnp 2>/dev/null \
+            | grep ":$PORT " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)
+          [[ -z "$HOLDERS" ]] && break
+          for pid in $HOLDERS; do kill -9 "$pid" 2>/dev/null; done
+          sleep 2
+        done
         aiag_pm2_reload_or_create "$APP" "$ECOSYSTEM"
         aiag_pm2 save
         log "Rollback to $PREV_LINK done"
