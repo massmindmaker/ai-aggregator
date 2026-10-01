@@ -24,7 +24,7 @@
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type postgres from 'postgres';
-import { authorVersionListed, type SqlFragmentSource } from '../catalog/author-admission';
+import { type SqlFragmentSource } from '../catalog/author-admission';
 
 type Row = Record<string, unknown>;
 type Scope = Record<string, Row | undefined>;

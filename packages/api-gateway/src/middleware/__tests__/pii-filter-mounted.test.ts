@@ -91,7 +91,8 @@ describe('piiFilter — fail-closed residency (H-1)', () => {
     const r = await app().fetch(post(withEmail('sber/gigachat-pro')));
 
     expect(r.status).toBe(403);
-    expect((await r.json()).error.code).toBe('FORBIDDEN');
+    const body = (await r.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('FORBIDDEN');
   });
 
   it('blocks when the resolver returns no candidates', async () => {
