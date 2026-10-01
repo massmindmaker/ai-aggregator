@@ -23,11 +23,18 @@ const state = vi.hoisted(() => ({
   keys: {} as Record<string, unknown | null>,
   failRevision: false,
   failCandidates: false,
+  // Every query text the double is handed, in order (H-3: see the admission
+  // branch below — the predicate arrives as its own invocation).
+  queries: [] as string[],
+  // Which branch handled each query. The admission fragment must be handled by
+  // the `author_probe_operations` branch, not fall through to the throw.
+  handled: [] as string[],
 }));
 
 vi.mock('../lib/db', () => {
   const tx = Object.assign(async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const query = strings.join(' ');
+    state.queries.push(query);
     if (query.includes('aiag_read_gateway_catalog_revision_v1')) {
       if (state.failRevision) throw new Error('storage-diagnostic-secret');
       return [{ revision: state.revision }];
@@ -50,9 +57,24 @@ vi.mock('../lib/db', () => {
       if (state.failCandidates) throw new Error('storage-diagnostic-secret');
       return state.candidates.filter(row => (values[0] as string[]).includes(row.model_id as string));
     }
-    // Nested admission fragment: postgres.js inlines it into the parent query,
-    // so this double just discards it like the other interpolated values.
-    if (query.includes('author_probe_operations')) return [];
+    // H-3: this branch IS reachable, and the old comment here said the
+    // opposite. postgres.js inlines a nested fragment into the parent
+    // statement when the parent is finally sent — but the tagged template is
+    // still *invoked* on its own to build that fragment, so this double is
+    // called once with the admission predicate alone as its query text. That
+    // text contains `FROM author_probe_operations` / `FROM users`, not
+    // `FROM models`, so the check above does not swallow it and control really
+    // does reach here. (The wave review claimed the opposite from substring
+    // offsets; dropping the branch on that basis left 24 green tests and 14
+    // unhandled rejections, because the discarded return value is never
+    // awaited.) Its return value is discarded: postgres.js resolves the
+    // fragment into the parent query, so there is no standalone result set.
+    // The predicate's own clauses are covered by author-admission-predicate.test.ts.
+    if (query.includes('author_probe_operations')) {
+      state.handled.push('admission');
+      return [];
+    }
+    state.handled.push('unexpected');
     throw new Error('Unexpected SQL in catalogue HTTP test');
   }, { array: (value: unknown) => value });
   return { sql: { begin: async (_isolation: string, work: (sql: typeof tx) => unknown) => work(tx) } };
@@ -173,7 +195,43 @@ describe('public catalog producer-consumer over the real HTTP chain', () => {
     state.keys = { [validKey]: apiKeyRow };
     state.failRevision = false;
     state.failCandidates = false;
+    state.queries = [];
+    state.handled = [];
     seedTwoModels();
+  });
+
+  describe('admission predicate reaches this double as its own invocation (H-3)', () => {
+    it('the predicate is invoked standalone, so the author_probe_operations branch is live', async () => {
+      const app = await boot('stored_chat_only');
+      await app.fetch('http://gateway.test/v1/catalog?limit=20', {
+        headers: { authorization: `Bearer ${validKey}` },
+      });
+
+      // The wave review read this double's source and concluded the
+      // `author_probe_operations` branch below was unreachable, because
+      // postgres.js supposedly inlines the fragment into the parent query. It
+      // does inline it — into the statement that is finally SENT — but the
+      // tagged template is still invoked on its own to build the fragment, and
+      // that invocation lands here with the predicate as the whole query text.
+      // Asserted here so the claim cannot be re-derived from offsets and used to
+      // delete a reachable branch again.
+      //
+      // `probe.state` identifies the admission fragment; the revision aggregate
+      // also mentions author_probe_operations but is matched earlier, by
+      // `concat_ws`.
+      const fragment = state.queries.filter((q) => q.includes('probe.state'));
+      expect(fragment.length).toBeGreaterThan(0);
+      // ...and it is a separate invocation, not the page query: no `FROM models`
+      // in it, which is why the earlier check does not match it.
+      expect(fragment[0]).not.toContain('FROM models');
+      expect(fragment[0]).toContain('author_probe_operations probe');
+      // Control reaches the admission branch rather than falling through to the
+      // `Unexpected SQL` throw. Without this, deleting the branch leaves the
+      // suite green (the fragment's return value is never awaited, so the
+      // rejection surfaces only as an unhandled error).
+      expect(state.handled).toContain('admission');
+      expect(state.handled).not.toContain('unexpected');
+    });
   });
 
   describe('stored_chat_only: available producer output parses strictly in the consumer', () => {
