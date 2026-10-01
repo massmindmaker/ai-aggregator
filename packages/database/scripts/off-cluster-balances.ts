@@ -405,10 +405,10 @@ const UUID =
  * usage snapshot are derived from it — a hand-written maximum that disagrees
  * with the pricing is rejected by the database, which is the intent.
  */
-function pricedCandidate(
-  modelSlug: string,
-  promptTokens: number,
-): Record<string, unknown> {
+// No prompt-length parameter: this rehearsal prices a fixed worst-case context window
+// on purpose, and a promptTokens argument implied the cost varied with prompt length
+// when it does not. Both call sites passed a value that was silently discarded.
+function pricedCandidate(modelSlug: string): Record<string, unknown> {
   const input = "0.1",
     output = "0.1",
     markup = "10",
@@ -534,7 +534,7 @@ export async function settleChargeViaGatewayAuthority(
   input: ChargeInput,
 ): Promise<ChargeResult> {
   assertChargeInput(input);
-  const candidate = pricedCandidate(input.modelSlug, input.promptTokens);
+  const candidate = pricedCandidate(input.modelSlug);
   const maxCredits = String(candidate.maxCredits);
   const cost = chargedCredits(candidate, input.promptTokens);
   if (cost <= 0n || cost > BigInt(maxCredits))
@@ -654,7 +654,7 @@ export async function firstDebitAfterRestore(
   const before = await readOpeningBalances(client, [input.orgId]);
   const balanceBefore = before[0].balancePayg;
   const maxCredits = String(
-    pricedCandidate(input.modelSlug, input.promptTokens).maxCredits,
+    pricedCandidate(input.modelSlug).maxCredits,
   );
   if (input.rejectHoldAboveBalance === true) {
     // The whole point of the cutover: the restored balance alone must fund the

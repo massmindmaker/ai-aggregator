@@ -18,7 +18,7 @@ import { Pool } from 'pg';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import type { CatalogModel, ModelType, HostingRegion } from '../../apps/web/src/lib/marketplace/catalog';
+import type { CatalogModel, ModelType, HostingRegion } from '../../../apps/web/src/lib/marketplace/catalog';
 
 // ESM-safe __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -178,7 +178,6 @@ function deterministicStats(slug: string, modelType: ModelType) {
   const h5 = (h * 374761393) >>> 0;
 
   // avgRating: 4.4 – 4.9 (step 0.1)
-  const ratingSteps = 5; // 4.4, 4.5, 4.6, 4.7, 4.8, 4.9  → 6 options
   const avgRating = +(4.4 + (h1 % 6) * 0.1).toFixed(1);
 
   // totalReviews: 20 – 400

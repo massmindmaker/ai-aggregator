@@ -149,6 +149,15 @@ const TOP_MODEL_SLUGS: Array<{ slug: string; code: string }> = [
   { slug: 'stable-diffusion-3-5', code: 'SD' },
 ];
 
+/** Chip text for the "горячее сейчас" cards, from the real model type. */
+const MODEL_TYPE_CHIP: Record<string, string> = {
+  llm: 'chat',
+  image: 'image',
+  video: 'video',
+  audio: 'audio',
+  embedding: 'embedding',
+};
+
 const topModels = TOP_MODEL_SLUGS.flatMap(({ slug, code }) => {
   const model = getModelBySlug(slug);
   if (!model) return [];
@@ -164,15 +173,6 @@ const topModels = TOP_MODEL_SLUGS.flatMap(({ slug, code }) => {
     },
   ];
 });
-
-/** Chip text for the "горячее сейчас" cards, from the real model type. */
-const MODEL_TYPE_CHIP: Record<string, string> = {
-  llm: 'chat',
-  image: 'image',
-  video: 'video',
-  audio: 'audio',
-  embedding: 'embedding',
-};
 
 const steps = [
   {

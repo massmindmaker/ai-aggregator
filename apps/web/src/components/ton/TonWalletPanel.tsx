@@ -35,8 +35,6 @@ function TonWalletInner({mode,showCheckout}:{mode:Mode;showCheckout:boolean}){
  },[mode,showCheckout]);
 
  useEffect(()=>{void(async()=>{try{const r=await fetch('/api/ton/config',{cache:'no-store'}),v=await r.json() as {enabled?:boolean};setEnabled(r.ok&&v.enabled===true);if(r.ok&&v.enabled===true)await refresh();}catch{setEnabled(false);}})();},[refresh]);
- useEffect(()=>{try{ui.setConnectionNetwork('-3');}catch{};const unsubscribe=ui.onStatusChange(current=>{void acceptWallet(current as any);},()=>setStatus('Кошелёк вернул ошибку подключения.'));return ()=>unsubscribe();},[ui,acceptWallet]);
-
  const acceptWallet=useCallback(async(current:any)=>{
   const pending=challenge.current;if(!pending||submitted.current||!current)return;
   if(current?.account?.chain!=='-3'){setStatus('Нужен кошелёк TON testnet.');return;}
@@ -59,7 +57,10 @@ function TonWalletInner({mode,showCheckout}:{mode:Mode;showCheckout:boolean}){
    setStatus('Кошелёк привязан к аккаунту.');setConsent(false);await refresh();router.refresh();
   }catch{setStatus('Подпись не подтверждена. Создайте новый запрос и повторите вручную.');}
   finally{setBusy(false);}
- },[ui,router,refresh,signIn]);
+ },[ui,router,refresh]);
+
+ useEffect(()=>{try{ui.setConnectionNetwork('-3');}catch{};const unsubscribe=ui.onStatusChange(current=>{void acceptWallet(current as any);},()=>setStatus('Кошелёк вернул ошибку подключения.'));return ()=>unsubscribe();},[ui,acceptWallet]);
+
  async function startProof(){
   if(mode==='manage'&&!consent)return;
   setBusy(true);setStatus('');submitted.current=false;challenge.current=null;
