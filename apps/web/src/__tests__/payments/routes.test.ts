@@ -154,6 +154,10 @@ beforeEach(() => {
   dbInsertValues.mockReset().mockResolvedValue(undefined);
   dbExecute.mockReset();
   dbUpdate.mockReset();
+  // Legacy fiat-rail tests assume the deploy configures card providers; the
+  // TON-only describe deletes these per-test to assert the 503 gate.
+  process.env.TINKOFF_TERMINAL_KEY = 'legacy-test-terminal';
+  process.env.TINKOFF_SECRET_KEY = 'legacy-test-secret';
 });
 
 /** DB-backed subscription identity for the admin refund route. The guarded
@@ -509,5 +513,40 @@ describe('POST /api/admin/payments/refund', () => {
       makeReq({ paymentId: 'pay_1', provider: 'tinkoff', providerPaymentId: 'p', amount: 1 }) as never
     );
     expect(r.status).toBe(502);
+  });
+});
+
+describe('TON-only launch: fiat rails are refused without fiat env (plan task 5.1)', () => {
+  const fiatVars = ['TINKOFF_TERMINAL_KEY', 'TINKOFF_SECRET_KEY', 'YOOKASSA_SHOP_ID', 'YOOKASSA_SECRET_KEY'];
+  beforeEach(() => {
+    mockedAuth.mockResolvedValue({ user: { id: 'u1', email: 'x@y' } });
+    for (const name of fiatVars) delete process.env[name];
+  });
+  afterEach(() => {
+    for (const name of fiatVars) delete process.env[name];
+  });
+
+  it('topup answers 503 ton_only when no fiat provider is configured', async () => {
+    const r = await topup(makeReq({ amountRub: 500 }) as never);
+    expect(r.status).toBe(503);
+    const body = (await r.json()) as { error: { code: string; message?: string } };
+    expect(body.error.code).toBe('ton_only');
+    expect(body.error.message).toContain('TON');
+    expect(dbInsertValues).not.toHaveBeenCalled();
+  });
+
+  it('subscriptions/create answers 503 ton_only when no fiat provider is configured', async () => {
+    const r = await createSub(makeReq({ tierId: 'basic', period: 'month' }) as never);
+    expect(r.status).toBe(503);
+    const body = (await r.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('ton_only');
+  });
+
+  it('fiat rails keep working when the env explicitly configures them', async () => {
+    process.env.TINKOFF_TERMINAL_KEY = 'test-terminal';
+    process.env.TINKOFF_SECRET_KEY = 'test-secret';
+    mockInitPayment.mockResolvedValueOnce({ success: true, paymentId: 'p1', paymentUrl: 'https://pay.test/x' });
+    const r = await topup(makeReq({ amountRub: 500 }) as never);
+    expect(r.status).not.toBe(503);
   });
 });

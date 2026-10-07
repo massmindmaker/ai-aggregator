@@ -38,6 +38,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // TON-only launch (plan task 5.1): card rails live only when the deploy
+  // explicitly configures them; without fiat env the only rail is TON.
+  if (!process.env.TINKOFF_TERMINAL_KEY && !process.env.YOOKASSA_SHOP_ID) {
+    return NextResponse.json(
+      {
+        error: {
+          message: 'Оплата сейчас доступна только в TON — пополните баланс кошельком Toncoin',
+          code: 'ton_only',
+        },
+      },
+      { status: 503 }
+    );
+  }
+
   const body = (await req.json().catch(() => ({}))) as CreateSubBody;
   // No tier in TIERS has monthly === 0 (Free tier removed — founder 2026-07-17,
   // see /CLAUDE.md founder decisions). getTier('free') now returns null, same

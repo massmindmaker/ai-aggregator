@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/Switch';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 import { TonWalletPanel } from '@/components/ton/TonWalletPanel';
+import { CryptoDisclaimer, FiatSunsetNotice } from '@/components/billing/CryptoDisclaimer';
 
 type ProviderId = 'tinkoff' | 'yookassa' | 'sbp';
 
@@ -36,6 +37,11 @@ interface PaymentRow {
 }
 
 const TOPUP_PRESETS = [500, 1000, 2500, 5000, 10000];
+
+// TON-only launch (plan task 5.1): card rails are the legacy path — the API
+// answers 503 ton_only unless the deploy configures fiat env; the UI matches.
+// Flip this back (with the fiat env) when card rails return.
+const FIAT_ENABLED = false;
 
 export default function BillingPage() {
   const [topupAmount, setTopupAmount] = useState<number>(1000);
@@ -286,7 +292,8 @@ export default function BillingPage() {
           </div>
         )}
 
-        {/* Top-up form */}
+        {/* Top-up form — fiat card, hidden for the TON-only launch */}
+        {FIAT_ENABLED && (
         <div className="rounded-2xl border border-border bg-card p-6 mb-8">
           <div className="flex items-center gap-2 mb-4">
             <Plus className="h-5 w-5 text-primary" />
@@ -355,12 +362,19 @@ export default function BillingPage() {
               : `Пополнить на ${topupAmount.toLocaleString('ru-RU')} ₽`}
           </Button>
         </div>
+        )}
 
         <div className="mb-8">
           <TonWalletPanel mode="manage" showCheckout />
         </div>
 
-        {/* Auto top-up */}
+        <div className="mb-8 space-y-3">
+          <FiatSunsetNotice />
+          <CryptoDisclaimer />
+        </div>
+
+        {/* Auto top-up — fiat card, hidden for the TON-only launch */}
+        {FIAT_ENABLED && (
         <div className="rounded-2xl border border-border bg-card p-6 mb-8">
           <div className="flex items-center gap-2 mb-2">
             <Zap className="h-5 w-5 text-primary" />
@@ -408,6 +422,7 @@ export default function BillingPage() {
             {autoSaving ? 'Сохраняем…' : 'Сохранить'}
           </Button>
         </div>
+        )}
 
         {/* Payments table */}
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
