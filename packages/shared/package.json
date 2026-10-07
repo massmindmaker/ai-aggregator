@@ -22,6 +22,10 @@
       "import": "./dist/validation.js",
       "types": "./dist/validation.d.ts"
     },
+    "./ton-checkout-policy-builder": {
+      "types": "./dist/ton-checkout-policy-builder.d.ts",
+      "import": "./dist/ton-checkout-policy-builder.js"
+    },
     "./ton-payment-contract": {
       "types": "./dist/ton-payment-contract.d.ts",
       "import": "./dist/ton-payment-contract.js"

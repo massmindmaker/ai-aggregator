@@ -26,6 +26,8 @@ export interface TonObservationDatabase {
   deps: Omit<TonObserveReconcilerDeps, "provider" | "newLeaseOwner">;
   /** Optional expiry-cron surface (0100); absent on test seams that don't provide it. */
   expireStaleInvoices?(limit: number): Promise<number>;
+  /** Optional policy-refresher surface (task 3.4): persists the policy JSON to admin_settings. */
+  writeCheckoutPolicy?(policyJson: string): Promise<void>;
   close(): Promise<TonDatabaseCloseResult>;
 }
 export interface TonObservationStartupDeps {
@@ -114,6 +116,13 @@ async function defaultDatabase(url: string): Promise<TonObservationDatabase> {
   return {
     close: () => db.close(),
     expireStaleInvoices: (limit: number) => api.expireStaleTonInvoices(db, limit),
+    writeCheckoutPolicy: (policyJson: string) =>
+      db.transaction(async (tx) => {
+        await tx.query({
+          text: "INSERT INTO admin_settings(key,value,description,updated_at) VALUES('ton_checkout_policy',$1::jsonb,'TON checkout policy (worker auto-refresh)',clock_timestamp()) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_at=clock_timestamp()",
+          values: [policyJson],
+        });
+      }),
     deps: {
       getInvoice: (id) => api.getTonInvoiceForReconciliation(db, id),
       listSources: (input) => api.listTonReconciliationSources(db, input),
@@ -133,7 +142,8 @@ async function defaultDatabase(url: string): Promise<TonObservationDatabase> {
 export async function startTonObservationFromEnv(
   options: TonObservationStartupDeps = {},
 ): Promise<{ close(): Promise<TonCloseResult> }> {
-  const config = parseTonObservationStartup(options.env ?? process.env);
+  const env = options.env ?? process.env;
+  const config = parseTonObservationStartup(env);
   if (config.mode === "disabled") {
     const closed = Promise.resolve<TonCloseResult>({
       kind: "closed",
@@ -290,11 +300,34 @@ export async function startTonObservationFromEnv(
         expireStale: database.expireStaleInvoices,
       })
     : undefined;
+  // Third interval (task 3.4): runtime checkout policy refresh. Requires the
+  // operator template env (recipient/packs/finality ids) and the write seam.
+  let policyCron: { close(): Promise<void> } | undefined;
+  if (database.writeCheckoutPolicy && env.TON_POLICY_TEMPLATE) {
+    const oracle = await import("@aiag/shared/server");
+    const builder = await import("@aiag/shared/ton-checkout-policy-builder");
+    type PolicyBuilderInput = import("@aiag/shared/ton-checkout-policy-builder").PolicyBuilderInput;
+    const template = JSON.parse(env.TON_POLICY_TEMPLATE) as Omit<
+      PolicyBuilderInput,
+      "usdPerTon"
+    >;
+    policyCron = (await import("./ton-policy-refresher.js")).createTonPolicyRefresher({
+      fetchRate: () => oracle.getTonUsdRate(),
+      readObservation: () => oracle.readTonFxObservation(),
+      buildPolicy: ({ usdPerTon, observedAtMs }) =>
+        builder.buildCheckoutPolicy(
+          { ...template, usdPerTon } as PolicyBuilderInput,
+          { nowMs: () => observedAtMs },
+        ),
+      writePolicy: database.writeCheckoutPolicy,
+    });
+  }
   return {
     close() {
       closing ??= (async () => {
         clearInterval(timer);
         await expiryCron?.close();
+        await policyCron?.close();
         controller.abort();
         await active;
         await budget.closePool(() => database.close());

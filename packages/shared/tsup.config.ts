@@ -7,6 +7,7 @@ export default defineConfig({
     "src/client.ts",
     "src/server.ts",
     "src/ton-payment-contract.ts",
+    "src/ton-checkout-policy-builder.ts",
     "src/catalog-contract.ts",
   ],
   format: ["esm"],

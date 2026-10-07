@@ -25,6 +25,15 @@ export function clearTonFxCache(): void {
   cache = null;
 }
 
+/**
+ * Returns the last cached observation INCLUDING its real observation time —
+ * a stale-ok serve keeps the original ts so downstream policy refreshers can
+ * refuse to stamp an old rate as fresh (plan AG-TON-L task 3.4).
+ */
+export function readTonFxObservation(): { usd: number; observedAtMs: number } | null {
+  return cache ? { usd: cache.usd, observedAtMs: cache.ts } : null;
+}
+
 function positiveRate(payload: unknown): number {
   if (!payload || typeof payload !== 'object') throw new Error('coingecko_bad_payload');
   const entry = (payload as Record<string, unknown>)['the-open-network'];
