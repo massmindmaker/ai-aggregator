@@ -446,4 +446,32 @@ describe("fixture-only native settlement ordering", () => {
     expect(budget.mutationOutcome).toBe('unknown');expect(f.deps.advanceCursor).not.toHaveBeenCalled();expect(f.deps.releaseLease).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['lag', { kind: 'lag' } as const],
+    ['mismatch', { kind: 'mismatch' } as const],
+  ])('never settles when the secondary masterchain source %s (post-crosscheck gate)', async (_label, crosscheckOutcome) => {
+    const f = create();
+    f.deps.crosscheckMasterchain = vi.fn(async () => crosscheckOutcome);
+    expect(
+      await reconcileTonInvoicesWithFixtureSettlement(input(), f.deps, f.hook),
+    ).toEqual(done);
+    expect(f.settle).not.toHaveBeenCalled();
+    expect(f.events).not.toContain('settle');
+    expect(f.observations[0]).toMatchObject({
+      result:
+        crosscheckOutcome.kind === 'lag'
+          ? { kind: 'observed', reason: 'finality_pending' }
+          : { kind: 'review_required', reason: 'settlement_evidence_conflict' },
+    });
+  });
+
+  it('settles exactly once when the secondary source agrees', async () => {
+    const f = create();
+    f.deps.crosscheckMasterchain = vi.fn(async () => ({ kind: 'agree' } as const));
+    expect(
+      await reconcileTonInvoicesWithFixtureSettlement(input(), f.deps, f.hook),
+    ).toEqual(done);
+    expect(f.settle).toHaveBeenCalledTimes(1);
+  });
+
 });

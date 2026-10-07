@@ -109,6 +109,22 @@ describe.runIf(process.env.RUN_NATIVE_DB_INTEGRATION === '1')('TON mainnet netwo
     });
   }, 120_000);
 
+  it('settles a mainnet invoice exactly once under parallel settlement attempts', async () => {
+    await mainnetFixture(async (f) => {
+      const invoice = await createTonInvoice(f.db, f.ctx, await f.makeInput(MAINNET_NATIVE, '700000000'), { allowlist: [MAINNET_NATIVE] });
+      const results = await Promise.all([
+        settleTonInvoice(f.db, invoice.invoiceId, mainnetCredit(invoice, f.now)),
+        settleTonInvoice(f.db, invoice.invoiceId, mainnetCredit(invoice, f.now)),
+      ]);
+      const kinds = results.map((result) => result.kind).sort();
+      expect(kinds).toEqual(['already_settled', 'settled']);
+      const grant = (await f.query('SELECT payg_credits::text AS payg FROM organizations WHERE id=$1::uuid', [f.ctx.orgId]))[0];
+      expect(grant).toEqual({ payg: invoice.grantMicrocredits });
+      const events = (await f.query('SELECT count(*)::int AS n FROM ton_chain_events WHERE recipient_account=$1', [RECIPIENT]))[0];
+      expect(events).toEqual({ n: 1 });
+    });
+  }, 120_000);
+
   it('rejects assets that are not in the server-side allowlist', async () => {
     await mainnetFixture(async (f) => {
       const mainnetJetton: Asset = { network: 'tvm:-1', kind: 'jetton', masterAddress: `0:${'3'.repeat(64)}`, decimals: 6 };

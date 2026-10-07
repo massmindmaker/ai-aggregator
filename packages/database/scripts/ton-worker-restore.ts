@@ -75,7 +75,37 @@ async function state(c: Client) {
   };
 }
 function equivalent(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  const first = JSON.stringify(a);
+  const second = JSON.stringify(b);
+  if (first === second) return true;
+  // Diagnose the first divergence instead of failing opaquely.
+  try {
+    const left = a as Record<string, unknown>;
+    const right = b as Record<string, unknown>;
+    for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
+      const x = JSON.stringify(left[key]);
+      const y = JSON.stringify(right[key]);
+      if (x === y) continue;
+      console.error('TON_RESTORE_DIFF_KEY', key);
+      const ax = left[key] as unknown[];
+      const ay = right[key] as unknown[];
+      if (Array.isArray(ax) && Array.isArray(ay)) {
+        console.error('TON_RESTORE_DIFF_LEN', ax.length, ay.length);
+        for (let i = 0; i < Math.max(ax.length, ay.length); i += 1) {
+          const sx = JSON.stringify(ax[i]);
+          const sy = JSON.stringify(ay[i]);
+          if (sx !== sy) {
+            console.error('TON_RESTORE_DIFF_AT', i, sx, '<>', sy);
+            break;
+          }
+        }
+      }
+      break;
+    }
+  } catch {
+    /* diagnosis is best-effort */
+  }
+  return false;
 }
 export async function rehearseTonWorkerRestore(
   sourceUrl: string,

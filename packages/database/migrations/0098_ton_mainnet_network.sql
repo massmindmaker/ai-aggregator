@@ -31,7 +31,9 @@ INSERT INTO ton_asset_allowlist (network,asset_kind,master_address,asset_decimal
 CREATE FUNCTION aiag_ton_allowlisted_assets_v1(_network TEXT) RETURNS TABLE(network TEXT,asset_kind TEXT,master_address VARCHAR,asset_decimals SMALLINT) LANGUAGE SQL STABLE SET search_path = pg_catalog, public, pg_temp AS $$
  SELECT a.network,a.asset_kind,a.master_address,a.asset_decimals FROM ton_asset_allowlist a WHERE a.is_active AND a.network=_network ORDER BY a.asset_kind,a.master_address NULLS FIRST
 $$;
-REVOKE ALL ON ton_asset_allowlist FROM PUBLIC;
+-- No explicit table REVOKE here: PUBLIC holds no table privileges by default,
+-- and a no-op REVOKE would store an owner-only ACL that pg_dump drops, making
+-- the restore rehearsal's ACL snapshot comparison fail on identical semantics.
 REVOKE EXECUTE ON FUNCTION aiag_ton_allowlisted_assets_v1(text) FROM PUBLIC;
 
 -- Network-aware replacements of the 0072 invoice-core functions. The mirror in

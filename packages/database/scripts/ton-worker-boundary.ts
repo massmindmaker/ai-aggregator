@@ -138,7 +138,7 @@ async function sourceManifest(): Promise<CoreFunction[]> {
   );
   const matches = [
     ...source.matchAll(
-      /CREATE FUNCTION ([a-z0-9_]+)\(([^)]*)\) RETURNS ([A-Z]+) LANGUAGE (SQL|plpgsql)([\s\S]*?) AS \$\$([\s\S]*?)\$\$;/g,
+      /CREATE (?:OR REPLACE )?FUNCTION ([a-z0-9_]+)\(([^)]*)\) RETURNS ([A-Z]+) LANGUAGE (SQL|plpgsql)([\s\S]*?) AS \$\$([\s\S]*?)\$\$;/g,
     ),
   ];
   if (matches.length !== 18) fail("TON_BOUNDARY_SOURCE_INVALID");

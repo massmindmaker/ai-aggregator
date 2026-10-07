@@ -505,7 +505,10 @@ async function reconcileSource(
           result: outcome,
         });
         budget.check();
-        if (settlement && verified.kind === "verified") {
+        // Settlement may only follow the POST-crosscheck outcome: a
+        // lagging/mismatching secondary source must defer or stop the credit
+        // even when the primary verification succeeded.
+        if (settlement && outcome.kind === "verified_candidate") {
           if (
             invoice.asset.kind !== "native" ||
             verified.credit.asset.kind !== "native" ||
