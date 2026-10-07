@@ -208,8 +208,32 @@ export async function startTonObservationFromEnv(
     throw Error("TON_OBSERVATION_STARTUP_REFUSED");
   }
   const sourceFilter = config.sourceId;
+  // Operator alerts (task 6.1): best-effort, never break the sweep loop.
+  const alerts = (await import("./ton-alerts.js")).createTonAlerts();
+  if (settlement) {
+    const innerSettle = settlement.settleVerifiedCredit.bind(settlement);
+    settlement.settleVerifiedCredit = async (invoiceId, credit) => {
+      const result = await innerSettle(invoiceId, credit);
+      try {
+        alerts.onSettlement(result as { kind: string });
+      } catch {
+        /* alerting cannot create work or undo persisted state */
+      }
+      return result;
+    };
+  }
+  const observedRecord = database.deps.recordObservation.bind(database.deps);
   const deps: TonObserveReconcilerDeps = {
     ...database.deps,
+    recordObservation: async (input) => {
+      const result = await observedRecord(input);
+      try {
+        alerts.onObservation(input.result as Parameters<typeof alerts.onObservation>[0]);
+      } catch {
+        /* alerting cannot create work or undo persisted state */
+      }
+      return result;
+    },
     provider,
     newLeaseOwner: options.newLeaseOwner ?? randomUUID,
     ...(config.crosscheck
@@ -225,6 +249,7 @@ export async function startTonObservationFromEnv(
     closing: Promise<TonCloseResult> | undefined;
   const report = (id: string | null, result: TonReconcileSourceResult) => {
     try {
+      if (id !== null) alerts.onSourceResult(id, result);
       options.onResult?.(id, result);
     } catch {
       /* reporting cannot create work or undo persisted state */
@@ -320,6 +345,8 @@ export async function startTonObservationFromEnv(
           { nowMs: () => observedAtMs },
         ),
       writePolicy: database.writeCheckoutPolicy,
+      onError: (error) => alerts.onFxDegraded(error instanceof Error ? error.message : 'fx_error'),
+      onSkip: (reason) => alerts.onFxDegraded(reason === 'stale' ? 'stale' : 'no_observation'),
     });
   }
   return {
@@ -328,6 +355,7 @@ export async function startTonObservationFromEnv(
         clearInterval(timer);
         await expiryCron?.close();
         await policyCron?.close();
+        await alerts.close();
         controller.abort();
         await active;
         await budget.closePool(() => database.close());
