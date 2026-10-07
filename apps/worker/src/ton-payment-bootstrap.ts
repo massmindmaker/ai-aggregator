@@ -27,8 +27,10 @@ export interface TonObservationDatabase {
 export interface TonObservationStartupDeps {
   env?: Readonly<Record<string, string | undefined>>;
   makeDatabase?: (url: string) => Promise<TonObservationDatabase>;
-  makeProvider?: (config: { baseUrl: string }) => TonEvidenceProvider;
+  makeProvider?: (config: { baseUrl: string; apiKey?: string }) => TonEvidenceProvider;
   newLeaseOwner?: () => string;
+  /** Test seam overriding the default TonAPI crosscheck gate when the env flag enables it. */
+  crosscheckMasterchain?: import("./ton-evidence-crosscheck-gate.js").TonCrosscheckFn;
   onResult?: (
     sourceId: string | null,
     result: TonReconcileSourceResult,
@@ -47,9 +49,17 @@ export function parseTonObservationStartup(
   env: Readonly<Record<string, string | undefined>>,
 ):
   | { mode: "disabled" }
-  | { mode: "observe"; databaseUrl: string; sourceId: string | null } {
+  | {
+      mode: "observe";
+      databaseUrl: string;
+      sourceId: string | null;
+      crosscheck: boolean;
+      toncenterApiKey: string | undefined;
+    } {
   const mode = env.TON_RECONCILIATION_MODE ?? "disabled";
   if (mode === "disabled") return { mode };
+  const crosscheckFlag = env.TON_EVIDENCE_CROSSCHECK ?? "0";
+  const toncenterApiKey = env.TONCENTER_API_KEY?.trim() || undefined;
   if (
     mode !== "observe" ||
     env.TON_RECONCILIATION_NETWORK !== "tvm:-3" ||
@@ -57,7 +67,8 @@ export function parseTonObservationStartup(
     env.TON_RECONCILIATION_PROVIDER_ID !== TON_PROVIDER_ID ||
     env.TON_RECONCILIATION_PROVIDER_ORIGIN !== TON_PROVIDER_ORIGIN ||
     env.TON_RECONCILIATION_VERIFIER_VERSION !== TON_VERIFIER_VERSION ||
-    env.TON_RECONCILIATION_FINALITY_POLICY_ID !== TON_FINALITY_POLICY_ID
+    env.TON_RECONCILIATION_FINALITY_POLICY_ID !== TON_FINALITY_POLICY_ID ||
+    (crosscheckFlag !== "0" && crosscheckFlag !== "1")
   )
     throw Error("TON_OBSERVATION_STARTUP_REFUSED");
   const raw = env.DATABASE_URL;
@@ -83,6 +94,8 @@ export function parseTonObservationStartup(
       env.TON_RECONCILIATION_SOURCE_ID === undefined
         ? null
         : hash(env.TON_RECONCILIATION_SOURCE_ID),
+    crosscheck: crosscheckFlag === "1",
+    toncenterApiKey,
   };
 }
 async function defaultDatabase(url: string): Promise<TonObservationDatabase> {
@@ -130,9 +143,10 @@ export async function startTonObservationFromEnv(
     if ("settleVerifiedCredit" in database.deps)
       throw Error("TON_RUNTIME_SETTLEMENT_FORBIDDEN");
     provider = options.makeProvider
-      ? options.makeProvider({ baseUrl: TON_PROVIDER_ORIGIN })
+      ? options.makeProvider({ baseUrl: TON_PROVIDER_ORIGIN, apiKey: config.toncenterApiKey })
       : (await import("./ton-payment-provider.js")).createToncenterV3Provider({
           baseUrl: TON_PROVIDER_ORIGIN,
+          apiKey: config.toncenterApiKey,
         });
   } catch {
     controller.abort();
@@ -144,6 +158,13 @@ export async function startTonObservationFromEnv(
     ...database.deps,
     provider,
     newLeaseOwner: options.newLeaseOwner ?? randomUUID,
+    ...(config.crosscheck
+      ? {
+          crosscheckMasterchain:
+            options.crosscheckMasterchain ??
+            (await import("./ton-evidence-crosscheck-gate.js")).buildTonapiCrosscheckGate(),
+        }
+      : {}),
   };
   let active: Promise<void> | undefined,
     afterSourceId: string | null = null,

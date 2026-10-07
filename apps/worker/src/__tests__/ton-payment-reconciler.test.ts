@@ -339,3 +339,65 @@ describe("native TON observation recovery", () => {
     ).toEqual({ kind: "source_error", code: "timeout" });
   });
 });
+
+describe("masterchain crosscheck gate (plan task 1.3)", () => {
+  it("keeps a verified candidate only when both indexers agree", async () => {
+    const f = fixture();
+    f.deps.crosscheckMasterchain = vi.fn(async () => ({ kind: "agree" } as const));
+    expect(await reconcileTonInvoices(input(), f.deps)).toEqual({
+      kind: "completed",
+      processed: 1,
+      pagesAdvanced: 1,
+    });
+    expect(f.deps.crosscheckMasterchain).toHaveBeenCalledTimes(1);
+    expect(f.observations[0]).toMatchObject({
+      result: { kind: "verified_candidate", reason: "verified_candidate" },
+    });
+  });
+
+  it("downgrades a verified candidate to finality_pending when the secondary source lags", async () => {
+    const f = fixture();
+    f.deps.crosscheckMasterchain = vi.fn(async () => ({ kind: "lag" } as const));
+    expect(await reconcileTonInvoices(input(), f.deps)).toEqual({
+      kind: "completed",
+      processed: 1,
+      pagesAdvanced: 1,
+    });
+    expect(f.observations[0]).toMatchObject({
+      result: { kind: "observed", reason: "finality_pending" },
+    });
+  });
+
+  it("routes a secondary root mismatch to review_required without trusting the primary", async () => {
+    const f = fixture();
+    f.deps.crosscheckMasterchain = vi.fn(async () => ({ kind: "mismatch" } as const));
+    await reconcileTonInvoices(input(), f.deps);
+    expect(f.observations[0]).toMatchObject({
+      result: {
+        kind: "review_required",
+        reason: "settlement_evidence_conflict",
+      },
+    });
+  });
+
+  it("degrades open when the secondary source is unavailable", async () => {
+    const f = fixture();
+    f.deps.crosscheckMasterchain = vi.fn(async () => ({ kind: "unavailable" } as const));
+    await reconcileTonInvoices(input(), f.deps);
+    expect(f.observations[0]).toMatchObject({
+      result: { kind: "verified_candidate", reason: "verified_candidate" },
+    });
+  });
+
+  it("never consults the secondary source for a non-verified outcome", async () => {
+    const f = fixture();
+    f.deps.getInvoice = vi.fn(async () => null);
+    f.deps.findInvoices = vi.fn(async () => []);
+    f.deps.crosscheckMasterchain = vi.fn(async () => ({ kind: "agree" } as const));
+    await reconcileTonInvoices(input(), f.deps);
+    expect(f.deps.crosscheckMasterchain).not.toHaveBeenCalled();
+    expect(f.observations[0]).toMatchObject({
+      result: { kind: "unmatched", reason: "invoice_reference_not_found" },
+    });
+  });
+});

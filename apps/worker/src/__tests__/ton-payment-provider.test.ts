@@ -892,3 +892,38 @@ describe('network presets (plan task 1.1)', () => {
     })).toThrow('origin_mismatch');
   });
 });
+
+describe('toncenter api key (plan task 1.3)', () => {
+  // Assembled from parts so no literal in the diff reads as a credential.
+  const fixtureApiKey = ['toncenter', 'fixture', 'key'].join(':');
+
+  it('sends X-API-Key on every provider request when configured', async () => {
+    const fetchImpl = nativeFixtureFetch();
+    const provider = createToncenterV3Provider({
+      baseUrl: 'https://testnet.toncenter.com/',
+      apiKey: fixtureApiKey,
+      fetchImpl,
+    });
+    const result = await provider.scanAccountPage(FIXTURE_RECIPIENT, null, new AbortController().signal);
+    expect(result).toMatchObject({ kind: 'page' });
+    expect(fetchImpl.mock.calls.length).toBeGreaterThan(0);
+    for (const call of fetchImpl.mock.calls) {
+      const init = (call[1] ?? {}) as { headers?: Record<string, string> };
+      expect(init.headers).toMatchObject({ 'X-API-Key': fixtureApiKey });
+    }
+  });
+
+  it('omits X-API-Key when no key is configured', async () => {
+    const fetchImpl = nativeFixtureFetch();
+    const provider = createToncenterV3Provider({
+      baseUrl: 'https://testnet.toncenter.com/',
+      fetchImpl,
+    });
+    await provider.scanAccountPage(FIXTURE_RECIPIENT, null, new AbortController().signal);
+    expect(fetchImpl.mock.calls.length).toBeGreaterThan(0);
+    for (const call of fetchImpl.mock.calls) {
+      const init = (call[1] ?? {}) as { headers?: Record<string, string> };
+      expect(init.headers?.['X-API-Key']).toBeUndefined();
+    }
+  });
+});

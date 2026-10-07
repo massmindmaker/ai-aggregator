@@ -18,6 +18,7 @@ import {
   TON_EVIDENCE_MODEL,
   type NormalizedTonEvidence,
 } from "./ton-payment-evidence.js";
+import type { TonCrosscheckFn } from "./ton-evidence-crosscheck-gate.js";
 import {
   verifyChainCredit,
   TON_VERIFIER_POLICY,
@@ -55,6 +56,13 @@ export interface TonObserveReconcilerDeps {
     references: readonly string[];
   }): Promise<readonly TonInvoice[]>;
   provider: TonEvidenceProvider;
+  /**
+   * Optional second-source masterchain agreement gate (plan task 1.3). When
+   * present, a primary-verified candidate is only trusted after the secondary
+   * indexer agrees; a lag downgrades to finality_pending and a root divergence
+   * escalates to review instead of trusting either head.
+   */
+  crosscheckMasterchain?: TonCrosscheckFn;
   recordObservation(input: TonObservationInput): Promise<TonObservationResult>;
   claimLease(input: {
     source: TonReconciliationSource;
@@ -405,7 +413,7 @@ async function reconcileSource(
           !references.includes(invoice.reference) ||
           byReference.has(invoice.reference) ||
           invoiceIds.has(invoice.invoiceId) ||
-          invoice.network !== "tvm:-3" ||
+          invoice.network !== source.network ||
           invoice.asset.kind !== "native" ||
           invoice.asset.decimals !== 9 ||
           invoice.recipient !== source.invoiceRecipient
@@ -447,8 +455,34 @@ async function reconcileSource(
           continue;
         }
         const verified = verifyChainCredit(invoice, e, TON_VERIFIER_POLICY);
+        let verifiedOutcome: TonObservationInput["result"] | null = null;
+        if (verified.kind === "verified" && deps.crosscheckMasterchain) {
+          // Defense in depth: a primary-verified candidate must also survive
+          // the second-source head comparison before it may settle.
+          let crosschecked: TonObservationInput["result"] | null = null;
+          try {
+            const crosscheck = await deps.crosscheckMasterchain(e, input.signal);
+            if (crosscheck.kind === "lag") {
+              crosschecked = {
+                kind: "observed",
+                reason: "finality_pending",
+                evidenceDigest: verified.evidenceDigest,
+              };
+            } else if (crosscheck.kind === "mismatch") {
+              crosschecked = {
+                kind: "review_required",
+                reason: "settlement_evidence_conflict",
+                evidenceDigest: verified.evidenceDigest,
+              };
+            }
+          } catch {
+            crosschecked = null;
+          }
+          verifiedOutcome = crosschecked;
+        }
         const outcome: TonObservationInput["result"] =
-          verified.kind === "verified"
+          verifiedOutcome ??
+          (verified.kind === "verified"
             ? {
                 kind: "verified_candidate",
                 reason: "verified_candidate",
@@ -464,7 +498,7 @@ async function reconcileSource(
                   kind: "review_required",
                   reason: verified.reason,
                   evidenceDigest: verified.evidenceDigest,
-                };
+                });
         await observe({
           ...common,
           invoiceId: invoice.invoiceId,

@@ -24,3 +24,5 @@ export * from './author-manifest';
 export * from './author-probe';
 
 export * from "./ton-wallet-proof";
+export * from "./ton-evidence-crosscheck";
+export * from "./ton-fx-oracle";

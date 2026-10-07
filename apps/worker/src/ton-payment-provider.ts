@@ -57,6 +57,8 @@ export interface ToncenterV3ProviderConfig {
   baseUrl: string;
   /** Network preset pin; defaults to testnet so existing behaviour is unchanged. */
   preset?: TonPreset;
+  /** Optional TonCenter API key sent as X-API-Key on every request. */
+  apiKey?: string;
   /** Test seam: production defaults to the SSRF-hardened safeFetch boundary. */
   fetchImpl?: FetchBoundary;
   nowMs?: () => number;
@@ -513,6 +515,8 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
   canonicalBaseUrl(config.baseUrl, preset);
   const fetchImpl = config.fetchImpl ?? safeFetch;
   const nowMs = config.nowMs ?? Date.now;
+  const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : '';
+  const baseHeaders = apiKey ? { 'X-API-Key': apiKey } : undefined;
   const request = async (path: string, query: URLSearchParams, signal: AbortSignal): Promise<unknown> => {
     // A cancellation already observed by the runner is a terminal operational
     // boundary for this request: do not start a new provider call.
@@ -522,7 +526,7 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     signal.addEventListener('abort', abort, { once: true });
     try {
-      const response = await fetchImpl(`${preset.origin}${path}?${query.toString()}`, { method: 'GET', signal: controller.signal, maxRedirects: 0 });
+      const response = await fetchImpl(`${preset.origin}${path}?${query.toString()}`, { method: 'GET', signal: controller.signal, maxRedirects: 0, headers: baseHeaders });
       const problem = statusFailure(response); if (problem) throw problem;
       return await jsonBody(response);
     } catch (error) {

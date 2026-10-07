@@ -215,4 +215,35 @@ describe("disabled and observe-only TON bootstrap", () => {
     expect(f.makeDatabase).not.toHaveBeenCalled();expect(f.makeProvider).not.toHaveBeenCalled();
   });
 
+  it('passes the TonCenter api key into the provider config (plan task 1.3)',async()=>{
+    const f=setup();
+    const fixtureApiKey=['toncenter','bootstrap','fixture'].join(':');
+    const h=await startTonObservationFromEnv({...f,env:{...env(),TONCENTER_API_KEY:fixtureApiKey}});
+    expect(f.makeProvider).toHaveBeenCalledWith(expect.objectContaining({apiKey:fixtureApiKey}));
+    await h.close();
+  });
+  it('wires the secondary-source crosscheck only when the env flag asks for it (plan task 1.3)',async()=>{
+    const f=setup();
+    const crosscheck=vi.fn(async()=>({kind:'agree'} as const));
+    const h=await startTonObservationFromEnv({
+      ...f,
+      env:{...env(),TON_EVIDENCE_CROSSCHECK:'1'},
+      crosscheckMasterchain:crosscheck,
+    });
+    // Flush the startup tick only; the 30s interval must not run here.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.observations[0]).toMatchObject({result:{kind:'verified_candidate'}});
+    expect(crosscheck).toHaveBeenCalledTimes(1);
+    await h.close();
+  });
+  it('keeps the crosscheck absent without the env flag',async()=>{
+    const f=setup();
+    const crosscheck=vi.fn(async()=>({kind:'agree'} as const));
+    const h=await startTonObservationFromEnv({...f,env:env(),crosscheckMasterchain:crosscheck});
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(f.observations[0]).toMatchObject({result:{kind:'verified_candidate'}});
+    expect(crosscheck).not.toHaveBeenCalled();
+    await h.close();
+  });
+
 });
