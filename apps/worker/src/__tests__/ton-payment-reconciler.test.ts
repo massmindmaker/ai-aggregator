@@ -401,3 +401,89 @@ describe("masterchain crosscheck gate (plan task 1.3)", () => {
     });
   });
 });
+
+describe("mainnet reconciliation (mainnet wiring)", () => {
+  const mainnetSource = () => {
+    const { createHash } = require("node:crypto") as typeof import("node:crypto");
+    return {
+      sourceId: createHash("sha256")
+        .update('toncenter-v3-mainnet\0{"decimals":9,"kind":"native","network":"tvm:-1"}\0' + address)
+        .digest("hex"),
+      network: "tvm:-1" as const,
+      asset: { network: "tvm:-1" as const, kind: "native" as const, decimals: 9 as const },
+      invoiceRecipient: address,
+      scanFloorTimeMs: 1699999900000,
+    };
+  };
+  const mainnetInvoice = () => {
+    const base = invoice();
+    const asset = { network: "tvm:-1" as const, kind: "native" as const, decimals: 9 as const };
+    return {
+      ...base,
+      network: "tvm:-1" as const,
+      asset,
+      quote: { ...base.quote, asset, fx: { ...base.quote.fx, targetAsset: asset } },
+      finalityPolicyId: "toncenter-v3-provider-attested-mc-depth-2-v1",
+    } satisfies TonInvoice;
+  };
+  const mainnetEvidence = async () => {
+    const native = await import("../__fixtures__/ton/synthetic-native-success.json");
+    const { normalizeCanonicalTonEvidence, TON_EVIDENCE_LIMITS, TON_PRESETS } = await import(
+      "../ton-payment-evidence.js"
+    );
+    const raw = structuredClone(native.default.evidence);
+    raw.network = "tvm:-1";
+    raw.asset = { network: "tvm:-1", kind: "native", decimals: 9 };
+    raw.source = {
+      ...raw.source,
+      providerId: "toncenter-v3-mainnet",
+      origin: "https://toncenter.com",
+    };
+    // Match the fixture invoice reference like the testnet evidence() helper does.
+    const target = mainnetInvoice().reference;
+    for (const tx of raw.transactions) {
+      if (tx.inMessage?.decodedPayload?.kind === "native_comment") {
+        tx.inMessage.decodedPayload.reference = target;
+      }
+    }
+    const parsed = normalizeCanonicalTonEvidence(raw, TON_EVIDENCE_LIMITS, TON_PRESETS.mainnet);
+    if ("kind" in parsed) throw new Error(parsed.code);
+    return parsed;
+  };
+
+  it("parses a mainnet source identity and rejects a cross-network forgery", async () => {
+    const { nativeSource } = await import("../ton-recovery-contract.js");
+    const good = nativeSource(mainnetSource());
+    expect(good.network).toBe("tvm:-1");
+    const forged = { ...mainnetSource(), sourceId: source().sourceId };
+    expect(() => nativeSource(forged)).toThrow("TON_SOURCE_IDENTITY");
+  });
+
+  it("verifies a mainnet page under the mainnet preset policy", async () => {
+    const { TON_PRESETS } = await import("../ton-payment-evidence.js");
+    const { tonVerifierPolicyForPreset } = await import("../ton-payment-verifier.js");
+    const ev = await mainnetEvidence();
+    const f = fixture();
+    f.deps.provider.scanAccountPage = vi.fn(async () => ({
+      kind: "page" as const,
+      evidence: [ev],
+      nextCursor: null,
+      exhausted: true,
+    }));
+    f.deps.findInvoices = vi.fn(async () => [mainnetInvoice()]);
+    f.deps.getInvoice = vi.fn(async () => mainnetInvoice());
+    f.deps.claimLease = vi.fn(async () => ({ kind: "claimed" as const, cursor: null, binding: null }));
+    f.deps.listSources = vi.fn(async () => [mainnetSource()]);
+    f.deps.verifierPolicy = tonVerifierPolicyForPreset(TON_PRESETS.mainnet);
+    f.deps.verifierPreset = TON_PRESETS.mainnet;
+    expect(
+      await reconcileTonInvoices(
+        { source: mainnetSource(), limit: 4, signal: input().signal },
+        f.deps,
+      ),
+    ).toEqual({ kind: "completed", processed: 1, pagesAdvanced: 1 });
+    expect(f.observations[0]).toMatchObject({
+      result: { kind: "verified_candidate", reason: "verified_candidate" },
+    });
+  });
+});

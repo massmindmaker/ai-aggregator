@@ -250,20 +250,53 @@ describe("disabled and observe-only TON bootstrap", () => {
       expect(close).toHaveBeenCalledTimes(1);
     });
 
-    it("still refuses an injected settlement function even in settle mode", async () => {
+  it("still refuses an injected settlement function even in settle mode", async () => {
+    const f = setup();
+    await expect(
+      startTonObservationFromEnv({
+        ...f,
+        env: {
+          ...env(),
+          TON_RECONCILIATION_MODE: "settle",
+          TON_SETTLEMENT_CONFIRMATION: confirmation,
+          DATABASE_URL: workerUrl,
+        },
+        settleVerifiedCredit: vi.fn(),
+      } as never),
+    ).rejects.toThrow("TON_RUNTIME_SETTLEMENT_FORBIDDEN");
+  });
+
+    it("boots mainnet reconciliation when every preset constant matches (mainnet wiring)", async () => {
+      const f = setup();
+      const h = await startTonObservationFromEnv({
+        ...f,
+        env: {
+          ...env(),
+          TON_NETWORK_PRESET: "mainnet",
+          TON_RECONCILIATION_NETWORK: "tvm:-1",
+          TON_RECONCILIATION_PROVIDER_ID: "toncenter-v3-mainnet",
+          TON_RECONCILIATION_PROVIDER_ORIGIN: "https://toncenter.com",
+          TON_RECONCILIATION_FINALITY_POLICY_ID: "toncenter-v3-provider-attested-mc-depth-2-v1",
+        },
+      });
+      expect(f.makeProvider).toHaveBeenCalledWith(
+        expect.objectContaining({ baseUrl: "https://toncenter.com" }),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(f.deps.listSources).toHaveBeenCalledTimes(1);
+      await h.close();
+    });
+
+    it.each([
+      ["testnet network with mainnet preset", { TON_NETWORK_PRESET: "mainnet" }],
+      ["mainnet network with testnet preset", { TON_RECONCILIATION_NETWORK: "tvm:-1" }],
+      ["unknown preset", { TON_NETWORK_PRESET: "devnet" }],
+    ])("refuses %s", async (_label, patch) => {
       const f = setup();
       await expect(
-        startTonObservationFromEnv({
-          ...f,
-          env: {
-            ...env(),
-            TON_RECONCILIATION_MODE: "settle",
-            TON_SETTLEMENT_CONFIRMATION: confirmation,
-            DATABASE_URL: workerUrl,
-          },
-          settleVerifiedCredit: vi.fn(),
-        } as never),
-      ).rejects.toThrow("TON_RUNTIME_SETTLEMENT_FORBIDDEN");
+        startTonReconciliationFromEnv({ ...f, env: { ...env(), ...patch } }),
+      ).rejects.toThrow("TON_RECONCILIATION_STARTUP_REFUSED");
+      expect(f.makeDatabase).not.toHaveBeenCalled();
     });
   });
   it("preserves unknown release outcome when the database acknowledgement is malformed", async () => {

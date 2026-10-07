@@ -16,7 +16,9 @@ import type { TonEvidenceProvider } from "./ton-payment-provider.js";
 import {
   TON_PROVIDER_ID,
   TON_EVIDENCE_MODEL,
+  TON_PRESETS,
   type NormalizedTonEvidence,
+  type TonPreset,
 } from "./ton-payment-evidence.js";
 import type { TonCrosscheckFn } from "./ton-evidence-crosscheck-gate.js";
 import {
@@ -63,6 +65,12 @@ export interface TonObserveReconcilerDeps {
    * escalates to review instead of trusting either head.
    */
   crosscheckMasterchain?: TonCrosscheckFn;
+  /**
+   * Preset-bound verification policy (mainnet wiring): when provided, evidence
+   * is verified under this policy/preset instead of the pinned testnet one.
+   */
+  verifierPolicy?: typeof TON_VERIFIER_POLICY;
+  verifierPreset?: TonPreset;
   recordObservation(input: TonObservationInput): Promise<TonObservationResult>;
   claimLease(input: {
     source: TonReconciliationSource;
@@ -373,7 +381,12 @@ async function reconcileSource(
       }
       let page: ReturnType<typeof providerPage>;
       try {
-        page = providerPage(rawPage, expected, source.invoiceRecipient);
+        page = providerPage(
+          rawPage,
+          expected,
+          source.invoiceRecipient,
+          deps.verifierPreset ?? TON_PRESETS.testnet,
+        );
       } catch (error) {
         if (error instanceof TonSourceFailure) {
           if (error.code === "unsupported_asset")
@@ -463,7 +476,12 @@ async function reconcileSource(
           });
           continue;
         }
-        const verified = verifyChainCredit(invoice, e, TON_VERIFIER_POLICY);
+        const verified = verifyChainCredit(
+          invoice,
+          e,
+          deps.verifierPolicy ?? TON_VERIFIER_POLICY,
+          deps.verifierPreset ?? TON_PRESETS.testnet,
+        );
         let verifiedOutcome: TonObservationInput["result"] | null = null;
         if (verified.kind === "verified" && deps.crosscheckMasterchain) {
           // Defense in depth: a primary-verified candidate must also survive
@@ -525,7 +543,7 @@ async function reconcileSource(
           if (
             invoice.asset.kind !== "native" ||
             verified.credit.asset.kind !== "native" ||
-            verified.credit.network !== "tvm:-3"
+            verified.credit.network !== invoice.network
           )
             throw new TonRunStopped("db_error");
           await renew();

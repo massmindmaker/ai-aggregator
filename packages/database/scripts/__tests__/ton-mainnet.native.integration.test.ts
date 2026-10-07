@@ -161,6 +161,22 @@ describe.runIf(process.env.RUN_NATIVE_DB_INTEGRATION === '1')('TON mainnet netwo
     });
   }, 120_000);
 
+  it('lists mainnet sources and validates the mainnet source identity (0102)', async () => {
+    await mainnetFixture(async (f) => {
+      const invoice = await createTonInvoice(f.db, f.ctx, await f.makeInput(MAINNET_NATIVE), { allowlist: [MAINNET_NATIVE] });
+      const sources = (await f.query("SELECT aiag_list_ton_reconciliation_sources_v1(NULL,16,'native') AS sources"))[0].sources;
+      const mainnetSources = sources.filter((s: { network: string }) => s.network === 'tvm:-1');
+      expect(mainnetSources).toHaveLength(1);
+      const source = mainnetSources[0];
+      expect(source.invoiceRecipient).toBe(RECIPIENT);
+      // The identity function accepts the correct pair and refuses a cross-network provider.
+      await f.query('SELECT aiag_ton_reconciliation_source_v1($1::jsonb,$2::text)', [JSON.stringify(source), 'toncenter-v3-mainnet']);
+      await expect(f.query('SELECT aiag_ton_reconciliation_source_v1($1::jsonb,$2::text)', [JSON.stringify(source), 'toncenter-v3-testnet']))
+        .rejects.toThrow('TON_INVALID_SOURCE');
+      void invoice;
+    });
+  }, 120_000);
+
   it('rejects assets that are not in the server-side allowlist', async () => {
     await mainnetFixture(async (f) => {
       const mainnetJetton: Asset = { network: 'tvm:-1', kind: 'jetton', masterAddress: `0:${'3'.repeat(64)}`, decimals: 6 };

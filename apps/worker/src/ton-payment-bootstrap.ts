@@ -4,6 +4,9 @@ import type { TonEvidenceProvider } from "./ton-payment-provider.js";
 import {
   TON_PROVIDER_ID,
   TON_PROVIDER_ORIGIN,
+  TON_PRESETS,
+  resolveTonPreset,
+  type TonPreset,
 } from "./ton-payment-evidence.js";
 import {
   TON_VERIFIER_VERSION,
@@ -61,19 +64,23 @@ export function parseTonObservationStartup(
       sourceId: string | null;
       crosscheck: boolean;
       toncenterApiKey: string | undefined;
+      preset: TonPreset;
     } {
   const mode = env.TON_RECONCILIATION_MODE ?? "disabled";
   if (mode === "disabled") return { mode };
   const crosscheckFlag = env.TON_EVIDENCE_CROSSCHECK ?? "0";
   const toncenterApiKey = env.TONCENTER_API_KEY?.trim() || undefined;
+  // Network preset (mainnet wiring): every pinned reconciliation constant is
+  // checked against the selected preset, never against a bare literal.
+  const preset = resolveTonPreset(env.TON_NETWORK_PRESET);
   if (
     (mode !== "observe" && mode !== "settle") ||
-    env.TON_RECONCILIATION_NETWORK !== "tvm:-3" ||
+    env.TON_RECONCILIATION_NETWORK !== preset.network ||
     env.TON_RECONCILIATION_ASSET_KIND !== "native" ||
-    env.TON_RECONCILIATION_PROVIDER_ID !== TON_PROVIDER_ID ||
-    env.TON_RECONCILIATION_PROVIDER_ORIGIN !== TON_PROVIDER_ORIGIN ||
+    env.TON_RECONCILIATION_PROVIDER_ID !== preset.providerId ||
+    env.TON_RECONCILIATION_PROVIDER_ORIGIN !== preset.origin ||
     env.TON_RECONCILIATION_VERIFIER_VERSION !== TON_VERIFIER_VERSION ||
-    env.TON_RECONCILIATION_FINALITY_POLICY_ID !== TON_FINALITY_POLICY_ID ||
+    env.TON_RECONCILIATION_FINALITY_POLICY_ID !== preset.finalityPolicyId ||
     (crosscheckFlag !== "0" && crosscheckFlag !== "1") ||
     // Settle is a dual gate: the exact env confirmation AND (below) a database
     // URL bound to the worker-only principal. One is never enough.
@@ -107,6 +114,7 @@ export function parseTonObservationStartup(
         : hash(env.TON_RECONCILIATION_SOURCE_ID),
     crosscheck: crosscheckFlag === "1",
     toncenterApiKey,
+    preset,
   };
 }
 async function defaultDatabase(url: string): Promise<TonObservationDatabase> {
@@ -197,10 +205,11 @@ export async function startTonObservationFromEnv(
       };
     }
     provider = options.makeProvider
-      ? options.makeProvider({ baseUrl: TON_PROVIDER_ORIGIN, apiKey: config.toncenterApiKey })
+      ? options.makeProvider({ baseUrl: config.preset.origin, apiKey: config.toncenterApiKey })
       : (await import("./ton-payment-provider.js")).createToncenterV3Provider({
-          baseUrl: TON_PROVIDER_ORIGIN,
+          baseUrl: config.preset.origin,
           apiKey: config.toncenterApiKey,
+          preset: config.preset,
         });
   } catch {
     controller.abort();
@@ -236,6 +245,8 @@ export async function startTonObservationFromEnv(
     },
     provider,
     newLeaseOwner: options.newLeaseOwner ?? randomUUID,
+    verifierPolicy: (await import("./ton-payment-verifier.js")).tonVerifierPolicyForPreset(config.preset),
+    verifierPreset: config.preset,
     ...(config.crosscheck
       ? {
           crosscheckMasterchain:

@@ -65,9 +65,15 @@ export function nativeSource(value: unknown): TonReconciliationSource {
   ]);
   const a = object(r.asset);
   exact(a, ["network", "kind", "decimals"]);
+  // The source identity pairs the network with its canonical provider id:
+  // 'tvm:-3' → toncenter-v3-testnet, 'tvm:-1' → toncenter-v3-mainnet.
+  const identity =
+    r.network === "tvm:-1"
+      ? { network: "tvm:-1", providerId: "toncenter-v3-mainnet" }
+      : { network: "tvm:-3", providerId: "toncenter-v3-testnet" };
   if (
-    r.network !== "tvm:-3" ||
-    a.network !== "tvm:-3" ||
+    r.network !== identity.network ||
+    a.network !== identity.network ||
     a.kind !== "native" ||
     a.decimals !== 9 ||
     typeof r.invoiceRecipient !== "string" ||
@@ -78,25 +84,30 @@ export function nativeSource(value: unknown): TonReconciliationSource {
     throw Error("TON_SOURCE_IDENTITY");
   const id = createHash("sha256")
     .update(
-      TON_PROVIDER_ID +
-        '\0{"decimals":9,"kind":"native","network":"tvm:-3"}\0' +
+      identity.providerId +
+        `\0{"decimals":9,"kind":"native","network":"${identity.network}"}\0` +
         r.invoiceRecipient,
     )
     .digest("hex");
   if (hash(r.sourceId) !== id) throw Error("TON_SOURCE_IDENTITY");
+  const network = identity.network as TonReconciliationSource["network"];
   return {
     sourceId: id,
-    network: "tvm:-3",
-    asset: { network: "tvm:-3", kind: "native", decimals: 9 },
+    network,
+    asset: { network, kind: "native", decimals: 9 },
     invoiceRecipient: r.invoiceRecipient,
     scanFloorTimeMs: r.scanFloorTimeMs as number,
   };
 }
 export function sourceForInvoice(invoice: TonInvoice): TonReconciliationSource {
+  const providerId =
+    invoice.network === "tvm:-1"
+      ? "toncenter-v3-mainnet"
+      : "toncenter-v3-testnet";
   const sourceId = createHash("sha256")
     .update(
-      TON_PROVIDER_ID +
-        '\0{"decimals":9,"kind":"native","network":"tvm:-3"}\0' +
+      providerId +
+        `\0{"decimals":9,"kind":"native","network":"${invoice.network}"}\0` +
         invoice.recipient,
     )
     .digest("hex");
@@ -191,7 +202,7 @@ export function sourceError(
 }
 export function creditCandidate(e: NormalizedTonEvidence) {
   if (
-    e.network !== "tvm:-3" ||
+    (e.network !== "tvm:-3" && e.network !== "tvm:-1") ||
     e.asset.kind !== "native" ||
     e.creditPath.kind !== "native"
   )
@@ -215,6 +226,7 @@ export function providerPage(
   value: unknown,
   previous: TonProviderCursor | null,
   account: string,
+  preset: import("./ton-payment-evidence.js").TonPreset,
 ): Extract<TonProviderResult, { kind: "page" }> {
   try {
     const p = object(value);
@@ -230,7 +242,7 @@ export function providerPage(
     if (p.exhausted !== (next === null) || (!p.evidence.length && !p.exhausted))
       throw new TonSourceFailure("pagination_regressed");
     const evidence = p.evidence.map((item) => {
-      const e = normalizeCanonicalTonEvidence(item, TON_EVIDENCE_LIMITS);
+      const e = normalizeCanonicalTonEvidence(item, TON_EVIDENCE_LIMITS, preset);
       if ("kind" in e) throw new TonSourceFailure(e.code);
       return e;
     });

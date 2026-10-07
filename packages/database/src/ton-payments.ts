@@ -522,11 +522,18 @@ function normalizeSource(value: unknown): TonReconciliationSource {
     "invoiceRecipient",
     "scanFloorTimeMs",
   ]);
-  if (raw.network !== "tvm:-3") throw new Error("TON_INVALID_NETWORK");
+  // Source identity pairs each network with its canonical provider id
+  // (tvm:-3 → toncenter-v3-testnet, tvm:-1 → toncenter-v3-mainnet).
+  const identity: { network: "tvm:-3" | "tvm:-1"; providerId: string } =
+    raw.network === "tvm:-1"
+      ? { network: "tvm:-1", providerId: "toncenter-v3-mainnet" }
+      : { network: "tvm:-3", providerId: "toncenter-v3-testnet" };
+  if (raw.network !== identity.network)
+    throw new Error("TON_INVALID_NETWORK");
   const rawAsset = object(raw.asset);
   keys(rawAsset, ["decimals", "kind", "network"]);
   if (
-    rawAsset.network !== "tvm:-3" ||
+    rawAsset.network !== identity.network ||
     rawAsset.kind !== "native" ||
     rawAsset.decimals !== 9
   )
@@ -535,14 +542,14 @@ function normalizeSource(value: unknown): TonReconciliationSource {
   const sourceId = lowerHash(raw.sourceId, "TON_INVALID_SOURCE");
   const expected = createHash("sha256")
     .update(
-      `${TON_PROVIDER_ID}\0{"decimals":9,"kind":"native","network":"tvm:-3"}\0${invoiceRecipient}`,
+      `${identity.providerId}\0{"decimals":9,"kind":"native","network":"${identity.network}"}\0${invoiceRecipient}`,
     )
     .digest("hex");
   if (sourceId !== expected) throw new Error("TON_INVALID_SOURCE");
   return {
     sourceId,
-    network: "tvm:-3",
-    asset: { decimals: 9, kind: "native", network: "tvm:-3" },
+    network: identity.network,
+    asset: { decimals: 9, kind: "native", network: identity.network },
     invoiceRecipient,
     scanFloorTimeMs: time(raw.scanFloorTimeMs),
   };

@@ -61,8 +61,8 @@ CREATE FUNCTION aiag_ton_worker.settle_invoice_v1(_invoice uuid,_credit jsonb) R
 BEGIN
  IF SESSION_USER::text <> 'aiag_ton_worker' THEN RAISE EXCEPTION 'TON_SETTLEMENT_SESSION_REQUIRED' USING ERRCODE='42501'; END IF;
  IF _invoice IS NULL OR _credit IS NULL OR pg_catalog.octet_length(_credit::text)>32768 THEN RAISE EXCEPTION 'TON_SETTLEMENT_INPUT_INVALID'; END IF;
- -- Testnet pin until the Phase 3.2 settle-mode wiring widens the accepted network.
- IF _credit->>'network' IS DISTINCT FROM 'tvm:-3' OR _credit->'asset'->>'kind' IS DISTINCT FROM 'native' OR _credit->'asset'->'decimals' IS DISTINCT FROM '9'::jsonb THEN RAISE EXCEPTION 'TON_SETTLEMENT_ASSET_UNSUPPORTED'; END IF;
+ -- Native Toncoin only; the network itself must match the invoice (settle core enforces).
+ IF _credit->>'network' NOT IN ('tvm:-3','tvm:-1') OR _credit->'asset'->>'kind' IS DISTINCT FROM 'native' OR _credit->'asset'->'decimals' IS DISTINCT FROM '9'::jsonb THEN RAISE EXCEPTION 'TON_SETTLEMENT_ASSET_UNSUPPORTED'; END IF;
  RETURN public.aiag_settle_ton_invoice_v1(_invoice,_credit);
 END
 $aiag$;

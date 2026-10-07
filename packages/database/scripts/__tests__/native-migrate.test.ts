@@ -61,16 +61,16 @@ describe("native ordered migrator", () => {
 
     // 100 = 0100 adds the batched invoice expiry on top of 0099's
 // worker-only settlement principal and 0098's mainnet network.
-    expect(migrations).toHaveLength(101);
+    expect(migrations).toHaveLength(102);
     expect(migrations[0].version).toBe("drizzle/0000_moaning_the_fury.sql");
     expect(migrations[1].version).toBe("migrations/0004_gateway_core.sql");
     expect(migrations[2].version).toBe(
       "migrations/0004_seed_test_upstreams.sql",
     );
     expect(migrations.at(-1)?.version).toBe(
-      "migrations/0101_ton_review_contour.sql",
+      "migrations/0102_ton_mainnet_sources.sql",
     );
-    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(101);
+    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(102);
   });
 
   it("removes only an outer transaction wrapper owned by a historical file", () => {
