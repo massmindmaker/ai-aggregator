@@ -190,6 +190,82 @@ describe("disabled and observe-only TON bootstrap", () => {
     expect(f.makeDatabase).not.toHaveBeenCalled();
     expect(settleVerifiedCredit).not.toHaveBeenCalled();
   });
+
+  describe("settle mode behind the dual gate (plan task 3.2)", () => {
+    const confirmation = "I-UNDERSTAND-WORKER-ONLY-SETTLEMENT";
+    const workerUrl = "postgresql://aiag_ton_worker@127.0.0.1:15432/ai_aggregator_test";
+
+    it.each([undefined, "", "yes", "i-understand-worker-only-settlement"])(
+      "refuses settle mode without the exact confirmation: %j",
+      async (value) => {
+        const f = setup();
+        await expect(
+          startTonReconciliationFromEnv({
+            ...f,
+            env: {
+              ...env(),
+              TON_RECONCILIATION_MODE: "settle",
+              TON_SETTLEMENT_CONFIRMATION: value,
+              DATABASE_URL: workerUrl,
+            },
+          }),
+        ).rejects.toThrow("TON_RECONCILIATION_STARTUP_REFUSED");
+        expect(f.makeDatabase).not.toHaveBeenCalled();
+      },
+    );
+
+    it("refuses settle mode when the database url is not the worker principal", async () => {
+      const f = setup();
+      await expect(
+        startTonReconciliationFromEnv({
+          ...f,
+          env: {
+            ...env(),
+            TON_RECONCILIATION_MODE: "settle",
+            TON_SETTLEMENT_CONFIRMATION: confirmation,
+          },
+        }),
+      ).rejects.toThrow("TON_RECONCILIATION_STARTUP_REFUSED");
+      expect(f.makeDatabase).not.toHaveBeenCalled();
+    });
+
+    it("runs the worker settlement path when both gates pass", async () => {
+      const f = setup();
+      const settleVerifiedCredit = vi.fn(async () => ({ kind: "settled" }));
+      const close = vi.fn(async () => ({ kind: "closed" as const, mutationOutcome: "known" as const }));
+      const makeDatabase = vi.fn(async () => ({ deps: { ...f.deps, settleVerifiedCredit }, close }));
+      const h = await startTonObservationFromEnv({
+        ...f,
+        makeDatabase,
+        env: {
+          ...env(),
+          TON_RECONCILIATION_MODE: "settle",
+          TON_SETTLEMENT_CONFIRMATION: confirmation,
+          DATABASE_URL: workerUrl,
+        },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settleVerifiedCredit).toHaveBeenCalledTimes(1);
+      await h.close();
+      expect(close).toHaveBeenCalledTimes(1);
+    });
+
+    it("still refuses an injected settlement function even in settle mode", async () => {
+      const f = setup();
+      await expect(
+        startTonObservationFromEnv({
+          ...f,
+          env: {
+            ...env(),
+            TON_RECONCILIATION_MODE: "settle",
+            TON_SETTLEMENT_CONFIRMATION: confirmation,
+            DATABASE_URL: workerUrl,
+          },
+          settleVerifiedCredit: vi.fn(),
+        } as never),
+      ).rejects.toThrow("TON_RUNTIME_SETTLEMENT_FORBIDDEN");
+    });
+  });
   it("preserves unknown release outcome when the database acknowledgement is malformed", async () => {
     const f = setup();
     f.deps.releaseLease.mockResolvedValueOnce("not-an-ack" as never);

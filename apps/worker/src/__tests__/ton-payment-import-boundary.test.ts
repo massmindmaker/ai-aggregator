@@ -34,14 +34,27 @@ describe("TON settlement source ownership fence, not DB authorization", () => {
       );
     expect(violations).toEqual([]);
   });
-  it("only allows the existing validated worker bootstrap to import the internal package", () => {
+  it("only allows the validated worker bootstrap to import the internal package, settlement strictly behind the settle branch", () => {
     expect(
       sourceFiles("apps/worker/src").filter((p) =>
         /@aiag\/database\/ton-reconciliation-internal/.test(read(p)),
       ),
     ).toEqual(["apps/worker/src/ton-payment-bootstrap.ts"]);
-    expect(read("apps/worker/src/ton-payment-bootstrap.ts")).not.toMatch(
-      /settleVerifiedCredit\s*\(|api\.settleTonInvoice|reconcileTonInvoicesWithFixtureSettlement/,
+    const bootstrap = read("apps/worker/src/ton-payment-bootstrap.ts");
+    // The observe branch must never touch settlement: env injection is
+    // refused before it, and the settle-only construction is fenced below.
+    expect(bootstrap).not.toMatch(
+      /reconcileTonInvoicesWithFixtureSettlement/,
+    );
+    // Settlement construction may only appear after the observe/settle fork.
+    const settleGate = bootstrap.indexOf('config.mode === "observe"');
+    const firstSettlementUse = bootstrap.search(
+      /api\.settleTonInvoiceAsWorker/,
+    );
+    expect(settleGate).toBeGreaterThan(0);
+    expect(firstSettlementUse).toBeGreaterThan(settleGate);
+    expect(bootstrap).toMatch(
+      /TON_RUNTIME_SETTLEMENT_FORBIDDEN/,
     );
   });
 });

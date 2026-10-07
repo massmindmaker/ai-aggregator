@@ -167,6 +167,8 @@ export interface TonFixtureSettlementDeps {
     credit: VerifiedChainCredit,
   ): Promise<TonSettlementResult>;
 }
+/** Sanctioned runtime name for the settlement hook (same shape as the fixture one). */
+export type TonSettlementHook = TonFixtureSettlementDeps;
 type SourceInput = {
   source: TonReconciliationSource;
   limit: number;
@@ -194,6 +196,13 @@ export async function reconcileTonInvoicesWithFixtureSettlement(
     throw Error("TON_INVALID_FIXTURE_SETTLEMENT");
   return reconcileSource(input, deps, budget, undefined, settlement);
 }
+/**
+ * Runtime settlement entry used by the worker bootstrap in settle mode. The
+ * hook must already be bound to the worker-principal database connection; the
+ * reconciler never constructs settlement authority itself.
+ */
+export const reconcileTonInvoicesWithSettlement =
+  reconcileTonInvoicesWithFixtureSettlement;
 /** One source, at most four whole eight-item pages. Claim and ACKed advance are cursor authority. */
 async function reconcileSource(
   input: SourceInput,
@@ -508,7 +517,11 @@ async function reconcileSource(
         // Settlement may only follow the POST-crosscheck outcome: a
         // lagging/mismatching secondary source must defer or stop the credit
         // even when the primary verification succeeded.
-        if (settlement && outcome.kind === "verified_candidate") {
+        if (
+          settlement &&
+          verified.kind === "verified" &&
+          outcome.kind === "verified_candidate"
+        ) {
           if (
             invoice.asset.kind !== "native" ||
             verified.credit.asset.kind !== "native" ||

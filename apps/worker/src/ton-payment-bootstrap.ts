@@ -15,8 +15,10 @@ import {
 } from "./ton-recovery-control.js";
 import {
   reconcileTonInvoices,
+  reconcileTonInvoicesWithSettlement,
   type TonObserveReconcilerDeps,
   type TonReconcileSourceResult,
+  type TonSettlementHook,
 } from "./ton-payment-reconciler.js";
 import { nativeSource, hash } from "./ton-recovery-contract.js";
 export type { TonCloseResult } from "./ton-recovery-control.js";
@@ -50,7 +52,7 @@ export function parseTonObservationStartup(
 ):
   | { mode: "disabled" }
   | {
-      mode: "observe";
+      mode: "observe" | "settle";
       databaseUrl: string;
       sourceId: string | null;
       crosscheck: boolean;
@@ -61,14 +63,18 @@ export function parseTonObservationStartup(
   const crosscheckFlag = env.TON_EVIDENCE_CROSSCHECK ?? "0";
   const toncenterApiKey = env.TONCENTER_API_KEY?.trim() || undefined;
   if (
-    mode !== "observe" ||
+    (mode !== "observe" && mode !== "settle") ||
     env.TON_RECONCILIATION_NETWORK !== "tvm:-3" ||
     env.TON_RECONCILIATION_ASSET_KIND !== "native" ||
     env.TON_RECONCILIATION_PROVIDER_ID !== TON_PROVIDER_ID ||
     env.TON_RECONCILIATION_PROVIDER_ORIGIN !== TON_PROVIDER_ORIGIN ||
     env.TON_RECONCILIATION_VERIFIER_VERSION !== TON_VERIFIER_VERSION ||
     env.TON_RECONCILIATION_FINALITY_POLICY_ID !== TON_FINALITY_POLICY_ID ||
-    (crosscheckFlag !== "0" && crosscheckFlag !== "1")
+    (crosscheckFlag !== "0" && crosscheckFlag !== "1") ||
+    // Settle is a dual gate: the exact env confirmation AND (below) a database
+    // URL bound to the worker-only principal. One is never enough.
+    (mode === "settle" &&
+      env.TON_SETTLEMENT_CONFIRMATION !== "I-UNDERSTAND-WORKER-ONLY-SETTLEMENT")
   )
     throw Error("TON_OBSERVATION_STARTUP_REFUSED");
   const raw = env.DATABASE_URL;
@@ -84,7 +90,8 @@ export function parseTonObservationStartup(
     !["postgres:", "postgresql:"].includes(url.protocol) ||
     !url.hostname ||
     url.hash ||
-    [...url.searchParams.keys()].some((k) => forbidden.has(k.toLowerCase()))
+    [...url.searchParams.keys()].some((k) => forbidden.has(k.toLowerCase())) ||
+    (mode === "settle" && decodeURIComponent(url.username) !== "aiag_ton_worker")
   )
     throw Error("TON_OBSERVATION_STARTUP_REFUSED");
   return {
@@ -131,6 +138,8 @@ export async function startTonObservationFromEnv(
     });
     return { close: () => closed };
   }
+  // Env can never inject the settlement function itself: settle mode derives
+  // it from the worker-principal database below, observe mode refuses it.
   if ("settleVerifiedCredit" in options)
     throw Error("TON_RUNTIME_SETTLEMENT_FORBIDDEN");
   const controller = new AbortController(),
@@ -139,9 +148,41 @@ export async function startTonObservationFromEnv(
     config.databaseUrl,
   );
   let provider: TonEvidenceProvider;
+  let settlement: TonSettlementHook | undefined;
   try {
-    if ("settleVerifiedCredit" in database.deps)
-      throw Error("TON_RUNTIME_SETTLEMENT_FORBIDDEN");
+    const injected =
+      "settleVerifiedCredit" in database.deps
+        ? (database.deps as TonObserveReconcilerDeps & Partial<TonSettlementHook>)
+            .settleVerifiedCredit
+        : undefined;
+    if (config.mode === "observe") {
+      if (injected !== undefined)
+        throw Error("TON_RUNTIME_SETTLEMENT_FORBIDDEN");
+    } else if (typeof injected === "function") {
+      // Test/installed seam: the settlement database was built by
+      // createTonSettlementWorkerDatabase (or a test double of it).
+      settlement = {
+        mode: "settle",
+        settleVerifiedCredit: injected,
+      };
+    } else {
+      const api = await import("@aiag/database/ton-reconciliation-internal");
+      const settlementDb = api.createTonSettlementWorkerDatabase(
+        config.databaseUrl,
+        { workerRole: "aiag_ton_worker", ownerRole: "aiag_ton_worker_owner" },
+      );
+      const originalClose = database.close.bind(database);
+      settlement = {
+        mode: "settle",
+        settleVerifiedCredit: (invoiceId, credit) =>
+          api.settleTonInvoiceAsWorker(settlementDb, invoiceId, credit),
+      };
+      database.close = async () => {
+        const first = await originalClose();
+        const second = await settlementDb.close();
+        return second.kind === "closed" ? first : second;
+      };
+    }
     provider = options.makeProvider
       ? options.makeProvider({ baseUrl: TON_PROVIDER_ORIGIN, apiKey: config.toncenterApiKey })
       : (await import("./ton-payment-provider.js")).createToncenterV3Provider({
@@ -195,11 +236,18 @@ export async function startTonObservationFromEnv(
       for (const source of sources) {
         budget.check();
         if (sourceFilter !== null && source.sourceId !== sourceFilter) continue;
-        const result = await reconcileTonInvoices(
-          { source, limit: 4, signal: controller.signal },
-          deps,
-          budget,
-        );
+        const result = settlement
+          ? await reconcileTonInvoicesWithSettlement(
+              { source, limit: 4, signal: controller.signal },
+              deps,
+              settlement,
+              budget,
+            )
+          : await reconcileTonInvoices(
+              { source, limit: 4, signal: controller.signal },
+              deps,
+              budget,
+            );
         report(source.sourceId, result);
         if (
           result.kind === "stopped" &&
