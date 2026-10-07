@@ -17,6 +17,11 @@ rules: `/SECURITY.md`. Stores map: `/docs/ARCHITECTURE.md`.
   Do not delete or renumber applied migrations. New product-owned schema work belongs in
   `/home/bob/Projects/agents-market` or `/home/bob/Projects/aiarena`; see
   `migrations/README.md`.
+- **0098 is the only migration with non-additive DDL** (DROP/ADD of the three
+  `network` CHECKs to admit `tvm:-1`). Its constraint names are the PostgreSQL
+  autogen `<table>_network_check`; if prod ever renamed them, adjust the manual
+  apply instead of skipping the widening. The 0072-era function bodies it
+  replaces are mirrored in `src/functions/ton-invoice-core.sql` (latest-wins).
 
 ## Commands (`drizzle-kit`)
 - `bun run db:generate` (gen SQL from schema), `db:push`, `db:migrate`, `db:studio`.

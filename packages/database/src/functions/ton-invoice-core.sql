@@ -123,7 +123,7 @@ BEGIN
  _n:=aiag_ton_text_v1(_j,'\A(0|[1-9][0-9]*)\Z',78)::numeric;
  IF (NOT _zero AND _n=0) OR (NOT _evidence AND _n>9223372036854775807) THEN RAISE EXCEPTION 'TON_INVALID_AMOUNT'; END IF; RETURN _n;
 END $$;
-CREATE FUNCTION aiag_ton_asset_v1(_j JSONB) RETURNS VOID LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public, pg_temp AS $$
+CREATE OR REPLACE FUNCTION aiag_ton_asset_v1(_j JSONB) RETURNS VOID LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
  IF _j->>'kind'='native' THEN
   PERFORM aiag_ton_keys_v1(_j,ARRAY['network','kind','decimals']);
@@ -133,7 +133,7 @@ BEGIN
   PERFORM aiag_ton_text_v1(_j->'masterAddress','\A(0|-1):[0-9a-f]{64}\Z',67);
   IF aiag_ton_time_v1(_j->'decimals')>18 THEN RAISE EXCEPTION 'TON_INVALID_ASSET'; END IF;
  ELSE RAISE EXCEPTION 'TON_INVALID_ASSET'; END IF;
- IF _j->'network' IS DISTINCT FROM '"tvm:-3"'::jsonb THEN RAISE EXCEPTION 'TON_INVALID_NETWORK'; END IF;
+ IF _j->>'network' NOT IN ('tvm:-3','tvm:-1') THEN RAISE EXCEPTION 'TON_INVALID_NETWORK'; END IF;
 END $$;
 CREATE FUNCTION aiag_ton_payload_v1(_p JSONB,_actor UUID,_org UUID) RETURNS VOID LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE _q JSONB; _fx JSONB; _grant NUMERIC; _num NUMERIC; _den NUMERIC; _prod NUMERIC; _converted NUMERIC; _rem NUMERIC; _fee NUMERIC; _key TEXT;
@@ -170,8 +170,8 @@ BEGIN
   aiag_ton_time_v1(_q->'expiresAtMs')>aiag_ton_time_v1(_fx->'expiresAtMs') THEN RAISE EXCEPTION 'TON_INVALID_TIME_ORDER'; END IF;
 END $$;
 
-CREATE FUNCTION aiag_create_ton_invoice_v1(_actor UUID,_org UUID,_payload JSONB,_fingerprint TEXT) RETURNS JSONB LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
-DECLARE _o organizations; _i ton_invoices; _q JSONB; _grant BIGINT; _now TIMESTAMPTZ;
+CREATE OR REPLACE FUNCTION aiag_create_ton_invoice_v1(_actor UUID,_org UUID,_payload JSONB,_fingerprint TEXT) RETURNS JSONB LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE _o organizations; _i ton_invoices; _q JSONB; _grant BIGINT; _now TIMESTAMPTZ; _network TEXT;
 BEGIN
  PERFORM aiag_ton_payload_v1(_payload,_actor,_org);
  IF _fingerprint IS NULL OR _fingerprint !~ '\A[0-9a-f]{64}\Z' THEN RAISE EXCEPTION 'TON_INVALID_FINGERPRINT'; END IF;
@@ -183,13 +183,18 @@ BEGIN
   RETURN aiag_ton_invoice_json_v1(_i);
  END IF;
  _grant:=(_payload->>'grantMicrocredits')::bigint; _q:=_payload->'quote'; _now:=clock_timestamp();
+ _network:=_q->'asset'->>'network';
+ IF NOT EXISTS(SELECT 1 FROM ton_asset_allowlist a WHERE a.is_active AND a.network=_network
+   AND a.asset_kind=_q->'asset'->>'kind'
+   AND a.master_address IS NOT DISTINCT FROM (_q->'asset'->>'masterAddress')
+   AND a.asset_decimals=(_q->'asset'->>'decimals')::smallint) THEN RAISE EXCEPTION 'TON_ASSET_NOT_ALLOWLISTED'; END IF;
  IF _o.refund_debt_credits>0 OR EXISTS(SELECT 1 FROM payments WHERE topup_org_id=_org AND refund_claim_id IS NOT NULL) THEN RAISE EXCEPTION 'TON_REFUND_BLOCKED'; END IF;
  IF _grant>9007199254740991 OR _o.payg_credits<0 OR _o.payg_credits>9007199254740991-_grant THEN RAISE EXCEPTION 'TON_BALANCE_COMPATIBILITY_LIMIT'; END IF;
  IF (_q->>'quotedAtMs')::numeric>extract(epoch FROM _now)*1000 OR (_q->>'expiresAtMs')::numeric<=extract(epoch FROM _now)*1000 THEN RAISE EXCEPTION 'TON_QUOTE_EXPIRED'; END IF;
  INSERT INTO ton_invoices(owner_user_id,org_id,purpose,idempotency_key,request_fingerprint,request_payload,price_revision,grant_microcredits,source_price_unit,source_price_atomic,
  quote_id,quote_snapshot,network,asset_kind,master_address,asset_decimals,amount_atomic,recipient,expected_sender,finality_policy_id,verifier_version,quoted_at,expires_at)
  VALUES(_actor,_org,'gateway_topup',_payload->>'idempotencyKey',_fingerprint,_payload,_payload->>'priceRevision',_grant,'gateway_microcredits',_grant,
- _q->>'quoteId',_q,'tvm:-3',_q->'asset'->>'kind',_q->'asset'->>'masterAddress',(_q->'asset'->>'decimals')::smallint,(_q->>'amountAtomic')::bigint,
+ _q->>'quoteId',_q,_network,_q->'asset'->>'kind',_q->'asset'->>'masterAddress',(_q->'asset'->>'decimals')::smallint,(_q->>'amountAtomic')::bigint,
  _payload->>'recipient',_payload->>'expectedSender',_payload->>'finalityPolicyId',_payload->>'verifierVersion',
  to_timestamp((_q->>'quotedAtMs')::numeric/1000),to_timestamp((_q->>'expiresAtMs')::numeric/1000)) RETURNING * INTO _i;
  RETURN aiag_ton_invoice_json_v1(_i);
@@ -207,11 +212,11 @@ BEGIN
  UPDATE ton_invoices SET status='expired',updated_at=clock_timestamp() WHERE id=_invoice AND org_id=_org AND status='pending' AND expires_at<=clock_timestamp() RETURNING id INTO _updated;
  IF _updated IS NULL THEN RETURN 'unchanged'; END IF; RETURN 'expired';
 END $$;
-CREATE FUNCTION aiag_ton_credit_v1(_c JSONB) RETURNS VOID LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public, pg_temp AS $$
+CREATE OR REPLACE FUNCTION aiag_ton_credit_v1(_c JSONB) RETURNS VOID LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE _key TEXT;
 BEGIN
  PERFORM aiag_ton_keys_v1(_c,ARRAY['network','asset','recipient','recipientAccount','sender','amountAtomic','reference','txHash','txLt','messageHash','messageIndex','chainTimeMs','observedAtMs','verifiedAtMs','blockAnchor','masterchainAnchor','executionPathDigest','verifierVersion','finalityPolicyId','jettonCredit']);
- IF _c->'network' IS DISTINCT FROM '"tvm:-3"'::jsonb THEN RAISE EXCEPTION 'TON_INVALID_NETWORK'; END IF;
+ IF _c->>'network' NOT IN ('tvm:-3','tvm:-1') THEN RAISE EXCEPTION 'TON_INVALID_NETWORK'; END IF;
  PERFORM aiag_ton_asset_v1(_c->'asset');
  FOREACH _key IN ARRAY ARRAY['recipient','recipientAccount','sender'] LOOP
   PERFORM aiag_ton_text_v1(_c->_key,'\A(0|-1):[0-9a-f]{64}\Z',67);
@@ -241,9 +246,9 @@ CREATE FUNCTION aiag_ton_receipt_json_v1(_invoice UUID) RETURNS JSONB LANGUAGE S
  'paygAfterMicrocredits',r.metadata->>'payg_after_microcredits','refundDebtAfterMicrocredits',r.metadata->>'refund_debt_after_microcredits')
  FROM ton_invoices i JOIN gateway_transactions r ON r.id=i.receipt_id WHERE i.id=_invoice AND i.status='settled'
 $$;
-CREATE FUNCTION aiag_settle_ton_invoice_v1(_invoice UUID,_credit JSONB) RETURNS JSONB LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+CREATE OR REPLACE FUNCTION aiag_settle_ton_invoice_v1(_invoice UUID,_credit JSONB) RETURNS JSONB LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE _org UUID; _o organizations; _i ton_invoices; _event ton_chain_events; _d ton_invoice_event_decisions;
- _facts JSONB; _evidence JSONB; _reason TEXT; _now TIMESTAMPTZ; _grant BIGINT; _receipt UUID; _changed UUID; _payg TEXT; _debt TEXT; _amount NUMERIC;
+ _facts JSONB; _evidence JSONB; _reason TEXT; _now TIMESTAMPTZ; _grant BIGINT; _receipt UUID; _changed UUID; _payg TEXT; _debt TEXT; _amount NUMERIC; _network TEXT;
 BEGIN
  PERFORM aiag_ton_credit_v1(_credit);
  IF (_credit->>'verifiedAtMs')::numeric>extract(epoch FROM clock_timestamp())*1000 THEN RAISE EXCEPTION 'TON_INVALID_TIME_ORDER'; END IF;
@@ -252,14 +257,14 @@ BEGIN
  SELECT * INTO _o FROM organizations WHERE id=_org FOR UPDATE;
  SELECT * INTO _i FROM ton_invoices WHERE id=_invoice AND org_id=_org FOR UPDATE;
  IF NOT FOUND THEN RETURN jsonb_build_object('kind','not_found'); END IF;
- _now:=clock_timestamp();
+ _now:=clock_timestamp(); _network:=_credit->>'network';
  _facts:=_credit-ARRAY['observedAtMs','verifiedAtMs','blockAnchor','masterchainAnchor','executionPathDigest','verifierVersion','finalityPolicyId'];
  _evidence:=_credit-ARRAY['amountAtomic','reference','sender','txHash','txLt','messageHash','messageIndex','chainTimeMs','observedAtMs','verifiedAtMs'];
  INSERT INTO ton_chain_events(network,recipient_account,tx_hash,message_hash,tx_lt,message_index,fact_snapshot,evidence_snapshot,observed_at,verified_at)
- VALUES('tvm:-3',_credit->>'recipientAccount',_credit->>'txHash',_credit->>'messageHash',_credit->>'txLt',(_credit->>'messageIndex')::integer,
+ VALUES(_network,_credit->>'recipientAccount',_credit->>'txHash',_credit->>'messageHash',_credit->>'txLt',(_credit->>'messageIndex')::integer,
  _facts,_evidence,to_timestamp((_credit->>'observedAtMs')::numeric/1000),to_timestamp((_credit->>'verifiedAtMs')::numeric/1000))
  ON CONFLICT(network,recipient_account,tx_hash,message_hash) DO NOTHING;
- SELECT * INTO _event FROM ton_chain_events WHERE network='tvm:-3' AND recipient_account=_credit->>'recipientAccount' AND tx_hash=_credit->>'txHash' AND message_hash=_credit->>'messageHash' FOR UPDATE;
+ SELECT * INTO _event FROM ton_chain_events WHERE network=_network AND recipient_account=_credit->>'recipientAccount' AND tx_hash=_credit->>'txHash' AND message_hash=_credit->>'messageHash' FOR UPDATE;
  IF _event.id IS NULL THEN RAISE EXCEPTION 'TON_EVENT_CAS'; END IF;
  IF _event.fact_snapshot<>_facts THEN RETURN jsonb_build_object('kind','evidence_conflict','eventId',_event.id::text); END IF;
  SELECT * INTO _d FROM ton_invoice_event_decisions WHERE invoice_id=_invoice AND event_id=_event.id;
@@ -273,7 +278,7 @@ BEGIN
  ELSIF _i.status='review_required' THEN _reason:='invoice_in_review';
  ELSIF _i.status='expired' OR _now>=_i.expires_at OR (_credit->>'chainTimeMs')::numeric>=extract(epoch FROM _i.expires_at)*1000 THEN _reason:='late_payment';
  ELSIF _o.owner_id<>_i.owner_user_id THEN _reason:='owner_changed';
- ELSIF _credit->>'recipient'<>_i.recipient OR _credit->'asset'<>_i.quote_snapshot->'asset' OR _credit->>'reference'<>_i.reference OR
+ ELSIF _network<>_i.network OR _credit->>'recipient'<>_i.recipient OR _credit->'asset'<>_i.quote_snapshot->'asset' OR _credit->>'reference'<>_i.reference OR
   (_i.expected_sender IS NOT NULL AND _credit->>'sender'<>_i.expected_sender) OR
   (_i.asset_kind='native' AND _credit->>'recipientAccount'<>_i.recipient) OR
   (_i.asset_kind='jetton' AND (_credit->'jettonCredit'->>'masterAddress' IS DISTINCT FROM _i.master_address OR
@@ -309,7 +314,7 @@ BEGIN
  INSERT INTO gateway_transactions(org_id,request_id,type,source,delta,metadata)
  VALUES(_org,'ton:invoice:'||_invoice::text,'topup','ton',_grant,jsonb_build_object('schema_version',1,'invoice_id',_invoice::text,
  'order_id',_i.order_id::text,'event_id',_event.id::text,'owner_user_id',_i.owner_user_id::text,'grant_microcredits',_grant::text,
- 'amount_atomic',_i.amount_atomic::text,'asset',_i.quote_snapshot->'asset','network','tvm:-3','price_revision',_i.price_revision,
+ 'amount_atomic',_i.amount_atomic::text,'asset',_i.quote_snapshot->'asset','network',_i.network,'price_revision',_i.price_revision,
  'quote_id',_i.quote_id,'payg_after_microcredits',_payg,'refund_debt_after_microcredits',_debt,'settled_at',_now)) RETURNING id INTO _receipt;
  IF _receipt IS NULL THEN RAISE EXCEPTION 'TON_RECEIPT_CAS'; END IF;
  INSERT INTO ton_invoice_event_decisions(invoice_id,event_id,decision) VALUES(_invoice,_event.id,'settled');
@@ -318,4 +323,7 @@ BEGIN
  IF _changed IS NULL THEN RAISE EXCEPTION 'TON_INVOICE_CAS'; END IF;
  RETURN jsonb_build_object('kind','settled','receipt',aiag_ton_receipt_json_v1(_invoice));
 END $$;
-REVOKE EXECUTE ON FUNCTION aiag_ton_invoice_json_v1(ton_invoices),aiag_ton_invoice_guard_v1(),aiag_ton_event_immutable_v1(),aiag_ton_decision_immutable_v1(),aiag_ton_receipt_immutable_v1(),aiag_ton_settlement_consistent_v1(),aiag_ton_keys_v1(jsonb,text[]),aiag_ton_text_v1(jsonb,text,integer),aiag_ton_time_v1(jsonb),aiag_ton_atomic_v1(jsonb,boolean,boolean),aiag_ton_asset_v1(jsonb),aiag_ton_payload_v1(jsonb,uuid,uuid),aiag_create_ton_invoice_v1(uuid,uuid,jsonb,text),aiag_read_ton_invoice_v1(uuid,uuid,uuid),aiag_expire_ton_invoice_v1(uuid),aiag_ton_credit_v1(jsonb),aiag_ton_receipt_json_v1(uuid),aiag_settle_ton_invoice_v1(uuid,jsonb) FROM PUBLIC;
+CREATE FUNCTION aiag_ton_allowlisted_assets_v1(_network TEXT) RETURNS TABLE(network TEXT,asset_kind TEXT,master_address VARCHAR,asset_decimals SMALLINT) LANGUAGE SQL STABLE SET search_path = pg_catalog, public, pg_temp AS $$
+ SELECT a.network,a.asset_kind,a.master_address,a.asset_decimals FROM ton_asset_allowlist a WHERE a.is_active AND a.network=_network ORDER BY a.asset_kind,a.master_address NULLS FIRST
+$$;
+REVOKE EXECUTE ON FUNCTION aiag_ton_invoice_json_v1(ton_invoices),aiag_ton_invoice_guard_v1(),aiag_ton_event_immutable_v1(),aiag_ton_decision_immutable_v1(),aiag_ton_receipt_immutable_v1(),aiag_ton_settlement_consistent_v1(),aiag_ton_keys_v1(jsonb,text[]),aiag_ton_text_v1(jsonb,text,integer),aiag_ton_time_v1(jsonb),aiag_ton_atomic_v1(jsonb,boolean,boolean),aiag_ton_asset_v1(jsonb),aiag_ton_payload_v1(jsonb,uuid,uuid),aiag_create_ton_invoice_v1(uuid,uuid,jsonb,text),aiag_read_ton_invoice_v1(uuid,uuid,uuid),aiag_expire_ton_invoice_v1(uuid),aiag_ton_credit_v1(jsonb),aiag_ton_receipt_json_v1(uuid),aiag_settle_ton_invoice_v1(uuid,jsonb),aiag_ton_allowlisted_assets_v1(text) FROM PUBLIC;

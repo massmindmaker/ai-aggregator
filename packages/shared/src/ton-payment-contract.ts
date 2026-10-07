@@ -85,10 +85,13 @@ export function toDatabaseAtomic(value: bigint, allowZero = false): string {
 export function normalizeAsset(input: unknown): Asset {
   if (!input || typeof input !== 'object') throw new Error('Invalid asset');
   const asset = input as Record<string, unknown>;
-  if (asset.network !== 'tvm:-3') throw new Error('Only testnet assets are supported');
+  if (asset.network !== 'tvm:-3' && asset.network !== 'tvm:-1') {
+    throw new Error('Only TON testnet and mainnet assets are supported');
+  }
+  const network = asset.network as TonNetworkId;
   if (asset.kind === 'native') {
     if (asset.decimals !== 9 || 'masterAddress' in asset) throw new Error('Invalid native asset');
-    return Object.freeze({ network: 'tvm:-3', kind: 'native', decimals: 9 });
+    return Object.freeze({ network, kind: 'native', decimals: 9 });
   }
   if (asset.kind !== 'jetton') throw new Error('Invalid asset kind');
   validateDecimals(asset.decimals as number);
@@ -98,7 +101,7 @@ export function normalizeAsset(input: unknown): Asset {
     throw new Error('Expected a raw jetton master address');
   }
   return Object.freeze({
-    network: 'tvm:-3', kind: 'jetton', decimals: asset.decimals as number,
+    network, kind: 'jetton', decimals: asset.decimals as number,
     masterAddress: master.toLowerCase(),
   });
 }

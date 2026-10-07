@@ -94,7 +94,7 @@ export interface TonNativeFixture {
   close(): Promise<void>;
 }
 
-export async function openTonFixture(options: { initialPayg?: string; initialDebt?: string; quoteTtlMs?: number } = {}): Promise<TonNativeFixture> {
+export async function openTonFixture(options: { initialPayg?: string; initialDebt?: string; quoteTtlMs?: number; asset?: Asset; policyAllowlist?: readonly Asset[] } = {}): Promise<TonNativeFixture> {
   assertTonCoreTestEnvironment(process.env);
   // No driver/domain module is loaded until the dedicated DB guard has passed.
   const held = await openHeldClient(process.env);
@@ -104,6 +104,7 @@ export async function openTonFixture(options: { initialPayg?: string; initialDeb
   const domain = await import("../../src");
   const contract = await import("@aiag/shared/ton-payment-contract");
   const client = held.client;
+  const fixtureAsset = options.asset ?? NATIVE_TON_ASSET;
   const userId = randomUUID();
   const orgId = randomUUID();
   const dbNow = await client.query<{ now_ms: string }>({ text: "SELECT floor(extract(epoch FROM clock_timestamp())*1000)::text AS now_ms", values: [] });
@@ -112,14 +113,14 @@ export async function openTonFixture(options: { initialPayg?: string; initialDeb
   await client.query({ text: "INSERT INTO users (id,email,is_active,is_banned) VALUES ($1::uuid,$2,TRUE,FALSE)", values: [userId, `ton-${userId}@example.test`] });
   await client.query({ text: "INSERT INTO organizations (id,slug,name,owner_id,is_active,subscription_credits,payg_credits,refund_debt_credits) VALUES ($1::uuid,$2,$3,$4::uuid,TRUE,0,$5::bigint,$6::bigint)", values: [orgId, `ton-${orgId}`, "TON native fixture", userId, options.initialPayg ?? "0", options.initialDebt ?? "0"] });
   const db = transactionDatabase(client);
-  const policy: TonServerPolicy = { allowlist: [NATIVE_TON_ASSET] };
+  const policy: TonServerPolicy = { allowlist: options.policyAllowlist ?? [fixtureAsset] };
   let lastRefund: { claimId: string; payment: { paymentId: string; providerPaymentId: string; providerOrderId: string }; providerKey: string } | undefined;
   const createInput = (patch: Partial<CreateTonInvoiceInput> = {}): CreateTonInvoiceInput => {
     const grant = patch.grantMicrocredits ?? MAX_SAFE_RUB_PAYG;
     const quotedAtMs = now;
     const quote = contract.createQuote({
-      quoteId: `quote-${randomUUID()}`, sourcePrice: { unit: "gateway_microcredits", amountAtomic: grant }, asset: NATIVE_TON_ASSET,
-      fx: { sourceUnit: "gateway_microcredits", targetAsset: NATIVE_TON_ASSET, numerator: "1", denominator: "1", rounding: "floor", source: "fixture-rate-v1", observedAtMs: quotedAtMs - 1, expiresAtMs: quotedAtMs + (options.quoteTtlMs ?? 120_000) },
+      quoteId: `quote-${randomUUID()}`, sourcePrice: { unit: "gateway_microcredits", amountAtomic: grant }, asset: fixtureAsset,
+      fx: { sourceUnit: "gateway_microcredits", targetAsset: fixtureAsset, numerator: "1", denominator: "1", rounding: "floor", source: "fixture-rate-v1", observedAtMs: quotedAtMs - 1, expiresAtMs: quotedAtMs + (options.quoteTtlMs ?? 120_000) },
       additionalFeeAtomic: "2", expiresAtMs: quotedAtMs + (options.quoteTtlMs ?? 120_000),
     }, policy.allowlist, quotedAtMs);
     return { idempotencyKey: `fixture-${randomUUID()}`, grantMicrocredits: grant, priceRevision: "fixture-price-v1", quote, recipient: NATIVE_TON_RECIPIENT, expectedSender: SENDER, finalityPolicyId: "fixture-only-v1", verifierVersion: "fixture-verifier-v1", ...patch };
@@ -128,7 +129,7 @@ export async function openTonFixture(options: { initialPayg?: string; initialDeb
   const verifiedCredit = (invoice: TonInvoice, patch: Partial<VerifiedChainCredit> = {}): VerifiedChainCredit => {
     const eventSeed = invoice.invoiceId.replaceAll("-", "");
     return ({
-    network: "tvm:-3", asset: NATIVE_TON_ASSET, recipient: invoice.recipient, recipientAccount: invoice.recipient, sender: invoice.expectedSender ?? SENDER, amountAtomic: invoice.amountAtomic, reference: invoice.reference,
+    network: invoice.network, asset: invoice.asset, recipient: invoice.recipient, recipientAccount: invoice.recipient, sender: invoice.expectedSender ?? SENDER, amountAtomic: invoice.amountAtomic, reference: invoice.reference,
     txHash: `${eventSeed}${eventSeed}`, txLt: "1", messageHash: `${eventSeed.split("").reverse().join("")}${eventSeed.split("").reverse().join("")}`, messageIndex: 0, chainTimeMs: now - 3, observedAtMs: now - 2, verifiedAtMs: now - 1,
     blockAnchor: "fixture-block-v1", masterchainAnchor: "fixture-masterchain-v1", executionPathDigest: "5".repeat(64), verifierVersion: invoice.verifierVersion, finalityPolicyId: invoice.finalityPolicyId, jettonCredit: null, ...patch,
     });

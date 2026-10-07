@@ -7,6 +7,7 @@ import {
   char,
   jsonb,
   bigint,
+  boolean,
   smallint,
   integer,
   timestamp,
@@ -236,5 +237,29 @@ export const tonInvoiceEventDecisions = pgTable(
     review: index("ton_invoice_reviews")
       .on(t.createdAt, t.id)
       .where(sql`${t.decision}='review_required'`),
+  }),
+);
+/** Server-owned TON asset admission (migration 0098); read via aiag_ton_allowlisted_assets_v1. */
+export const tonAssetAllowlist = pgTable(
+  "ton_asset_allowlist",
+  {
+    network: text("network").notNull(),
+    assetKind: text("asset_kind").notNull(),
+    masterAddress: varchar("master_address", { length: 67 }),
+    assetDecimals: smallint("asset_decimals").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => ({
+    assetKey: uniqueIndex("ton_asset_allowlist_asset_key").on(
+      t.network,
+      sql`COALESCE(${t.masterAddress},'')`,
+    ),
+    shape: check(
+      "ton_asset_allowlist_shape_check",
+      sql`((${t.assetKind}='native' AND ${t.masterAddress} IS NULL AND ${t.assetDecimals}=9) OR (${t.assetKind}='jetton' AND ${t.masterAddress} IS NOT NULL))`,
+    ),
   }),
 );

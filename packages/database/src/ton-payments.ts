@@ -285,7 +285,7 @@ function credit(input: VerifiedChainCredit) {
     "finalityPolicyId",
     "jettonCredit",
   ]);
-  if (c.network !== "tvm:-3") throw new Error("TON_INVALID_NETWORK");
+  if (c.network !== "tvm:-3" && c.network !== "tvm:-1") throw new Error("TON_INVALID_NETWORK");
   const asset = normalizeAsset(c.asset);
   const hash = (v: unknown) => {
     if (typeof v !== "string" || !full("[0-9a-fA-F]{64}").test(v))
@@ -309,7 +309,7 @@ function credit(input: VerifiedChainCredit) {
     };
   } else if (c.jettonCredit !== null) throw new Error("TON_INVALID_JETTON");
   return {
-    network: "tvm:-3",
+    network: c.network,
     asset,
     recipient: address(c.recipient),
     recipientAccount: address(c.recipientAccount),
@@ -766,7 +766,7 @@ function parseTonInvoiceResult(value: unknown): TonInvoice {
       raw.schemaVersion !== 1 ||
       raw.product !== "aggregator" ||
       raw.purpose !== "gateway_topup" ||
-      raw.network !== "tvm:-3" ||
+      (raw.network !== "tvm:-3" && raw.network !== "tvm:-1") ||
       typeof raw.idempotencyKey !== "string" ||
       !full("[A-Za-z0-9_-]{1,96}").test(raw.idempotencyKey) ||
       typeof raw.reference !== "string" ||
@@ -808,7 +808,7 @@ function parseTonInvoiceResult(value: unknown): TonInvoice {
       quote: parsedQuote,
       grantMicrocredits,
       priceRevision: label(raw.priceRevision),
-      network: "tvm:-3",
+      network: raw.network,
       asset: parsedAsset,
       amountAtomic,
       recipient: canonicalAddress(raw.recipient),
@@ -912,7 +912,7 @@ export async function findTonInvoicesForReconciliation(
         !references.has(invoice.reference) ||
         seenReferences.has(invoice.reference) ||
         seenInvoices.has(invoice.invoiceId) ||
-        invoice.network !== "tvm:-3" ||
+        invoice.network !== source.network ||
         invoice.asset.kind !== "native" ||
         invoice.asset.decimals !== 9 ||
         invoice.recipient !== source.invoiceRecipient

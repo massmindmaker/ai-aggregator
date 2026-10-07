@@ -198,8 +198,8 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       "aiag_mark_gateway_charge_dispatched",
     );
     // Includes author operations, terms, receipts, credit ledger and reconciliation through0090,
-    // plus the wallet-identity (0091) and checkout (0092) tables.
-    expect(Number(result.rows[0].table_count)).toBe(127);
+    // plus the wallet-identity (0091), checkout (0092) and TON asset allowlist (0098) tables.
+    expect(Number(result.rows[0].table_count)).toBe(128);
   });
 
   it("verifies TON immutable schema, invoker entrypoints and exact mirror", async () => {
@@ -207,15 +207,27 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       resolve("packages/database/migrations/0072_ton_invoice_core.sql"),
       "utf8",
     );
+    const mainnetMigration = await readFile(
+      resolve("packages/database/migrations/0098_ton_mainnet_network.sql"),
+      "utf8",
+    );
     const mirror = await readFile(
       resolve("packages/database/src/functions/ton-invoice-core.sql"),
       "utf8",
     );
-    expect(migration).toContain(mirror.trim());
+    // Latest replacement wins: 0098 overrides the four network-aware invoice
+    // core bodies; the mirror must carry exactly the applied definitions.
+    const latest = new Map<string, string>();
+    for (const source of [migration, mainnetMigration])
+      for (const match of source.matchAll(
+        /CREATE (?:OR REPLACE )?FUNCTION (\w+)\([^]*? AS \$\$([^]*?)\$\$;/g,
+      ))
+        latest.set(match[1]!, match[2]!);
     for (const table of [
       "ton_invoices",
       "ton_chain_events",
       "ton_invoice_event_decisions",
+      "ton_asset_allowlist",
     ]) {
       const result = await client.query({
         text: "SELECT to_regclass($1)::text AS name",
@@ -224,9 +236,16 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       expect(result.rows[0]?.name).toBe(table);
     }
     const expected = [
-      ...mirror.matchAll(/CREATE FUNCTION (\w+)\([^]*? AS \$\$([^]*?)\$\$;/g),
+      ...mirror.matchAll(
+        /CREATE (?:OR REPLACE )?FUNCTION (\w+)\([^]*? AS \$\$([^]*?)\$\$;/g,
+      ),
     ];
-    expect(expected).toHaveLength(18);
+    expect(expected).toHaveLength(19);
+    for (const match of expected) {
+      expect(latest.get(match[1]!), `latest applied body of ${match[1]}`).toBe(
+        match[2],
+      );
+    }
     const applied = await client.query<{
       name: string;
       definition: string;
@@ -237,7 +256,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       text: "SELECT p.proname AS name,pg_get_functiondef(p.oid) AS definition,NOT p.prosecdef AS invoker,p.proconfig AS config,EXISTS(SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') AS public_execute FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname=ANY($1::text[]) ORDER BY p.proname",
       values: [expected.map((match) => match[1])],
     });
-    expect(applied.rows).toHaveLength(18);
+    expect(applied.rows).toHaveLength(19);
     for (const match of expected) {
       const row = applied.rows.find((entry) => entry.name === match[1]);
       expect(row).toMatchObject({
@@ -411,7 +430,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(createHash("sha256").update(previous).digest("hex")).toBe(
       "b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6",
     );
-    expect(await discoverNativeMigrations()).toHaveLength(97);
+    expect(await discoverNativeMigrations()).toHaveLength(98);
     const types = await client.query<{ name: string; fields: string[] }>({
       text: `
       SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t

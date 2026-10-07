@@ -49,7 +49,9 @@ describe.skipIf(!RUN)("TON invoice native core", () => {
 
   it("matches all 18 applied function bodies and denies PUBLIC EXECUTE", async () => {
     const f = await open();
-    const source = await readFile("packages/database/src/functions/ton-invoice-core.sql", "utf8");
+    // This 0072-pure database is the oracle for the ORIGINAL 0072 bodies; the
+    // 0098 network-aware replacements are verified by the head baseline mirror.
+    const source = await readFile("packages/database/migrations/0072_ton_invoice_core.sql", "utf8");
     const expected = [...source.matchAll(/CREATE FUNCTION (\w+)\([^]*? AS \$\$([^]*?)\$\$;/g)];
     expect(expected).toHaveLength(18);
     const applied = await f.client.query<{ name: string; definition: string; invoker: boolean; public_execute: boolean; config: string[] }>({
