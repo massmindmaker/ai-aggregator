@@ -197,8 +197,9 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(result.rows[0].dispatch_function).toContain(
       "aiag_mark_gateway_charge_dispatched",
     );
-    // Includes author operations, terms, receipts, credit ledger and reconciliation through0090.
-    expect(Number(result.rows[0].table_count)).toBe(123);
+    // Includes author operations, terms, receipts, credit ledger and reconciliation through0090,
+    // plus the wallet-identity (0091) and checkout (0092) tables.
+    expect(Number(result.rows[0].table_count)).toBe(127);
   });
 
   it("verifies TON immutable schema, invoker entrypoints and exact mirror", async () => {
