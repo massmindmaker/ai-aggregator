@@ -59,18 +59,18 @@ describe("native ordered migrator", () => {
   it("discovers the complete immutable history in deterministic order", async () => {
     const migrations = await discoverNativeMigrations();
 
-    // 99 = 0099 adds the worker-only settlement principal on top of 0098's
-// mainnet network + asset allowlist.
-    expect(migrations).toHaveLength(99);
+    // 100 = 0100 adds the batched invoice expiry on top of 0099's
+// worker-only settlement principal and 0098's mainnet network.
+    expect(migrations).toHaveLength(100);
     expect(migrations[0].version).toBe("drizzle/0000_moaning_the_fury.sql");
     expect(migrations[1].version).toBe("migrations/0004_gateway_core.sql");
     expect(migrations[2].version).toBe(
       "migrations/0004_seed_test_upstreams.sql",
     );
     expect(migrations.at(-1)?.version).toBe(
-      "migrations/0099_ton_settlement_principal.sql",
+      "migrations/0100_ton_invoice_expiry_batch.sql",
     );
-    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(99);
+    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(100);
   });
 
   it("removes only an outer transaction wrapper owned by a historical file", () => {

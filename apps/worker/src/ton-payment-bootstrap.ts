@@ -24,6 +24,8 @@ import { nativeSource, hash } from "./ton-recovery-contract.js";
 export type { TonCloseResult } from "./ton-recovery-control.js";
 export interface TonObservationDatabase {
   deps: Omit<TonObserveReconcilerDeps, "provider" | "newLeaseOwner">;
+  /** Optional expiry-cron surface (0100); absent on test seams that don't provide it. */
+  expireStaleInvoices?(limit: number): Promise<number>;
   close(): Promise<TonDatabaseCloseResult>;
 }
 export interface TonObservationStartupDeps {
@@ -111,6 +113,7 @@ async function defaultDatabase(url: string): Promise<TonObservationDatabase> {
   const db = api.createTonWorkerDatabase(url);
   return {
     close: () => db.close(),
+    expireStaleInvoices: (limit: number) => api.expireStaleTonInvoices(db, limit),
     deps: {
       getInvoice: (id) => api.getTonInvoiceForReconciliation(db, id),
       listSources: (input) => api.listTonReconciliationSources(db, input),
@@ -281,10 +284,17 @@ export async function startTonObservationFromEnv(
   const timer = setInterval(tick, POLL_MS);
   timer.unref?.();
   tick();
+  // Second interval (task 3.3): bounded expiry sweep, best-effort by design.
+  const expiryCron = database.expireStaleInvoices
+    ? (await import("./ton-invoice-expiry.js")).createTonInvoiceExpiryCron({
+        expireStale: database.expireStaleInvoices,
+      })
+    : undefined;
   return {
     close() {
       closing ??= (async () => {
         clearInterval(timer);
+        await expiryCron?.close();
         controller.abort();
         await active;
         await budget.closePool(() => database.close());

@@ -30,6 +30,7 @@ export {
   advanceTonReconciliationCursor,
   bindTonReconciliationRecipient,
   claimTonReconciliationLease,
+  expireStaleTonInvoices,
   findTonInvoicesForReconciliation,
   getTonInvoiceForReconciliation,
   listTonReconciliationSources,

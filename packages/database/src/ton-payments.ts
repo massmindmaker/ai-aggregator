@@ -261,6 +261,24 @@ export async function expireTonInvoice(
       ).rows[0]!.result,
   );
 }
+/** Bounded batch expiry for the worker cron (0100); returns the transitioned count. */
+export async function expireStaleTonInvoices(
+  db: TonPaymentDatabase,
+  limit: number,
+): Promise<number> {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
+    throw new Error("TON_EXPIRY_LIMIT_INVALID");
+  }
+  return db.transaction(
+    async (tx) =>
+      (
+        await tx.query<{ result: number }>({
+          text: "SELECT aiag_expire_stale_ton_invoices_v1($1::integer) AS result",
+          values: [limit],
+        })
+      ).rows[0]!.result,
+  );
+}
 function credit(input: VerifiedChainCredit) {
   const c = object(input);
   keys(c, [

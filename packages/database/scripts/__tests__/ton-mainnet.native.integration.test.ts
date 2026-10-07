@@ -125,6 +125,42 @@ describe.runIf(process.env.RUN_NATIVE_DB_INTEGRATION === '1')('TON mainnet netwo
     });
   }, 120_000);
 
+  it('expires stale pending invoices in one bounded batch and not again (0100)', async () => {
+    await mainnetFixture(async (f) => {
+      const shortTtl = await f.makeInput(MAINNET_NATIVE, '100000000');
+      // Rebuild the input with a 1.5s quote lifetime so it is valid now and stale shortly.
+      const contract = await import('@aiag/shared/ton-payment-contract');
+      const grant = '100000000';
+      const quote = contract.createQuote({
+        quoteId: `quote-${randomUUID()}`,
+        sourcePrice: { unit: 'gateway_microcredits', amountAtomic: grant },
+        asset: MAINNET_NATIVE,
+        fx: { sourceUnit: 'gateway_microcredits', targetAsset: MAINNET_NATIVE, numerator: '1', denominator: '1', rounding: 'floor', source: 'expiry-fixture-v1', observedAtMs: f.now - 1, expiresAtMs: f.now + 1500 },
+        additionalFeeAtomic: '0',
+        expiresAtMs: f.now + 1500,
+      }, [MAINNET_NATIVE], f.now);
+      const invoice = await createTonInvoice(f.db, f.ctx, {
+        ...shortTtl,
+        quote,
+        idempotencyKey: `expiry-${randomUUID()}`,
+      }, { allowlist: [MAINNET_NATIVE] });
+      void invoice; void shortTtl;
+      const expireStale = (limit: number) =>
+        f.db.transaction(async (tx) =>
+          (await tx.query<{ result: number }>({
+            text: 'SELECT aiag_expire_stale_ton_invoices_v1($1::integer) AS result',
+            values: [limit],
+          })).rows[0]!.result);
+      expect(await expireStale(100)).toBe(0);
+      await new Promise((resolve) => setTimeout(resolve, 1700));
+      expect(await expireStale(100)).toBe(1);
+      expect(await expireStale(100)).toBe(0);
+      const status = (await f.query('SELECT status FROM ton_invoices WHERE id=$1::uuid', [invoice.invoiceId]))[0];
+      expect(status).toEqual({ status: 'expired' });
+      await expect(expireStale(0)).rejects.toThrow('TON_EXPIRY_LIMIT_INVALID');
+    });
+  }, 120_000);
+
   it('rejects assets that are not in the server-side allowlist', async () => {
     await mainnetFixture(async (f) => {
       const mainnetJetton: Asset = { network: 'tvm:-1', kind: 'jetton', masterAddress: `0:${'3'.repeat(64)}`, decimals: 6 };

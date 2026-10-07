@@ -42,7 +42,7 @@ describe("observe-only recovery ownership", () => {
           /^\d{4}.*\.sql$/.test(n),
         ),
       ),
-    ).toHaveLength(99);
+    ).toHaveLength(100);
     expect(read("apps/worker/src/ton-payment-provider.ts")).toContain(
       "if (source.asset.kind === 'jetton') return failure('unsupported_asset')",
     );
