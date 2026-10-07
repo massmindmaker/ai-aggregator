@@ -59,6 +59,65 @@ describe.runIf(process.env.RUN_NATIVE_DB_INTEGRATION === '1')('worker-only settl
     });
   }, 120_000);
 
+  it('retries a refund-blocked review through the worker retry wrapper (0103)', async () => {
+    await withWalletAuthDb(async (f) => {
+      const orgId = randomUUID();
+      await f.query(
+        "INSERT INTO organizations(id,name,slug,owner_id,payg_credits,refund_debt_credits) VALUES($1::uuid,'retry fixture',$1::text,$2::uuid,0,0)",
+        [orgId, f.user],
+      );
+      const now = Number((await f.query('SELECT floor(extract(epoch FROM clock_timestamp())*1000)::text AS now_ms'))[0].now_ms);
+      const contract = await import('@aiag/shared/ton-payment-contract');
+      const quote = contract.createQuote({
+        quoteId: `quote-${randomUUID()}`,
+        sourcePrice: { unit: 'gateway_microcredits', amountAtomic: '300000000' },
+        asset: TESTNET_NATIVE,
+        fx: { sourceUnit: 'gateway_microcredits', targetAsset: TESTNET_NATIVE, numerator: '1', denominator: '1', rounding: 'floor', source: 'retry-fixture-v1', observedAtMs: now - 1, expiresAtMs: now + 300_000 },
+        additionalFeeAtomic: '0',
+        expiresAtMs: now + 300_000,
+      }, [TESTNET_NATIVE], now);
+      const invoice: TonInvoice = await createTonInvoice(f.db, { actorUserId: f.user, orgId }, {
+        idempotencyKey: `retry-${randomUUID()}`,
+        grantMicrocredits: '300000000',
+        priceRevision: 'retry-fixture-v1',
+        quote,
+        recipient: RECIPIENT,
+        expectedSender: SENDER,
+        finalityPolicyId: 'retry-fixture-finality-v1',
+        verifierVersion: 'retry-fixture-verifier-v1',
+      }, { allowlist: [TESTNET_NATIVE] });
+      const seed = invoice.invoiceId.replaceAll('-', '');
+      const credit: VerifiedChainCredit = {
+        network: 'tvm:-3', asset: TESTNET_NATIVE, recipient: invoice.recipient, recipientAccount: invoice.recipient, sender: SENDER,
+        amountAtomic: invoice.amountAtomic, reference: invoice.reference,
+        txHash: `${seed}${seed}`, txLt: '1', messageHash: `${seed.split('').reverse().join('')}${seed.split('').reverse().join('')}`,
+        messageIndex: 0, chainTimeMs: now - 3, observedAtMs: now - 2, verifiedAtMs: now - 1,
+        blockAnchor: 'retry-block-v1', masterchainAnchor: 'retry-mc-v1', executionPathDigest: '8'.repeat(64),
+        verifierVersion: invoice.verifierVersion, finalityPolicyId: invoice.finalityPolicyId, jettonCredit: null,
+      };
+      await f.query('UPDATE organizations SET refund_debt_credits=500 WHERE id=$1::uuid', [orgId]);
+      const worker = await connectAs(f.url, 'aiag_ton_worker');
+      try {
+        const blocked = (await worker.query(
+          'SELECT aiag_ton_worker.settle_invoice_v1($1::uuid,$2::jsonb) AS result',
+          [invoice.invoiceId, JSON.stringify(credit)],
+        )).rows[0].result;
+        expect(blocked).toMatchObject({ kind: 'review_required', reason: 'refund_blocked' });
+        await f.query('UPDATE organizations SET refund_debt_credits=0 WHERE id=$1::uuid', [orgId]);
+        const event = (await f.query('SELECT e.id::text AS id FROM ton_chain_events e JOIN ton_invoice_event_decisions d ON d.event_id=e.id WHERE d.invoice_id=$1::uuid', [invoice.invoiceId]))[0];
+        const retried = (await worker.query(
+          'SELECT aiag_ton_worker.retry_reviewed_invoice_v1($1::uuid,$2::uuid) AS result',
+          [invoice.invoiceId, event.id],
+        )).rows[0].result;
+        expect(retried).toMatchObject({ kind: 'settled' });
+        const payg = (await f.query('SELECT payg_credits::text AS payg FROM organizations WHERE id=$1::uuid', [orgId]))[0];
+        expect(payg).toEqual({ payg: invoice.grantMicrocredits });
+      } finally {
+        await worker.end();
+      }
+    });
+  }, 120_000);
+
   it('settles as the worker login only, refusing every other role', async () => {
     await withWalletAuthDb(async (f) => {
       const orgId = randomUUID();

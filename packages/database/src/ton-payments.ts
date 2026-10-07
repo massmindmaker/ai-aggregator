@@ -390,7 +390,6 @@ export function settleTonInvoiceAsWorker(
   return runTonSettlement(db, invoiceId, input, true);
 }
 
-const TON_PROVIDER_ID = "toncenter-v3-testnet" as const;
 const TON_EVIDENCE_MODEL = "server_trusted_indexer" as const;
 const SOURCE_ID = full("[0-9a-f]{64}");
 const CANONICAL_REFERENCE = full(
@@ -594,7 +593,8 @@ function normalizeObservation(value: TonObservationInput): TonObservationInput {
   ]);
   if (
     raw.schemaVersion !== 1 ||
-    raw.providerId !== TON_PROVIDER_ID ||
+    (raw.providerId !== "toncenter-v3-testnet" &&
+      raw.providerId !== "toncenter-v3-mainnet") ||
     raw.evidenceModel !== TON_EVIDENCE_MODEL
   )
     throw new Error("TON_INVALID_OBSERVATION");
@@ -668,7 +668,7 @@ function normalizeObservation(value: TonObservationInput): TonObservationInput {
     sourceId: lowerHash(raw.sourceId, "TON_INVALID_SOURCE"),
     recipientAccount: canonicalAddress(raw.recipientAccount),
     eventIdentity,
-    providerId: TON_PROVIDER_ID,
+    providerId: raw.providerId as TonProviderId,
     evidenceModel: TON_EVIDENCE_MODEL,
     result: {
       kind,
@@ -1000,11 +1000,15 @@ export async function recordTonChainObservation(
   });
 }
 
+export type TonProviderId =
+  | "toncenter-v3-testnet"
+  | "toncenter-v3-mainnet";
+
 export async function claimTonReconciliationLease(
   db: TonPaymentDatabase,
   input: {
     source: TonReconciliationSource;
-    providerId: "toncenter-v3-testnet";
+    providerId: TonProviderId;
     leaseOwner: string;
     leaseMs: 90_000;
   },
@@ -1019,15 +1023,26 @@ export async function claimTonReconciliationLease(
 > {
   const raw = object(input);
   keys(raw, ["source", "providerId", "leaseOwner", "leaseMs"]);
-  if (raw.providerId !== TON_PROVIDER_ID || raw.leaseMs !== 90_000)
+  if (
+    (raw.providerId !== "toncenter-v3-testnet" &&
+      raw.providerId !== "toncenter-v3-mainnet") ||
+    raw.leaseMs !== 90_000
+  )
     throw new Error("TON_INVALID_LEASE");
+  const providerId: TonProviderId = raw.providerId;
   const source = normalizeSource(raw.source);
+  if (
+    source.network === "tvm:-1"
+      ? providerId !== "toncenter-v3-mainnet"
+      : providerId !== "toncenter-v3-testnet"
+  )
+    throw new Error("TON_INVALID_LEASE");
   const owner = canonicalId(raw.leaseOwner);
   return db.transaction(async (tx) => {
     const value = (
       await tx.query<{ result: unknown }>({
         text: "SELECT aiag_claim_ton_reconciliation_lease_v1($1::jsonb,$2::text,$3::uuid,$4::integer) AS result",
-        values: [sourceJson(source), TON_PROVIDER_ID, owner, 90_000],
+        values: [sourceJson(source), providerId, owner, 90_000],
       })
     ).rows[0]?.result;
     const result = object(value);
@@ -1211,7 +1226,8 @@ export async function releaseTonReconciliationLease(
 
 export interface TonReviewRequiredEntry {
   invoiceId: string;
-  eventId: string;
+  /** Null for observation-only review invoices (verifier-caused, no chain event). */
+  eventId: string | null;
   orgId: string;
   reference: string;
   reviewReason: string;
@@ -1244,13 +1260,13 @@ export async function listTonReviewRequired(
       updated_at: string;
     }>({
       text: `SELECT i.id::text AS invoice_id, d.event_id::text AS event_id, i.org_id::text AS org_id, i.reference,
-        i.review_reason, i.amount_atomic::text AS amount_atomic, i.asset_kind, i.network::text AS network,
-        e.tx_hash::text AS tx_hash, i.updated_at::text AS updated_at
+        COALESCE(d.reason, i.review_reason) AS review_reason, i.amount_atomic::text AS amount_atomic, i.asset_kind, i.network::text AS network,
+        COALESCE(e.tx_hash::text, '') AS tx_hash, i.updated_at::text AS updated_at
         FROM ton_invoices i
-        JOIN LATERAL (SELECT ed.event_id, ed.reason FROM ton_invoice_event_decisions ed
+        LEFT JOIN LATERAL (SELECT ed.event_id, ed.reason FROM ton_invoice_event_decisions ed
           WHERE ed.invoice_id=i.id AND ed.decision='review_required'
           ORDER BY ed.created_at DESC, ed.id DESC LIMIT 1) d ON TRUE
-        JOIN ton_chain_events e ON e.id=d.event_id
+        LEFT JOIN ton_chain_events e ON e.id=d.event_id
         WHERE i.status='review_required'
           AND NOT EXISTS (SELECT 1 FROM ton_invoice_event_decisions a WHERE a.invoice_id=i.id AND a.decision='acknowledged_no_credit')
         ORDER BY i.updated_at DESC, i.id
@@ -1259,7 +1275,7 @@ export async function listTonReviewRequired(
     });
     return result.rows.map((row) => ({
       invoiceId: row.invoice_id,
-      eventId: row.event_id,
+      eventId: row.event_id ?? null,
       orgId: row.org_id,
       reference: row.reference,
       reviewReason: row.review_reason,
@@ -1327,5 +1343,32 @@ export async function resolveTonReviewDecision(
       values: [invoiceId, eventId],
     });
     return "retry_scheduled";
+  });
+}
+
+/**
+ * Worker-only retry settlement (I1 fix): rebuilds the verified credit from the
+ * persisted event snapshots inside aiag_ton_worker.retry_reviewed_invoice_v1
+ * and re-runs the settle core. Must run on the settlement worker connection
+ * (SESSION_USER=aiag_ton_worker).
+ */
+export async function retryReviewedTonInvoice(
+  db: TonPaymentDatabase,
+  invoiceId: string,
+  eventId: string,
+): Promise<TonSettlementResult> {
+  const invoice = id(invoiceId);
+  const event = id(eventId);
+  return db.transaction(async (tx) => {
+    const raw = (
+      await tx.query<{ result: TonSettlementResult }>({
+        text: "SELECT aiag_ton_worker.retry_reviewed_invoice_v1($1::uuid,$2::uuid) AS result",
+        values: [invoice, event],
+      })
+    ).rows[0]?.result;
+    if (raw === undefined || raw === null) {
+      throw new Error("TON_INVALID_DATABASE_RESULT");
+    }
+    return raw;
   });
 }

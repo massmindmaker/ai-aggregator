@@ -76,30 +76,42 @@ export function TonReviewTable({ invoices }: { invoices: TonReviewRequiredEntry[
                 <td className="whitespace-nowrap p-2">{invoice.network}</td>
                 <td className="p-2 font-mono text-xs">{invoice.reference}</td>
                 <td className="p-2 font-mono text-xs">
-                  <a
-                    className="underline"
-                    href={`https://testnet.tonviewer.com/transaction/${invoice.txHash}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {invoice.txHash.slice(0, 10)}…
-                  </a>
+                  {invoice.txHash ? (
+                    <a
+                      className="underline"
+                      href={`https://${invoice.network === 'tvm:-1' ? 'tonviewer' : 'testnet.tonviewer'}.com/transaction/${invoice.txHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {invoice.txHash.slice(0, 10)}…
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground">нет события</span>
+                  )}
                 </td>
                 <td className="whitespace-nowrap p-2 text-right">
-                  <button
-                    className="mr-2 rounded border px-2 py-1 text-xs disabled:opacity-50"
-                    disabled={pending !== null}
-                    onClick={() => decide(invoice, 'retry_settle')}
-                  >
-                    {pending === `${invoice.invoiceId}:retry_settle` ? '…' : 'Retry'}
-                  </button>
-                  <button
-                    className="rounded border px-2 py-1 text-xs disabled:opacity-50"
-                    disabled={pending !== null}
-                    onClick={() => decide(invoice, 'acknowledge_no_credit')}
-                  >
-                    {pending === `${invoice.invoiceId}:acknowledge_no_credit` ? '…' : 'No credit'}
-                  </button>
+                  {invoice.eventId ? (
+                    <>
+                      <button
+                        className="mr-2 rounded border px-2 py-1 text-xs disabled:opacity-50"
+                        disabled={pending !== null}
+                        onClick={() => decide(invoice, 'retry_settle')}
+                      >
+                        {pending === `${invoice.invoiceId}:retry_settle` ? '…' : 'Retry'}
+                      </button>
+                      <button
+                        className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+                        disabled={pending !== null}
+                        onClick={() => decide(invoice, 'acknowledge_no_credit')}
+                      >
+                        {pending === `${invoice.invoiceId}:acknowledge_no_credit` ? '…' : 'No credit'}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      причина верификации — разбирать по runbook, без цепочечного события
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

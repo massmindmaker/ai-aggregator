@@ -27,6 +27,7 @@ export type {
 export {
   settleTonInvoice,
   settleTonInvoiceAsWorker,
+  retryReviewedTonInvoice,
   advanceTonReconciliationCursor,
   bindTonReconciliationRecipient,
   claimTonReconciliationLease,

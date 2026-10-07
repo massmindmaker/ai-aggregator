@@ -61,6 +61,7 @@ export function parseTonObservationStartup(
   | {
       mode: "observe" | "settle";
       databaseUrl: string;
+      settlementUrl?: string;
       sourceId: string | null;
       crosscheck: boolean;
       toncenterApiKey: string | undefined;
@@ -101,13 +102,39 @@ export function parseTonObservationStartup(
     !["postgres:", "postgresql:"].includes(url.protocol) ||
     !url.hostname ||
     url.hash ||
-    [...url.searchParams.keys()].some((k) => forbidden.has(k.toLowerCase())) ||
-    (mode === "settle" && decodeURIComponent(url.username) !== "aiag_ton_worker")
+    [...url.searchParams.keys()].some((k) => forbidden.has(k.toLowerCase()))
   )
     throw Error("TON_OBSERVATION_STARTUP_REFUSED");
+  // Settle's second gate is a SEPARATE settlement URL bound to the worker
+  // principal: the observation pool keeps running on the ordinary DATABASE_URL
+  // role (which holds the reconciliation grants the worker lacks).
+  let settlementUrl: string | undefined;
+  if (mode === "settle") {
+    const rawSettlement = env.TON_SETTLEMENT_DATABASE_URL;
+    if (!rawSettlement || rawSettlement.trim() !== rawSettlement)
+      throw Error("TON_OBSERVATION_STARTUP_REFUSED");
+    let settlementParsed: URL;
+    try {
+      settlementParsed = new URL(rawSettlement);
+    } catch {
+      throw Error("TON_OBSERVATION_STARTUP_REFUSED");
+    }
+    if (
+      !["postgres:", "postgresql:"].includes(settlementParsed.protocol) ||
+      !settlementParsed.hostname ||
+      settlementParsed.hash ||
+      [...settlementParsed.searchParams.keys()].some((k) =>
+        forbidden.has(k.toLowerCase()),
+      ) ||
+      decodeURIComponent(settlementParsed.username) !== "aiag_ton_worker"
+    )
+      throw Error("TON_OBSERVATION_STARTUP_REFUSED");
+    settlementUrl = rawSettlement;
+  }
   return {
     mode,
     databaseUrl: raw,
+    settlementUrl,
     sourceId:
       env.TON_RECONCILIATION_SOURCE_ID === undefined
         ? null
@@ -159,6 +186,9 @@ export async function startTonObservationFromEnv(
     });
     return { close: () => closed };
   }
+  // Pin the narrowed type for closures below (control-flow narrowing does not
+  // survive into function declarations).
+  const activeConfig = config;
   // Env can never inject the settlement function itself: settle mode derives
   // it from the worker-principal database below, observe mode refuses it.
   if ("settleVerifiedCredit" in options)
@@ -170,6 +200,11 @@ export async function startTonObservationFromEnv(
   );
   let provider: TonEvidenceProvider;
   let settlement: TonSettlementHook | undefined;
+  let settlementDatabase: Awaited<
+    ReturnType<
+      typeof import("@aiag/database/ton-reconciliation-internal")["createTonSettlementWorkerDatabase"]
+    >
+  > | undefined;
   try {
     const injected =
       "settleVerifiedCredit" in database.deps
@@ -189,14 +224,17 @@ export async function startTonObservationFromEnv(
     } else {
       const api = await import("@aiag/database/ton-reconciliation-internal");
       const settlementDb = api.createTonSettlementWorkerDatabase(
-        config.databaseUrl,
+        config.settlementUrl!,
         { workerRole: "aiag_ton_worker", ownerRole: "aiag_ton_worker_owner" },
       );
+      settlementDatabase = settlementDb;
       const originalClose = database.close.bind(database);
       settlement = {
         mode: "settle",
         settleVerifiedCredit: (invoiceId, credit) =>
           api.settleTonInvoiceAsWorker(settlementDb, invoiceId, credit),
+        retryReviewed: (invoiceId, eventId) =>
+          api.retryReviewedTonInvoice(settlementDb, invoiceId, eventId),
       };
       database.close = async () => {
         const first = await originalClose();
@@ -266,6 +304,31 @@ export async function startTonObservationFromEnv(
       /* reporting cannot create work or undo persisted state */
     }
   };
+  async function pollRetries() {
+    const rows = await settlementDatabase!.transaction(async (tx) => {
+      const result = await tx.query<{ invoice_id: string; event_id: string }>({
+        text: "SELECT aiag_list_retry_requested_ton_invoices_v1($1::integer) AS items",
+        values: [20],
+      });
+      const raw = (result.rows[0] as { items?: unknown } | undefined)?.items;
+      if (!Array.isArray(raw)) throw Error("TON_INVALID_DATABASE_RESULT");
+      return raw as Array<{ invoiceId: string; eventId: string }>;
+    });
+    for (const row of rows) {
+      budget.check();
+      try {
+        const result = (await settlement!.retryReviewed!(
+          row.invoiceId,
+          row.eventId,
+        )) as { kind: string };
+        alerts.onSettlement(result);
+      } catch (error) {
+        alerts.onSettlement({
+          kind: `retry_failed:${error instanceof Error ? error.message : "unknown"}`,
+        });
+      }
+    }
+  }
   async function cycle() {
     try {
       const found = await budget.db(
@@ -275,7 +338,11 @@ export async function startTonObservationFromEnv(
       );
       if (!Array.isArray(found) || found.length > 16)
         throw Error("TON_INVALID_SOURCE_PAGE");
-      const sources = found.map(nativeSource);
+      // Preset fence (I3): a worker bound to one network never sweeps the
+      // other network's sources with its provider.
+      const sources = found
+        .map(nativeSource)
+        .filter((source) => source.network === activeConfig.preset.network);
       let previous = afterSourceId;
       for (const source of sources) {
         if (previous !== null && source.sourceId <= previous)
@@ -305,11 +372,16 @@ export async function startTonObservationFromEnv(
         )
           return;
       }
+      if (settlement && typeof settlement.retryReviewed === "function") {
+        // Operator retry pass (I1): invoices whose review cause was temporary
+        // get their settlement re-run on the next tick after retry_requested.
+        await pollRetries();
+      }
       budget.check();
       afterSourceId =
         sources.length < 16 ? null : sources[sources.length - 1].sourceId;
     } catch (error) {
-      report(null, {
+      report("(cycle)", {
         kind: "stopped",
         reason: controller.signal.aborted
           ? "shutdown"

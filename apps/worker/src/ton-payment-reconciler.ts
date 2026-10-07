@@ -74,7 +74,7 @@ export interface TonObserveReconcilerDeps {
   recordObservation(input: TonObservationInput): Promise<TonObservationResult>;
   claimLease(input: {
     source: TonReconciliationSource;
-    providerId: typeof TON_PROVIDER_ID;
+    providerId: TonPreset["providerId"];
     leaseOwner: string;
     leaseMs: 90000;
   }): Promise<
@@ -174,6 +174,11 @@ export interface TonFixtureSettlementDeps {
     invoiceId: string,
     credit: VerifiedChainCredit,
   ): Promise<TonSettlementResult>;
+  /** Optional operator-retry entry (worker principal only). */
+  retryReviewed?(
+    invoiceId: string,
+    eventId: string,
+  ): Promise<TonSettlementResult>;
 }
 /** Sanctioned runtime name for the settlement hook (same shape as the fixture one). */
 export type TonSettlementHook = TonFixtureSettlementDeps;
@@ -240,6 +245,12 @@ async function reconcileSource(
     budget.mutationOutcome = "unknown";
     throw new TonRunStopped("db_error");
   };
+  // The claim/observation provider id follows the SOURCE network, so a preset
+  // switch never sends a testnet provider id for a mainnet source and vice versa.
+  const presetProviderId = (): TonPreset["providerId"] =>
+    source.network === "tvm:-1"
+      ? "toncenter-v3-mainnet"
+      : "toncenter-v3-testnet";
   const renew = async () =>
     fence(
       await budget.db(() =>
@@ -267,7 +278,7 @@ async function reconcileSource(
     sourceId: source.sourceId,
     recipientAccount: source.invoiceRecipient,
     eventIdentity: null,
-    providerId: TON_PROVIDER_ID,
+    providerId: presetProviderId(),
     evidenceModel: TON_EVIDENCE_MODEL,
     providerCursor: expected,
     observedAtMs: Date.now(),
@@ -310,7 +321,7 @@ async function reconcileSource(
     const claimed = await budget.db(() =>
       deps.claimLease({
         source,
-        providerId: TON_PROVIDER_ID,
+        providerId: presetProviderId(),
         leaseOwner,
         leaseMs: TON_LEASE_MS,
       }),

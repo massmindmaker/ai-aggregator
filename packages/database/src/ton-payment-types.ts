@@ -184,7 +184,7 @@ export type TonObservationInput = {
     messageHash: string;
     txLt: string;
   };
-  providerId: "toncenter-v3-testnet";
+  providerId: "toncenter-v3-testnet" | "toncenter-v3-mainnet";
   evidenceModel: "server_trusted_indexer";
   result:
     | {

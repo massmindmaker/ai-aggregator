@@ -206,7 +206,7 @@ describe("disabled and observe-only TON bootstrap", () => {
               ...env(),
               TON_RECONCILIATION_MODE: "settle",
               TON_SETTLEMENT_CONFIRMATION: value,
-              DATABASE_URL: workerUrl,
+              TON_SETTLEMENT_DATABASE_URL: workerUrl,
             },
           }),
         ).rejects.toThrow("TON_RECONCILIATION_STARTUP_REFUSED");
@@ -214,7 +214,7 @@ describe("disabled and observe-only TON bootstrap", () => {
       },
     );
 
-    it("refuses settle mode when the database url is not the worker principal", async () => {
+    it("refuses settle mode without a worker-principal settlement url", async () => {
       const f = setup();
       await expect(
         startTonReconciliationFromEnv({
@@ -223,6 +223,17 @@ describe("disabled and observe-only TON bootstrap", () => {
             ...env(),
             TON_RECONCILIATION_MODE: "settle",
             TON_SETTLEMENT_CONFIRMATION: confirmation,
+          },
+        }),
+      ).rejects.toThrow("TON_RECONCILIATION_STARTUP_REFUSED");
+      await expect(
+        startTonReconciliationFromEnv({
+          ...f,
+          env: {
+            ...env(),
+            TON_RECONCILIATION_MODE: "settle",
+            TON_SETTLEMENT_CONFIRMATION: confirmation,
+            TON_SETTLEMENT_DATABASE_URL: "postgresql://web@127.0.0.1:15432/ai_aggregator_test",
           },
         }),
       ).rejects.toThrow("TON_RECONCILIATION_STARTUP_REFUSED");
@@ -241,7 +252,7 @@ describe("disabled and observe-only TON bootstrap", () => {
           ...env(),
           TON_RECONCILIATION_MODE: "settle",
           TON_SETTLEMENT_CONFIRMATION: confirmation,
-          DATABASE_URL: workerUrl,
+          TON_SETTLEMENT_DATABASE_URL: workerUrl,
         },
       });
       await vi.advanceTimersByTimeAsync(0);
@@ -250,21 +261,21 @@ describe("disabled and observe-only TON bootstrap", () => {
       expect(close).toHaveBeenCalledTimes(1);
     });
 
-  it("still refuses an injected settlement function even in settle mode", async () => {
-    const f = setup();
-    await expect(
-      startTonObservationFromEnv({
-        ...f,
-        env: {
-          ...env(),
-          TON_RECONCILIATION_MODE: "settle",
-          TON_SETTLEMENT_CONFIRMATION: confirmation,
-          DATABASE_URL: workerUrl,
-        },
-        settleVerifiedCredit: vi.fn(),
-      } as never),
-    ).rejects.toThrow("TON_RUNTIME_SETTLEMENT_FORBIDDEN");
-  });
+    it("still refuses an injected settlement function even in settle mode", async () => {
+      const f = setup();
+      await expect(
+        startTonObservationFromEnv({
+          ...f,
+          env: {
+            ...env(),
+            TON_RECONCILIATION_MODE: "settle",
+            TON_SETTLEMENT_CONFIRMATION: confirmation,
+            TON_SETTLEMENT_DATABASE_URL: workerUrl,
+          },
+          settleVerifiedCredit: vi.fn(),
+        } as never),
+      ).rejects.toThrow("TON_RUNTIME_SETTLEMENT_FORBIDDEN");
+    });
 
     it("boots mainnet reconciliation when every preset constant matches (mainnet wiring)", async () => {
       const f = setup();
