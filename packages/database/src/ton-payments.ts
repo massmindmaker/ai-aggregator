@@ -1201,3 +1201,124 @@ export async function releaseTonReconciliationLease(
     ),
   );
 }
+
+export interface TonReviewRequiredEntry {
+  invoiceId: string;
+  eventId: string;
+  orgId: string;
+  reference: string;
+  reviewReason: string;
+  amountAtomic: string;
+  assetKind: string;
+  network: string;
+  txHash: string;
+  updatedAt: string;
+}
+
+/** Operator queue (task 4.1): invoices currently in review_required with their latest review cause. */
+export async function listTonReviewRequired(
+  db: TonPaymentDatabase,
+  limit: number,
+): Promise<TonReviewRequiredEntry[]> {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
+    throw new Error("TON_REVIEW_LIMIT_INVALID");
+  }
+  return db.transaction(async (tx) => {
+    const result = await tx.query<{
+      invoice_id: string;
+      event_id: string;
+      org_id: string;
+      reference: string;
+      review_reason: string;
+      amount_atomic: string;
+      asset_kind: string;
+      network: string;
+      tx_hash: string;
+      updated_at: string;
+    }>({
+      text: `SELECT i.id::text AS invoice_id, d.event_id::text AS event_id, i.org_id::text AS org_id, i.reference,
+        i.review_reason, i.amount_atomic::text AS amount_atomic, i.asset_kind, i.network::text AS network,
+        e.tx_hash::text AS tx_hash, i.updated_at::text AS updated_at
+        FROM ton_invoices i
+        JOIN LATERAL (SELECT ed.event_id, ed.reason FROM ton_invoice_event_decisions ed
+          WHERE ed.invoice_id=i.id AND ed.decision='review_required'
+          ORDER BY ed.created_at DESC, ed.id DESC LIMIT 1) d ON TRUE
+        JOIN ton_chain_events e ON e.id=d.event_id
+        WHERE i.status='review_required'
+          AND NOT EXISTS (SELECT 1 FROM ton_invoice_event_decisions a WHERE a.invoice_id=i.id AND a.decision='acknowledged_no_credit')
+        ORDER BY i.updated_at DESC, i.id
+        LIMIT $1::integer`,
+      values: [limit],
+    });
+    return result.rows.map((row) => ({
+      invoiceId: row.invoice_id,
+      eventId: row.event_id,
+      orgId: row.org_id,
+      reference: row.reference,
+      reviewReason: row.review_reason,
+      amountAtomic: row.amount_atomic,
+      assetKind: row.asset_kind,
+      network: row.network,
+      txHash: row.tx_hash,
+      updatedAt: row.updated_at,
+    }));
+  });
+}
+
+export type TonReviewAction = "acknowledge_no_credit" | "retry_settle";
+
+/**
+ * Append-only operator decision (task 4.1). `acknowledge_no_credit` is the
+ * terminal "no credit" verdict (the settle function honours it); `retry_settle`
+ * only records the audit row — the worker sweep re-evaluates the causes on its
+ * next tick (durable-but-re-evaluable review decisions, migration 0101).
+ */
+export async function resolveTonReviewDecision(
+  db: TonPaymentDatabase,
+  input: {
+    invoiceId: string;
+    eventId: string;
+    actor: string;
+    action: TonReviewAction;
+  },
+): Promise<"acknowledged" | "retry_scheduled"> {
+  const invoiceId = id(input.invoiceId);
+  const eventId = id(input.eventId);
+  if (
+    typeof input.actor !== "string" ||
+    input.actor.length === 0 ||
+    input.actor.length > 255
+  ) {
+    throw new Error("TON_REVIEW_ACTOR_INVALID");
+  }
+  return db.transaction(async (tx) => {
+    const current = await tx.query<{ status: string; reason: string | null }>({
+      text: `SELECT i.status, d.reason
+        FROM ton_invoices i
+        JOIN ton_invoice_event_decisions d ON d.invoice_id=i.id AND d.event_id=$2::uuid AND d.decision='review_required'
+        WHERE i.id=$1::uuid AND i.status='review_required'
+          AND NOT EXISTS (SELECT 1 FROM ton_invoice_event_decisions a WHERE a.invoice_id=i.id AND a.decision='acknowledged_no_credit')`,
+      values: [invoiceId, eventId],
+    });
+    const row = current.rows[0];
+    if (!row || row.reason === null) {
+      throw new Error("TON_REVIEW_TARGET_INVALID");
+    }
+    if (input.action === "acknowledge_no_credit") {
+      await tx.query({
+        text: `INSERT INTO ton_invoice_event_decisions(invoice_id,event_id,decision,reason)
+          VALUES($1::uuid,$2::uuid,'acknowledged_no_credit',$3)
+          ON CONFLICT (invoice_id,event_id,decision) DO NOTHING`,
+        values: [invoiceId, eventId, row.reason],
+      });
+      return "acknowledged";
+    }
+    await tx.query({
+      text: `INSERT INTO ton_invoice_event_decisions(invoice_id,event_id,decision)
+        VALUES($1::uuid,$2::uuid,'retry_requested')
+        ON CONFLICT (invoice_id,event_id,decision) DO NOTHING`,
+      values: [invoiceId, eventId],
+    });
+    return "retry_scheduled";
+  });
+}

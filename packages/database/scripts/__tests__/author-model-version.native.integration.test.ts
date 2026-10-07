@@ -56,9 +56,9 @@ describe.runIf(process.env.RUN_NATIVE_DB_INTEGRATION === "1")(
               port: 15432,
             });
             const migrations = await discoverNativeMigrations();
-            expect(migrations).toHaveLength(100);
+            expect(migrations).toHaveLength(101);
             expect(migrations.at(-1)?.filename).toBe(
-              "0100_ton_invoice_expiry_batch.sql",
+              "0101_ton_review_contour.sql",
             );
             const first = await runNativeMigrations(fixture, migrations);
             expect(first.applied).toHaveLength(migrations.length);

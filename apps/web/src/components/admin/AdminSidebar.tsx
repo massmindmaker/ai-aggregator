@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   CreditCard,
   Banknote,
+  Coins,
   Tag,
   Share2,
   ScanSearch,
@@ -73,6 +74,7 @@ const SECTIONS: NavSection[] = [
     heading: 'Finance',
     items: [
       { href: '/admin/payments', label: 'Платежи', icon: CreditCard },
+      { href: '/admin/ton', label: 'TON review', icon: Coins },
       { href: '/admin/payouts', label: 'Выплаты', icon: Banknote },
       { href: '/admin/promos', label: 'Промокоды', icon: Tag },
       { href: '/admin/referrals', label: 'Реферралы', icon: Share2 },

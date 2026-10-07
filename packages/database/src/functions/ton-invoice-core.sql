@@ -39,7 +39,8 @@ BEGIN
   IF (to_jsonb(NEW)-'updated_at') IS DISTINCT FROM (to_jsonb(OLD)-'updated_at') THEN RAISE EXCEPTION 'TON_IMMUTABLE'; END IF;
  ELSIF NOT ((OLD.status='pending' AND NEW.status IN ('observed','expired','review_required')) OR
    (OLD.status='observed' AND NEW.status IN ('confirmed','review_required')) OR
-   (OLD.status='confirmed' AND NEW.status='settled') OR (OLD.status='expired' AND NEW.status='review_required')) THEN
+   (OLD.status='confirmed' AND NEW.status='settled') OR (OLD.status='expired' AND NEW.status='review_required') OR
+   (OLD.status='review_required' AND NEW.status IN ('confirmed','settled'))) THEN
   RAISE EXCEPTION 'TON_INVALID_TRANSITION';
  END IF;
  RETURN NEW;
@@ -267,15 +268,20 @@ BEGIN
  SELECT * INTO _event FROM ton_chain_events WHERE network=_network AND recipient_account=_credit->>'recipientAccount' AND tx_hash=_credit->>'txHash' AND message_hash=_credit->>'messageHash' FOR UPDATE;
  IF _event.id IS NULL THEN RAISE EXCEPTION 'TON_EVENT_CAS'; END IF;
  IF _event.fact_snapshot<>_facts THEN RETURN jsonb_build_object('kind','evidence_conflict','eventId',_event.id::text); END IF;
- SELECT * INTO _d FROM ton_invoice_event_decisions WHERE invoice_id=_invoice AND event_id=_event.id;
+ -- Only the LATEST decision binds: settled is terminal money-wise, an operator
+ -- acknowledgement is terminal review-wise; plain review rows re-evaluate so
+ -- a cleared temporary cause settles on the next attempt.
+ SELECT * INTO _d FROM ton_invoice_event_decisions WHERE invoice_id=_invoice AND event_id=_event.id ORDER BY created_at DESC,id DESC LIMIT 1;
  IF FOUND THEN
   IF _d.decision='settled' THEN RETURN jsonb_build_object('kind','already_settled','receipt',aiag_ton_receipt_json_v1(_invoice)); END IF;
-  RETURN jsonb_build_object('kind','review_required','invoiceId',_invoice::text,'eventId',_event.id::text,'reason',_d.reason);
+  IF _d.decision='acknowledged_no_credit' THEN
+   RETURN jsonb_build_object('kind','review_required','invoiceId',_invoice::text,'eventId',_event.id::text,'reason',_d.reason);
+  END IF;
  END IF;
  _grant:=_i.grant_microcredits; _amount:=(_credit->>'amountAtomic')::numeric;
  IF _i.status='settled' THEN _reason:='additional_transfer';
  ELSIF EXISTS(SELECT 1 FROM ton_invoice_event_decisions WHERE event_id=_event.id AND decision='settled' AND invoice_id<>_invoice) THEN _reason:='event_already_consumed';
- ELSIF _i.status='review_required' THEN _reason:='invoice_in_review';
+ ELSIF _i.status='review_required' AND EXISTS(SELECT 1 FROM ton_invoice_event_decisions d WHERE d.invoice_id=_invoice AND d.decision='acknowledged_no_credit') THEN _reason:='invoice_in_review';
  ELSIF _i.status='expired' OR _now>=_i.expires_at OR (_credit->>'chainTimeMs')::numeric>=extract(epoch FROM _i.expires_at)*1000 THEN _reason:='late_payment';
  ELSIF _o.owner_id<>_i.owner_user_id THEN _reason:='owner_changed';
  ELSIF _network<>_i.network OR _credit->>'recipient'<>_i.recipient OR _credit->'asset'<>_i.quote_snapshot->'asset' OR _credit->>'reference'<>_i.reference OR
@@ -284,7 +290,7 @@ BEGIN
   (_i.asset_kind='jetton' AND (_credit->'jettonCredit'->>'masterAddress' IS DISTINCT FROM _i.master_address OR
    _credit->'jettonCredit'->>'merchantJettonWallet' IS DISTINCT FROM _credit->>'recipientAccount')) THEN _reason:='payment_mismatch';
  ELSIF _credit->>'verifierVersion'<>_i.verifier_version OR _credit->>'finalityPolicyId'<>_i.finality_policy_id THEN _reason:='verification_policy_mismatch';
- ELSIF EXISTS(SELECT 1 FROM ton_invoice_event_decisions WHERE invoice_id=_invoice AND event_id<>_event.id) THEN _reason:='multiple_transfers';
+ ELSIF EXISTS(SELECT 1 FROM ton_invoice_event_decisions WHERE invoice_id=_invoice AND event_id<>_event.id AND decision IN ('settled','review_required')) THEN _reason:='multiple_transfers';
  ELSIF _amount<_i.amount_atomic THEN _reason:='underpayment';
  ELSIF _amount>_i.amount_atomic THEN _reason:='overpayment';
  ELSIF _o.refund_debt_credits>0 OR EXISTS(SELECT 1 FROM payments WHERE topup_org_id=_org AND refund_claim_id IS NOT NULL) THEN _reason:='refund_blocked';
@@ -292,7 +298,8 @@ BEGIN
  ELSIF _grant>9007199254740991 OR _o.payg_credits>9007199254740991-_grant THEN _reason:='balance_compatibility_limit';
  END IF;
  IF _reason IS NOT NULL THEN
-  INSERT INTO ton_invoice_event_decisions(invoice_id,event_id,decision,reason) VALUES(_invoice,_event.id,'review_required',_reason);
+  INSERT INTO ton_invoice_event_decisions(invoice_id,event_id,decision,reason) VALUES(_invoice,_event.id,'review_required',_reason)
+   ON CONFLICT (invoice_id,event_id,decision) DO NOTHING;
   IF _i.status NOT IN ('settled','review_required') THEN
    UPDATE ton_invoices SET status='review_required',review_reason=_reason,updated_at=_now WHERE id=_invoice AND org_id=_org AND status IN ('pending','observed','expired') RETURNING id INTO _changed;
    IF _changed IS NULL THEN RAISE EXCEPTION 'TON_INVOICE_CAS'; END IF;
@@ -303,7 +310,7 @@ BEGIN
   UPDATE ton_invoices SET status='observed',updated_at=_now WHERE id=_invoice AND org_id=_org AND status='pending' RETURNING id INTO _changed;
   IF _changed IS NULL THEN RAISE EXCEPTION 'TON_INVOICE_CAS'; END IF;
  END IF;
- UPDATE ton_invoices SET status='confirmed',updated_at=_now WHERE id=_invoice AND org_id=_org AND status='observed' RETURNING id INTO _changed;
+ UPDATE ton_invoices SET status='confirmed',review_reason=NULL,updated_at=_now WHERE id=_invoice AND org_id=_org AND status IN ('observed','review_required') RETURNING id INTO _changed;
  IF _changed IS NULL THEN RAISE EXCEPTION 'TON_INVOICE_CAS'; END IF;
  UPDATE organizations SET payg_credits=payg_credits+_grant,updated_at=_now
  WHERE id=_org AND owner_id=_i.owner_user_id AND payg_credits>=0 AND refund_debt_credits=0

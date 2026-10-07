@@ -211,6 +211,10 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       resolve("packages/database/migrations/0098_ton_mainnet_network.sql"),
       "utf8",
     );
+    const reviewMigration = await readFile(
+      resolve("packages/database/migrations/0101_ton_review_contour.sql"),
+      "utf8",
+    );
     const mirror = await readFile(
       resolve("packages/database/src/functions/ton-invoice-core.sql"),
       "utf8",
@@ -218,7 +222,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     // Latest replacement wins: 0098 overrides the four network-aware invoice
     // core bodies; the mirror must carry exactly the applied definitions.
     const latest = new Map<string, string>();
-    for (const source of [migration, mainnetMigration])
+    for (const source of [migration, mainnetMigration, reviewMigration])
       for (const match of source.matchAll(
         /CREATE (?:OR REPLACE )?FUNCTION (\w+)\([^]*? AS \$\$([^]*?)\$\$;/g,
       ))
@@ -430,7 +434,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(createHash("sha256").update(previous).digest("hex")).toBe(
       "b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6",
     );
-    expect(await discoverNativeMigrations()).toHaveLength(100);
+    expect(await discoverNativeMigrations()).toHaveLength(101);
     const types = await client.query<{ name: string; fields: string[] }>({
       text: `
       SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
