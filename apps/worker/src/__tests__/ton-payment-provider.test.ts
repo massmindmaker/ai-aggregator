@@ -850,3 +850,45 @@ describe('required endpoint fact mutation matrix', () => {
     expect(result).toEqual({ kind: 'source_error', code: 'provider_schema_invalid', retryAfterMs: null });
   });
 });
+
+describe('network presets (plan task 1.1)', () => {
+  it('resolves the testnet preset by default and refuses unknown names', async () => {
+    const { resolveTonPreset, TON_PRESETS } = await import('../ton-payment-evidence.js');
+    expect(resolveTonPreset(undefined)).toBe(TON_PRESETS.testnet);
+    expect(resolveTonPreset('mainnet')).toBe(TON_PRESETS.mainnet);
+    expect(() => resolveTonPreset('devnet')).toThrow();
+  });
+
+  it('builds requests from the mainnet preset origin and stamps mainnet evidence', async () => {
+    const { TON_PRESETS } = await import('../ton-payment-evidence.js');
+    const fetchImpl = nativeFixtureFetch();
+    const mainnetProvider = createToncenterV3Provider({
+      baseUrl: 'https://toncenter.com/',
+      preset: TON_PRESETS.mainnet,
+      fetchImpl,
+    });
+    const result = await mainnetProvider.scanAccountPage(FIXTURE_RECIPIENT, null, new AbortController().signal);
+    expect(result).toMatchObject({ kind: 'page' });
+    expect(fetchImpl.mock.calls.length).toBeGreaterThan(0);
+    for (const call of fetchImpl.mock.calls) {
+      expect(String(call[0])).toMatch(/^https:\/\/toncenter\.com\/api\/v3\//);
+    }
+    if (result.kind !== 'page') throw new Error('expected a fixture page');
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0]!.source.providerId).toBe('toncenter-v3-mainnet');
+    expect(result.evidence[0]!.source.origin).toBe('https://toncenter.com');
+    expect(result.evidence[0]!.network).toBe('tvm:-1');
+    expect(result.evidence[0]!.asset.network).toBe('tvm:-1');
+  });
+
+  it('rejects a baseUrl that belongs to the other preset', async () => {
+    const { TON_PRESETS } = await import('../ton-payment-evidence.js');
+    expect(() => createToncenterV3Provider({ baseUrl: 'https://toncenter.com/', fetchImpl: vi.fn() }))
+      .toThrow('origin_mismatch');
+    expect(() => createToncenterV3Provider({
+      baseUrl: 'https://testnet.toncenter.com/',
+      preset: TON_PRESETS.mainnet,
+      fetchImpl: vi.fn(),
+    })).toThrow('origin_mismatch');
+  });
+});

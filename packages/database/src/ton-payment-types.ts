@@ -1,4 +1,4 @@
-import type { TonQuote, Asset } from "@aiag/shared/ton-payment-contract";
+import type { TonNetworkId, TonQuote, Asset } from "@aiag/shared/ton-payment-contract";
 export type AtomicString = string; // Runtime canonical decimal validation mandatory.
 export interface TonInvoiceContext {
   actorUserId: string;
@@ -30,7 +30,7 @@ export interface TonInvoice {
   quote: TonQuote;
   grantMicrocredits: AtomicString;
   priceRevision: string;
-  network: "tvm:-3";
+  network: TonNetworkId;
   asset: Asset;
   amountAtomic: AtomicString;
   recipient: string;
@@ -58,14 +58,14 @@ export interface TonReceipt {
   eventId: string;
   grantMicrocredits: AtomicString;
   amountAtomic: AtomicString;
-  network: "tvm:-3";
+  network: TonNetworkId;
   asset: Asset;
   settledAt: string;
   paygAfterMicrocredits: AtomicString;
   refundDebtAfterMicrocredits: AtomicString;
 }
 export interface VerifiedChainCredit {
-  network: "tvm:-3";
+  network: TonNetworkId;
   asset: Asset;
   recipient: string;
   recipientAccount: string;
@@ -168,7 +168,7 @@ export type TonRecipientBinding = {
 
 export interface TonReconciliationSource {
   sourceId: string;
-  network: "tvm:-3";
+  network: TonNetworkId;
   asset: TonInvoice["asset"];
   invoiceRecipient: string;
   scanFloorTimeMs: number;

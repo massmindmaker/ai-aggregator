@@ -1,7 +1,14 @@
+/**
+ * TON network ids: 'tvm:-3' (testnet) and 'tvm:-1' (mainnet). The runtime quote
+ * parser below still only accepts testnet until the mainnet migration lands;
+ * the union exists so preset-aware code typechecks end to end.
+ */
+export type TonNetworkId = 'tvm:-3' | 'tvm:-1';
+
 /** Pure testnet amount/quote contract. No network, persistence, or issuer discovery. */
 export type Asset = Readonly<
-  | { network: 'tvm:-3'; kind: 'native'; decimals: 9 }
-  | { network: 'tvm:-3'; kind: 'jetton'; masterAddress: string; decimals: number }
+  | { network: TonNetworkId; kind: 'native'; decimals: 9 }
+  | { network: TonNetworkId; kind: 'jetton'; masterAddress: string; decimals: number }
 >;
 
 /** Target atomic units per source atomic unit. No implicit decimal scaling. */

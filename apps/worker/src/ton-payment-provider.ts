@@ -5,11 +5,11 @@ import {
   normalizeCanonicalTonEvidence,
   TON_EVIDENCE_LIMITS,
   TON_EVIDENCE_MODEL,
-  TON_PROVIDER_ID,
-  TON_PROVIDER_ORIGIN,
+  TON_PRESETS,
   type NormalizedTonEvidence,
   type NormalizedTonMessage,
   type NormalizedTonTransaction,
+  type TonPreset,
 } from './ton-payment-evidence.js';
 
 export type TonSourceErrorCode =
@@ -39,7 +39,7 @@ export type TonRecipientBinding = {
 
 export interface TonReconciliationSource {
   sourceId: string;
-  network: 'tvm:-3';
+  network: TonPreset['network'];
   asset: TonInvoice['asset'];
   invoiceRecipient: string;
   scanFloorTimeMs: number;
@@ -55,6 +55,8 @@ export interface TonEvidenceProvider {
 type FetchBoundary = typeof safeFetch;
 export interface ToncenterV3ProviderConfig {
   baseUrl: string;
+  /** Network preset pin; defaults to testnet so existing behaviour is unchanged. */
+  preset?: TonPreset;
   /** Test seam: production defaults to the SSRF-hardened safeFetch boundary. */
   fetchImpl?: FetchBoundary;
   nowMs?: () => number;
@@ -184,10 +186,11 @@ function secondsToMs(value: unknown): number {
   return milliseconds;
 }
 
-function canonicalBaseUrl(baseUrl: string): URL {
+function canonicalBaseUrl(baseUrl: string, preset: TonPreset): URL {
+  const expected = `${preset.origin}/`;
   let parsed: URL;
   try { parsed = new URL(baseUrl); } catch { throw new ProviderFailure('origin_mismatch'); }
-  if (baseUrl !== 'https://testnet.toncenter.com/' || parsed.username !== '' || parsed.password !== '' || parsed.href !== 'https://testnet.toncenter.com/') {
+  if (baseUrl !== expected || parsed.username !== '' || parsed.password !== '' || parsed.href !== expected) {
     throw new ProviderFailure('origin_mismatch');
   }
   return parsed;
@@ -446,7 +449,7 @@ function parentOutputHashes(transaction: NormalizedTonTransaction): string[] {
   return transaction.outMessages.map((entry) => entry.hash);
 }
 
-function mapTrace(traceBody: unknown, scan: Record<string, unknown>, blocks: Map<string, Record<string, unknown>>, headBody: unknown, recipient: string, fetchedAtMs: number): NormalizedTonEvidence {
+function mapTrace(traceBody: unknown, scan: Record<string, unknown>, blocks: Map<string, Record<string, unknown>>, headBody: unknown, recipient: string, fetchedAtMs: number, preset: TonPreset): NormalizedTonEvidence {
   const traces = object(traceBody).traces;
   if (!Array.isArray(traces) || traces.length !== 1) throw new ProviderFailure('provider_schema_invalid');
   const trace = object(traces[0]);
@@ -499,14 +502,15 @@ function mapTrace(traceBody: unknown, scan: Record<string, unknown>, blocks: Map
   const firstHead = validateHeadBlock(head.first);
   const last = validateHeadBlock(head.last);
   if (firstHead.seqno > last.seqno) throw new ProviderFailure('provider_schema_invalid');
-  const canonical = { schemaVersion: 1 as const, source: { providerId: TON_PROVIDER_ID, origin: TON_PROVIDER_ORIGIN, evidenceModel: TON_EVIDENCE_MODEL, fetchedAtMs }, network: 'tvm:-3', asset: { network: 'tvm:-3' as const, kind: 'native' as const, decimals: 9 }, trace: { id: traceId, complete: true, masterchainSeqno: Number(endMc), orderedTransactionHashes: mapped.map((tx) => tx.hash) }, latestIndexedMasterchain: last, transactions: mapped, creditPath: { kind: 'native' as const, recipientTransactionHash: scanFacts.hash, creditMessageHash: scanFacts.inMessage.hash } };
-  const normalized = normalizeCanonicalTonEvidence(canonical, TON_EVIDENCE_LIMITS);
+  const canonical = { schemaVersion: 1 as const, source: { providerId: preset.providerId, origin: preset.origin, evidenceModel: TON_EVIDENCE_MODEL, fetchedAtMs }, network: preset.network, asset: { network: preset.network, kind: 'native' as const, decimals: 9 }, trace: { id: traceId, complete: true, masterchainSeqno: Number(endMc), orderedTransactionHashes: mapped.map((tx) => tx.hash) }, latestIndexedMasterchain: last, transactions: mapped, creditPath: { kind: 'native' as const, recipientTransactionHash: scanFacts.hash, creditMessageHash: scanFacts.inMessage.hash } };
+  const normalized = normalizeCanonicalTonEvidence(canonical, TON_EVIDENCE_LIMITS, preset);
   if ('kind' in normalized) throw new ProviderFailure(normalized.code);
   return normalized;
 }
 
 export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): TonEvidenceProvider {
-  canonicalBaseUrl(config.baseUrl);
+  const preset = config.preset ?? TON_PRESETS.testnet;
+  canonicalBaseUrl(config.baseUrl, preset);
   const fetchImpl = config.fetchImpl ?? safeFetch;
   const nowMs = config.nowMs ?? Date.now;
   const request = async (path: string, query: URLSearchParams, signal: AbortSignal): Promise<unknown> => {
@@ -518,7 +522,7 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     signal.addEventListener('abort', abort, { once: true });
     try {
-      const response = await fetchImpl(`https://testnet.toncenter.com${path}?${query.toString()}`, { method: 'GET', signal: controller.signal, maxRedirects: 0 });
+      const response = await fetchImpl(`${preset.origin}${path}?${query.toString()}`, { method: 'GET', signal: controller.signal, maxRedirects: 0 });
       const problem = statusFailure(response); if (problem) throw problem;
       return await jsonBody(response);
     } catch (error) {
@@ -579,7 +583,7 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
           traced.push({ row, trace });
         }
         const head = await request('/api/v3/masterchainInfo', new URLSearchParams(), signal);
-        const evidence = traced.map(({ row, trace }) => mapTrace(trace, row, blocks, head, account, nowMs()));
+        const evidence = traced.map(({ row, trace }) => mapTrace(trace, row, blocks, head, account, nowMs(), preset));
         const finalRow = retained[retained.length - 1]!.facts;
         const cycleUpperLt = continuation?.cycleUpperLt ?? first.facts.lt;
         return { kind: 'page', evidence, nextCursor: { schemaVersion: 1, beforeLt: finalRow.lt, beforeTransactionHash: finalRow.hash, cycleUpperLt }, exhausted: false };

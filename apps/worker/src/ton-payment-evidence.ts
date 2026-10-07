@@ -4,6 +4,38 @@ export const TON_PROVIDER_ID = 'toncenter-v3-testnet' as const;
 export const TON_PROVIDER_ORIGIN = 'https://testnet.toncenter.com' as const;
 export const TON_EVIDENCE_MODEL = 'server_trusted_indexer' as const;
 
+/**
+ * Provider/verifier preset pair. The pinned testnet constants above stay the
+ * default everywhere; mainnet values only take effect when a caller resolves
+ * this table explicitly (plan AG-TON-L task 1.1/1.2). The DB CHECK and SQL
+ * functions still accept only 'tvm:-3' until migration 0098 lands.
+ */
+export const TON_PRESETS = Object.freeze({
+  testnet: Object.freeze({
+    network: 'tvm:-3',
+    providerId: 'toncenter-v3-testnet',
+    origin: 'https://testnet.toncenter.com',
+    finalityPolicyId: 'toncenter-v3-testnet-provider-attested-mc-depth-2-v1',
+  }),
+  mainnet: Object.freeze({
+    network: 'tvm:-1',
+    providerId: 'toncenter-v3-mainnet',
+    origin: 'https://toncenter.com',
+    finalityPolicyId: 'toncenter-v3-provider-attested-mc-depth-2-v1',
+  }),
+});
+
+export type TonPresetName = keyof typeof TON_PRESETS;
+export type TonPreset = (typeof TON_PRESETS)[TonPresetName];
+
+/** Undefined/empty resolves to the pinned testnet default; anything else must name a preset. */
+export function resolveTonPreset(name: string | undefined): TonPreset {
+  if (name === undefined || name === '') return TON_PRESETS.testnet;
+  const preset = (TON_PRESETS as Record<string, TonPreset | undefined>)[name];
+  if (!preset) throw new Error('TON_PRESET_UNKNOWN');
+  return preset;
+}
+
 export interface TonEvidenceLimits {
   maxBundleBytes: number;
   maxTraceTransactions: number;
@@ -56,8 +88,8 @@ export interface NormalizedTonTransaction {
 export interface NormalizedTonEvidence {
   schemaVersion: 1;
   source: {
-    providerId: typeof TON_PROVIDER_ID;
-    origin: typeof TON_PROVIDER_ORIGIN;
+    providerId: TonPreset['providerId'];
+    origin: TonPreset['origin'];
     evidenceModel: typeof TON_EVIDENCE_MODEL;
     fetchedAtMs: number;
   };
@@ -295,16 +327,16 @@ function opcode(value: unknown): string | null {
   return value.toLowerCase();
 }
 
-function asset(value: unknown): TonInvoice['asset'] {
+function asset(value: unknown, network: TonPreset['network']): TonInvoice['asset'] {
   const candidate = plainObject(value);
   if (candidate.kind === 'native') {
     exactKeys(candidate, ['network', 'kind', 'decimals']);
-    if (candidate.network !== 'tvm:-3' || candidate.decimals !== 9) throw new InvalidEvidence();
-    return { network: 'tvm:-3', kind: 'native', decimals: 9 };
+    if (candidate.network !== network || candidate.decimals !== 9) throw new InvalidEvidence();
+    return { network, kind: 'native', decimals: 9 };
   }
   exactKeys(candidate, ['network', 'kind', 'masterAddress', 'decimals']);
   if (
-    candidate.network !== 'tvm:-3' ||
+    candidate.network !== network ||
     candidate.kind !== 'jetton' ||
     !Number.isInteger(candidate.decimals) ||
     (candidate.decimals as number) < 0 ||
@@ -313,7 +345,7 @@ function asset(value: unknown): TonInvoice['asset'] {
     throw new InvalidEvidence();
   }
   return {
-    network: 'tvm:-3',
+    network,
     kind: 'jetton',
     masterAddress: address(candidate.masterAddress),
     decimals: candidate.decimals as number,
@@ -451,6 +483,7 @@ function validLimits(limits: TonEvidenceLimits): boolean {
 export function normalizeCanonicalTonEvidence(
   input: unknown,
   limits: TonEvidenceLimits,
+  preset: TonPreset = TON_PRESETS.testnet,
 ): NormalizedTonEvidence | TonNormalizationFailure {
   if (!validLimits(limits)) return { kind: 'source_error', code: 'provider_schema_invalid' };
 
@@ -477,8 +510,8 @@ export function normalizeCanonicalTonEvidence(
     const source = plainObject(evidence.source);
     exactKeys(source, ['providerId', 'origin', 'evidenceModel', 'fetchedAtMs']);
     if (
-      source.providerId !== TON_PROVIDER_ID ||
-      source.origin !== TON_PROVIDER_ORIGIN ||
+      source.providerId !== preset.providerId ||
+      source.origin !== preset.origin ||
       source.evidenceModel !== TON_EVIDENCE_MODEL
     ) {
       throw new InvalidEvidence();
@@ -500,13 +533,13 @@ export function normalizeCanonicalTonEvidence(
     return {
       schemaVersion: 1,
       source: {
-        providerId: TON_PROVIDER_ID,
-        origin: TON_PROVIDER_ORIGIN,
+        providerId: preset.providerId,
+        origin: preset.origin,
         evidenceModel: TON_EVIDENCE_MODEL,
         fetchedAtMs: time(source.fetchedAtMs),
       },
       network: label(evidence.network),
-      asset: asset(evidence.asset),
+      asset: asset(evidence.asset, preset.network),
       trace: {
         id: hash(trace.id),
         complete: boolean(trace.complete),

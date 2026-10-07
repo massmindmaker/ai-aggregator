@@ -647,3 +647,51 @@ describe('verifyChainCredit', () => {
     });
   });
 });
+
+describe('preset-aware verification (plan task 1.1)', () => {
+  it('verifies mainnet evidence under the mainnet preset policy', async () => {
+    const { TON_PRESETS } = await import('../ton-payment-evidence.js');
+    const { tonVerifierPolicyForPreset } = await import('../ton-payment-verifier.js');
+    const preset = TON_PRESETS.mainnet;
+    const policy = tonVerifierPolicyForPreset(preset);
+    const base = makeInvoice('native');
+    const invoice: TonInvoice = {
+      ...base,
+      network: 'tvm:-1',
+      asset: { network: 'tvm:-1', kind: 'native', decimals: 9 },
+      quote: {
+        ...base.quote,
+        asset: { network: 'tvm:-1', kind: 'native', decimals: 9 },
+      },
+      finalityPolicyId: preset.finalityPolicyId,
+    };
+    const evidence = changeEvidence(native, (value) => {
+      value.network = 'tvm:-1';
+      value.asset = { network: 'tvm:-1', kind: 'native', decimals: 9 };
+      value.source = {
+        ...value.source,
+        providerId: 'toncenter-v3-mainnet',
+        origin: 'https://toncenter.com',
+      };
+    });
+    const result = verifyChainCredit(invoice, evidence, policy, preset);
+    expect(result).toEqual(
+      expect.objectContaining({ kind: 'verified', evidenceDigest: expect.stringMatching(/^[0-9a-f]{64}$/) }),
+    );
+    expect(result).not.toEqual(expect.objectContaining({ reason: 'policy_mismatch' }));
+  });
+
+  it('keeps the default testnet gate closed against mainnet facts (fail-closed)', () => {
+    const invoice = {
+      ...makeInvoice('native'),
+      network: 'tvm:-1' as const,
+      finalityPolicyId: 'toncenter-v3-provider-attested-mc-depth-2-v1',
+    };
+    const evidence = changeEvidence(native, (value) => {
+      value.network = 'tvm:-1';
+      value.source = { ...value.source, providerId: 'toncenter-v3-mainnet', origin: 'https://toncenter.com' };
+    });
+    const result = verifyChainCredit(invoice, evidence, TON_VERIFIER_POLICY);
+    expect(result).toEqual(expect.objectContaining({ kind: 'review_required' }));
+  });
+});

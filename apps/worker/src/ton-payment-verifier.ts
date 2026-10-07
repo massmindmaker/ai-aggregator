@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 import type { TonInvoice, VerifiedChainCredit } from '@aiag/database';
 import {
   TON_EVIDENCE_MODEL,
+  TON_PRESETS,
   TON_PROVIDER_ID,
   TON_PROVIDER_ORIGIN,
   type NormalizedTonEvidence,
   type NormalizedTonMessage,
   type NormalizedTonTransaction,
+  type TonPreset,
 } from './ton-payment-evidence.js';
 
 export { TON_EVIDENCE_MODEL, TON_PROVIDER_ID, TON_PROVIDER_ORIGIN };
@@ -16,11 +18,11 @@ export const TON_FINALITY_POLICY_ID =
   'toncenter-v3-testnet-provider-attested-mc-depth-2-v1' as const;
 
 export interface TonVerifierPolicy {
-  network: 'tvm:-3';
-  providerId: typeof TON_PROVIDER_ID;
+  network: TonPreset['network'];
+  providerId: TonPreset['providerId'];
   evidenceModel: typeof TON_EVIDENCE_MODEL;
   verifierVersion: typeof TON_VERIFIER_VERSION;
-  finalityPolicyId: typeof TON_FINALITY_POLICY_ID;
+  finalityPolicyId: TonPreset['finalityPolicyId'];
   minIndexedMasterchainDepth: 2;
   maxBundleBytes: 1_048_576;
   maxTraceTransactions: 128;
@@ -38,6 +40,20 @@ export const TON_VERIFIER_POLICY: Readonly<TonVerifierPolicy> = Object.freeze({
   maxTraceTransactions: 128,
   maxMessagesPerTransaction: 64,
 });
+
+/**
+ * The only sanctioned way to verify against mainnet facts: the caller must
+ * explicitly resolve the preset and pass both the derived policy and the same
+ * preset to verifyChainCredit. Defaults elsewhere stay pinned to testnet.
+ */
+export function tonVerifierPolicyForPreset(preset: TonPreset): Readonly<TonVerifierPolicy> {
+  return Object.freeze({
+    ...TON_VERIFIER_POLICY,
+    network: preset.network,
+    providerId: preset.providerId,
+    finalityPolicyId: preset.finalityPolicyId,
+  });
+}
 
 export type TonObservedReason = 'candidate_not_found' | 'trace_incomplete' | 'finality_pending';
 
@@ -84,20 +100,26 @@ function review(reason: TonReviewReason, evidenceDigest: string): TonVerificatio
   return { kind: 'review_required', reason, evidenceDigest };
 }
 
-function policyMatches(invoice: TonInvoice, evidence: NormalizedTonEvidence, policy: TonVerifierPolicy): boolean {
-  return policy.network === TON_VERIFIER_POLICY.network
-    && policy.providerId === TON_VERIFIER_POLICY.providerId
-    && policy.evidenceModel === TON_VERIFIER_POLICY.evidenceModel
-    && policy.verifierVersion === TON_VERIFIER_POLICY.verifierVersion
-    && policy.finalityPolicyId === TON_VERIFIER_POLICY.finalityPolicyId
-    && policy.minIndexedMasterchainDepth === TON_VERIFIER_POLICY.minIndexedMasterchainDepth
-    && policy.maxBundleBytes === TON_VERIFIER_POLICY.maxBundleBytes
-    && policy.maxTraceTransactions === TON_VERIFIER_POLICY.maxTraceTransactions
-    && policy.maxMessagesPerTransaction === TON_VERIFIER_POLICY.maxMessagesPerTransaction
+function policyMatches(
+  invoice: TonInvoice,
+  evidence: NormalizedTonEvidence,
+  policy: TonVerifierPolicy,
+  preset: TonPreset,
+): boolean {
+  const canonical = tonVerifierPolicyForPreset(preset);
+  return policy.network === canonical.network
+    && policy.providerId === canonical.providerId
+    && policy.evidenceModel === canonical.evidenceModel
+    && policy.verifierVersion === canonical.verifierVersion
+    && policy.finalityPolicyId === canonical.finalityPolicyId
+    && policy.minIndexedMasterchainDepth === canonical.minIndexedMasterchainDepth
+    && policy.maxBundleBytes === canonical.maxBundleBytes
+    && policy.maxTraceTransactions === canonical.maxTraceTransactions
+    && policy.maxMessagesPerTransaction === canonical.maxMessagesPerTransaction
     && invoice.verifierVersion === policy.verifierVersion
     && invoice.finalityPolicyId === policy.finalityPolicyId
     && evidence.source.providerId === policy.providerId
-    && evidence.source.origin === TON_PROVIDER_ORIGIN
+    && evidence.source.origin === preset.origin
     && evidence.source.evidenceModel === policy.evidenceModel;
 }
 
@@ -288,13 +310,14 @@ export function verifyChainCredit(
   invoice: TonInvoice,
   evidence: NormalizedTonEvidence,
   policy: TonVerifierPolicy,
+  preset: TonPreset = TON_PRESETS.testnet,
 ): TonVerificationResult {
   const evidenceDigest = digest(evidence);
 
-  if (invoice.network !== 'tvm:-3' || evidence.network !== invoice.network) {
+  if (invoice.network !== preset.network || evidence.network !== invoice.network) {
     return review('network_mismatch', evidenceDigest);
   }
-  if (!policyMatches(invoice, evidence, policy)) return review('policy_mismatch', evidenceDigest);
+  if (!policyMatches(invoice, evidence, policy, preset)) return review('policy_mismatch', evidenceDigest);
 
   const serializedBytes = Buffer.byteLength(stableJson(evidence));
   if (
@@ -396,7 +419,7 @@ export function verifyChainCredit(
   }
 
   const credit: VerifiedChainCredit = {
-    network: 'tvm:-3',
+    network: policy.network,
     asset: invoice.asset,
     recipient: invoice.recipient,
     recipientAccount: candidate.transaction.account,
