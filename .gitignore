@@ -75,3 +75,6 @@ video/
 
 # Superpowers isolated worktrees
 .worktrees/
+
+# Mimosa scanner local state
+.mimosa/
