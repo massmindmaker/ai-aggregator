@@ -59,18 +59,18 @@ describe("native ordered migrator", () => {
   it("discovers the complete immutable history in deterministic order", async () => {
     const migrations = await discoverNativeMigrations();
 
-    // 98 = 0098 adds the TON mainnet network + asset allowlist on top of 0097's
-// author-surface catalog revision triggers and 0096's org-scope idempotency index.
-    expect(migrations).toHaveLength(98);
+    // 99 = 0099 adds the worker-only settlement principal on top of 0098's
+// mainnet network + asset allowlist.
+    expect(migrations).toHaveLength(99);
     expect(migrations[0].version).toBe("drizzle/0000_moaning_the_fury.sql");
     expect(migrations[1].version).toBe("migrations/0004_gateway_core.sql");
     expect(migrations[2].version).toBe(
       "migrations/0004_seed_test_upstreams.sql",
     );
     expect(migrations.at(-1)?.version).toBe(
-      "migrations/0098_ton_mainnet_network.sql",
+      "migrations/0099_ton_settlement_principal.sql",
     );
-    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(98);
+    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(99);
   });
 
   it("removes only an outer transaction wrapper owned by a historical file", () => {

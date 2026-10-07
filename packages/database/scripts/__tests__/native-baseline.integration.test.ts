@@ -430,7 +430,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(createHash("sha256").update(previous).digest("hex")).toBe(
       "b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6",
     );
-    expect(await discoverNativeMigrations()).toHaveLength(98);
+    expect(await discoverNativeMigrations()).toHaveLength(99);
     const types = await client.query<{ name: string; fields: string[] }>({
       text: `
       SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t

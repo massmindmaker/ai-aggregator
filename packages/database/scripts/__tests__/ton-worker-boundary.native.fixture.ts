@@ -149,6 +149,10 @@ export async function withTonWorkerRoles(
         };
         return { invoice, credit };
       };
+      // 0099 pre-creates the production principal on every migrated database;
+      // rehearsals must install their own parameterized copy behind the same
+      // schema name, so remove the migrated copy before any install/sabotage.
+      await root.query("DROP SCHEMA IF EXISTS aiag_ton_worker CASCADE");
       if (install) await installTonWorkerBoundary(url, roles);
       for (const kind of ["web", "api", "worker"] as const) {
         const u = new URL(url);
