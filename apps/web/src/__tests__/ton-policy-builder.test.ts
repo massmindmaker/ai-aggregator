@@ -31,12 +31,27 @@ describe('ton checkout policy builder', () => {
     ]);
   });
 
-  it('encodes 5.23 USD/TON as the exact 1e6-scaled numerator', () => {
-    const policy = parseCheckoutPolicy(buildCheckoutPolicy(baseInput(), { nowMs }));
-    expect(policy.fx.numerator).toBe('5230000');
-    expect(policy.fx.denominator).toBe('1000000');
-    expect(policy.fx.rounding).toBe('ceil');
-    expect(policy.fx.source).toBe('coingecko:the-open-network');
+  it('encodes the economics: 1000 credits at 5 USD/TON cost exactly 2.0 TON', () => {
+    const policy = parseCheckoutPolicy(buildCheckoutPolicy({ ...baseInput(), usdPerTon: 5 }, { nowMs }));
+    // 1000 credits = 1_000_000 micro; amountAtomic must be 2e9 nanoTON at 5 USD/TON
+    const micro = 1_000_000n;
+    const fx = policy.fx;
+    const num = BigInt(fx.numerator), den = BigInt(fx.denominator);
+    const product = micro * num;
+    const quotient = product / den;
+    const rem = product % den;
+    const rounded = rem > 0n ? quotient + 1n : quotient; // ceil
+    expect(rounded).toBe(2_000_000_000n);
+    expect(fx.source).toBe('coingecko:the-open-network');
+  });
+
+  it('keeps numerator/denominator inside int64 at extreme rates', () => {
+    for (const usdPerTon of [0.01, 5.23, 1000]) {
+      const policy = parseCheckoutPolicy(buildCheckoutPolicy({ ...baseInput(), usdPerTon }, { nowMs }));
+      expect(BigInt(policy.fx.numerator) > 0n).toBe(true);
+      expect(BigInt(policy.fx.denominator) > 0n);
+      expect(BigInt(policy.fx.denominator) <= 9223372036854775807n).toBe(true);
+    }
   });
 
   it('anchors FX provenance to the injected clock and maxFxAgeSeconds', () => {

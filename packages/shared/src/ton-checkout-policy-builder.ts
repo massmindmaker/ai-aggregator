@@ -2,9 +2,9 @@
  * Pure builder for the server-owned TON checkout policy JSON blob consumed by
  * parseCheckoutPolicy (zod) in apps/web. The FX oracle is NOT consulted here:
  * the caller supplies usdPerTon and its real observation timestamp; this
- * module only renders a string that the schema must accept. FX is a
- * fixed-point ratio scaled by 1e6 with 'ceil' rounding (in favour of the
- * receiver).
+ * module only renders a string that the schema must accept. FX is expressed
+ * as nanoTON per 1 microcredit (numerator/denominator = 10^10 / (usdPerTon ×
+ * 10^6)) with 'ceil' rounding (in favour of the receiver).
  */
 export interface PolicyBuilderInput {
   usdPerTon: number;
@@ -25,7 +25,6 @@ export interface PolicyBuilderDeps {
 /** Defaults must stay inside the zod bounds (30..600 and 1..86400). */
 const DEFAULT_QUOTE_LIFETIME_SECONDS = 120;
 const DEFAULT_MAX_FX_AGE_SECONDS = 60;
-const FX_SCALE = 1_000_000n;
 const FX_SOURCE = 'coingecko:the-open-network';
 const MAX_SIGNED_BIGINT = 9223372036854775807n;
 
@@ -47,7 +46,15 @@ export function buildCheckoutPolicy(input: PolicyBuilderInput, deps?: PolicyBuil
   if (typeof input.usdPerTon !== 'number' || !Number.isFinite(input.usdPerTon) || input.usdPerTon <= 0) {
     throw new Error('TON_POLICY_BUILDER_FX_INVALID');
   }
-  const numerator = positiveAtomicString(BigInt(Math.round(input.usdPerTon * 1_000_000)), 'TON_POLICY_BUILDER_FX_INVALID');
+  // Economic ratio: nanoTON per 1 microcredit = 10^10 / (usdPerTon × 10^6).
+  // 1 micro = 1e-5 USD; nanoTON = USD / usdPerTon × 1e9  ⇒  micro × 1e4 / usdPerTon.
+  // Math.round here is acceptable: this is a rate, not money; actual amounts
+  // are computed on BigInt in createQuote (convertAtomic, ceil rounding).
+  const FX_NUMERATOR = 10_000_000_000n; // 10^10, constant
+  const denominator = positiveAtomicString(
+    BigInt(Math.round(input.usdPerTon * 1_000_000)),
+    'TON_POLICY_BUILDER_FX_INVALID',
+  );
   const policy = {
     revision: input.revision,
     recipient: input.recipient,
@@ -57,8 +64,8 @@ export function buildCheckoutPolicy(input: PolicyBuilderInput, deps?: PolicyBuil
     quoteLifetimeSeconds: input.quoteLifetimeSeconds ?? DEFAULT_QUOTE_LIFETIME_SECONDS,
     maxFxAgeSeconds,
     fx: {
-      numerator,
-      denominator: FX_SCALE.toString(),
+      numerator: FX_NUMERATOR.toString(),
+      denominator,
       rounding: 'ceil' as const,
       source: FX_SOURCE,
       observedAtMs,
