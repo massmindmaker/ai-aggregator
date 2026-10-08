@@ -27,11 +27,11 @@ import {
 export const metadata: Metadata = {
   title: "Каталог моделей — AI Aggregator",
   description:
-    "Витрина AI-моделей: GPT, Claude, YandexGPT, DALL-E и ещё десятки моделей. Единый API, оплата в рублях, без VPN.",
+    "Витрина AI-моделей: GPT, Claude, YandexGPT, DALL-E и ещё десятки моделей. Единый API, оплата в Gram (TON), без VPN.",
   openGraph: {
     title: "Каталог моделей — AI Aggregator",
     description:
-      "Витрина AI-моделей: GPT, Claude, YandexGPT, DALL-E. Единый API, оплата в рублях.",
+      "Витрина AI-моделей: GPT, Claude, YandexGPT, DALL-E. Единый API, оплата в Gram (TON).",
     type: "website",
   },
   alternates: { canonical: "/marketplace" },
@@ -64,7 +64,7 @@ export default async function MarketplacePage({
             Каталог моделей
           </h1>
           <p className="text-muted-foreground max-w-2xl">
-            Все модели доступны через один API. Оплата в рублях с баланса.
+            Все модели доступны через один API. Оплата в Gram (TON) с баланса.
             Фильтры сохраняются в ссылке — делитесь подборкой.
           </p>
           <Link

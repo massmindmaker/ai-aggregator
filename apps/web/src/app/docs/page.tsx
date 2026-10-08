@@ -129,7 +129,7 @@ export default function DocsPage() {
               </h1>
               <p className="mt-3 text-lg text-muted-foreground">
                 Единый OpenAI-совместимый API ко всем моделям платформы.
-                Подключайтесь за 2 минуты, оплачивайте в рублях, без VPN.
+                Подключайтесь за 2 минуты, оплачивайте в Gram (TON), без VPN.
               </p>
             </header>
 

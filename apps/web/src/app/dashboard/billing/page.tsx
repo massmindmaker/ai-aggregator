@@ -231,12 +231,12 @@ export default function BillingPage() {
               )}
             </div>
             <p className="mt-3 text-sm text-muted-foreground">
-              Перейдите на платный тариф для повышенных лимитов и приоритета
+              Пополните баланс кредитов для повышенных лимитов и приоритета
               в роутинге.
             </p>
             <Button asChild size="sm" className="mt-4">
               <a href="/pricing">
-                Выбрать тариф <ArrowRight className="ms-2 h-4 w-4" />
+                Выбрать пакет <ArrowRight className="ms-2 h-4 w-4" />
               </a>
             </Button>
           </div>

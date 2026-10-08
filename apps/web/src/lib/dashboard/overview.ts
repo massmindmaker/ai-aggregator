@@ -107,7 +107,7 @@ export async function fetchOverview(userId: string, mode: Mode): Promise<Overvie
         cta: myModelsLive === 0 ? 'Загрузить модель' : undefined,
         href: myModelsLive === 0 ? '/dashboard/models/new' : '/dashboard/models',
       },
-      { label: 'Тариф', value: planName },
+      { label: 'Пакет', value: planName },
     ];
   } else {
     tiles = [
@@ -126,7 +126,7 @@ export async function fetchOverview(userId: string, mode: Mode): Promise<Overvie
         value: '—',
         sublabel: 'модели вы используете',
       },
-      { label: 'Тариф', value: planName },
+      { label: 'Пакет', value: planName },
     ];
   }
 

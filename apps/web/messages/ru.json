@@ -109,14 +109,6 @@
   },
   "pricing": {
     "title": "Тарифы",
-    "tiers": {
-      "free": "Free",
-      "basic": "Basic",
-      "starter": "Starter",
-      "growth": "Growth",
-      "pro": "Pro",
-      "business": "Business"
-    },
     "calculator": {
       "title": "Калькулятор",
       "requestsPerDay": "Запросов в день",
