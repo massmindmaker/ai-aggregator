@@ -1,5 +1,5 @@
 ﻿import Link from 'next/link';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { Metadata } from 'next';
 import MainLayout from '@/components/layout/MainLayout';
 import HeroAnimation from '@/components/HeroAnimation';
@@ -20,23 +20,31 @@ import { filtersToSearchParams } from '@/lib/marketplace/filters';
  * (no DB, no network), so module scope is safe here.
  *
  * 🔴 AG-7 (2026-09-30): the same rule now applies to PRICES and to the tier
- * cards below. This file used to print hand-typed "0.2 ₽ / 1k tok" strings and
+ * cards below. This file used to print hand-typed "0.2 rub / 1k tok" strings and
  * five subscription tiers (Basic/Starter/Growth/Pro/Business) that the billing
  * code does not know: prices are billed in CREDITS (pricing-calc.ts docblock)
  * and `TIERS` in lib/payments/providers.ts has exactly three ids
  * (basic|starter|pro) — Growth/Business returned 400 BAD_TIER at checkout.
  * Both blocks are now derived from those two modules.
+ *
+ * Gram-storefront (2026-10-09): the pricing section below sells Gram top-up
+ * packages projected from the active TON checkout policy (`readGramPricing`),
+ * not ruble subscriptions.
  */
 
 import { getModelBySlug } from '@/lib/marketplace/catalog';
 import { formatPriceLabel } from '@/lib/marketplace/pricing-calc';
-import { TIERS, TIER_ORDER, type TierId } from '@/lib/payments/tiers';
+import {
+  readGramPricing,
+  type GramPackageView,
+  type GramPricingView,
+} from '@/lib/ton-wallet/pricing-packages';
 
 export const metadata: Metadata = {
   title:
-    'AI-Aggregator — любая AI-модель, один API, оплата картой РФ',
+    'AI-Aggregator — любая AI-модель, один API, оплата в Gram',
   description:
-    'Подключайте AI-модели через OpenAI-совместимый API. GPT-5, Claude, Flux, Veo и открытые модели. Оплата картой РФ, СБП, по счёту. Deploy в РФ-регионе.',
+    'Подключайте AI-модели через OpenAI-совместимый API. GPT-5, Claude, Flux, Veo и открытые модели. Оплата в Gram (TON), курс фиксируется на счёте. Deploy в РФ-регионе.',
 };
 
 /**
@@ -136,7 +144,7 @@ const FLOATING_MODEL_SLUGS = [
 
 /**
  * 🔴 AG-7 (2026-09-30): these were four hand-written cards with hand-typed
- * prices in rubles ("0.2 ₽ / 1k tok" for a model the catalog prices at 0.9
+ * prices in rubles ("0.2 rub / 1k tok" for a model the catalog prices at 0.9
  * credits/1k). Prices are now read from the same catalog the marketplace uses
  * and printed by `formatPriceLabel`, which renders CREDITS ("кр") — the unit
  * billing actually charges in. Slugs are resolved through `getModelBySlug`, so
@@ -188,7 +196,7 @@ const steps = [
   {
     num: '// 02',
     title: 'Получите API-ключ',
-    desc: 'Пополните баланс через T-Bank, СБП или по счёту. Ключ в дашборде через 10 секунд.',
+    desc: 'Пополните баланс в Gram (TON). Ключ в дашборде через 10 секунд.',
     code: (
       <>
         Authorization: Bearer{' '}
@@ -211,12 +219,12 @@ const steps = [
 
 const compareRows = [
   {
-    feat: 'Оплата картой РФ / СБП',
-    us: { kind: 'check', text: '✓ T-Bank, ЮKassa, СБП' },
+    feat: 'Крипто-оплата Gram (TON)',
+    us: { kind: 'check', text: '✓ Gram (TON), курс фиксируется на счёте' },
     cells: [
       { kind: 'cross', text: '✗ только US card' },
       { kind: 'cross', text: '✗ только US card' },
-      { kind: 'check', text: '✓ ЮKassa' },
+      { kind: 'cross', text: '✗ только фиат (ЮKassa)' },
     ],
   },
   {
@@ -284,40 +292,88 @@ const cellColor: Record<string, string> = {
 /**
  * 🔴 AG-7 (2026-09-30): this block used to advertise five tiers — Basic 990,
  * Starter 2490, **Growth 4490**, Pro 6990, **Business 29900** — and per-tier
- * promises ("+1000₽ на баланс", "-10% на запросы", "5 API-ключей", "Retention
- * логов 90 дней") that exist nowhere in the code. Growth and Business are not
- * in `TIERS` at all: `getTier()` returned null and checkout answered 400
- * BAD_TIER, i.e. two of the five cards on the home page were unpurchasable.
+ * promises ("+1000 руб на баланс", "-10% на запросы", "5 API-ключей",
+ * "Retention логов 90 дней") that exist nowhere in the code. Growth and
+ * Business are not in `TIERS` at all: `getTier()` returned null and checkout
+ * answered 400 BAD_TIER, i.e. two of the five cards on the home page were
+ * unpurchasable.
  *
- * Now every card is generated from `TIERS` (lib/payments/tiers.ts) — the same
- * table `api/subscriptions/create` charges from — and the only promise made is
- * the one the code implements: a monthly credit allotment. Credits, not rubles
- * on a balance: the webhook grants `tier.credits` credits (1 credit = 1 cent).
+ * Gram-storefront (2026-10-09): the section sells no ruble subscriptions at
+ * all anymore. Cards are Gram top-up packages projected from the active TON
+ * checkout policy via `readGramPricing` (task 3) — the same view /pricing
+ * invoices from. Without a policy NO price is invented: the three canonical
+ * packages render with the line "Цена — на странице оплаты" and the CTA still
+ * leads to /pricing.
  */
-const pricingTiers = TIER_ORDER.map((id: TierId) => {
-  const tier = TIERS[id];
-  return {
-    id,
-    tier: tier.name,
-    featured: id === 'starter',
+const HOME_PACKAGE_IDS = ['credit-1200', 'credit-3200', 'credit-10000'];
+
+/** Canonical ids/labels shown when the checkout policy is unavailable. */
+const DEFAULT_HOME_PACKAGES = [
+  { id: 'credit-1200', label: 'Basic — 1 200 кредитов' },
+  { id: 'credit-3200', label: 'Starter — 3 200 кредитов' },
+  { id: 'credit-10000', label: 'Pro — 10 000 кредитов' },
+];
+
+interface HomePackageCard {
+  id: string;
+  label: string;
+  featured: boolean;
+  price: ReactNode;
+  desc: string;
+  cta: string;
+}
+
+/** Up to three packages: the canonical ids when present, else the first three. */
+function pickHomePackages(view: GramPricingView): GramPackageView[] {
+  const preferred = HOME_PACKAGE_IDS.flatMap((id) => {
+    const pkg = view.packages.find((p) => p.id === id);
+    return pkg ? [pkg] : [];
+  });
+  const chosen = [...(preferred.length > 0 ? preferred : view.packages)];
+  for (const pkg of view.packages) {
+    if (chosen.length >= 3) break;
+    if (!chosen.some((p) => p.id === pkg.id)) chosen.push(pkg);
+  }
+  return chosen.slice(0, 3);
+}
+
+function buildHomePackageCards(view: GramPricingView | null): HomePackageCard[] {
+  if (!view || view.packages.length === 0) {
+    return DEFAULT_HOME_PACKAGES.map((pkg, i) => ({
+      id: pkg.id,
+      label: pkg.label,
+      featured: i === 1,
+      price: (
+        <span style={{ fontSize: 13, fontWeight: 600 }}>
+          Цена — на странице оплаты
+        </span>
+      ),
+      desc: 'Пополнение в Gram (TON).',
+      cta: 'Подключить',
+    }));
+  }
+  return pickHomePackages(view).map((pkg, i) => ({
+    id: pkg.id,
+    label: pkg.label,
+    featured: i === 1,
     price: (
       <>
-        {tier.monthly.toLocaleString('ru-RU')}
-        <span style={{ color: 'var(--accent)', fontSize: 14 }}>₽</span>
-        <span
-          className="text-[11px] font-normal"
-          style={{ color: 'var(--ink-muted)' }}
-        >{' '}
-          / мес
-        </span>
+        {'≈ '}
+        {pkg.grams}
+        <span style={{ color: 'var(--accent)', fontSize: 14 }}> GRAM</span>
       </>
     ),
-    desc: `${tier.credits.toLocaleString('ru-RU')} кредитов в месяц на все модели каталога. Без подписки — pay-per-request по факту.`,
+    desc: `${pkg.credits} кредитов`,
     cta: 'Подключить',
-  };
-});
+  }));
+}
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Never throws (task 3): null when the policy is missing/unparsable —
+  // buildHomePackageCards then renders the no-price fallback cards.
+  const gramPricing = await readGramPricing();
+  const homePackages = buildHomePackageCards(gramPricing);
+
   return (
     <MainLayout>
       {/* ═══ HERO ═══ */}
@@ -407,7 +463,7 @@ export default function HomePage() {
                   background: 'var(--accent)',
                 }}
               />
-              оплата картой РФ · без VPN
+              оплата в Gram · без VPN
             </span>
 
             <h1
@@ -425,7 +481,7 @@ export default function HomePage() {
               <br />
               One API.
               <br />
-              Card payments in <span style={{ color: 'var(--accent)' }}>RU.</span>
+              Payments in <span style={{ color: 'var(--accent)' }}>Gram.</span>
             </h1>
 
             <p
@@ -440,8 +496,8 @@ export default function HomePage() {
               } as CSSProperties}
             >
               Подключайте AI-модели через OpenAI-совместимый API. GPT-5,
-              Claude, Flux, Veo и открытые модели. Пополнение картой РФ, СБП
-              или по счёту, списание в кредитах. Deploy в РФ-регионе.
+              Claude, Flux, Veo и открытые модели. Пополнение в Gram (TON),
+              списание в кредитах. Deploy в РФ-регионе.
             </p>
 
             <div className="flex gap-3.5 flex-wrap">
@@ -489,8 +545,8 @@ export default function HomePage() {
               } as CSSProperties}
             >
               <span className="inline-flex items-center gap-1.5">
-                <span style={{ color: 'var(--success)' }}>✓</span> T-Bank / СБП /
-                ЮKassa
+                <span style={{ color: 'var(--success)' }}>✓</span> Оплата в
+                Gram (TON)
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span style={{ color: 'var(--success)' }}>✓</span>{' '}
@@ -1079,8 +1135,8 @@ export default function HomePage() {
             </h2>
             <p style={{ fontSize: 17, color: 'var(--ink-muted)', maxWidth: 600 }}>
               Платите за фактическое использование: цена запроса одна и та же
-              вне зависимости от тарифа. Подписка даёт ежемесячный запас
-              кредитов.
+              вне зависимости от тарифа. Пакеты пополнения — разовым депозитом
+              в Gram (TON).
             </p>
           </div>
 
@@ -1088,9 +1144,9 @@ export default function HomePage() {
             className="aiag-pricing-grid grid gap-3"
             style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}
           >
-            {pricingTiers.map((p) => (
+            {homePackages.map((p) => (
               <div
-                key={p.tier}
+                key={p.id}
                 className={`relative transition-all hover:-translate-y-0.5`}
                 style={{
                   background: p.featured
@@ -1126,7 +1182,7 @@ export default function HomePage() {
                     letterSpacing: '0.1em',
                   }}
                 >
-                  {p.tier}
+                  {p.label}
                 </div>
                 <div
                   className="font-mono font-bold"
@@ -1215,7 +1271,7 @@ export default function HomePage() {
         >
           Любая модель. Один API.
           <br />
-              <span style={{ color: 'var(--accent)' }}>Оплата картой РФ.</span>
+              <span style={{ color: 'var(--accent)' }}>Оплата Gram (TON).</span>
         </h2>
         <p
           style={{
@@ -1225,7 +1281,7 @@ export default function HomePage() {
             maxWidth: 520,
           }}
         >
-          Рублёвая оплата, SDK на 6 языках. Первый
+          Оплата в Gram (TON), SDK на 6 языках. Первый
           запрос за 2 минуты.
         </p>
         <div className="flex gap-3.5 flex-wrap justify-center">
@@ -1288,7 +1344,7 @@ export default function HomePage() {
               }}
             >
               Маркетплейс AI-моделей с OpenAI-совместимым API. Пополнение
-              картой РФ и СБП, списание в кредитах. Deploy в РФ-регионе.
+              в Gram (TON), списание в кредитах. Deploy в РФ-регионе.
             </p>
           </div>
 
