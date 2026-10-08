@@ -415,16 +415,30 @@ export async function startTonObservationFromEnv(
     const oracle = await import("@aiag/shared/server");
     const builder = await import("@aiag/shared/ton-checkout-policy-builder");
     type PolicyBuilderInput = import("@aiag/shared/ton-checkout-policy-builder").PolicyBuilderInput;
-    const template = JSON.parse(env.TON_POLICY_TEMPLATE) as Omit<
-      PolicyBuilderInput,
-      "usdPerTon"
-    >;
+    // TON_POLICY_TEMPLATE arrives as JSON, where grantMicrocredits parses to a
+    // JS number; the builder contract demands bigint, so map before building.
+    const template = JSON.parse(env.TON_POLICY_TEMPLATE) as {
+      recipient: string;
+      revision: string;
+      finalityPolicyId: string;
+      verifierVersion: string;
+      packages: Array<{ id: string; label: string; grantMicrocredits: number | string }>;
+      quoteLifetimeSeconds?: number;
+      maxFxAgeSeconds?: number;
+    };
     policyCron = (await import("./ton-policy-refresher.js")).createTonPolicyRefresher({
       fetchRate: () => oracle.getTonUsdRate(),
       readObservation: () => oracle.readTonFxObservation(),
       buildPolicy: ({ usdPerTon, observedAtMs }) =>
         builder.buildCheckoutPolicy(
-          { ...template, usdPerTon } as PolicyBuilderInput,
+          {
+            ...template,
+            usdPerTon,
+            packages: template.packages.map((entry) => ({
+              ...entry,
+              grantMicrocredits: BigInt(entry.grantMicrocredits),
+            })),
+          } as PolicyBuilderInput,
           { nowMs: () => observedAtMs },
         ),
       writePolicy: database.writeCheckoutPolicy,
