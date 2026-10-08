@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: 'Оплата сейчас доступна только в TON — пополните баланс кошельком Toncoin',
+          message: 'Оплата сейчас доступна только в TON (Gram) — пополните баланс криптокошельком',
           code: 'ton_only',
         },
       },
