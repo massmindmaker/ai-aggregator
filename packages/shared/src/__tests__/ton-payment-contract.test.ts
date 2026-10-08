@@ -124,6 +124,17 @@ describe('bounded rational conversion', () => {
     expect(convertAtomic('3074457345618258602', { numerator: '3', denominator: '1', rounding: 'floor' })).toBe(9223372036854775806n);
     expect(() => convertAtomic('3074457345618258603', { numerator: '3', denominator: '3', rounding: 'floor' })).toThrow();
   });
+  it('pins the int64 grant ceiling of the storefront fx pair (numerator 1e10)', () => {
+    // Production pair from ton-checkout-policy-builder at 5 USD/TON:
+    // numerator 10^10 / denominator 5x10^6 caps grant x numerator at int64,
+    // i.e. grants > ~$9 223 are not quotable at ANY rate with numerator 1e10
+    // (operator package budget; fail-closed).
+    const storefrontFx: RationalFx = { numerator: '10000000000', denominator: '5000000', rounding: 'ceil' };
+    // Exactly under the ceiling: 922337203 x 1e10 = 9223372030000000000 <= int64.
+    expect(convertAtomic('922337203', storefrontFx)).toBe(1844674406000n);
+    // One micro more overflows the intermediate before division: fail closed.
+    expect(() => convertAtomic('922337204', storefrontFx)).toThrow('FX intermediate exceeds signed BIGINT');
+  });
 });
 
 describe('immutable quote snapshot', () => {
