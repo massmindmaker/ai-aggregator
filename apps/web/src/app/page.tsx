@@ -40,6 +40,12 @@ import {
   type GramPricingView,
 } from '@/lib/ton-wallet/pricing-packages';
 
+// Gram-storefront (task 5, fix round 1): HomePage reads the live TON checkout
+// policy via `readGramPricing` (DB) — without this the route stays static and
+// the build would bake in a fallback "Цена — на странице оплаты" or a stale
+// fx snapshot. Mirrors pricing/page.tsx.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title:
     'AI-Aggregator — любая AI-модель, один API, оплата в Gram',
