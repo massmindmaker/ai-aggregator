@@ -1,183 +1,39 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { Check, Sparkles, ArrowRight } from 'lucide-react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/Button';
-import { Switch } from '@/components/ui/Switch';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
-import { TIERS, TIER_ORDER, type TierId } from '@/lib/payments/tiers';
-
-interface Tier {
-  id: string; // 'basic'|'starter'|'pro'
-  name: string;
-  monthlyPrice: number;
-  yearlyPrice: number;
-  tagline: string;
-  credits: string;
-  features: string[];
-  cta: string;
-  ctaHref: string;
-  isPopular?: boolean;
-  isContact?: boolean;
-}
+import type { GramPricingView } from '@/lib/ton-wallet/pricing-packages';
 
 /**
- * 🔴 AG-7 (2026-09-30): prices and credit counts used to be re-typed here,
- * duplicating `TIERS` — so the pricing page could drift from what checkout
- * actually charges. They are now read from the same table
- * (`@/lib/payments/tiers`, re-exported by providers.ts) that
- * `api/subscriptions/create` uses. The `tiers` array below carries only what
- * the code does NOT know: id → tier mapping, tagline and feature copy.
+ * Gram-storefront (task 4): the public pricing page sells top-up credit
+ * packages priced in Gram (TON), not ruble subscriptions. Every displayed
+ * amount comes straight from `GramPricingView` (task 3), whose BigInt math
+ * mirrors the payment contract — the storefront never re-types prices.
+ * `import type` above keeps the policy reader (and its DB imports) out of
+ * the client bundle; the server component passes the plain view down.
  *
- * Every feature claim here must be backed by code. The rpm line was the worst
- * offender: 60 / 300 / 500 were advertised, but the gateway enforces
- * `gateway_api_keys.rpm_limit` (DEFAULT 60, migration 0004) per API-key row
- * and nothing in apps/web ever writes that column from the subscription — so
- * all three tiers actually get 60. `RPM_LIMIT` below is the single enforced
- * value; upgrade it only together with the gateway column write.
+ * Deleted with the rub tiers: TIER_COPY, monthly/yearly switch, −15% badge,
+ * payment-provider selector and the dead handleSubscribe fetch — checkout
+ * now lives on /dashboard/billing (wallet payment), this page only links to it.
  */
-const RPM_LIMIT = 60;
 
-const TIER_COPY: Record<
-  TierId,
-  { tagline: string; features: string[]; cta: string; isPopular?: boolean }
-> = {
-  basic: {
-    tagline: 'Для пет-проектов и MVP',
-    features: [
-      'Все модели каталога',
-      `${RPM_LIMIT} запросов в минуту на ключ`,
-      'Единый OpenAI-совместимый API',
-    ],
-    cta: 'Подписаться на Basic',
-  },
-  starter: {
-    tagline: 'Для растущих команд',
-    features: [
-      'Всё из Basic',
-      `${RPM_LIMIT} запросов в минуту на ключ`,
-      'Единый OpenAI-совместимый API',
-    ],
-    cta: 'Подписаться на Starter',
-    isPopular: true,
-  },
-  pro: {
-    tagline: 'Для продуктовых команд',
-    features: [
-      'Всё из Starter',
-      `${RPM_LIMIT} запросов в минуту на ключ`,
-      'Единый OpenAI-совместимый API',
-    ],
-    cta: 'Подписаться на Pro',
-  },
-};
-
-const tiers: Tier[] = TIER_ORDER.map((id) => {
-  const tier = TIERS[id];
-  const copy = TIER_COPY[id];
-  return {
-    id,
-    name: tier.name,
-    monthlyPrice: tier.monthly,
-    yearlyPrice: tier.yearly,
-    tagline: copy.tagline,
-    credits: `${tier.credits.toLocaleString('ru-RU')} кредитов / мес`,
-    features: copy.features,
-    cta: copy.cta,
-    ctaHref: `/register?plan=${id}`,
-    isPopular: copy.isPopular,
-  };
-});
-
-type ProviderId = 'tinkoff' | 'yookassa' | 'sbp';
-
-const PROVIDER_LABELS: Record<ProviderId, string> = {
-  tinkoff: 'Тинькофф',
-  yookassa: 'ЮKassa (карта)',
-  sbp: 'СБП',
-};
-
-// yookassa/sbp webhooks are still a stub (TODO: persist + settle credits, see
-// /api/subscriptions/webhook/[provider]) — a subscription paid there takes
-// the user's money but never activates the tier. Keep them visible
-// (roadmap-honest) but disabled until that lands. Only tinkoff is a real,
-// working money path.
-const DISABLED_PROVIDERS: ReadonlySet<ProviderId> = new Set(['yookassa', 'sbp']);
-
-function formatPrice(n: number) {
-  return n.toLocaleString('ru-RU');
-}
+const PACKAGE_FEATURES = [
+  'Pay-per-request: платите за фактические запросы',
+  'Кредиты не сгорают',
+  'Оплата кошельком Gram (TON)',
+];
 
 interface PricingClientProps {
   isLoggedIn: boolean;
-  currentPlanId: string | null;
+  view: GramPricingView | null;
 }
 
-export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClientProps) {
-  const [isYearly, setIsYearly] = useState(false);
-  const [provider, setProvider] = useState<ProviderId>('tinkoff');
-  const [pendingTier, setPendingTier] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  function ctaForTier(tier: Tier): { label: string; href: string | null; isCurrent: boolean } {
-    if (!isLoggedIn) {
-      return {
-        label: 'Зарегистрироваться',
-        href: `/register?callbackUrl=${encodeURIComponent('/pricing')}`,
-        isCurrent: false,
-      };
-    }
-    if (currentPlanId && currentPlanId === tier.id) {
-      return { label: 'Текущий тариф', href: null, isCurrent: true };
-    }
-    return {
-      label: tier.cta,
-      href: `/dashboard/billing?upgrade=${tier.id}`,
-      isCurrent: false,
-    };
-  }
-
-  async function handleSubscribe(tierId: string) {
-    setError(null);
-    setPendingTier(tierId);
-    try {
-      const res = await fetch('/api/subscriptions/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tierId, yearly: isYearly, provider }),
-      });
-      const data = (await res.json()) as {
-        success?: boolean;
-        paymentUrl?: string;
-        qrPayload?: string;
-        error?: { message: string; code?: string };
-      };
-      if (res.status === 401) {
-        // Not logged in — redirect to register with intent
-        window.location.href = `/register?plan=${tierId}&intent=subscribe`;
-        return;
-      }
-      if (!res.ok || !data.success) {
-        setError(data.error?.message || `Ошибка ${res.status}`);
-        return;
-      }
-      if (data.paymentUrl) {
-        window.location.href = data.paymentUrl;
-      } else if (data.qrPayload) {
-        // For SBP — surface QR payload as link/QR (basic UX)
-        window.location.href = data.qrPayload;
-      } else {
-        setError('Получен пустой ответ от платёжной системы');
-      }
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setPendingTier(null);
-    }
-  }
+export default function PricingClient({ isLoggedIn, view }: PricingClientProps) {
+  const registerHref = `/register?callbackUrl=${encodeURIComponent('/pricing')}`;
 
   return (
     <MainLayout>
@@ -193,175 +49,104 @@ export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClie
             Платите за то, что используете
           </h1>
           <p className="mt-4 text-lg text-muted-foreground">
-            Pay-per-request, списание в кредитах (1 кредит = 1 цент). Подписка
-            даёт ежемесячный запас кредитов — цена запроса от тарифа не
-            зависит.
+            Pay-per-request, списание в кредитах (1 кредит = 1 цент). Покупайте
+            пакет кредитов — цена запроса от пакета не зависит.
+          </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Курс фиксируется на момент оплаты.
           </p>
 
-          <div className="mt-8 inline-flex items-center gap-3 rounded-full border border-border bg-card p-1.5 px-4">
-            <span
-              className={cn(
-                'text-sm transition-colors',
-                !isYearly ? 'text-foreground font-medium' : 'text-muted-foreground'
-              )}
-            >
-              Ежемесячно
-            </span>
-            <Switch checked={isYearly} onCheckedChange={setIsYearly} aria-label="Переключить ежегодную оплату" />
-            <span
-              className={cn(
-                'text-sm transition-colors',
-                isYearly ? 'text-foreground font-medium' : 'text-muted-foreground'
-              )}
-            >
-              Ежегодно
-            </span>
-            <Badge className="ms-1 bg-primary/15 text-primary border-primary/30 hover:bg-primary/15">
-              −15%
-            </Badge>
-          </div>
-
-          {/* Payment provider selector */}
-          <div className="mt-5 inline-flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Способ оплаты:</span>
-            {(['tinkoff', 'yookassa', 'sbp'] as ProviderId[]).map((p) => {
-              const disabled = DISABLED_PROVIDERS.has(p);
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => !disabled && setProvider(p)}
-                  aria-disabled={disabled}
-                  title={disabled ? 'Скоро' : undefined}
-                  className={cn(
-                    'px-3 py-1 rounded-full border transition-colors',
-                    disabled
-                      ? 'opacity-40 cursor-not-allowed border-border'
-                      : provider === p
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border hover:border-primary/40'
-                  )}
-                >
-                  {PROVIDER_LABELS[p]}
-                  {disabled && <span className="ms-1">(скоро)</span>}
-                </button>
-              );
-            })}
-          </div>
-
-          {error && (
+          {view?.stale && (
             <div
-              role="alert"
-              className="mt-4 inline-block rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              role="status"
+              className="mt-5 inline-block rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary"
             >
-              {error}
+              Курс обновляется — цена зафиксируется при оплате
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 aiag-stagger">
-          {tiers.map((tier) => {
-            const displayPrice = isYearly
-              ? Math.round(tier.yearlyPrice / 12)
-              : tier.monthlyPrice;
-
-            return (
-              <div
-                key={tier.name}
-                className={cn(
-                  'relative flex flex-col rounded-2xl border bg-card p-6 transition-all',
-                  tier.isPopular
-                    ? 'border-primary/60 shadow-[0_0_0_1px_rgba(245,158,11,0.4),0_24px_64px_-16px_rgba(245,158,11,0.25)]'
-                    : 'border-border hover:border-primary/30 aiag-glow-hover'
-                )}
-              >
-                {tier.isPopular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-primary text-primary-foreground border-0 shadow-md">
-                      <Sparkles className="me-1 h-3 w-3" /> Популярный
-                    </Badge>
-                  </div>
-                )}
-
-                <div className="mb-1">
-                  <h3 className="text-xl font-semibold">{tier.name}</h3>
-                  <p className="text-sm text-muted-foreground">{tier.tagline}</p>
-                </div>
-
-                <div className="mt-5 mb-2">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-4xl font-bold tracking-tight">
-                      {formatPrice(displayPrice)}
-                    </span>
-                    <span className="text-lg text-muted-foreground">₽</span>
-                    <span className="text-sm text-muted-foreground">/мес</span>
-                  </div>
-                  {isYearly && tier.monthlyPrice > 0 && (
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      <span className="line-through">
-                        {formatPrice(tier.monthlyPrice)} ₽
-                      </span>{' '}
-                      при годовой оплате
+        {view === null ? (
+          /* Policy missing/invalid: honest empty state, page stays 200. */
+          <div className="mx-auto max-w-xl rounded-2xl border border-border bg-card p-10 text-center">
+            <h2 className="text-2xl font-semibold">Пакеты скоро появятся</h2>
+            <p className="mt-3 text-muted-foreground">
+              Витрина пакетов настраивается. Баланс уже можно пополнить
+              кошельком Gram в биллинге.
+            </p>
+            <Button asChild className="mt-6" variant="default" size="lg">
+              <Link href="/dashboard/billing">
+                Пополнить
+                <ArrowRight className="ms-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 aiag-stagger">
+            {view.packages.map((pkg, index) => {
+              const isPopular = index === 1;
+              return (
+                <div
+                  key={pkg.id}
+                  className={cn(
+                    'relative flex flex-col rounded-2xl border bg-card p-6 transition-all',
+                    isPopular
+                      ? 'border-primary/60 shadow-[0_0_0_1px_rgba(245,158,11,0.4),0_24px_64px_-16px_rgba(245,158,11,0.25)]'
+                      : 'border-border hover:border-primary/30 aiag-glow-hover'
+                  )}
+                >
+                  {isPopular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <Badge className="bg-primary text-primary-foreground border-0 shadow-md">
+                        <Sparkles className="me-1 h-3 w-3" /> Популярный
+                      </Badge>
                     </div>
                   )}
-                  <div className="mt-3 inline-flex items-center rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-mono text-primary">
-                    {tier.credits}
-                  </div>
-                </div>
 
-                <ul className="mt-5 space-y-2.5 flex-1">
-                  {tier.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm">
-                      <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                      <span className="text-foreground/90">{f}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {(() => {
-                  const cta = ctaForTier(tier);
-                  if (cta.isCurrent) {
-                    return (
-                      <Button
-                        type="button"
-                        className="mt-6 w-full opacity-60 cursor-default"
+                  <div className="mb-1 flex items-center gap-2">
+                    <h3 className="text-xl font-semibold">{pkg.label}</h3>
+                    {view.testnet && (
+                      <Badge
                         variant="outline"
-                        size="lg"
-                        disabled
+                        className="px-1.5 py-0 text-[10px] uppercase tracking-wide text-muted-foreground"
                       >
-                        {cta.label}
-                      </Button>
-                    );
-                  }
-                  if (cta.href) {
-                    return (
-                      <Button asChild className="mt-6 w-full" variant="default" size="lg">
-                        <Link href={cta.href}>
-                          {cta.label}
-                          <ArrowRight className="ms-2 h-4 w-4" />
-                        </Link>
-                      </Button>
-                    );
-                  }
-                  return (
-                    <Button
-                      type="button"
-                      className="mt-6 w-full"
-                      variant="default"
-                      size="lg"
-                      disabled={pendingTier === tier.id}
-                      onClick={() => handleSubscribe(tier.id)}
-                    >
-                      {pendingTier === tier.id ? 'Перенаправляем…' : cta.label}
+                        Testnet
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="mt-5 mb-2">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-4xl font-bold tracking-tight">
+                        ≈ {pkg.grams}
+                      </span>
+                      <span className="text-lg text-muted-foreground">GRAM</span>
+                    </div>
+                    <div className="mt-3 inline-flex items-center rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-mono text-primary">
+                      {pkg.credits} кредитов
+                    </div>
+                  </div>
+
+                  <ul className="mt-5 space-y-2.5 flex-1">
+                    {PACKAGE_FEATURES.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-sm">
+                        <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                        <span className="text-foreground/90">{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Button asChild className="mt-6 w-full" variant="default" size="lg">
+                    <Link href={isLoggedIn ? '/dashboard/billing' : registerHref}>
+                      {isLoggedIn ? 'Пополнить баланс' : 'Начать'}
                       <ArrowRight className="ms-2 h-4 w-4" />
-                    </Button>
-                  );
-                })()}
-              </div>
-            );
-          })}
-        </div>
+                    </Link>
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Enterprise / Business contact */}
         <div className="mt-10 rounded-2xl border border-border bg-card/60 p-8 md:p-10 flex flex-col md:flex-row md:items-center gap-6">
@@ -387,8 +172,8 @@ export default function PricingClient({ isLoggedIn, currentPlanId }: PricingClie
         </div>
 
         <p className="mt-10 text-center text-sm text-muted-foreground">
-          Все тарифы включают доступ к OpenAI-совместимому API, RU-residency
-          для критичных моделей и оплату в рублях.
+          Все пакеты включают доступ к OpenAI-совместимому API и RU-residency
+          для критичных моделей.
         </p>
       </section>
     </MainLayout>
