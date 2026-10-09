@@ -7,12 +7,16 @@ SELECT jsonb_build_object('schemaVersion',1,'product','aggregator','purpose',_i.
  'recipient',_i.recipient,'reference',_i.reference,'expectedSender',_i.expected_sender,'finalityPolicyId',_i.finality_policy_id,
  'verifierVersion',_i.verifier_version,'expiresAt',_i.expires_at,'createdAt',_i.created_at,'status',_i.status,'reviewReason',_i.review_reason)
 $$;
-CREATE FUNCTION aiag_ton_invoice_guard_v1() RETURNS TRIGGER LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+CREATE OR REPLACE FUNCTION aiag_ton_invoice_guard_v1() RETURNS TRIGGER LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
  IF TG_OP='DELETE' THEN RAISE EXCEPTION 'TON_IMMUTABLE'; END IF;
  IF TG_OP='INSERT' THEN
   IF NEW.status <> 'pending' THEN RAISE EXCEPTION 'TON_INVALID_TRANSITION'; END IF;
-  PERFORM aiag_ton_payload_v1(NEW.request_payload,NEW.owner_user_id,NEW.org_id);
+  IF NEW.purpose='agent_topup' THEN
+   PERFORM aiag_agent_ton_payload_v1(NEW.request_payload,NEW.owner_user_id,NEW.org_id);
+  ELSE
+   PERFORM aiag_ton_payload_v1(NEW.request_payload,NEW.owner_user_id,NEW.org_id);
+  END IF;
   IF NEW.quote_snapshot IS DISTINCT FROM NEW.request_payload->'quote' OR
    NEW.idempotency_key IS DISTINCT FROM NEW.request_payload->>'idempotencyKey' OR
    NEW.grant_microcredits::text IS DISTINCT FROM NEW.request_payload->>'grantMicrocredits' OR
