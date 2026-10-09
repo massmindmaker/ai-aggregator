@@ -198,8 +198,9 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
       "aiag_mark_gateway_charge_dispatched",
     );
     // Includes author operations, terms, receipts, credit ledger and reconciliation through0090,
-    // plus the wallet-identity (0091), checkout (0092) and TON asset allowlist (0098) tables.
-    expect(Number(result.rows[0].table_count)).toBe(128);
+    // plus the wallet-identity (0091), checkout (0092), TON asset allowlist (0098) and the
+    // agent identity rail (0104: agent_principals, agent_wallet_challenges) tables.
+    expect(Number(result.rows[0].table_count)).toBe(130);
   });
 
   it("verifies TON immutable schema, invoker entrypoints and exact mirror", async () => {
@@ -434,7 +435,7 @@ describe.skipIf(!RUN_INTEGRATION)("native PostgreSQL baseline", () => {
     expect(createHash("sha256").update(previous).digest("hex")).toBe(
       "b6ddc2382f92f45c0fcc51f8c8e46027faabf76de457009cb884844ddbb612a6",
     );
-    expect(await discoverNativeMigrations()).toHaveLength(103);
+    expect(await discoverNativeMigrations()).toHaveLength(104);
     const types = await client.query<{ name: string; fields: string[] }>({
       text: `
       SELECT t.typname AS name,array_agg(a.attname::text ORDER BY a.attnum) AS fields FROM pg_type t
