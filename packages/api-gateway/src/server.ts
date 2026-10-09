@@ -131,6 +131,11 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
     // Execution paths preserve only known operational envelopes; no arbitrary diagnostics.
     if (error instanceof AiagError && error.code === 'UNAUTHORIZED')
       return c.json(errors.unauthorized().toResponseBody(), 401);
+    // 0105 TTL: an expired key must stay a 401 KEY_EXPIRED on execution paths
+    // too — falling through to the 503 request-state envelope would tell
+    // clients to retry a dead key instead of rotating it.
+    if (error instanceof AiagError && error.code === 'KEY_EXPIRED')
+      return c.json(errors.unauthorized('API key expired', 'KEY_EXPIRED').toResponseBody(), 401);
     if (error instanceof AiagError && error.code === 'SERVICE_UNAVAILABLE' && error.message === 'Authentication unavailable')
       return c.json(errors.unavailable('Authentication unavailable').toResponseBody(), 503);
     if (error instanceof AiagError && error.code === 'RATE_LIMITED') {
