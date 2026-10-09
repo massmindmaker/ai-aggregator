@@ -47,3 +47,6 @@ export type { TonWalletContext, LinkedTonWallet, TonWalletLoginUser } from "./to
 
 export { createTonCheckout,readTonCheckout,claimTonCheckoutSend,recordTonCheckoutClientReport } from "./ton-wallet-checkout";
 export type { TonCheckoutPolicy,TonCheckout,TonCheckoutInput } from "./ton-wallet-checkout";
+
+export { issueAgentChallenge,consumeAgentRegister,AgentAuthError } from './agent-auth';
+export type { AgentChallenge,AgentRegisterResult,AgentChallengeInput,AgentRegisterInput } from './agent-auth';

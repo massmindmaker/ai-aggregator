@@ -1,0 +1,91 @@
+/** Agent registration rail: TON-proof challenges → service-owned org + principal. No key custody here. */
+import { createHash,randomBytes,randomUUID,timingSafeEqual } from 'node:crypto';
+import { Address } from '@ton/core';
+import { parseTonWalletProofInput,verifyTonWalletProof } from '@aiag/shared/server';
+import type { TonWalletProofInput,VerifiedTonWallet } from '@aiag/shared/server';
+import type { TonPaymentDatabase,TonSqlClient } from './ton-payment-types';
+
+export class AgentAuthError extends Error{constructor(readonly code:string){super(code);this.name='AgentAuthError';}}
+export interface AgentChallenge{challengeId:string;payload:string;expiresAt:string;}
+export interface AgentRegisterResult{principalId:string;orgId:string;}
+/** The caller (gateway) supplies raw `0:hex` Ton Connect addresses; the rail persists the friendly form. */
+export interface AgentChallengeInput{address:string;network:'-3';domain:string;}
+export interface AgentRegisterInput{challengeId:string;address:string;proof:unknown;}
+export interface AgentChallengeRow extends Record<string,unknown>{
+ id:string;purpose:'register'|'revoke';payload_hash:string;network:string;address:string;domain:string;issued_ms:string;expires_ms:string;consumed_at:string|null;
+}
+
+const digest=(value:string)=>createHash('sha256').update(value).digest('hex');
+function fail(code='AGENT_AUTH_INVALID'):never{throw new AgentAuthError(code);}
+function uuid(value:unknown):string{if(typeof value!=='string'||value.length!==36||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value))fail();return value;}
+function hex64(value:unknown):string{if(typeof value!=='string'||value.length!==64||!/^[0-9a-f]{64}$/.test(value))fail();return value;}
+function equalHash(a:string,b:string):boolean{return timingSafeEqual(Buffer.from(hex64(a),'hex'),Buffer.from(hex64(b),'hex'));}
+function rawAddress(value:unknown):string{if(typeof value!=='string'||!/^0:[0-9a-f]{64}$/.test(value))fail();return value;}
+/** Canonical display form stored in the 48-char columns (matches the web Ton Connect sender encoding). */
+function displayAddress(raw:string):string{
+ const display=Address.parseRaw(raw).toString({urlSafe:true,bounceable:true,testOnly:true});
+ if(!/^[A-Za-z0-9_-]{48}$/.test(display))fail();return display;
+}
+function domain(value:unknown):string{
+ if(typeof value!=='string'||value.length>300||value.length<3||!value.includes('.')||new URL('https://'+value).host!==value)fail();return value;
+}
+async function query<R extends Record<string,unknown>>(tx:TonSqlClient,text:string,values:readonly unknown[]=[]){return (await tx.query<R>({text,values})).rows;}
+async function clock(tx:TonSqlClient):Promise<number>{const row=(await query<{now_ms:string}>(tx,'SELECT floor(extract(epoch FROM clock_timestamp())*1000)::text AS now_ms'))[0];const now=Number(row?.now_ms);if(!Number.isSafeInteger(now)||now<0)fail('AGENT_AUTH_UNAVAILABLE');return now;}
+function isUniqueActiveAddress(error:unknown):boolean{return typeof error==='object'&&error!==null&&(error as {code?:unknown}).code==='23505'&&(error as {constraint?:unknown}).constraint==='agent_principals_active_address';}
+
+const challengeFields="id::text,purpose,payload_hash,network,address,domain,floor(extract(epoch FROM issued_at)*1000)::text AS issued_ms,floor(extract(epoch FROM expires_at)*1000)::text AS expires_ms,consumed_at::text";
+
+export async function issueAgentChallenge(db:TonPaymentDatabase,input:AgentChallengeInput):Promise<AgentChallenge>{
+ if(input.network!=='-3')fail();
+ const contextDomain=domain(input.domain);
+ const address=displayAddress(rawAddress(input.address));
+ const id=randomUUID(),payload='aiag:agent:register:-3:'+randomBytes(32).toString('hex');
+ return db.transaction(async tx=>{
+  await query(tx,"SELECT pg_advisory_xact_lock(hashtextextended('aiag:agent:challenge-issue',0))");
+  const counters=(await query<{global_n:number;address_n:number}>(tx,`SELECT count(*) FILTER(WHERE issued_at>clock_timestamp()-interval '60 seconds')::int AS global_n,
+   count(*) FILTER(WHERE address=$1)::int AS address_n
+   FROM public.agent_wallet_challenges WHERE issued_at>clock_timestamp()-interval '5 minutes'`,[address]))[0];
+  if(!counters||counters.global_n>=200||counters.address_n>=8)fail('AGENT_CHALLENGE_RATE_LIMIT');
+  await query(tx,`DELETE FROM public.agent_wallet_challenges WHERE id IN(SELECT id FROM public.agent_wallet_challenges WHERE expires_at<clock_timestamp()-interval '24 hours' ORDER BY expires_at LIMIT 100)`);
+  const row=(await query<{expires_at:string}>(tx,`WITH moment AS MATERIALIZED(SELECT date_trunc('milliseconds',clock_timestamp()) AS n)
+   INSERT INTO public.agent_wallet_challenges(id,purpose,payload_hash,network,address,domain,issued_at,expires_at)
+   SELECT $1::uuid,'register',$2,'-3',$3,$4,n,n+interval '120 seconds' FROM moment RETURNING expires_at::text`,[id,digest(payload),address,contextDomain]))[0];
+  if(!row)fail('AGENT_AUTH_UNAVAILABLE');
+  return {challengeId:id,payload,expiresAt:row.expires_at};
+ });
+}
+
+export async function consumeAgentRegister(db:TonPaymentDatabase,input:AgentRegisterInput):Promise<AgentRegisterResult>{
+ const challengeId=uuid(input.challengeId);
+ let proof:TonWalletProofInput;try{proof=parseTonWalletProofInput(input.proof);}catch{fail('AGENT_PROOF_INVALID');}
+ const claimed=rawAddress(input.address);
+ return db.transaction(async tx=>{
+  const ch=(await query<AgentChallengeRow>(tx,'SELECT '+challengeFields+' FROM public.agent_wallet_challenges WHERE id=$1::uuid FOR UPDATE',[challengeId]))[0];
+  if(!ch||ch.purpose!=='register'||ch.network!=='-3'||ch.address!==displayAddress(claimed))fail('AGENT_CHALLENGE_INVALID');
+  if(!equalHash(ch.payload_hash,digest(proof.proof.payload)))fail('AGENT_PROOF_INVALID');
+  const now=await clock(tx);
+  if(now>=Number(ch.expires_ms)||ch.consumed_at)fail('AGENT_CHALLENGE_EXPIRED');
+  let identity:VerifiedTonWallet;try{identity=verifyTonWalletProof(proof,{network:'-3',domain:ch.domain,payload:proof.proof.payload,issuedAtMs:Number(ch.issued_ms),expiresAtMs:Number(ch.expires_ms),nowMs:now});}catch{fail('AGENT_PROOF_INVALID');}
+  if(identity.address!==claimed)fail('AGENT_PROOF_INVALID');
+  await query(tx,"SELECT pg_advisory_xact_lock(hashtextextended('aiag:agent:address:'||$1,0))",[identity.address]);
+  if((await query<{id:string}>(tx,"SELECT id::text FROM public.agent_principals WHERE network='-3' AND address=$1 AND status='active'",[ch.address])).length)fail('AGENT_ALREADY_REGISTERED');
+  const owner=(await query<{owner:string}>(tx,'SELECT public.aiag_agent_owner_user_v1()::text AS owner'))[0];
+  if(!owner||!uuid(owner.owner))fail('AGENT_AUTH_UNAVAILABLE');
+  let org:{id:string}|undefined;
+  for(let attempt=0;attempt<3&&!org;attempt++)
+   org=(await query<{id:string}>(tx,`INSERT INTO public.organizations(slug,name,owner_id)
+    VALUES($1,'agent:'||$2,$3::uuid) ON CONFLICT (slug) DO NOTHING RETURNING id::text`,['agent-'+randomUUID().slice(0,8),ch.address.slice(0,8),owner.owner]))[0];
+  if(!org)fail('AGENT_AUTH_UNAVAILABLE');
+  let principal:{id:string}|undefined;
+  try{principal=(await query<{id:string}>(tx,`INSERT INTO public.agent_principals(org_id,network,address,address_raw)
+   VALUES($1::uuid,'-3',$2,$3) RETURNING id::text`,[org.id,ch.address,identity.address]))[0];}
+  catch(error){if(isUniqueActiveAddress(error))fail('AGENT_ALREADY_REGISTERED');throw error;}
+  const updated=(await query<{id:string}>(tx,`WITH moment AS MATERIALIZED(SELECT date_trunc('milliseconds',clock_timestamp()) AS n)
+   UPDATE public.agent_wallet_challenges c SET consumed_at=n,proof_digest=$2,principal_id=$3::uuid FROM moment
+   WHERE c.id=$1::uuid AND c.consumed_at IS NULL AND c.expires_at>n RETURNING c.id::text`,[challengeId,identity.proofDigest,principal!.id]))[0];
+  if(!updated)fail('AGENT_CHALLENGE_EXPIRED');
+  await query(tx,`INSERT INTO public.audit_log(actor_id,actor_type,action,resource_type,resource_id,details)
+   VALUES($1::uuid,'system','agent.register','agent_principal',$2,$3::jsonb)`,[owner.owner,principal!.id,JSON.stringify({challengeId,network:'-3',orgId:org.id})]);
+  return {principalId:principal!.id,orgId:org.id};
+ });
+}
