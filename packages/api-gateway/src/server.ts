@@ -30,6 +30,7 @@ import { storedBatches } from './routes/v1/stored-batches';
 import { catalogRoute } from './routes/v1/catalog';
 import { usage } from './routes/v1/usage';
 import { organizationKeys } from './routes/v1/organization-keys';
+import { agentRegister } from './routes/v1/agent-register';
 import { catalogHttpBoundary } from './catalog/http-contract';
 import { adminProxy } from './routes/admin/proxyTest';
 import { adminCatalog } from './routes/admin/catalog';
@@ -87,6 +88,15 @@ app.get('/health', (c) =>
 app.get('/', (c) =>
   c.json({ service: 'aiag-gateway', version: '0.4.0-code' })
 );
+
+// ---- /v1/agent: headless agent registration rail ----------------------------
+// public by design: registration bootstrap — the caller has no gateway key
+// yet; the TON wallet proof IS the authentication. Mounted on the ROOT app
+// ahead of both /v1 execution assemblies so their requireApiKey chain cannot
+// capture it (endpoint handlers registered earlier terminate the chain).
+// Abuse is bounded by the route's own Redis sliding-window guards
+// (agentreg:glob / agentreg:addr:*) plus the service-side challenge caps.
+app.route('/v1/agent', agentRegister);
 
 // ---- /v1 routes: auth + rate-limit + pii ------------------------------------
 // This is intentionally before either assembly's shared guards: catalog has a
