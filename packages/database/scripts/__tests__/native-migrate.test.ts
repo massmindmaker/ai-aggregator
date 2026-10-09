@@ -59,17 +59,17 @@ describe("native ordered migrator", () => {
   it("discovers the complete immutable history in deterministic order", async () => {
     const migrations = await discoverNativeMigrations();
 
-    // 104 = 0104 adds agent principals + wallet challenges + service owner.
-    expect(migrations).toHaveLength(104);
+    // 105 = 0105 adds optional gateway API-key expiry (gateway_api_keys.expires_at).
+    expect(migrations).toHaveLength(105);
     expect(migrations[0].version).toBe("drizzle/0000_moaning_the_fury.sql");
     expect(migrations[1].version).toBe("migrations/0004_gateway_core.sql");
     expect(migrations[2].version).toBe(
       "migrations/0004_seed_test_upstreams.sql",
     );
     expect(migrations.at(-1)?.version).toBe(
-      "migrations/0104_agent_principals.sql",
+      "migrations/0105_agent_key_expires_at.sql",
     );
-    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(104);
+    expect(new Set(migrations.map(({ checksum }) => checksum)).size).toBe(105);
   });
 
   it("removes only an outer transaction wrapper owned by a historical file", () => {

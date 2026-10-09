@@ -47,7 +47,11 @@ export class AiagError extends Error {
 
 export const errors = {
   badRequest: (m: string, d?: unknown) => new AiagError('BAD_REQUEST', 400, m, d),
-  unauthorized: (m = 'Invalid API key') => new AiagError('UNAUTHORIZED', 401, m),
+  // Optional second argument keeps the default 401 code ('UNAUTHORIZED') for
+  // every pre-existing caller while letting auth distinguish rejection
+  // reasons (e.g. 'KEY_EXPIRED') inside the standard {error:{code}} body.
+  unauthorized: (m = 'Invalid API key', code = 'UNAUTHORIZED') =>
+    new AiagError(code, 401, m),
   paymentRequired: (m = 'Insufficient funds') => new AiagError('PAYMENT_REQUIRED', 402, m),
   forbidden: (m: string) => new AiagError('FORBIDDEN', 403, m),
   notFound: (m: string) => new AiagError('NOT_FOUND', 404, m),

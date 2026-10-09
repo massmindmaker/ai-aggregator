@@ -56,9 +56,9 @@ describe.runIf(process.env.RUN_NATIVE_DB_INTEGRATION === "1")(
               port: 15432,
             });
             const migrations = await discoverNativeMigrations();
-            expect(migrations).toHaveLength(104);
+            expect(migrations).toHaveLength(105);
             expect(migrations.at(-1)?.filename).toBe(
-              "0104_agent_principals.sql",
+              "0105_agent_key_expires_at.sql",
             );
             const first = await runNativeMigrations(fixture, migrations);
             expect(first.applied).toHaveLength(migrations.length);

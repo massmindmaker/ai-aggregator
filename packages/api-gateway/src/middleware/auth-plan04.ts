@@ -32,6 +32,11 @@ export type AuthenticatedApiKey = {
   cost_limit_monthly_rub?: number | null;
   model_whitelist?: string[];
   ru_residency_only?: boolean;
+  // 0105: optional key TTL. NULL/undefined = key never expires. Selected and
+  // enforced by this middleware; optional for the same fixture-compat reason
+  // as the fields above. Serialized as an ISO-8601 UTC string (see the
+  // to_char projection in resolveFromDb), never a raw driver Date.
+  expires_at?: string | null;
 };
 
 /**
@@ -55,7 +60,8 @@ async function resolveFromDb(key: string): Promise<AuthenticatedApiKey | null> {
   const rows = await sql<AuthenticatedApiKey[]>`
     SELECT id, org_id, policies,
            rpm_limit, daily_usd_cap, batch_rpm_limit,
-           cost_limit_monthly_rub, model_whitelist, ru_residency_only
+           cost_limit_monthly_rub, model_whitelist, ru_residency_only,
+           to_char(expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at
     FROM gateway_api_keys
     WHERE key_hash = ${keyHash}
       AND revoked_at IS NULL
@@ -83,6 +89,11 @@ export const requireApiKey: MiddlewareHandler = async (c, next) => {
     throw errors.unavailable('Authentication unavailable');
   }
   if (!apiKey) throw errors.unauthorized();
+  // 0105: optional expiry, evaluated per request from the fresh lookup (never
+  // cached). Inclusive boundary: an expires_at equal to "now" is already dead.
+  if (apiKey.expires_at && Date.parse(apiKey.expires_at) <= Date.now()) {
+    throw errors.unauthorized('API key expired', 'KEY_EXPIRED');
+  }
 
   c.set('apiKey' as never, apiKey as never);
   c.set('orgId' as never, apiKey.org_id as never);
