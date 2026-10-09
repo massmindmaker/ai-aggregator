@@ -50,3 +50,6 @@ export type { TonCheckoutPolicy,TonCheckout,TonCheckoutInput } from "./ton-walle
 
 export { issueAgentChallenge,consumeAgentRegister,AgentAuthError } from './agent-auth';
 export type { AgentChallenge,AgentRegisterResult,AgentChallengeInput,AgentRegisterInput } from './agent-auth';
+
+export { createAgentTopupInvoice,readAgentTopupInvoice,agentTopupFingerprint,AgentTopupError } from './agent-topup';
+export type { AgentTopupAsset,AgentTopupPolicy,AgentTopupInvoice,AgentTopupInvoiceStatus,CreateAgentTopupInput,ReadAgentTopupInput } from './agent-topup';

@@ -31,6 +31,7 @@ import { catalogRoute } from './routes/v1/catalog';
 import { usage } from './routes/v1/usage';
 import { organizationKeys } from './routes/v1/organization-keys';
 import { agentRegister } from './routes/v1/agent-register';
+import { agentTopup } from './routes/v1/agent-topup';
 import { catalogHttpBoundary } from './catalog/http-contract';
 import { adminProxy } from './routes/admin/proxyTest';
 import { adminCatalog } from './routes/admin/catalog';
@@ -126,6 +127,23 @@ app.route('/v1/usage', usage);
 app.use('/v1/organization/*', requireApiKey);
 app.use('/v1/organization/*', rateLimit);
 app.route('/v1/organization', organizationKeys);
+
+// ---- /v1/agent/topup + /v1/agent/invoices: headless agent topup rail -------
+// Same root-app mount pattern as /v1/usage and /v1/organization above, so it
+// behaves identically in the legacy and stored assemblies (the execution-mode
+// sub-apps below mount later and never capture these paths). Registration
+// (/v1/agent/challenge|register) stays PUBLIC: it is mounted even earlier and
+// its handlers terminate the chain before these middlewares — this sub-app
+// carries no handlers for those paths. Auth is the gateway key; orgId comes
+// from the fresh key row. The route adds its own coarse mint window
+// (agenttop:<key_id> 12/5min) on top of the per-key RPM limiter here.
+app.use('/v1/agent/topup', requireApiKey);
+app.use('/v1/agent/topup/*', requireApiKey);
+app.use('/v1/agent/topup', rateLimit);
+app.use('/v1/agent/topup/*', rateLimit);
+app.use('/v1/agent/invoices/*', requireApiKey);
+app.use('/v1/agent/invoices/*', rateLimit);
+app.route('/v1/agent', agentTopup);
 
 if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
   // Early cache policy includes auth, RPM, unsupported routes and 404 responses.
