@@ -27,6 +27,13 @@ const schema = z.object({
     ])
     .default("legacy"),
   AUTHOR_CHAT_ENABLED: z.enum(["0", "1"]).default("0"),
+  // Review wave (T-a2): USDT (jetton) topup invoices can be minted by the
+  // rail, but the worker's settlement path rejects jettons
+  // (TON_SETTLEMENT_ASSET_UNSUPPORTED in worker-boundary) — a paid USDT
+  // invoice would never settle and would loop in db_error. Until jetton
+  // settle ships, USDT topup is operator-gated and OFF by default; the 402
+  // topup hint (billing/admission-internal.ts) mirrors the same flag.
+  AIAG_AGENT_USDT_ENABLED: z.enum(["0", "1"]).default("0"),
   // CBR endpoints (FIX H5/H6)
   CBR_URL: z.string().default("https://www.cbr.ru/scripts/XML_daily.asp"),
   CBR_FALLBACK_URL: z.string().optional(),

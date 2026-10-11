@@ -7,7 +7,8 @@
  *   agent key (policies->>'kind' = 'agent'):
  *     402 {error:{code:'PAYMENT_REQUIRED',message:'Insufficient funds',
  *                 topup:{default_asset:'gram',endpoint:'POST /v1/agent/topup',
- *                        min_credits:100,assets:['gram','usdt']}}}
+ *                        min_credits:100,assets:['gram'] (+'usdt' when
+ *                        AIAG_AGENT_USDT_ENABLED=1)}}}
  *     + Retry-After: 30
  *
  *   human key: the legacy body byte-for-byte (no `topup`, no Retry-After) —
@@ -21,7 +22,7 @@
  * Unit-level, following the neighboring billing-test patterns
  * (billing-preflight.test.ts fakeSql / billing-admission.test.ts P0003 rows).
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Import-time guard identical to auth-key-expiry.test.ts: lib/db builds a
 // postgres client from config on import; unit tests must never reach it.
@@ -44,11 +45,14 @@ const AGENT_POLICIES: Record<string, unknown> = {
   s2s_key_minting: true,
 };
 
+// Default contour: AIAG_AGENT_USDT_ENABLED is unset → the hint advertises
+// gram only (review wave, T-a2). The gate-on variant lives in the dedicated
+// describe at the bottom of this file.
 const EXPECTED_TOPUP = {
   default_asset: 'gram',
   endpoint: 'POST /v1/agent/topup',
   min_credits: 100,
-  assets: ['gram', 'usdt'],
+  assets: ['gram'],
 };
 
 /** Tagged-template stand-in for the postgres.js client (billing-preflight pattern). */
@@ -321,5 +325,40 @@ describe('HTTP 402 rendering via applyAiagErrorHandler', () => {
     const res = await app.fetch(new Request('http://x/v1/x', { method: 'POST' }));
     expect(res.status).toBe(503);
     expect(res.headers.get('Retry-After')).toBeNull();
+  });
+});
+
+// ── USDT gate: hint assets mirror the topup rail (review wave, T-a2) ─────────
+
+describe('INSUFFICIENT_FUNDS_TOPUP_HINT.assets tracks AIAG_AGENT_USDT_ENABLED', () => {
+  afterEach(() => {
+    delete process.env.AIAG_AGENT_USDT_ENABLED;
+    vi.resetModules();
+  });
+
+  it('gate on → the hint advertises gram AND usdt (fresh module evaluation)', async () => {
+    process.env.AIAG_AGENT_USDT_ENABLED = '1';
+    vi.resetModules();
+    const mod = await import('../billing/admission-internal');
+    expect(mod.INSUFFICIENT_FUNDS_TOPUP_HINT.assets).toEqual(['gram', 'usdt']);
+    const e = new mod.InsufficientFundsError(AGENT_POLICIES);
+    expect(e.topup?.assets).toEqual(['gram', 'usdt']);
+    expect(e.toResponseBody()).toEqual({
+      error: {
+        code: 'PAYMENT_REQUIRED',
+        message: 'Insufficient funds',
+        topup: {
+          default_asset: 'gram',
+          endpoint: 'POST /v1/agent/topup',
+          min_credits: 100,
+          assets: ['gram', 'usdt'],
+        },
+      },
+    });
+  });
+
+  it('gate off (default, env unset) → gram only — the hint never points at an asset the rail would 503', () => {
+    expect(INSUFFICIENT_FUNDS_TOPUP_HINT.assets).toEqual(['gram']);
+    expect(INSUFFICIENT_FUNDS_TOPUP_HINT.assets).not.toContain('usdt');
   });
 });

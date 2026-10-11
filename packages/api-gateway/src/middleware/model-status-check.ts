@@ -53,15 +53,24 @@ export async function checkModelStatus(
 }
 
 /**
- * Hono middleware factory. Reads `model` from JSON body (cloned so downstream
- * handlers can re-parse it). Non-JSON bodies / no `model` field pass through.
+ * Hono middleware factory. Reads `model` from the JSON body (through Hono's
+ * cached-body read so downstream handlers can re-parse it). Non-JSON bodies /
+ * no `model` field pass through.
  */
 export function modelStatusMiddleware(sqlClient: SqlClient = defaultSql): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     let modelSlug: string | undefined;
     try {
-      const cloned = c.req.raw.clone();
-      const body = (await cloned.json()) as { model?: unknown };
+      // Review wave (T-a2 guard parity): read via c.req.json(), NOT
+      // c.req.raw.clone(). In both the legacy /v1/* chain and the MCP
+      // facade's sub-app this middleware runs AFTER piiFilter, which already
+      // consumed the raw stream via c.req.json() — and Request.clone()
+      // throws once the body is used, so the old clone-based read made this
+      // guard silently skip every JSON POST that reached piiFilter (the
+      // freeze/depublish short-circuit never fired on chat paths). Hono's
+      // body cache keeps the parsed body readable here and for downstream
+      // handlers alike.
+      const body = (await c.req.json()) as { model?: unknown };
       if (typeof body?.model === 'string') modelSlug = body.model;
     } catch {
       return next();

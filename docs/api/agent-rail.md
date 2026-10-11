@@ -188,7 +188,8 @@ AGENT_AUTH_UNAVAILABLE`. Same sliding-window guards as the challenge.
 `POST /v1/agent/topup` mints a TON invoice for **whole credits** (1 credit =
 1000 microcredits = the unit `GET /v1/balance` reports). The minimum grant is
 **100 credits**. The asset is either `gram` (native TON, testnet `tvm:-3`) or
-`usdt` (jetton, pinned master, oracle-free peg **1 USDT = 100 credits**).
+`usdt` (jetton, pinned master, oracle-free peg **1 USDT = 100 credits**;
+operator-gated, see §3.1).
 
 ### 3.1 `POST /v1/agent/topup` (auth)
 
@@ -210,6 +211,14 @@ Body (strict):
 Idempotency is **org-scoped**: replaying the same body (any sibling key of the
 same org) returns the same invoice; a *different* body under a used key is
 `409 TON_IDEMPOTENCY_CONFLICT`. Rate: 12 requests / 5 min per key.
+
+> **USDT is operator-gated.** `"usdt"` additionally requires the operator-side
+> switch `AIAG_AGENT_USDT_ENABLED=1` (gateway config, **default off**): while
+> off, a `usdt` request answers `503 AGENT_USDT_DISABLED` and **no invoice is
+> minted**. The gate stays off until jetton settlement is complete on the
+> worker side — a paid USDT invoice could not be credited before that. The
+> 402 topup hint advertises the same asset set (§4), so an agent following the
+> hint never hits the disabled asset.
 
 Response `201`:
 
@@ -303,7 +312,8 @@ Statuses: `pending → observed → confirmed → settled`; terminal alternative
 Topup error codes: `400` (invalid request / `AGENT_GRANT_TOO_SMALL` /
 `TON_BALANCE_COMPATIBILITY_LIMIT`), `403 AGENT_NOT_AUTHORIZED`,
 `404 AGENT_TOPUP_NOT_FOUND`, `409 TON_IDEMPOTENCY_CONFLICT` /
-`TON_REFUND_BLOCKED`, `503` (`TON_ASSET_NOT_ALLOWLISTED`, `TON_CHECKOUT_FX_STALE`,
+`TON_REFUND_BLOCKED`, `503` (`AGENT_USDT_DISABLED` — the operator gate of
+§3.1, `TON_ASSET_NOT_ALLOWLISTED`, `TON_CHECKOUT_FX_STALE`,
 `TON_QUOTE_EXPIRED`, `AGENT_TOPUP_UNAVAILABLE`).
 
 ## 4. Chat / inference
@@ -339,16 +349,29 @@ Agent-relevant behaviours:
         "default_asset": "gram",
         "endpoint": "POST /v1/agent/topup",
         "min_credits": 100,
-        "assets": ["gram", "usdt"]
+        "assets": ["gram"]
       }
     }
   }
   ```
 
   plus a `Retry-After: 30` header (a freshly topped-up balance settles
-  asynchronously). Human keys get the legacy body without `topup`. An agent
+  asynchronously). `assets` mirrors the operator gate of §3.1: `"usdt"` joins
+  the array only while `AIAG_AGENT_USDT_ENABLED=1` is on — the default is
+  `["gram"]`. Human keys get the legacy body without `topup`. An agent
   should branch on `error.code === "PAYMENT_REQUIRED"`, run the topup flow of
   §3, then retry.
+
+  > **Perimeter of the hint.** The `topup` field is guaranteed on the
+  > **legacy HTTP assembly** (`GATEWAY_HTTP_EXECUTION_MODE=legacy`, the
+  > production default), where every money refusal path renders through the
+  > shared `InsufficientFundsError`. On a **stored assembly** (stage-2
+  > rollout) the execution routes — chat, embeddings, completions, batches —
+  > answer with the canonical 402 `{error:{code:"PAYMENT_REQUIRED",
+  > message:"Insufficient funds"}}` **without** the `topup` field (and media
+  > execution paths render a canonicalized 402 as well). Branch on
+  > `error.code` first and treat `topup` as optional enrichment: when it is
+  > absent, top up via §3 anyway.
 
 - **Expired key → `401` with `error.code: "KEY_EXPIRED"`.** Expiry is evaluated
   per request; an expired bearer must not be retried — mint/rotate a key
@@ -625,12 +648,16 @@ Code-complete ≠ production-enabled. As of this writing:
   (`EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs`, raw
   `0:b113a994…`, network `tvm:-1`) with a fixed peg of 1 USDT = 100 credits.
   Admission additionally runs through the `ton_asset_allowlist` table: the
-  mainnet USDT row **is seeded by migration 0109**, so mainnet USDT invoices
-  are admissible as soon as the rail is enabled. A **testnet** USDT master is
-  NOT seeded — the operator confirms and seeds it (allowlist row + the
+  mainnet USDT row **is seeded by migration 0109**, so the allowlist itself
+  would admit mainnet USDT. A **testnet** USDT master is NOT seeded — the
+  operator confirms and seeds it (allowlist row + the
   `aiag.usdt_testnet_master` GUC) at testnet launch; until then testnet
   USDT answers `503 TON_ASSET_NOT_ALLOWLISTED`. Which USDT master is
   live (testnet or mainnet) is an operator-side setting, not a client choice.
+  Independently of the allowlist, the gateway-level `AIAG_AGENT_USDT_ENABLED`
+  gate (§3.1, **default off**) must also be set: until jetton settlement is
+  complete on the worker side, USDT invoice minting answers
+  `503 AGENT_USDT_DISABLED` for both networks.
 - **Runtime settlement is not enabled in production.** On-chain payment
   observation and invoice settlement run only where the operator has enabled
   the TON runtime; a paid invoice may stay `pending` on a deployment without
@@ -640,8 +667,9 @@ Code-complete ≠ production-enabled. As of this writing:
   configured, topup answers `503` ("Topup pricing unavailable").
 
 For local/agent development, treat everything above as the test contour: use a
-testnet wallet, top up in gram, and expect usdt to be unavailable until the
-operator turns it on.
+testnet wallet, top up in gram, and expect usdt to answer
+`503 AGENT_USDT_DISABLED` until the operator both seeds the testnet master and
+enables `AIAG_AGENT_USDT_ENABLED` (§3.1).
 
 ## 9. Endpoint summary
 

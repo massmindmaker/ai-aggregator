@@ -61,6 +61,23 @@ const db = vi.hoisted(() => {
 });
 vi.mock('../lib/db', () => ({ sql: db.sql }));
 
+// ── USDT operator gate (review wave, T-a2): mutable per-test seam ────────────
+// The route reads config.AIAG_AGENT_USDT_ENABLED at request time; the mock
+// below exposes it as a getter over a hoisted holder so each test can flip
+// the gate without re-importing the module graph.
+const gate = vi.hoisted(() => ({ usdt: '0' }));
+vi.mock('../config', async () => {
+  const actual = await vi.importActual<typeof import('../config')>('../config');
+  return {
+    config: {
+      ...actual.config,
+      get AIAG_AGENT_USDT_ENABLED() {
+        return gate.usdt;
+      },
+    },
+  };
+});
+
 import { applyAiagErrorHandler } from '../lib/errors';
 import { setRedisFactory } from '../lib/redis';
 import { requireApiKey, setApiKeyResolver } from '../middleware/auth-plan04';
@@ -160,6 +177,7 @@ beforeEach(() => {
   service.create.mockReset();
   service.read.mockReset();
   delete process.env.TON_CHECKOUT_POLICY;
+  gate.usdt = '0';
   setupRedis();
   setApiKeyResolver(async () => ({
     id: KEY_ID,
@@ -226,8 +244,9 @@ describe('POST /v1/agent/topup — happy gram', () => {
   });
 });
 
-describe('POST /v1/agent/topup — happy usdt (peg)', () => {
+describe('POST /v1/agent/topup — happy usdt (peg, operator gate ON)', () => {
   it('201 with jetton-forward-payload hint carrying the pinned mainnet master', async () => {
+    gate.usdt = '1';
     db.results.push([policyRow()]);
     service.create.mockResolvedValue(usdtInvoice());
 
@@ -247,6 +266,51 @@ describe('POST /v1/agent/topup — happy usdt (peg)', () => {
       minForwardAtomic: expect.stringMatching(/^[1-9][0-9]*$/),
     });
     expect(service.create.mock.calls[0]![1].asset).toBe('usdt');
+  });
+});
+
+describe('POST /v1/agent/topup — USDT operator gate (AIAG_AGENT_USDT_ENABLED, default off)', () => {
+  it('gate off + usdt → 503 AGENT_USDT_DISABLED; no invoice, no SQL, no service call', async () => {
+    gate.usdt = '0';
+    const res = await post('/v1/agent/topup', {
+      asset: 'usdt',
+      credits: '100',
+      idempotencyKey: 'usdt-gate-off',
+    });
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('AGENT_USDT_DISABLED');
+    // Static message, no internals.
+    expect(typeof body.error.message).toBe('string');
+    // The gate fires before the policy SELECT and before the service tx.
+    expect(db.sql.mock.calls.length).toBe(0);
+    expect(service.create).not.toHaveBeenCalled();
+  });
+
+  it('gate off does not touch gram (still 201)', async () => {
+    gate.usdt = '0';
+    db.results.push([policyRow()]);
+    service.create.mockResolvedValue(gramInvoice());
+
+    const res = await post('/v1/agent/topup', {
+      asset: 'gram',
+      credits: '100',
+      idempotencyKey: 'gram-gate-off',
+    });
+    expect(res.status).toBe(201);
+    expect(service.create).toHaveBeenCalledTimes(1);
+    expect(service.create.mock.calls[0]![1].asset).toBe('gram');
+  });
+
+  it('gate on + usdt → the gate stops interfering (201 covered above); a bad usdt body is still 400, not 503', async () => {
+    gate.usdt = '1';
+    const res = await post('/v1/agent/topup', {
+      asset: 'usdt',
+      credits: '99',
+      idempotencyKey: 'k',
+    });
+    expect(res.status).toBe(400);
+    expect(service.create).not.toHaveBeenCalled();
   });
 });
 

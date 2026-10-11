@@ -486,6 +486,85 @@ describe('error channel', () => {
   });
 });
 
+// ── Guard parity (review wave, T-a2): the legacy /v1/* chain inside the app ──
+// server.ts mounts keyLimits → piiFilter → modelStatusMiddleware on /v1/* in
+// the legacy assembly; the facade's sub-app must run the same three guards on
+// its in-process dispatch, or an MCP caller would bypass the key's
+// model_whitelist / monthly cap, PII transborder policy and model freeze
+// state while an HTTP caller is rejected.
+describe('guard parity: /v1/* execution guards apply to MCP tool calls', () => {
+  it('model_whitelist: a key restricted to another model → 403 FORBIDDEN as isError, no upstream work', async () => {
+    setApiKeyResolver(async () => ({
+      id: KEY_ID,
+      org_id: ORG,
+      policies: {},
+      rpm_limit: 60,
+      batch_rpm_limit: 10,
+      daily_usd_cap: null,
+      model_whitelist: ['mock/other'],
+    }));
+
+    const res = await rpc(
+      'tools/call',
+      {
+        name: 'aiag_chat_completion',
+        arguments: {
+          model: 'mock/small',
+          messages: [{ role: 'user', content: 'say hi' }],
+          max_tokens: 8,
+        },
+      },
+      30,
+    );
+    const body = await json(res);
+    expect(body.error).toBeUndefined();
+    const result = body.result as {
+      isError: boolean;
+      structuredContent: { error: { code: string; message: string } };
+    };
+    expect(result.isError).toBe(true);
+    // The gateway 403 envelope crosses the MCP boundary 1:1.
+    expect(result.structuredContent.error.code).toBe('FORBIDDEN');
+    expect(typeof result.structuredContent.error.message).toBe('string');
+    // The guard fired BEFORE any routing/billing/upstream work.
+    expect(spies.resolveModelWithOverride).not.toHaveBeenCalled();
+    expect(spies.getUpstream).not.toHaveBeenCalled();
+    expect(spies.settleCharge).not.toHaveBeenCalled();
+  });
+
+  it('frozen model → 503 MODEL_FROZEN envelope as isError, before routing/billing', async () => {
+    // The model-status SELECT is the first SQL the dispatch awaits, so this
+    // queued row answers exactly that lookup.
+    db.results.push([{ status: 'frozen' }]);
+
+    const res = await rpc(
+      'tools/call',
+      {
+        name: 'aiag_chat_completion',
+        arguments: {
+          model: 'mock/small',
+          messages: [{ role: 'user', content: 'say hi' }],
+          max_tokens: 8,
+        },
+      },
+      31,
+    );
+    const body = await json(res);
+    expect(body.error).toBeUndefined();
+    const result = body.result as {
+      isError: boolean;
+      structuredContent: { error: unknown; model?: string; status?: string };
+    };
+    expect(result.isError).toBe(true);
+    // The middleware's flat legacy envelope is carried through unchanged.
+    expect(result.structuredContent.error).toBe('MODEL_FROZEN');
+    expect(result.structuredContent.model).toBe('mock/small');
+    expect(result.structuredContent.status).toBe('frozen');
+    expect(spies.resolveModelWithOverride).not.toHaveBeenCalled();
+    expect(spies.settleCharge).not.toHaveBeenCalled();
+  });
+});
+
 describe('transport surface', () => {
   it('GET /mcp answers 405 (POST-only facade)', async () => {
     const res = await mount().request('http://gw.example/mcp', {

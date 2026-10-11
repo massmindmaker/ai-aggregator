@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 import type { SqlClient } from "../lib/db";
 import { AiagError } from "../lib/errors";
+import { config } from "../config";
 import {
   admissionJsonObjectsEqual,
   normalizeAdmissionTimestamp,
@@ -42,9 +43,10 @@ export class AdmissionDeadlineExpiredError extends AdmissionConflictError {
 // carries the SAME envelope, and for agent keys
 // (`gateway_api_keys.policies->>'kind' = 'agent'`) the 402 body gains a
 // `topup` hint pointing at the headless topup rail — POST /v1/agent/topup,
-// gram|usdt, minimum grant 100 credits (mirrors routes/v1/agent-topup.ts and
-// the 0106 minimum). Human keys keep the legacy body byte-for-byte: a person
-// tops up in the web UI, and a machine hint would be noise.
+// gram|usdt (usdt only while the operator gate AIAG_AGENT_USDT_ENABLED=1 is
+// on, mirrored from routes/v1/agent-topup.ts), minimum grant 100 credits
+// (mirrors the 0106 minimum). Human keys keep the legacy body byte-for-byte:
+// a person tops up in the web UI, and a machine hint would be noise.
 //
 // Backwards compatible by construction: the code stays "PAYMENT_REQUIRED"
 // (stored attempt layers match on exactly this code — stored-chat-attempt.ts,
@@ -63,7 +65,16 @@ export const INSUFFICIENT_FUNDS_TOPUP_HINT = Object.freeze({
   default_asset: "gram",
   endpoint: "POST /v1/agent/topup",
   min_credits: 100,
-  assets: Object.freeze(["gram", "usdt"] as const),
+  // Mirrors the topup rail's operator gate (routes/v1/agent-topup.ts reads
+  // the same config field, review wave T-a2): usdt is advertised only while
+  // the operator enabled USDT invoices — the hint must never point an agent
+  // at an asset the rail would refuse with 503 AGENT_USDT_DISABLED. Frozen
+  // at module init together with the config itself.
+  assets: Object.freeze(
+    config.AIAG_AGENT_USDT_ENABLED === "1"
+      ? (["gram", "usdt"] as const)
+      : (["gram"] as const),
+  ),
 });
 
 export type InsufficientFundsTopupHint = typeof INSUFFICIENT_FUNDS_TOPUP_HINT;

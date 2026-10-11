@@ -60,11 +60,14 @@ const baseKey: AuthenticatedApiKey = {
   ru_residency_only: false,
 };
 
+// Default contour (review wave, T-a2): AIAG_AGENT_USDT_ENABLED unset → the
+// mounted hint advertises gram only; usdt joins when the operator flips the
+// gate (unit-pinned in insufficient-funds-hint.test.ts).
 const EXPECTED_TOPUP = {
   default_asset: 'gram',
   endpoint: 'POST /v1/agent/topup',
   min_credits: 100,
-  assets: ['gram', 'usdt'],
+  assets: ['gram'],
 };
 
 /**

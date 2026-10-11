@@ -35,6 +35,8 @@
  *   AGENT_NOT_AUTHORIZED           → 403   AGENT_TOPUP_NOT_FOUND        → 404
  *   TON_ASSET_NOT_ALLOWLISTED      → 503   TON_CHECKOUT_FX_STALE        → 503
  *   TON_QUOTE_EXPIRED              → 503   AGENT_TOPUP_UNAVAILABLE      → 503
+ *   AGENT_USDT_DISABLED            → 503 (operator gate AIAG_AGENT_USDT_
+ *                                     ENABLED, default off — see the route)
  *   TON_BALANCE_COMPATIBILITY_LIMIT→ 400   anything else                → 400
  * Driver/SQL text is never echoed: unexpected errors rethrow and render a
  * bare {error:{code:'INTERNAL'}}.
@@ -46,6 +48,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
+import { config } from '../../config';
 import { sql } from '../../lib/db';
 import { AiagError, errors } from '../../lib/errors';
 import { makeRedis } from '../../lib/redis';
@@ -304,6 +307,18 @@ agentTopup.post('/topup', async (c) => {
 
   const parsed = topupSchema.safeParse(await readJsonBody(c));
   if (!parsed.success) throw errors.badRequest('Invalid agent topup request');
+
+  // ── USDT operator gate (review wave, T-a2) ────────────────────────────────
+  // The worker's settlement path rejects jettons (TON_SETTLEMENT_ASSET_
+  // UNSUPPORTED in worker-boundary), so a paid USDT invoice could never be
+  // credited — it would loop in db_error forever. Until jetton settle ships,
+  // USDT invoices are minted only where the operator flipped
+  // AIAG_AGENT_USDT_ENABLED=1 (config.ts, default off). The 402 topup hint
+  // advertises the same asset set, so the rail never points an agent at an
+  // asset it would then refuse. Static message, no internals.
+  if (parsed.data.asset === 'usdt' && config.AIAG_AGENT_USDT_ENABLED !== '1') {
+    throw new AiagError('AGENT_USDT_DISABLED', 503, 'USDT topup is not enabled');
+  }
 
   let policy: AgentTopupPolicy;
   try {

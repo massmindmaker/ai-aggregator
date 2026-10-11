@@ -22,8 +22,11 @@
  * agent-policy, balance, models, chat) on an in-process Hono sub-app and
  * calls them via `app.request()` — an in-memory dispatch, never an HTTP
  * loopback to ourselves. Every route guard (org scoping, topup/policy Redis
- * windows, guarded UPDATEs, audit rows, error envelopes) therefore applies
- * to MCP callers exactly as to HTTP callers.
+ * windows, guarded UPDATEs, audit rows, error envelopes, and — since the
+ * review-wave guard-parity fix — the legacy /v1/* execution guards
+ * keyLimits/piiFilter/modelStatus) applies to MCP callers exactly as to HTTP
+ * callers; only requireApiKey + rateLimit are not re-run inside the dispatch
+ * because the outer /mcp mount already executed them on the real request.
  *
  * ── Error mapping ────────────────────────────────────────────────────────────
  * Non-2xx route replies become CallToolResult.isError with the gateway's own
@@ -37,6 +40,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { AuthenticatedApiKey } from '../middleware/auth-plan04';
 import { requestIdMiddleware } from '../middleware/request-id';
+import { keyLimits } from '../middleware/key-limits';
+import { piiFilter } from '../middleware/pii-filter';
+import { modelStatusMiddleware } from '../middleware/model-status-check';
 import { applyAiagErrorHandler } from '../lib/errors';
 import { balance as balanceRoute } from '../routes/v1/balance';
 import { models as modelsRoute } from '../routes/v1/models';
@@ -67,6 +73,18 @@ export function createAgentGatewayService(key: AuthenticatedApiKey): AgentGatewa
     c.set('orgId' as never, key.org_id as never);
     await next();
   });
+  // Guard parity (review wave, T-a2): the legacy assembly in server.ts mounts
+  // keyLimits → piiFilter → modelStatusMiddleware on /v1/* after auth. The
+  // sub-app skips requireApiKey + rateLimit — the outer /mcp mount already
+  // ran both on the real request, and the in-process dispatch carries no
+  // Authorization header to re-authenticate with — but the three execution
+  // guards below run here with identical order and semantics, so an MCP
+  // caller cannot bypass the key's model_whitelist / monthly cost cap, PII
+  // transborder policy or the model freeze/depublish state. They read only
+  // the apiKey/orgId context set above.
+  app.use('/v1/*', keyLimits);
+  app.use('/v1/*', piiFilter);
+  app.use('/v1/*', modelStatusMiddleware());
   applyAiagErrorHandler(app);
   // Same assemblies server.ts mounts: the route modules own every guard.
   app.route('/v1/agent', agentTopup);
