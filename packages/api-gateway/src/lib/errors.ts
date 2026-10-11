@@ -13,6 +13,16 @@ export function applyAiagErrorHandler(app: Hono): void {
   app.onError((err, c) => {
     if (err instanceof AiagError) {
       logger.warn({ err, code: err.code }, 'aiag_error');
+      // T10 (agentic rail): an error may carry a retry hint (e.g. the 402
+      // insufficient-funds topup hint, 30s). Additive only — no pre-existing
+      // AiagError sets retryAfterSeconds, so nothing changes for them.
+      if (
+        typeof err.retryAfterSeconds === 'number' &&
+        Number.isSafeInteger(err.retryAfterSeconds) &&
+        err.retryAfterSeconds > 0
+      ) {
+        c.header('Retry-After', String(err.retryAfterSeconds));
+      }
       return c.json(err.toResponseBody(), err.status as any);
     }
     logger.error({ err: String(err) }, 'unhandled');
@@ -24,6 +34,12 @@ export function applyAiagErrorHandler(app: Hono): void {
 }
 
 export class AiagError extends Error {
+  /**
+   * Optional Retry-After hint in seconds, rendered as a response header by
+   * applyAiagErrorHandler. Set so far only by InsufficientFundsError (T10).
+   */
+  retryAfterSeconds?: number;
+
   constructor(
     public code: string,
     public status: number,

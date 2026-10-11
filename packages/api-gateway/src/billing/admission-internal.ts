@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 import type { SqlClient } from "../lib/db";
-import { AiagError, errors } from "../lib/errors";
+import { AiagError } from "../lib/errors";
 import {
   admissionJsonObjectsEqual,
   normalizeAdmissionTimestamp,
@@ -36,6 +36,103 @@ export class AdmissionDeadlineExpiredError extends AdmissionConflictError {
   }
 }
 
+// ── T10 (agentic rail, plan 2026-10-09): machine-readable 402 topup hint ─────
+//
+// x402-challenge semantics without the EVM part: every gateway money refusal
+// carries the SAME envelope, and for agent keys
+// (`gateway_api_keys.policies->>'kind' = 'agent'`) the 402 body gains a
+// `topup` hint pointing at the headless topup rail — POST /v1/agent/topup,
+// gram|usdt, minimum grant 100 credits (mirrors routes/v1/agent-topup.ts and
+// the 0106 minimum). Human keys keep the legacy body byte-for-byte: a person
+// tops up in the web UI, and a machine hint would be noise.
+//
+// Backwards compatible by construction: the code stays "PAYMENT_REQUIRED"
+// (stored attempt layers match on exactly this code — stored-chat-attempt.ts,
+// stored-embeddings-attempt.ts, stored-chat-byok-attempt.ts), message and
+// status are the legacy ones; `topup` is purely additive and present only for
+// agent keys. `retryAfterSeconds` is rendered as a `Retry-After` response
+// header by lib/errors.ts applyAiagErrorHandler.
+//
+// Defined here rather than settle.ts deliberately: this module keeps a
+// type-only dependency on lib/db, while settle.ts value-imports the live sql
+// client — hosting the shared class here avoids making that client a
+// transitive dependency of every admission caller.
+
+/** The single canonical topup hint appended to agent-key 402 bodies. */
+export const INSUFFICIENT_FUNDS_TOPUP_HINT = Object.freeze({
+  default_asset: "gram",
+  endpoint: "POST /v1/agent/topup",
+  min_credits: 100,
+  assets: Object.freeze(["gram", "usdt"] as const),
+});
+
+export type InsufficientFundsTopupHint = typeof INSUFFICIENT_FUNDS_TOPUP_HINT;
+
+/** Coarse back-off: a freshly topup'd balance settles asynchronously. */
+export const INSUFFICIENT_FUNDS_RETRY_AFTER_SECONDS = 30;
+
+/**
+ * The agent-rail key marker. Only a strict `kind === 'agent'` counts — the
+ * flag is written by the registration/key-mint services and accepted by the
+ * stored fresh-policy parser; every other shape (absent, other kind, case
+ * variants) means a human key and renders the legacy 402 body.
+ */
+export function isAgentKeyPolicies(policies: unknown): boolean {
+  return (
+    typeof policies === "object" &&
+    policies !== null &&
+    !Array.isArray(policies) &&
+    (policies as { kind?: unknown }).kind === "agent"
+  );
+}
+
+export class InsufficientFundsError extends AiagError {
+  /** Present only for agent keys; human keys render without it. */
+  readonly topup: InsufficientFundsTopupHint | undefined;
+  /**
+   * Present only for agent keys — a human key's response stays byte- and
+   * header-identical to the legacy 402.
+   */
+  readonly retryAfterSeconds: number | undefined;
+
+  constructor(policies?: Record<string, unknown>) {
+    super("PAYMENT_REQUIRED", 402, "Insufficient funds");
+    this.name = "InsufficientFundsError";
+    if (isAgentKeyPolicies(policies)) {
+      this.topup = INSUFFICIENT_FUNDS_TOPUP_HINT;
+      this.retryAfterSeconds = INSUFFICIENT_FUNDS_RETRY_AFTER_SECONDS;
+    } else {
+      this.topup = undefined;
+      this.retryAfterSeconds = undefined;
+    }
+  }
+
+  override toResponseBody(): {
+    error: {
+      code: string;
+      message: string;
+      details?: unknown;
+      topup?: InsufficientFundsTopupHint;
+    };
+  } {
+    const body = super.toResponseBody();
+    if (this.topup === undefined) return body;
+    return { error: { ...body.error, topup: this.topup } };
+  }
+}
+
+/**
+ * The single factory for every gateway money refusal (preflight
+ * assertPositiveBalance, settleCharge P0003, admission P0003). Callers pass
+ * the auth-context key policies — the flag itself never lives in the billing
+ * layer, which stays free of any request context.
+ */
+export function insufficientFunds(
+  policies?: Record<string, unknown>,
+): InsufficientFundsError {
+  return new InsufficientFundsError(policies);
+}
+
 export type AdmitGatewayChargeArgs = Readonly<{
   orgId: string;
   billingRequestId: string;
@@ -47,6 +144,14 @@ export type AdmitGatewayChargeArgs = Readonly<{
   authorizedMaxCredits: bigint;
   quoteSnapshot: JsonObject;
   preDispatchDeadlineAt: string;
+  /**
+   * T10: auth-context key policies (optional). Sole purpose: when the stored
+   * function refuses funds (P0003), a `kind:'agent'` key gets the machine-
+   * readable topup hint in its 402 body. Threading is optional everywhere so
+   * pre-existing call sites keep compiling; passing nothing renders the
+   * legacy body unchanged.
+   */
+  policies?: Record<string, unknown>;
 }>;
 
 export type MarkGatewayChargeDispatchedArgs = Readonly<{
@@ -68,6 +173,8 @@ export type RecordGatewayChargeOutcomeArgs = Readonly<{
   actualCostCredits: bigint;
   usageSnapshot: JsonObject;
   outcomeKind: string;
+  /** T10: same optional agent-key marker as AdmitGatewayChargeArgs.policies. */
+  policies?: Record<string, unknown>;
 }>;
 
 export type SettleAdmittedGatewayChargeArgs = Readonly<{
@@ -136,6 +243,7 @@ export function timestamp(value: unknown): string {
 function mapTransportError(
   error: unknown,
   operation: AdmissionOperation,
+  policies?: Record<string, unknown>,
 ): AiagError {
   const code =
     typeof error === "object" &&
@@ -151,7 +259,9 @@ function mapTransportError(
       (operation === "dispatch" && code === "P0005"))
   )
     return new AdmissionDeadlineExpiredError();
-  if (code === "P0003") return errors.paymentRequired();
+  // T10: P0003 INSUFFICIENT_FUNDS keeps its legacy 402 envelope and gains the
+  // agent-key topup hint when policies mark the caller as an agent.
+  if (code === "P0003") return insufficientFunds(policies);
   if (code === "P0004") return new AdmissionUnavailableError();
   if (code === "P0005") return new AdmissionConflictError();
   return new AdmissionUnavailableError();
@@ -197,6 +307,7 @@ export async function queryAdmission(
   client: SqlClient,
   operation: AdmissionOperation,
   functionCall: SqlFragment,
+  policies?: Record<string, unknown>,
 ): Promise<GatewayChargeAdmissionResult> {
   let rows: readonly Record<string, unknown>[];
   try {
@@ -206,7 +317,7 @@ export async function queryAdmission(
       FROM admission
     `;
   } catch (error) {
-    throw mapTransportError(error, operation);
+    throw mapTransportError(error, operation, policies);
   }
   if (rows.length !== 1) unavailable();
   try {
@@ -369,7 +480,7 @@ export async function admitGatewayChargeInternal(
       ${preDispatchDeadlineAt}::timestamptz
     )
   `;
-  const result = await queryAdmission(client, "admit", functionCall);
+  const result = await queryAdmission(client, "admit", functionCall, args.policies);
   if (
     result.orgId !== orgId ||
     result.billingRequestId !== billingRequestId ||
@@ -467,7 +578,7 @@ export async function recordGatewayChargeOutcomeInternal(
       ${outcomeKind}::varchar
     )
   `;
-  const result = await queryAdmission(client, "outcome", functionCall);
+  const result = await queryAdmission(client, "outcome", functionCall, args.policies);
   assertGatewayOutcome(captured, result);
   return result;
 }

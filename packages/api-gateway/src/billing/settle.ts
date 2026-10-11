@@ -16,6 +16,7 @@
 import { sql as defaultSql } from '../lib/db';
 import { errors } from '../lib/errors';
 import { newSettlementRequestId } from '../middleware/request-id';
+import { insufficientFunds } from './admission-internal';
 
 /**
  * Server-minted settlement identity — `stl_<uuid>`, produced by
@@ -75,6 +76,14 @@ export type SettleArgs = {
   /** Optional per-request context (model_slug, input/output tokens) — written
    *  verbatim to gateway_transactions.metadata for the spend-by-model ledger. */
   metadata?: Record<string, unknown>;
+  /**
+   * T10 (agentic rail): auth-context key policies, optional. Sole purpose:
+   * when the stored function refuses funds (P0003), a `kind:'agent'` key gets
+   * the machine-readable topup hint in its 402 body instead of the bare
+   * legacy envelope. The billing layer never derives it itself — the caller
+   * (which holds the Hono auth context) passes the plain policies object.
+   */
+  policies?: Record<string, unknown>;
 };
 
 export type SettleResult = {
@@ -108,7 +117,14 @@ export type SettleResult = {
  */
 export async function assertPositiveBalance(
   orgId: string,
-  client: typeof defaultSql = defaultSql
+  client: typeof defaultSql = defaultSql,
+  /**
+   * T10: auth-context key policies (optional, injected by the route layer —
+   * this module holds no Hono context). An agent key
+   * (`policies->>'kind' = 'agent'`) gets the machine-readable topup hint in
+   * the 402 body; every other caller keeps the legacy envelope.
+   */
+  policies?: Record<string, unknown>
 ): Promise<void> {
   const rows = await client<Array<{ balance: string }>>`
     SELECT (subscription_credits + payg_credits)::text AS balance
@@ -120,7 +136,7 @@ export async function assertPositiveBalance(
   // a non-positive balance → fail closed with 402 before spending upstream.
   // BigInt keeps the comparison exact at the BIGINT micro-credit scale.
   if (!row || BigInt(row.balance) <= 0n) {
-    throw errors.paymentRequired();
+    throw insufficientFunds(policies);
   }
 }
 
@@ -171,7 +187,9 @@ export async function settleCharge(
     const code = (e as { code?: string }).code;
     if (code === 'P0001') throw errors.badRequest('Invalid amount');
     if (code === 'P0002') throw errors.badRequest('Unknown organization');
-    if (code === 'P0003') throw errors.paymentRequired();
+    // T10: same unified money-refusal envelope as the preflight gate above —
+    // legacy 402 for human keys, +topup hint for agent keys.
+    if (code === 'P0003') throw insufficientFunds(args.policies);
     if (code === 'P0004') throw errors.unavailable('Concurrent modification');
     // 23505 = unique_violation on gateway_transactions_api_usage_uniq. With the
     // org-scoped index and server-minted ids this should be unreachable; if it
