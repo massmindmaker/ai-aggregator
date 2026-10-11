@@ -20,7 +20,8 @@ export class TonSourceFailure extends Error {
     super(code);
   }
 }
-export function object(value: unknown): Record<string, unknown> {  if (
+export function object(value: unknown): Record<string, unknown> {
+  if (
     value === null ||
     typeof value !== "object" ||
     Array.isArray(value) ||

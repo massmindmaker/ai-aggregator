@@ -100,11 +100,15 @@ TON-proof (testnet `-3`), топап Gram/USDT-инвойсами, ключи с
   `POST /v1/agent/revoke`, `GET|PUT /v1/agent/policy`, `POST /mcp`
   (9 тулов `aiag_*` + resource `aiag://catalog`).
 - **Миграции `0104`–`0109`** (principals, key TTL, topup core, key meta, quota
-  writers, USDT reconciliation) — обычные упорядоченные миграции, применяются
-  штатно, ничего прод-специфичного включать не надо.
+  writers, USDT reconciliation) — обычные упорядоченные миграции; применение
+  на проде — отдельное решение владельца (как у всей TON-волны), код ничего
+  прод-специфичного не включает.
 - **TON runtime по-прежнему testnet-gated**: регистрация только `-3`, gram-инвойсы
-  testnet; USDT пинится к mainnet-мастеру, но allowlist-строка не засеяна →
-  `usdt` отвечает 503 до активации оператором. Включение mainnet и settlement —
+  testnet. USDT: mainnet-мастер (peg 1 USDT = 100 кредитов) и его allowlist-строка
+  засеяны миграцией `0109` — mainnet-USDT-инвойс создаётся, но не сеттлится без
+  включённого mainnet-воркера; testnet-USDT-мастер НЕ засеян (GUC
+  `aiag.usdt_testnet_master` + allowlist-строка — оператор при testnet-запуске),
+  до того testnet-USDT отвечает 503. Включение mainnet и settlement —
   отдельный шаг владельца.
 - **Gram-витрина веб-кошелька ждёт адрес владельца** — это другой контур
   (`ton_checkout_policy`), не путать с агентским рельсом.
