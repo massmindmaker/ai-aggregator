@@ -53,3 +53,6 @@ export type { AgentChallenge,AgentRegisterResult,AgentChallengeInput,AgentRegist
 
 export { createAgentTopupInvoice,readAgentTopupInvoice,agentTopupFingerprint,AgentTopupError } from './agent-topup';
 export type { AgentTopupAsset,AgentTopupPolicy,AgentTopupInvoice,AgentTopupInvoiceStatus,CreateAgentTopupInput,ReadAgentTopupInput } from './agent-topup';
+
+export { readAgentPolicy,updateAgentPolicy,mergeKeyPolicies,AgentPolicyError } from './agent-policy';
+export type { AgentRoutingKey,AgentPolicyPatch,AgentPolicyQuotas,AgentPolicyState } from './agent-policy';

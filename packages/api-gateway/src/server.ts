@@ -33,6 +33,7 @@ import { organizationKeys } from './routes/v1/organization-keys';
 import { agentRegister } from './routes/v1/agent-register';
 import { agentTopup } from './routes/v1/agent-topup';
 import { agentKeys } from './routes/v1/agent-keys';
+import { agentPolicy } from './routes/v1/agent-policy';
 import { catalogHttpBoundary } from './catalog/http-contract';
 import { adminProxy } from './routes/admin/proxyTest';
 import { adminCatalog } from './routes/admin/catalog';
@@ -161,6 +162,20 @@ app.use('/v1/agent/keys/*', rateLimit);
 app.use('/v1/agent/revoke', requireApiKey);
 app.use('/v1/agent/revoke', rateLimit);
 app.route('/v1/agent', agentKeys);
+
+// ---- /v1/agent/policy: routing policy + opt-in quotas (Task 8) -------------
+// Same root-app mount pattern as the key-lifecycle rail above: auth + per-key
+// RPM here, plus the route's own coarse 30/min window (agentpolicy:<key_id>)
+// because policy reads/writes are single-row work. orgId/keyId come from the
+// fresh key row; quota writes run through the 0108 SQL entrypoints, which
+// carry the same live-key -> active-principal authorization as 0106/0107.
+// Limits are opt-in self-service: an agent that never PUTs a quota field is
+// unlimited, and nothing here imposes or tightens a default cap.
+app.use('/v1/agent/policy', requireApiKey);
+app.use('/v1/agent/policy/*', requireApiKey);
+app.use('/v1/agent/policy', rateLimit);
+app.use('/v1/agent/policy/*', rateLimit);
+app.route('/v1/agent', agentPolicy);
 
 if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
   // Early cache policy includes auth, RPM, unsupported routes and 404 responses.
