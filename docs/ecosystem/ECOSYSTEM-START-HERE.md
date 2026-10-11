@@ -88,6 +88,32 @@
 Архив `Projects/archive/ai-ecosystem-sources-20260906` и `Projects/archive/aiag-web` —
 **только чтение и история**, править там нельзя.
 
+## Агентский рельс: готов в коде, НЕ включён на проде (срез 11.10.2026)
+
+Реализован планом `2026-10-09 agentic-rail` (T1–T12): headless-регистрация по
+TON-proof (testnet `-3`), топап Gram/USDT-инвойсами, ключи с TTL/ротацией/ревоком,
+политики+квоты (добровольные), 402-хинт для агентских ключей, MCP-фасад.
+Полный гайд — [`docs/api/agent-rail.md`](../api/agent-rail.md).
+
+- **Эндпоинты (packages/api-gateway):** `POST /v1/agent/{challenge,register,topup}`,
+  `GET /v1/agent/invoices/:id`, `GET /v1/agent/keys`, `POST /v1/agent/keys/:id/{rotate,revoke}`,
+  `POST /v1/agent/revoke`, `GET|PUT /v1/agent/policy`, `POST /mcp`
+  (9 тулов `aiag_*` + resource `aiag://catalog`).
+- **Миграции `0104`–`0109`** (principals, key TTL, topup core, key meta, quota
+  writers, USDT reconciliation) — обычные упорядоченные миграции, применяются
+  штатно, ничего прод-специфичного включать не надо.
+- **TON runtime по-прежнему testnet-gated**: регистрация только `-3`, gram-инвойсы
+  testnet; USDT пинится к mainnet-мастеру, но allowlist-строка не засеяна →
+  `usdt` отвечает 503 до активации оператором. Включение mainnet и settlement —
+  отдельный шаг владельца.
+- **Gram-витрина веб-кошелька ждёт адрес владельца** — это другой контур
+  (`ton_checkout_policy`), не путать с агентским рельсом.
+- **Юрлицо/оферта отложены владельцем** — платный публичный запуск остаётся
+  заблокирован (юр-блокер ниже в «Ближайших шагах» не снят).
+
+Не включать рельс на проде и не «включать usdt/mainnet» без прямого указания
+владельца.
+
 ## Цикл, ради которого всё и делается
 
 ```
