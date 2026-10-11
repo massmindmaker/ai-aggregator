@@ -569,6 +569,67 @@ describe('guard parity: /v1/* execution guards apply to MCP tool calls', () => {
     expect(spies.resolveModelWithOverride).not.toHaveBeenCalled();
     expect(spies.settleCharge).not.toHaveBeenCalled();
   });
+
+  it('NB-1: monthly cost cap blocks chat but NOT the self-service rail (agent can lift its own quota)', async () => {
+    // Mirror the legacy perimeter: keyLimits guards the inference path only.
+    // An MCP-only agent that set a monthly cap must still be able to call
+    // aiag_set_routing_policy to lift it — otherwise it locks itself out for
+    // the rest of the month with no HTTP escape hatch.
+    const redis = new (IORedisMock as any)();
+    const now = new Date();
+    const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    void redis.set(`cost_month:${KEY_ID}:${month}`, '999999000');
+    setRedisFactory(() => redis as any);
+    setApiKeyResolver(async () => ({
+      id: KEY_ID,
+      org_id: ORG,
+      policies: {},
+      rpm_limit: 60,
+      batch_rpm_limit: 10,
+      daily_usd_cap: null,
+      model_whitelist: null,
+      cost_limit_monthly_rub: '100',
+    }));
+
+    const chatRes = await rpc(
+      'tools/call',
+      {
+        name: 'aiag_chat_completion',
+        arguments: {
+          model: 'mock/small',
+          messages: [{ role: 'user', content: 'say hi' }],
+          max_tokens: 8,
+        },
+      },
+      31,
+    );
+    const chatBody = await json(chatRes);
+    const chatResult = chatBody.result as {
+      isError: boolean;
+      structuredContent: { error: { code: unknown; message: unknown } };
+    };
+    expect(chatResult.isError).toBe(true);
+    expect(chatResult.structuredContent.error.code).toBe('PAYMENT_REQUIRED');
+
+    service.updatePolicy.mockResolvedValue({
+      policies: {},
+      modelWhitelist: [],
+      quotas: { sessionMicrocredits: null, monthlyCredits: null, dailyOrgUsdMicro: null },
+    });
+    const policyRes = await rpc(
+      'tools/call',
+      {
+        name: 'aiag_set_routing_policy',
+        arguments: { monthly_credits_limit: null },
+      },
+      31,
+    );
+    const policyBody = await json(policyRes);
+    expect(policyBody.error).toBeUndefined();
+    const policyResult = policyBody.result as { isError?: boolean };
+    expect(policyResult.isError).not.toBe(true);
+    expect(service.updatePolicy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('transport surface', () => {

@@ -73,18 +73,18 @@ export function createAgentGatewayService(key: AuthenticatedApiKey): AgentGatewa
     c.set('orgId' as never, key.org_id as never);
     await next();
   });
-  // Guard parity (review wave, T-a2): the legacy assembly in server.ts mounts
-  // keyLimits → piiFilter → modelStatusMiddleware on /v1/* after auth. The
-  // sub-app skips requireApiKey + rateLimit — the outer /mcp mount already
-  // ran both on the real request, and the in-process dispatch carries no
-  // Authorization header to re-authenticate with — but the three execution
-  // guards below run here with identical order and semantics, so an MCP
-  // caller cannot bypass the key's model_whitelist / monthly cost cap, PII
-  // transborder policy or the model freeze/depublish state. They read only
-  // the apiKey/orgId context set above.
-  app.use('/v1/*', keyLimits);
-  app.use('/v1/*', piiFilter);
-  app.use('/v1/*', modelStatusMiddleware());
+  // Guard parity (review wave, T-a2 + NB-1 follow-up): the legacy assembly in
+  // server.ts mounts keyLimits → piiFilter → modelStatusMiddleware on /v1/*
+  // after auth, while the AGENT self-service routes (topup/keys/policy) are
+  // deliberately mounted on the root app WITHOUT keyLimits — a key blocked by
+  // its spending cap must still be able to read receipts and lift its own
+  // quota, otherwise an MCP-only agent that set a monthly cap locks itself
+  // out for the rest of the month. Mirror the legacy perimeter exactly: the
+  // three execution guards cover only the inference path (/v1/chat), not the
+  // self-service rail. They read only the apiKey/orgId context set above.
+  app.use('/v1/chat/*', keyLimits);
+  app.use('/v1/chat/*', piiFilter);
+  app.use('/v1/chat/*', modelStatusMiddleware());
   applyAiagErrorHandler(app);
   // Same assemblies server.ts mounts: the route modules own every guard.
   app.route('/v1/agent', agentTopup);
