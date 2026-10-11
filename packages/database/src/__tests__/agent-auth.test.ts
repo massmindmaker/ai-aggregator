@@ -6,6 +6,7 @@ import { walletProofFixture } from "../../../shared/src/__tests__/ton-wallet-pro
 import {
   consumeAgentRegister,
   issueAgentChallenge,
+  revokeAgentPrincipal,
   type AgentChallengeRow,
 } from "../agent-auth";
 import type { TonPaymentDatabase, TonSqlClient } from "../ton-payment-types";
@@ -359,5 +360,88 @@ describe("agent register consumption", () => {
       ).rejects.toThrow();
       expect(calls).toHaveLength(0);
     }
+  });
+});
+
+describe("agent principal self-revoke (0107 entrypoint seam)", () => {
+  const KEY_ID = "55555555-5555-4555-8555-5555555555aa";
+  const PRINCIPAL = "88000000-0000-4000-8000-0000000000cc";
+
+  function revokeResult(overrides: Record<string, unknown> = {}) {
+    return {
+      principalId: PRINCIPAL,
+      revokedAt: "2026-10-09T12:00:00.123456+00:00",
+      keysRevoked: 3,
+      ...overrides,
+    };
+  }
+
+  it("returns the normalized fact and calls the SQL entrypoint with prepared values", async () => {
+    const { db, calls } = recordingDatabase([[{ result: revokeResult() }]]);
+    const result = await revokeAgentPrincipal(db, { keyId: KEY_ID });
+    expect(result).toEqual({
+      principalId: PRINCIPAL,
+      revokedAt: "2026-10-09T12:00:00.123Z",
+      keysRevoked: 3,
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.text).toContain("aiag_revoke_agent_principal_v1");
+    expect(calls[0]!.values).toEqual([KEY_ID]);
+  });
+
+  it("accepts a string-encoded JSONB result (defensive driver shape)", async () => {
+    const { db } = recordingDatabase([
+      [{ result: JSON.stringify(revokeResult()) }],
+    ]);
+    const result = await revokeAgentPrincipal(db, { keyId: KEY_ID });
+    expect(result.principalId).toBe(PRINCIPAL);
+    expect(result.keysRevoked).toBe(3);
+  });
+
+  it("passes an idempotent zero-keys fact through untouched", async () => {
+    const { db } = recordingDatabase([
+      [{ result: revokeResult({ keysRevoked: 0 }) }],
+    ]);
+    const result = await revokeAgentPrincipal(db, { keyId: KEY_ID });
+    expect(result.keysRevoked).toBe(0);
+  });
+
+  it("maps PG RAISE EXCEPTION codes to AgentAuthError", async () => {
+    for (const code of ["AGENT_NOT_AUTHORIZED", "AGENT_PRINCIPAL_STATE_CONFLICT"]) {
+      const { db } = recordingDatabase([new Error(code)]);
+      await expect(revokeAgentPrincipal(db, { keyId: KEY_ID })).rejects.toMatchObject({
+        name: "AgentAuthError",
+        code,
+      });
+    }
+  });
+
+  it("fails closed on a malformed entrypoint result", async () => {
+    for (const bad of [
+      { result: { principalId: "not-a-uuid", revokedAt: "2026-10-09T12:00:00Z", keysRevoked: 1 } },
+      { result: { principalId: PRINCIPAL, revokedAt: "not-a-timestamp", keysRevoked: 1 } },
+      { result: { principalId: PRINCIPAL, revokedAt: "2026-10-09T12:00:00Z", keysRevoked: -1 } },
+      { result: { principalId: PRINCIPAL, revokedAt: "2026-10-09T12:00:00Z", keysRevoked: 1.5 } },
+      { result: null },
+    ]) {
+      const { db } = recordingDatabase([[bad]]);
+      await expect(revokeAgentPrincipal(db, { keyId: KEY_ID })).rejects.toMatchObject({
+        name: "AgentAuthError",
+        code: "AGENT_REVOKE_UNAVAILABLE",
+      });
+    }
+  });
+
+  it("rejects a malformed key id before SQL", async () => {
+    const { db, calls } = recordingDatabase();
+    await expect(revokeAgentPrincipal(db, { keyId: "not-a-uuid" })).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rethrows unexpected driver errors unchanged", async () => {
+    const { db } = recordingDatabase([new Error("connection refused")]);
+    await expect(revokeAgentPrincipal(db, { keyId: KEY_ID })).rejects.toThrow(
+      "connection refused",
+    );
   });
 });

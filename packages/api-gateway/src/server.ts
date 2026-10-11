@@ -32,6 +32,7 @@ import { usage } from './routes/v1/usage';
 import { organizationKeys } from './routes/v1/organization-keys';
 import { agentRegister } from './routes/v1/agent-register';
 import { agentTopup } from './routes/v1/agent-topup';
+import { agentKeys } from './routes/v1/agent-keys';
 import { catalogHttpBoundary } from './catalog/http-contract';
 import { adminProxy } from './routes/admin/proxyTest';
 import { adminCatalog } from './routes/admin/catalog';
@@ -144,6 +145,22 @@ app.use('/v1/agent/topup/*', rateLimit);
 app.use('/v1/agent/invoices/*', requireApiKey);
 app.use('/v1/agent/invoices/*', rateLimit);
 app.route('/v1/agent', agentTopup);
+
+// ---- /v1/agent/keys + /v1/agent/revoke: agent key lifecycle (Task 7) ------
+// Same root-app mount pattern as /v1/usage, /v1/organization and the topup
+// rail above: auth + per-key RPM only (guarded single-row UPDATEs and one
+// org-scoped SELECT need nothing heavier). orgId/keyId come from the fresh
+// key row. The public registration sub-app mounted earlier carries no
+// handlers for these paths, so its bootstrap contract is untouched. Note
+// POST /v1/agent/keys/:id/rotate may target the calling key itself — after a
+// self-rotate the current bearer is dead by design (see agent-keys.ts).
+app.use('/v1/agent/keys', requireApiKey);
+app.use('/v1/agent/keys/*', requireApiKey);
+app.use('/v1/agent/keys', rateLimit);
+app.use('/v1/agent/keys/*', rateLimit);
+app.use('/v1/agent/revoke', requireApiKey);
+app.use('/v1/agent/revoke', rateLimit);
+app.route('/v1/agent', agentKeys);
 
 if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
   // Early cache policy includes auth, RPM, unsupported routes and 404 responses.

@@ -89,3 +89,51 @@ export async function consumeAgentRegister(db:TonPaymentDatabase,input:AgentRegi
   return {principalId:principal!.id,orgId:org.id};
  });
 }
+
+// ── Principal self-revoke (0107 aiag_revoke_agent_principal_v1, Task 7) ───────
+export interface AgentRevokeInput{keyId:string}
+export interface AgentRevokeResult{principalId:string;revokedAt:string;keysRevoked:number}
+
+/** RAISE EXCEPTION codes the 0107 entrypoint can surface as the driver message. */
+const REVOKE_SQL_CODES=new Set(['AGENT_NOT_AUTHORIZED','AGENT_PRINCIPAL_STATE_CONFLICT']);
+
+const ISO_LIKE=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+function rethrowRevokeSqlError(e:unknown):never{
+ if(e instanceof AgentAuthError)throw e;
+ const message=typeof e==='object'&&e!==null?String((e as{message?:unknown}).message):'';
+ if(REVOKE_SQL_CODES.has(message))fail(message);
+ throw e;
+}
+
+/**
+ * Revoke the principal behind the calling key plus every live key of its org
+ * (spec §3 C1: the wallet is freed for a fresh registration). Authorization
+ * is possession of the live key itself — see the 0107 header. Idempotent: an
+ * already-revoked principal returns the stored fact, keysRevoked counting
+ * only the keys killed by this call.
+ */
+export async function revokeAgentPrincipal(db:TonPaymentDatabase,input:AgentRevokeInput):Promise<AgentRevokeResult>{
+ const keyId=uuid(input.keyId);
+ return db.transaction(async tx=>{
+  let raw:unknown;
+  try{
+   raw=(await query<{result:unknown}>(tx,'SELECT public.aiag_revoke_agent_principal_v1($1::uuid) AS result',[keyId]))[0]?.result;
+  }catch(e){rethrowRevokeSqlError(e);}
+  // node-pg parses JSONB columns; a string is accepted defensively but any
+  // other shape is an unavailable rail, never a 500 with internals.
+  let parsed:Record<string,unknown>|undefined;
+  if(typeof raw==='string'){try{parsed=JSON.parse(raw)as Record<string,unknown>;}catch{/* fall through */}}
+  else if(typeof raw==='object'&&raw!==null&&!Array.isArray(raw))parsed=raw as Record<string,unknown>;
+  // Every malformed RESULT shape is one rail failure: the entrypoint is our
+  // own 0107 SQL, so a bad shape there is unavailability, not caller error
+  // (a bad CALLER input — the key id — already failed above as AUTH_INVALID).
+  let principalId:string;
+  try{principalId=uuid(parsed?.principalId);}catch{fail('AGENT_REVOKE_UNAVAILABLE');}
+  const revokedRaw=parsed?.revokedAt;
+  if(typeof revokedRaw!=='string'||!ISO_LIKE.test(revokedRaw)||!Number.isSafeInteger(Date.parse(revokedRaw)))fail('AGENT_REVOKE_UNAVAILABLE');
+  const keysRevoked=parsed?.keysRevoked;
+  if(typeof keysRevoked!=='number'||!Number.isSafeInteger(keysRevoked)||keysRevoked<0||keysRevoked>100000)fail('AGENT_REVOKE_UNAVAILABLE');
+  return {principalId,revokedAt:new Date(revokedRaw).toISOString(),keysRevoked};
+ });
+}
