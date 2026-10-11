@@ -625,9 +625,11 @@ Code-complete ≠ production-enabled. As of this writing:
   (`EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs`, raw
   `0:b113a994…`, network `tvm:-1`) with a fixed peg of 1 USDT = 100 credits.
   Admission additionally runs through the `ton_asset_allowlist` table: the
-  USDT row is **not seeded by default**, so `asset:"usdt"` currently answers
-  `503 TON_ASSET_NOT_ALLOWLISTED` until the operator activates the jetton row
-  (asset kind `jetton`, the master above, decimals 6). Which USDT master is
+  mainnet USDT row **is seeded by migration 0109**, so mainnet USDT invoices
+  are admissible as soon as the rail is enabled. A **testnet** USDT master is
+  NOT seeded — the operator confirms and seeds it (allowlist row + the
+  `aiag.usdt_testnet_master` GUC) at testnet launch; until then testnet
+  USDT answers `503 TON_ASSET_NOT_ALLOWLISTED`. Which USDT master is
   live (testnet or mainnet) is an operator-side setting, not a client choice.
 - **Runtime settlement is not enabled in production.** On-chain payment
   observation and invoice settlement run only where the operator has enabled
