@@ -162,7 +162,6 @@ export type TonRecipientBinding = {
         kind: "jetton";
         masterAddress: string;
         ownerAddress: string;
-        walletAddress: string;
       };
 };
 

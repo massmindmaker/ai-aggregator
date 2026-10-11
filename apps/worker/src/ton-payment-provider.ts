@@ -11,6 +11,16 @@ import {
   type NormalizedTonTransaction,
   type TonPreset,
 } from './ton-payment-evidence.js';
+import {
+  jettonInternalTransferPayload,
+  jettonNotificationPayload,
+  jettonTransferPayload,
+  parseJettonTransferRow,
+  TON_JETTON_INTERNAL_OPCODE,
+  TON_JETTON_NOTIFICATION_OPCODE,
+  TON_JETTON_TRANSFER_OPCODE,
+  type JettonTransferRowFacts,
+} from './ton-jetton-evidence.js';
 
 export type TonSourceErrorCode =
   | 'origin_mismatch' | 'redirect_rejected' | 'response_too_large'
@@ -34,7 +44,7 @@ export type TonRecipientBinding = {
   recipientAccount: string;
   derivation:
     | { kind: 'native'; ownerAddress: string }
-    | { kind: 'jetton'; masterAddress: string; ownerAddress: string; walletAddress: string };
+    | { kind: 'jetton'; masterAddress: string; ownerAddress: string };
 };
 
 export interface TonReconciliationSource {
@@ -45,11 +55,30 @@ export interface TonReconciliationSource {
   scanFloorTimeMs: number;
 }
 
+/** Jetton scan context: which master/owner pair the transfers must serve. */
+export interface TonJettonScanInput {
+  masterAddress: string;
+  ownerAddress: string;
+  /** Target asset decimals (USDT: 6); part of the normalized evidence asset. */
+  decimals: number;
+}
+
 export interface TonEvidenceProvider {
   resolveRecipientAccount(source: TonReconciliationSource, signal: AbortSignal): Promise<
     { kind: 'resolved'; recipientAccount: string } | Extract<TonProviderResult, { kind: 'source_error' }>
   >;
   scanAccountPage(recipientAccount: string, cursor: TonProviderCursor | null, signal: AbortSignal): Promise<TonProviderResult>;
+  /**
+   * Jetton branch (task 9): lists incoming jetton transfers of the owner for
+   * one master via TonCenter v3 and rebuilds full credit-path evidence from
+   * each transfer's trace. Absent on partial test doubles; the reconciler
+   * then reports the source as unsupported_asset.
+   */
+  scanJettonTransfersPage?(
+    input: TonJettonScanInput,
+    cursor: TonProviderCursor | null,
+    signal: AbortSignal,
+  ): Promise<TonProviderResult>;
 }
 
 type FetchBoundary = typeof safeFetch;
@@ -302,6 +331,17 @@ function message(raw: unknown, index: number, externalAllowed: boolean): Normali
     const reference = string(decoded.comment);
     if (reference.length < 1 || reference.length > 96 || reference.trim() !== reference || /[\u0000-\u001f\u007f]/.test(reference)) throw new ProviderFailure('provider_schema_invalid');
     decodedPayload = { kind: 'native_comment', reference };
+  } else if (decoded !== null) {
+    // Jetton bodies (task 9): opcode and decoded @type must agree pairwise.
+    // A malformed body under a matching opcode fails closed; a benign
+    // disagreement stays opaque ('other') and the verifier rejects the trace.
+    if (opcode === TON_JETTON_TRANSFER_OPCODE && decoded['@type'] === 'jetton_transfer') {
+      decodedPayload = jettonTransferPayload(decoded);
+    } else if (opcode === TON_JETTON_INTERNAL_OPCODE && decoded['@type'] === 'jetton_internal_transfer') {
+      decodedPayload = jettonInternalTransferPayload(decoded);
+    } else if (opcode === TON_JETTON_NOTIFICATION_OPCODE && decoded['@type'] === 'jetton_notify') {
+      decodedPayload = jettonNotificationPayload(decoded);
+    }
   }
   return {
     hash: base64Hash(item.hash), index, source: source === null ? null : address(source), destination: address(item.destination),
@@ -451,20 +491,12 @@ function parentOutputHashes(transaction: NormalizedTonTransaction): string[] {
   return transaction.outMessages.map((entry) => entry.hash);
 }
 
-function mapTrace(traceBody: unknown, scan: Record<string, unknown>, blocks: Map<string, Record<string, unknown>>, headBody: unknown, recipient: string, fetchedAtMs: number, preset: TonPreset): NormalizedTonEvidence {
-  const traces = object(traceBody).traces;
-  if (!Array.isArray(traces) || traces.length !== 1) throw new ProviderFailure('provider_schema_invalid');
-  const trace = object(traces[0]);
-  const traceId = base64Hash(trace.trace_id);
-  if (trace.external_hash !== undefined && trace.external_hash !== null) base64Hash(trace.external_hash);
-  const scanFacts = validateScanRow(scan, recipient);
-  if (traceId !== scanFacts.traceId || bool(trace.is_incomplete)) throw new ProviderFailure('provider_schema_invalid');
-  const startMc = decimal(trace.mc_seqno_start); const endMc = decimal(trace.mc_seqno_end);
-  if (BigInt(startMc) > BigInt(endMc) || BigInt(endMc) > BigInt(Number.MAX_SAFE_INTEGER)) throw new ProviderFailure('provider_schema_invalid');
-  const startLt = decimal(trace.start_lt); const endLt = decimal(trace.end_lt);
-  const startUtime = secondsToMs(trace.start_utime); const endUtime = secondsToMs(trace.end_utime);
-  if (BigInt(startLt) > BigInt(endLt) || startUtime > endUtime) throw new ProviderFailure('provider_schema_invalid');
-  const range: TraceRange = { traceId, startMc: BigInt(startMc), endMc: BigInt(endMc), startLt: BigInt(startLt), endLt: BigInt(endLt), startTimeMs: startUtime, endTimeMs: endUtime };
+/** Shared ordered-transaction mapping for native and jetton traces. */
+function mapOrderedTraceTransactions(
+  trace: Record<string, unknown>,
+  blocks: Map<string, Record<string, unknown>>,
+  range: TraceRange,
+): { transactions: NormalizedTonTransaction[]; order: string[]; inputFingerprints: Map<string, string> } {
   const info = object(trace.trace_info);
   if (info.trace_state !== 'complete' || integer(info.pending_messages) !== 0) throw new ProviderFailure('provider_schema_invalid');
   const order = trace.transactions_order;
@@ -476,7 +508,7 @@ function mapTrace(traceBody: unknown, scan: Record<string, unknown>, blocks: Map
   const mapped = order.map((rawHash, index): NormalizedTonTransaction => {
     const rawHashText = string(rawHash); const tx = object(transactions[rawHashText]);
     const txHash = base64Hash(tx.hash);
-    if (txHash !== base64Hash(rawHashText) || base64Hash(tx.trace_id) !== traceId) throw new ProviderFailure('provider_schema_invalid');
+    if (txHash !== base64Hash(rawHashText) || base64Hash(tx.trace_id) !== range.traceId) throw new ProviderFailure('provider_schema_invalid');
     const block = validateBlockRef(tx.block_ref); const key = `${block.workchain}:${block.shard}:${block.seqno}`; const anchor = blocks.get(key);
     if (!anchor || signedInteger(anchor.workchain) !== block.workchain || shard(anchor.shard) !== block.shard || integer(anchor.seqno) !== block.seqno) throw new ProviderFailure('provider_schema_invalid');
     const mcRef = object(anchor.masterchain_block_ref);
@@ -495,16 +527,126 @@ function mapTrace(traceBody: unknown, scan: Record<string, unknown>, blocks: Map
   const traceMessageHashes = new Set(mapped.flatMap((transaction) => [transaction.inMessage.hash, ...transaction.outMessages.map((entry) => entry.hash)]));
   if (integer(info.messages) !== traceMessageHashes.size) throw new ProviderFailure('provider_schema_invalid');
   validateTraceTree(trace.trace, transactionMap, canonicalOrder);
+  return { transactions: mapped, order: canonicalOrder, inputFingerprints: traceInputFingerprints };
+}
+
+/** Trace-level facts (id, mc/lt/utime bounds) shared by both mappers. */
+function traceFacts(traceBody: unknown): { trace: Record<string, unknown>; range: TraceRange } {
+  const traces = object(traceBody).traces;
+  if (!Array.isArray(traces) || traces.length !== 1) throw new ProviderFailure('provider_schema_invalid');
+  const trace = object(traces[0]);
+  const traceId = base64Hash(trace.trace_id);
+  if (trace.external_hash !== undefined && trace.external_hash !== null) base64Hash(trace.external_hash);
+  if (bool(trace.is_incomplete)) throw new ProviderFailure('provider_schema_invalid');
+  const startMc = decimal(trace.mc_seqno_start); const endMc = decimal(trace.mc_seqno_end);
+  if (BigInt(startMc) > BigInt(endMc) || BigInt(endMc) > BigInt(Number.MAX_SAFE_INTEGER)) throw new ProviderFailure('provider_schema_invalid');
+  const startLt = decimal(trace.start_lt); const endLt = decimal(trace.end_lt);
+  const startUtime = secondsToMs(trace.start_utime); const endUtime = secondsToMs(trace.end_utime);
+  if (BigInt(startLt) > BigInt(endLt) || startUtime > endUtime) throw new ProviderFailure('provider_schema_invalid');
+  return { trace, range: { traceId, startMc: BigInt(startMc), endMc: BigInt(endMc), startLt: BigInt(startLt), endLt: BigInt(endLt), startTimeMs: startUtime, endTimeMs: endUtime } };
+}
+
+function headFacts(headBody: unknown): { seqno: number; rootHash: string; fileHash: string } {
+  const head = object(headBody);
+  const firstHead = validateHeadBlock(head.first);
+  const last = validateHeadBlock(head.last);
+  if (firstHead.seqno > last.seqno) throw new ProviderFailure('provider_schema_invalid');
+  return last;
+}
+
+function mapTrace(traceBody: unknown, scan: Record<string, unknown>, blocks: Map<string, Record<string, unknown>>, headBody: unknown, recipient: string, fetchedAtMs: number, preset: TonPreset): NormalizedTonEvidence {
+  const { trace, range } = traceFacts(traceBody);
+  const scanFacts = validateScanRow(scan, recipient);
+  if (range.traceId !== scanFacts.traceId) throw new ProviderFailure('provider_schema_invalid');
+  const { transactions: mapped, inputFingerprints: traceInputFingerprints } = mapOrderedTraceTransactions(trace, blocks, range);
   const selected = mapped.filter((tx) => tx.account === scanFacts.account && tx.hash === scanFacts.hash
     && tx.lt === scanFacts.lt && sameMessageFacts(tx.inMessage, scanFacts.inMessage)
     && traceInputFingerprints.get(tx.hash) === scanFacts.inMessageFingerprint);
   const selectedTransaction = selected[0];
   if (!selectedTransaction || selected.length !== 1) throw new ProviderFailure('provider_schema_invalid');
-  const head = object(headBody);
-  const firstHead = validateHeadBlock(head.first);
-  const last = validateHeadBlock(head.last);
-  if (firstHead.seqno > last.seqno) throw new ProviderFailure('provider_schema_invalid');
-  const canonical = { schemaVersion: 1 as const, source: { providerId: preset.providerId, origin: preset.origin, evidenceModel: TON_EVIDENCE_MODEL, fetchedAtMs }, network: preset.network, asset: { network: preset.network, kind: 'native' as const, decimals: 9 }, trace: { id: traceId, complete: true, masterchainSeqno: Number(endMc), orderedTransactionHashes: mapped.map((tx) => tx.hash) }, latestIndexedMasterchain: last, transactions: mapped, creditPath: { kind: 'native' as const, recipientTransactionHash: scanFacts.hash, creditMessageHash: scanFacts.inMessage.hash } };
+  const last = headFacts(headBody);
+  const canonical = { schemaVersion: 1 as const, source: { providerId: preset.providerId, origin: preset.origin, evidenceModel: TON_EVIDENCE_MODEL, fetchedAtMs }, network: preset.network, asset: { network: preset.network, kind: 'native' as const, decimals: 9 }, trace: { id: range.traceId, complete: true, masterchainSeqno: Number(range.endMc), orderedTransactionHashes: mapped.map((tx) => tx.hash) }, latestIndexedMasterchain: last, transactions: mapped, creditPath: { kind: 'native' as const, recipientTransactionHash: scanFacts.hash, creditMessageHash: scanFacts.inMessage.hash } };
+  const normalized = normalizeCanonicalTonEvidence(canonical, TON_EVIDENCE_LIMITS, preset);
+  if ('kind' in normalized) throw new ProviderFailure(normalized.code);
+  return normalized;
+}
+
+/**
+ * Jetton credit-path mapping (task 9): from the trace of one incoming jetton
+ * transfer, rebuilds the transfer → internal transfer → credit → notification
+ * chain the verifier's jetton candidate demands. The merchant's jetton wallet
+ * contract is the ACCOUNT of the credit transaction (chain truth), never a
+ * separately emulated derivation.
+ */
+function mapJettonTrace(
+  traceBody: unknown,
+  row: JettonTransferRowFacts,
+  blocks: Map<string, Record<string, unknown>>,
+  headBody: unknown,
+  asset: { network: TonPreset['network']; masterAddress: string; decimals: number },
+  fetchedAtMs: number,
+  preset: TonPreset,
+): NormalizedTonEvidence {
+  const { trace, range } = traceFacts(traceBody);
+  if (range.traceId !== row.traceId) throw new ProviderFailure('provider_schema_invalid');
+  const { transactions: mapped } = mapOrderedTraceTransactions(trace, blocks, range);
+  const creditTx = mapped.find((tx) => tx.hash === row.transactionHash);
+  if (
+    !creditTx ||
+    creditTx.inMessage.opcode !== TON_JETTON_INTERNAL_OPCODE ||
+    creditTx.inMessage.decodedPayload.kind !== 'jetton_internal_transfer'
+  ) throw new ProviderFailure('provider_schema_invalid');
+  const internal = creditTx.inMessage.decodedPayload;
+  const transferTx = mapped.find(
+    (tx) => tx.inMessage.opcode === TON_JETTON_TRANSFER_OPCODE
+      && tx.inMessage.decodedPayload.kind === 'jetton_transfer'
+      && tx.outMessages.some((outgoing) => outgoing.hash === creditTx.inMessage.hash),
+  );
+  if (!transferTx) throw new ProviderFailure('provider_schema_invalid');
+  const transfer = transferTx.inMessage.decodedPayload;
+  if (transfer.kind !== 'jetton_transfer') throw new ProviderFailure('provider_schema_invalid');
+  const notificationMessage = creditTx.outMessages.find(
+    (outgoing) => outgoing.opcode === TON_JETTON_NOTIFICATION_OPCODE
+      && outgoing.decodedPayload.kind === 'jetton_notification'
+      && outgoing.destination === row.destinationOwner,
+  );
+  if (!notificationMessage) throw new ProviderFailure('provider_schema_invalid');
+  const notification = notificationMessage.decodedPayload;
+  if (notification.kind !== 'jetton_notification') throw new ProviderFailure('provider_schema_invalid');
+  const notificationTx = mapped.find((tx) => tx.inMessage.hash === notificationMessage.hash);
+  if (!notificationTx) throw new ProviderFailure('provider_schema_invalid');
+  // Row (indexer) and trace (chain decode) must agree on every monetary fact.
+  if (
+    transfer.destination !== row.destinationOwner ||
+    transferTx.inMessage.source !== row.sourceOwner ||
+    internal.sender !== row.sourceOwner ||
+    notification.sender !== row.sourceOwner ||
+    notificationMessage.destination !== row.destinationOwner ||
+    transfer.amountAtomic !== row.amountAtomic ||
+    internal.amountAtomic !== row.amountAtomic ||
+    notification.amountAtomic !== row.amountAtomic ||
+    notification.forwardReference !== (row.reference ?? '')
+  ) throw new ProviderFailure('provider_schema_invalid');
+  const last = headFacts(headBody);
+  const canonical = {
+    schemaVersion: 1 as const,
+    source: { providerId: preset.providerId, origin: preset.origin, evidenceModel: TON_EVIDENCE_MODEL, fetchedAtMs },
+    network: preset.network,
+    asset: { network: preset.network, kind: 'jetton' as const, masterAddress: asset.masterAddress, decimals: asset.decimals },
+    trace: { id: range.traceId, complete: true, masterchainSeqno: Number(range.endMc), orderedTransactionHashes: mapped.map((tx) => tx.hash) },
+    latestIndexedMasterchain: last,
+    transactions: mapped,
+    creditPath: {
+      kind: 'jetton' as const,
+      masterAddress: asset.masterAddress,
+      walletDerivationOwner: row.destinationOwner,
+      derivedMerchantWallet: creditTx.account,
+      transferMessageHash: transferTx.inMessage.hash,
+      internalTransferMessageHash: creditTx.inMessage.hash,
+      creditTransactionHash: creditTx.hash,
+      notificationMessageHash: notificationMessage.hash,
+    },
+  };
   const normalized = normalizeCanonicalTonEvidence(canonical, TON_EVIDENCE_LIMITS, preset);
   if ('kind' in normalized) throw new ProviderFailure(normalized.code);
   return normalized;
@@ -517,6 +659,10 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
   const nowMs = config.nowMs ?? Date.now;
   const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : '';
   const baseHeaders = apiKey ? { 'X-API-Key': apiKey } : undefined;
+  // Merchant jetton wallet contracts are immutable chain facts; the cache only
+  // pins consistency across scans (24h refresh) and fails closed on any change.
+  const jettonWalletCache = new Map<string, { wallet: string; resolvedAtMs: number }>();
+  const JETTON_WALLET_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
   const request = async (path: string, query: URLSearchParams, signal: AbortSignal): Promise<unknown> => {
     // A cancellation already observed by the runner is a terminal operational
     // boundary for this request: do not start a new provider call.
@@ -538,7 +684,15 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
   };
   return {
     async resolveRecipientAccount(source) {
-      if (source.asset.kind === 'jetton') return failure('unsupported_asset');
+      if (source.asset.kind === 'jetton') {
+        // The jetton scan binds the OWNER address (direction=in listing);
+        // the merchant's jetton wallet contract is derived from chain data
+        // inside each credit trace, so resolution only validates the pair.
+        try {
+          address(source.asset.masterAddress);
+          return { kind: 'resolved', recipientAccount: address(source.invoiceRecipient) };
+        } catch (error) { return failure(error instanceof ProviderFailure ? error.code : 'provider_schema_invalid'); }
+      }
       try { return { kind: 'resolved', recipientAccount: address(source.invoiceRecipient) }; } catch (error) { return failure(error instanceof ProviderFailure ? error.code : 'provider_schema_invalid'); }
     },
     async scanAccountPage(recipientAccount, cursor, signal) {
@@ -591,6 +745,99 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
         const finalRow = retained[retained.length - 1]!.facts;
         const cycleUpperLt = continuation?.cycleUpperLt ?? first.facts.lt;
         return { kind: 'page', evidence, nextCursor: { schemaVersion: 1, beforeLt: finalRow.lt, beforeTransactionHash: finalRow.hash, cycleUpperLt }, exhausted: false };
+      } catch (error) { return failure(error instanceof ProviderFailure ? error.code : 'provider_schema_invalid', error instanceof ProviderFailure ? error.retryAfterMs : null); }
+    },
+    async scanJettonTransfersPage(input, cursor, signal) {
+      try {
+        const master = address(input.masterAddress);
+        const owner = address(input.ownerAddress);
+        if (!Number.isSafeInteger(input.decimals) || input.decimals < 0 || input.decimals > 18) {
+          throw new ProviderFailure('provider_schema_invalid');
+        }
+        const continuation = cursor === null ? null : cursorValue(cursor);
+        const query = new URLSearchParams({
+          address: owner,
+          jetton_address: master,
+          direction: 'in',
+          limit: String(PAGE_SIZE),
+          offset: '0',
+          sort: 'desc',
+        });
+        if (continuation !== null) query.set('end_lt', continuation.beforeLt);
+        const page = object(await request('/api/v3/jetton/transfers', query, signal));
+        const rows = page.jetton_transfers;
+        if (!Array.isArray(rows) || rows.length > PAGE_SIZE) throw new ProviderFailure('provider_schema_invalid');
+        if (rows.length === 0) return { kind: 'page', evidence: [], nextCursor: null, exhausted: true };
+        const parsed = rows.map((row) => parseJettonTransferRow(row, { masterAddress: master, ownerAddress: owner }));
+        if (parsed.some((entry) => entry.kind === 'schema_invalid')) throw new ProviderFailure('provider_schema_invalid');
+        // Semantic rejections (foreign master/owner, aborted credit) drop the
+        // row: the transfer belongs to someone else or never landed.
+        const allRows = parsed.filter((entry): entry is JettonTransferRowFacts => entry.kind !== 'row_rejected');
+        const pageUpperLt = allRows.length > 0 ? allRows[0]!.transactionLt : null;
+        let retained = allRows;
+        if (continuation !== null && retained.length > 0) {
+          const first = retained[0]!;
+          if (first.transactionLt === continuation.beforeLt && first.transactionHash === continuation.beforeTransactionHash) {
+            retained = retained.slice(1);
+          } else if (BigInt(first.transactionLt) > BigInt(continuation.beforeLt)) {
+            throw new ProviderFailure('pagination_regressed');
+          }
+          // else: the indexer's end_lt bound excluded the boundary row — the
+          // page simply starts below the cursor, which is safe to continue.
+        }
+        if (retained.length === 0) return { kind: 'page', evidence: [], nextCursor: null, exhausted: true };
+        let previous: bigint | null = null;
+        for (const row of retained) {
+          const lt = BigInt(row.transactionLt);
+          if ((continuation !== null && lt >= BigInt(continuation.beforeLt))
+            || (continuation !== null && lt > BigInt(continuation.cycleUpperLt))
+            || (previous !== null && lt >= previous)) throw new ProviderFailure('pagination_regressed');
+          previous = lt;
+        }
+        const blocks = new Map<string, Record<string, unknown>>();
+        const traced: Array<{ row: JettonTransferRowFacts; trace: unknown }> = [];
+        for (const row of retained) {
+          const txHashB64 = Buffer.from(row.transactionHash, 'hex').toString('base64');
+          const trace = await request('/api/v3/traces', new URLSearchParams({ tx_hash: txHashB64, include_actions: 'true', limit: '1', offset: '0' }), signal);
+          const traceRows = object(trace).traces; if (!Array.isArray(traceRows) || traceRows.length !== 1) throw new ProviderFailure('provider_schema_invalid');
+          for (const tx of Object.values(object(object(traceRows[0]).transactions))) {
+            const block = validateBlockRef(object(tx).block_ref);
+            const key = `${block.workchain}:${block.shard}:${block.seqno}`;
+            if (!blocks.has(key)) {
+              const response = object(await request('/api/v3/blocks', new URLSearchParams({ workchain: String(block.workchain), shard: block.shard, seqno: String(block.seqno), limit: '2' }), signal));
+              if (!Array.isArray(response.blocks)) throw new ProviderFailure('provider_schema_invalid');
+              const candidates = response.blocks.map(validateBlockAnchor);
+              const matches = candidates.filter((candidate) => signedInteger(candidate.workchain) === block.workchain
+                && shard(candidate.shard) === block.shard && integer(candidate.seqno) === block.seqno);
+              if (matches.length !== 1) throw new ProviderFailure('provider_schema_invalid');
+              blocks.set(key, matches[0]!);
+            }
+          }
+          traced.push({ row, trace });
+        }
+        const head = await request('/api/v3/masterchainInfo', new URLSearchParams(), signal);
+        const fetchedAtMs = nowMs();
+        const evidence = traced.map(({ row, trace }) => {
+          const mapped = mapJettonTrace(trace, row, blocks, head, { network: preset.network, masterAddress: master, decimals: input.decimals }, fetchedAtMs, preset);
+          const wallet = mapped.creditPath.kind === 'jetton' ? mapped.creditPath.derivedMerchantWallet : null;
+          if (wallet !== null) {
+            const cacheKey = `${preset.network}|${master}|${owner}`;
+            const cached = jettonWalletCache.get(cacheKey);
+            if (cached === undefined) {
+              jettonWalletCache.set(cacheKey, { wallet, resolvedAtMs: fetchedAtMs });
+            } else if (cached.wallet !== wallet) {
+              // Wallet derivation is immutable per (master, owner): a second,
+              // different wallet contract is an indexer inconsistency.
+              throw new ProviderFailure('provider_schema_invalid');
+            } else if (fetchedAtMs - cached.resolvedAtMs > JETTON_WALLET_CACHE_TTL_MS) {
+              cached.resolvedAtMs = fetchedAtMs;
+            }
+          }
+          return mapped;
+        });
+        const finalRow = retained[retained.length - 1]!;
+        const cycleUpperLt = continuation?.cycleUpperLt ?? pageUpperLt!;
+        return { kind: 'page', evidence, nextCursor: { schemaVersion: 1, beforeLt: finalRow.transactionLt, beforeTransactionHash: finalRow.transactionHash, cycleUpperLt }, exhausted: false };
       } catch (error) { return failure(error instanceof ProviderFailure ? error.code : 'provider_schema_invalid', error instanceof ProviderFailure ? error.retryAfterMs : null); }
     },
   };

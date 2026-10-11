@@ -530,25 +530,47 @@ function normalizeSource(value: unknown): TonReconciliationSource {
   if (raw.network !== identity.network)
     throw new Error("TON_INVALID_NETWORK");
   const rawAsset = object(raw.asset);
-  keys(rawAsset, ["decimals", "kind", "network"]);
-  if (
-    rawAsset.network !== identity.network ||
-    rawAsset.kind !== "native" ||
-    rawAsset.decimals !== 9
-  )
+  let asset: TonReconciliationSource["asset"];
+  let assetLiteral: string;
+  if (rawAsset.kind === "native") {
+    keys(rawAsset, ["decimals", "kind", "network"]);
+    if (rawAsset.network !== identity.network || rawAsset.decimals !== 9)
+      throw new Error("TON_INVALID_ASSET");
+    asset = { decimals: 9, kind: "native", network: identity.network };
+    assetLiteral = `{"decimals":9,"kind":"native","network":"${identity.network}"}`;
+  } else if (rawAsset.kind === "jetton") {
+    keys(rawAsset, ["decimals", "kind", "masterAddress", "network"]);
+    if (
+      rawAsset.network !== identity.network ||
+      !Number.isSafeInteger(rawAsset.decimals) ||
+      (rawAsset.decimals as number) < 0 ||
+      (rawAsset.decimals as number) > 18 ||
+      typeof rawAsset.masterAddress !== "string" ||
+      !/^(0|-1):[a-f0-9]{64}$/.test(rawAsset.masterAddress)
+    )
+      throw new Error("TON_INVALID_ASSET");
+    asset = {
+      decimals: rawAsset.decimals as number,
+      kind: "jetton",
+      masterAddress: rawAsset.masterAddress,
+      network: identity.network,
+    };
+    assetLiteral = `{"decimals":${asset.decimals},"kind":"jetton","masterAddress":"${asset.masterAddress}","network":"${identity.network}"}`;
+  } else {
     throw new Error("TON_INVALID_ASSET");
+  }
   const invoiceRecipient = canonicalAddress(raw.invoiceRecipient);
   const sourceId = lowerHash(raw.sourceId, "TON_INVALID_SOURCE");
   const expected = createHash("sha256")
     .update(
-      `${identity.providerId}\0{"decimals":9,"kind":"native","network":"${identity.network}"}\0${invoiceRecipient}`,
+      `${identity.providerId}\0${assetLiteral}\0${invoiceRecipient}`,
     )
     .digest("hex");
   if (sourceId !== expected) throw new Error("TON_INVALID_SOURCE");
   return {
     sourceId,
     network: identity.network,
-    asset: { decimals: 9, kind: "native", network: identity.network },
+    asset,
     invoiceRecipient,
     scanFloorTimeMs: time(raw.scanFloorTimeMs),
   };
@@ -561,8 +583,6 @@ function normalizeBinding(
   const raw = object(value);
   keys(raw, ["recipientAccount", "derivation"]);
   const derivation = object(raw.derivation);
-  keys(derivation, ["kind", "ownerAddress"]);
-  if (derivation.kind !== "native") throw new Error("TON_INVALID_BINDING");
   const recipientAccount = canonicalAddress(raw.recipientAccount);
   const ownerAddress = canonicalAddress(derivation.ownerAddress);
   if (
@@ -570,10 +590,25 @@ function normalizeBinding(
     ownerAddress !== source.invoiceRecipient
   )
     throw new Error("TON_INVALID_BINDING");
-  return {
-    recipientAccount,
-    derivation: { kind: "native", ownerAddress },
-  };
+  if (derivation.kind === "native") {
+    keys(derivation, ["kind", "ownerAddress"]);
+    if (source.asset.kind !== "native") throw new Error("TON_INVALID_BINDING");
+    return { recipientAccount, derivation: { kind: "native", ownerAddress } };
+  }
+  if (derivation.kind === "jetton") {
+    keys(derivation, ["kind", "masterAddress", "ownerAddress"]);
+    const masterAddress = canonicalAddress(derivation.masterAddress);
+    if (
+      source.asset.kind !== "jetton" ||
+      masterAddress !== source.asset.masterAddress
+    )
+      throw new Error("TON_INVALID_BINDING");
+    return {
+      recipientAccount,
+      derivation: { kind: "jetton", masterAddress, ownerAddress },
+    };
+  }
+  throw new Error("TON_INVALID_BINDING");
 }
 
 function normalizeObservation(value: TonObservationInput): TonObservationInput {
@@ -868,13 +903,15 @@ export async function listTonReconciliationSources(
   input: {
     afterSourceId: string | null;
     limit: number;
-    assetKind: "native";
+    assetKind: "native" | "jetton" | "all";
   },
 ): Promise<readonly TonReconciliationSource[]> {
   const raw = object(input);
   keys(raw, ["afterSourceId", "limit", "assetKind"]);
   if (
-    raw.assetKind !== "native" ||
+    (raw.assetKind !== "native" &&
+      raw.assetKind !== "jetton" &&
+      raw.assetKind !== "all") ||
     !Number.isInteger(raw.limit) ||
     (raw.limit as number) < 1 ||
     (raw.limit as number) > 16
@@ -887,7 +924,7 @@ export async function listTonReconciliationSources(
   return db.transaction(async (tx) => {
     const result = await tx.query<{ result: unknown }>({
       text: "SELECT aiag_list_ton_reconciliation_sources_v1($1::text,$2::integer,$3::text) AS result",
-      values: [after, raw.limit, "native"],
+      values: [after, raw.limit, raw.assetKind],
     });
     const rows = result.rows[0]?.result;
     if (!Array.isArray(rows) || rows.length > (raw.limit as number))
@@ -938,8 +975,11 @@ export async function findTonInvoicesForReconciliation(
         seenReferences.has(invoice.reference) ||
         seenInvoices.has(invoice.invoiceId) ||
         invoice.network !== source.network ||
-        invoice.asset.kind !== "native" ||
-        invoice.asset.decimals !== 9 ||
+        invoice.asset.kind !== source.asset.kind ||
+        invoice.asset.decimals !== source.asset.decimals ||
+        (source.asset.kind === "jetton" &&
+          invoice.asset.kind === "jetton" &&
+          invoice.asset.masterAddress !== source.asset.masterAddress) ||
         invoice.recipient !== source.invoiceRecipient
       )
         throw new Error("TON_INVALID_DATABASE_RESULT");

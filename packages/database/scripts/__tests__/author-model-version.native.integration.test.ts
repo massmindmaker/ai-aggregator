@@ -56,9 +56,9 @@ describe.runIf(process.env.RUN_NATIVE_DB_INTEGRATION === "1")(
               port: 15432,
             });
             const migrations = await discoverNativeMigrations();
-            expect(migrations).toHaveLength(108);
+            expect(migrations).toHaveLength(109);
             expect(migrations.at(-1)?.filename).toBe(
-              "0108_agent_quota_writers.sql",
+              "0109_usdt_jetton_reconciliation.sql",
             );
             const first = await runNativeMigrations(fixture, migrations);
             expect(first.applied).toHaveLength(migrations.length);

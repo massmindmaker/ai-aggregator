@@ -23,7 +23,7 @@ import {
   type TonReconcileSourceResult,
   type TonSettlementHook,
 } from "./ton-payment-reconciler.js";
-import { nativeSource, hash } from "./ton-recovery-contract.js";
+import { reconciliationSource, hash } from "./ton-recovery-contract.js";
 export type { TonCloseResult } from "./ton-recovery-control.js";
 export interface TonObservationDatabase {
   deps: Omit<TonObserveReconcilerDeps, "provider" | "newLeaseOwner">;
@@ -66,18 +66,21 @@ export function parseTonObservationStartup(
       crosscheck: boolean;
       toncenterApiKey: string | undefined;
       preset: TonPreset;
+      /** 'native' keeps the pre-0109 Gram-only sweep; 'all' adds USDT jettons. */
+      assetKind: "native" | "all";
     } {
   const mode = env.TON_RECONCILIATION_MODE ?? "disabled";
   if (mode === "disabled") return { mode };
   const crosscheckFlag = env.TON_EVIDENCE_CROSSCHECK ?? "0";
   const toncenterApiKey = env.TONCENTER_API_KEY?.trim() || undefined;
+  const assetKind = env.TON_RECONCILIATION_ASSET_KIND ?? "native";
   // Network preset (mainnet wiring): every pinned reconciliation constant is
   // checked against the selected preset, never against a bare literal.
   const preset = resolveTonPreset(env.TON_NETWORK_PRESET);
   if (
     (mode !== "observe" && mode !== "settle") ||
     env.TON_RECONCILIATION_NETWORK !== preset.network ||
-    env.TON_RECONCILIATION_ASSET_KIND !== "native" ||
+    (assetKind !== "native" && assetKind !== "all") ||
     env.TON_RECONCILIATION_PROVIDER_ID !== preset.providerId ||
     env.TON_RECONCILIATION_PROVIDER_ORIGIN !== preset.origin ||
     env.TON_RECONCILIATION_VERIFIER_VERSION !== TON_VERIFIER_VERSION ||
@@ -142,6 +145,7 @@ export function parseTonObservationStartup(
     crosscheck: crosscheckFlag === "1",
     toncenterApiKey,
     preset,
+    assetKind,
   };
 }
 async function defaultDatabase(url: string): Promise<TonObservationDatabase> {
@@ -333,7 +337,7 @@ export async function startTonObservationFromEnv(
     try {
       const found = await budget.db(
         () =>
-          deps.listSources({ afterSourceId, limit: 16, assetKind: "native" }),
+          deps.listSources({ afterSourceId, limit: 16, assetKind: activeConfig.assetKind }),
         false,
       );
       if (!Array.isArray(found) || found.length > 16)
@@ -341,7 +345,7 @@ export async function startTonObservationFromEnv(
       // Preset fence (I3): a worker bound to one network never sweeps the
       // other network's sources with its provider.
       const sources = found
-        .map(nativeSource)
+        .map(reconciliationSource)
         .filter((source) => source.network === activeConfig.preset.network);
       let previous = afterSourceId;
       for (const source of sources) {

@@ -321,6 +321,17 @@ function label(value: unknown): string {
   return value;
 }
 
+/**
+ * Jetton forward payloads are OPTIONAL by protocol: an empty forward payload
+ * is a valid transfer whose candidate simply carries no reference (the
+ * reconciler routes it down the existing unmatched path). Everything else
+ * keeps label()'s strict shape.
+ */
+function optionalLabel(value: unknown): string {
+  if (value === '') return '';
+  return label(value);
+}
+
 function opcode(value: unknown): string | null {
   if (value === null) return null;
   if (typeof value !== 'string' || !OPCODE.test(value)) throw new InvalidEvidence();
@@ -364,7 +375,7 @@ function decodedPayload(value: unknown): NormalizedTonMessage['decodedPayload'] 
         kind: 'jetton_transfer',
         amountAtomic: decimal(payload.amountAtomic),
         destination: address(payload.destination),
-        forwardReference: label(payload.forwardReference),
+        forwardReference: optionalLabel(payload.forwardReference),
       };
     case 'jetton_internal_transfer':
       exactKeys(payload, ['kind', 'amountAtomic', 'sender', 'responseDestination']);
@@ -380,7 +391,7 @@ function decodedPayload(value: unknown): NormalizedTonMessage['decodedPayload'] 
         kind: 'jetton_notification',
         amountAtomic: decimal(payload.amountAtomic),
         sender: address(payload.sender),
-        forwardReference: label(payload.forwardReference),
+        forwardReference: optionalLabel(payload.forwardReference),
       };
     case 'other':
       exactKeys(payload, ['kind']);

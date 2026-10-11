@@ -206,6 +206,8 @@ describe("TON reconciliation wrapper validation", () => {
         leaseMs: 90_000,
       }),
     ).rejects.toThrow("TON_INVALID_SOURCE");
+    // 0109: jetton assets are legal identities now; a jetton asset under a
+    // native-derived source id is an identity mismatch, not a shape error.
     await expect(
       claimTonReconciliationLease(db, {
         source: {
@@ -213,7 +215,7 @@ describe("TON reconciliation wrapper validation", () => {
           asset: {
             network: "tvm:-3",
             kind: "jetton",
-            decimals: 9,
+            decimals: 6,
             masterAddress: RECIPIENT,
           },
         },
@@ -221,8 +223,41 @@ describe("TON reconciliation wrapper validation", () => {
         leaseOwner: OWNER,
         leaseMs: 90_000,
       }),
-    ).rejects.toThrow("TON_INVALID_FIELDS");
+    ).rejects.toThrow("TON_INVALID_SOURCE");
     expect(calls).toHaveLength(0);
+  });
+
+  it("accepts a jetton source with the 0109 canonical asset literal and reaches SQL", async () => {
+    const master = `0:${"3".repeat(64)}`;
+    const jettonAsset = {
+      network: "tvm:-3",
+      kind: "jetton",
+      decimals: 6,
+      masterAddress: master,
+    } as const;
+    const sourceId = createHash("sha256")
+      .update(
+        `toncenter-v3-testnet\0{"decimals":6,"kind":"jetton","masterAddress":"${master}","network":"tvm:-3"}\0${RECIPIENT}`,
+      )
+      .digest("hex");
+    const { db, calls } = recordingDatabase([{ kind: "busy" }]);
+    await expect(
+      claimTonReconciliationLease(db, {
+        source: {
+          sourceId,
+          network: "tvm:-3",
+          asset: jettonAsset,
+          invoiceRecipient: RECIPIENT,
+          scanFloorTimeMs: 0,
+        },
+        providerId: "toncenter-v3-testnet",
+        leaseOwner: OWNER,
+        leaseMs: 90_000,
+      }),
+    ).resolves.toEqual({ kind: "busy" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.values[1]).toBe("toncenter-v3-testnet");
+    expect(String(calls[0]?.values[0])).toContain(sourceId);
   });
 
   it("validates claimed cursor and pinned native binding returned by SQL", async () => {

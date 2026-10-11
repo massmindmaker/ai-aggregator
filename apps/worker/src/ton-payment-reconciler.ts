@@ -34,7 +34,7 @@ import {
 import {
   object,
   exact,
-  nativeSource,
+  reconciliationSource,
   sourceForInvoice,
   uuid,
   cursor,
@@ -51,7 +51,7 @@ export interface TonObserveReconcilerDeps {
   listSources(input: {
     afterSourceId: string | null;
     limit: number;
-    assetKind: "native";
+    assetKind: "native" | "jetton" | "all";
   }): Promise<readonly TonReconciliationSource[]>;
   findInvoices(input: {
     source: TonReconciliationSource;
@@ -227,7 +227,7 @@ async function reconcileSource(
   request(input, ["source", "limit", "signal"]);
   let source: TonReconciliationSource;
   try {
-    source = nativeSource(input.source);
+    source = reconciliationSource(input.source);
   } catch {
     return { kind: "not_started", reason: "source_identity_mismatch" };
   }
@@ -358,10 +358,20 @@ async function reconcileSource(
         source,
         leaseOwner,
         expected,
-        binding: {
-          recipientAccount: source.invoiceRecipient,
-          derivation: { kind: "native", ownerAddress: source.invoiceRecipient },
-        },
+        binding:
+          source.asset.kind === "jetton"
+            ? {
+                recipientAccount: source.invoiceRecipient,
+                derivation: {
+                  kind: "jetton",
+                  masterAddress: source.asset.masterAddress,
+                  ownerAddress: source.invoiceRecipient,
+                },
+              }
+            : {
+                recipientAccount: source.invoiceRecipient,
+                derivation: { kind: "native", ownerAddress: source.invoiceRecipient },
+              },
       }),
     );
     if (bound === "binding_mismatch")
@@ -374,11 +384,27 @@ async function reconcileSource(
       await renew();
       budget.check();
       const result = await budget.provider((signal) =>
-        deps.provider.scanAccountPage(
-          source.invoiceRecipient,
-          expected,
-          signal,
-        ),
+        source.asset.kind === "jetton"
+          ? deps.provider.scanJettonTransfersPage
+            ? deps.provider.scanJettonTransfersPage(
+                {
+                  masterAddress: source.asset.masterAddress,
+                  ownerAddress: source.invoiceRecipient,
+                  decimals: source.asset.decimals,
+                },
+                expected,
+                signal,
+              )
+            : Promise.resolve({
+                kind: "source_error",
+                code: "unsupported_asset",
+                retryAfterMs: null,
+              } as const)
+          : deps.provider.scanAccountPage(
+              source.invoiceRecipient,
+              expected,
+              signal,
+            ),
       );
       budget.check();
       if (result.kind === "deadline")
@@ -395,7 +421,7 @@ async function reconcileSource(
         page = providerPage(
           rawPage,
           expected,
-          source.invoiceRecipient,
+          source,
           deps.verifierPreset ?? TON_PRESETS.testnet,
         );
       } catch (error) {
@@ -447,8 +473,11 @@ async function reconcileSource(
           byReference.has(invoice.reference) ||
           invoiceIds.has(invoice.invoiceId) ||
           invoice.network !== source.network ||
-          invoice.asset.kind !== "native" ||
-          invoice.asset.decimals !== 9 ||
+          invoice.asset.kind !== source.asset.kind ||
+          invoice.asset.decimals !== source.asset.decimals ||
+          (source.asset.kind === "jetton" &&
+            invoice.asset.kind === "jetton" &&
+            invoice.asset.masterAddress !== source.asset.masterAddress) ||
           invoice.recipient !== source.invoiceRecipient
         )
           throw Error("TON_INVALID_INVOICE_BINDING");
@@ -552,8 +581,11 @@ async function reconcileSource(
           outcome.kind === "verified_candidate"
         ) {
           if (
-            invoice.asset.kind !== "native" ||
-            verified.credit.asset.kind !== "native" ||
+            verified.credit.asset.kind !== invoice.asset.kind ||
+            verified.credit.asset.decimals !== invoice.asset.decimals ||
+            (invoice.asset.kind === "jetton" &&
+              verified.credit.asset.kind === "jetton" &&
+              verified.credit.asset.masterAddress !== invoice.asset.masterAddress) ||
             verified.credit.network !== invoice.network
           )
             throw new TonRunStopped("db_error");
@@ -683,7 +715,7 @@ export async function reconcileTonInvoice(
     if (!invoice) return { kind: "not_found" };
     if (invoice.invoiceId !== input.invoiceId)
       throw Error("TON_INVOICE_IDENTITY");
-    if (invoice.asset.kind !== "native")
+    if (invoice.asset.kind !== "native" && invoice.asset.kind !== "jetton")
       return { kind: "source_error", code: "unsupported_asset" };
     const result = await reconcileTonInvoices(
       {

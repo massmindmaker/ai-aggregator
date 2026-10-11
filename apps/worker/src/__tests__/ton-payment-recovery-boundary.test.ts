@@ -35,16 +35,22 @@ describe("observe-only recovery ownership", () => {
       /await import\(['"]@aiag\/database\/ton-reconciliation-internal['"]\)/,
     );
   });
-  it("adds no migration and does not change the approved native-only provider contract", () => {
+  it("adds exactly the 0109 jetton migration and keeps the native account scan jetton-free", () => {
     expect(
       ["drizzle", "migrations"].flatMap((directory) =>
         readdirSync(resolve(root, "packages/database", directory)).filter((n) =>
           /^\d{4}.*\.sql$/.test(n),
         ),
       ),
-    ).toHaveLength(108);
-    expect(read("apps/worker/src/ton-payment-provider.ts")).toContain(
-      "if (source.asset.kind === 'jetton') return failure('unsupported_asset')",
+    ).toHaveLength(109);
+    // The jetton rail (task 9) resolves through the dedicated transfer scan;
+    // the native account scan must stay exactly that — native — and the
+    // jetton resolver must validate the master before reporting the owner.
+    const provider = read("apps/worker/src/ton-payment-provider.ts");
+    expect(provider).toContain("if (source.asset.kind === 'jetton') {");
+    expect(provider).toContain(
+      "async scanJettonTransfersPage(input, cursor, signal)",
     );
+    expect(provider).toContain("address(source.asset.masterAddress)");
   });
 });

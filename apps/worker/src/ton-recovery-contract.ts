@@ -19,8 +19,7 @@ export class TonSourceFailure extends Error {
     super(code);
   }
 }
-export function object(value: unknown): Record<string, unknown> {
-  if (
+export function object(value: unknown): Record<string, unknown> {  if (
     value === null ||
     typeof value !== "object" ||
     Array.isArray(value) ||
@@ -54,7 +53,33 @@ export function uuid(value: unknown): string {
     throw Error("TON_INVALID_ID");
   return value;
 }
-export function nativeSource(value: unknown): TonReconciliationSource {
+/**
+ * Canonical asset literal used by the source-id hash — MUST byte-match the
+ * SQL canonicalizer `aiag_ton_reconciliation_source_id_v1` (migration 0109):
+ * alphabetical key order, lowercase raw addresses.
+ */
+export function assetLiteral(
+  asset: TonReconciliationSource["asset"],
+): string {
+  if (asset.kind === "native") {
+    return `{"decimals":9,"kind":"native","network":"${asset.network}"}`;
+  }
+  return `{"decimals":${asset.decimals},"kind":"jetton","masterAddress":"${asset.masterAddress}","network":"${asset.network}"}`;
+}
+
+function sourceIdentity(network: unknown): {
+  network: "tvm:-3" | "tvm:-1";
+  providerId: "toncenter-v3-testnet" | "toncenter-v3-mainnet";
+} {
+  return network === "tvm:-1"
+    ? { network: "tvm:-1", providerId: "toncenter-v3-mainnet" }
+    : { network: "tvm:-3", providerId: "toncenter-v3-testnet" };
+}
+
+/** General (native + jetton) reconciliation-source parser (migration 0109 contract). */
+export function reconciliationSource(
+  value: unknown,
+): TonReconciliationSource {
   const r = object(value);
   exact(r, [
     "sourceId",
@@ -63,41 +88,62 @@ export function nativeSource(value: unknown): TonReconciliationSource {
     "invoiceRecipient",
     "scanFloorTimeMs",
   ]);
-  const a = object(r.asset);
-  exact(a, ["network", "kind", "decimals"]);
-  // The source identity pairs the network with its canonical provider id:
-  // 'tvm:-3' → toncenter-v3-testnet, 'tvm:-1' → toncenter-v3-mainnet.
-  const identity =
-    r.network === "tvm:-1"
-      ? { network: "tvm:-1", providerId: "toncenter-v3-mainnet" }
-      : { network: "tvm:-3", providerId: "toncenter-v3-testnet" };
+  const identity = sourceIdentity(r.network);
   if (
     r.network !== identity.network ||
-    a.network !== identity.network ||
-    a.kind !== "native" ||
-    a.decimals !== 9 ||
     typeof r.invoiceRecipient !== "string" ||
     !/^(?:0|-1):[a-f0-9]{64}$/.test(r.invoiceRecipient) ||
     !Number.isSafeInteger(r.scanFloorTimeMs) ||
     (r.scanFloorTimeMs as number) < 0
   )
     throw Error("TON_SOURCE_IDENTITY");
+  const a = object(r.asset);
+  let asset: TonReconciliationSource["asset"];
+  if (a.kind === "native") {
+    exact(a, ["network", "kind", "decimals"]);
+    if (a.network !== identity.network || a.decimals !== 9)
+      throw Error("TON_SOURCE_IDENTITY");
+    asset = { network: identity.network, kind: "native", decimals: 9 };
+  } else if (a.kind === "jetton") {
+    exact(a, ["network", "kind", "decimals", "masterAddress"]);
+    if (
+      a.network !== identity.network ||
+      !Number.isSafeInteger(a.decimals) ||
+      (a.decimals as number) < 0 ||
+      (a.decimals as number) > 18 ||
+      typeof a.masterAddress !== "string" ||
+      !/^(?:0|-1):[a-f0-9]{64}$/.test(a.masterAddress)
+    )
+      throw Error("TON_SOURCE_IDENTITY");
+    asset = {
+      network: identity.network,
+      kind: "jetton",
+      masterAddress: a.masterAddress,
+      decimals: a.decimals as number,
+    };
+  } else {
+    throw Error("TON_SOURCE_IDENTITY");
+  }
   const id = createHash("sha256")
     .update(
-      identity.providerId +
-        `\0{"decimals":9,"kind":"native","network":"${identity.network}"}\0` +
-        r.invoiceRecipient,
+      identity.providerId + `\0${assetLiteral(asset)}\0` + r.invoiceRecipient,
     )
     .digest("hex");
   if (hash(r.sourceId) !== id) throw Error("TON_SOURCE_IDENTITY");
-  const network = identity.network as TonReconciliationSource["network"];
   return {
     sourceId: id,
-    network,
-    asset: { network, kind: "native", decimals: 9 },
+    network: identity.network,
+    asset,
     invoiceRecipient: r.invoiceRecipient,
     scanFloorTimeMs: r.scanFloorTimeMs as number,
   };
+}
+
+/** Native-only narrow view kept for call sites that must never see jettons. */
+export function nativeSource(value: unknown): TonReconciliationSource {
+  const source = reconciliationSource(value);
+  if (source.asset.kind !== "native") throw Error("TON_SOURCE_IDENTITY");
+  return source;
 }
 export function sourceForInvoice(invoice: TonInvoice): TonReconciliationSource {
   const providerId =
@@ -106,12 +152,10 @@ export function sourceForInvoice(invoice: TonInvoice): TonReconciliationSource {
       : "toncenter-v3-testnet";
   const sourceId = createHash("sha256")
     .update(
-      providerId +
-        `\0{"decimals":9,"kind":"native","network":"${invoice.network}"}\0` +
-        invoice.recipient,
+      providerId + `\0${assetLiteral(invoice.asset)}\0` + invoice.recipient,
     )
     .digest("hex");
-  return nativeSource({
+  return reconciliationSource({
     sourceId,
     network: invoice.network,
     asset: invoice.asset,
@@ -152,17 +196,39 @@ export function binding(
   const r = object(value);
   exact(r, ["recipientAccount", "derivation"]);
   const d = object(r.derivation);
-  exact(d, ["kind", "ownerAddress"]);
   if (
     r.recipientAccount !== s.invoiceRecipient ||
-    d.kind !== "native" ||
     d.ownerAddress !== s.invoiceRecipient
   )
     throw new TonSourceFailure("recipient_binding_changed");
-  return {
-    recipientAccount: s.invoiceRecipient,
-    derivation: { kind: "native", ownerAddress: s.invoiceRecipient },
-  };
+  if (d.kind === "native") {
+    exact(d, ["kind", "ownerAddress"]);
+    if (s.asset.kind !== "native")
+      throw new TonSourceFailure("recipient_binding_changed");
+    return {
+      recipientAccount: s.invoiceRecipient,
+      derivation: { kind: "native", ownerAddress: s.invoiceRecipient },
+    };
+  }
+  if (d.kind === "jetton") {
+    exact(d, ["kind", "masterAddress", "ownerAddress"]);
+    if (
+      s.asset.kind !== "jetton" ||
+      d.masterAddress !== s.asset.masterAddress ||
+      typeof d.masterAddress !== "string" ||
+      !/^(?:0|-1):[a-f0-9]{64}$/.test(d.masterAddress)
+    )
+      throw new TonSourceFailure("recipient_binding_changed");
+    return {
+      recipientAccount: s.invoiceRecipient,
+      derivation: {
+        kind: "jetton",
+        masterAddress: d.masterAddress,
+        ownerAddress: s.invoiceRecipient,
+      },
+    };
+  }
+  throw new TonSourceFailure("recipient_binding_changed");
 }
 export const SOURCE_ERRORS: ReadonlySet<string> = new Set([
   "origin_mismatch",
@@ -201,31 +267,60 @@ export function sourceError(
   };
 }
 export function creditCandidate(e: NormalizedTonEvidence) {
-  if (
-    (e.network !== "tvm:-3" && e.network !== "tvm:-1") ||
-    e.asset.kind !== "native" ||
-    e.creditPath.kind !== "native"
-  )
+  if (e.network !== "tvm:-3" && e.network !== "tvm:-1")
     throw new TonSourceFailure("unsupported_asset");
-  const tx = e.transactions.find(
-    (t) =>
-      t.hash ===
-      (e.creditPath as { recipientTransactionHash: string })
-        .recipientTransactionHash,
-  );
-  if (!tx || tx.inMessage.hash !== e.creditPath.creditMessageHash)
-    throw new TonSourceFailure("provider_schema_invalid");
-  const payload = tx.inMessage.decodedPayload;
-  return {
-    tx,
-    event: { txHash: tx.hash, txLt: tx.lt, messageHash: tx.inMessage.hash },
-    reference: payload.kind === "native_comment" ? payload.reference : null,
-  };
+  if (e.asset.kind === "native" && e.creditPath.kind === "native") {
+    const tx = e.transactions.find(
+      (t) =>
+        t.hash ===
+        (e.creditPath as { recipientTransactionHash: string })
+          .recipientTransactionHash,
+    );
+    if (!tx || tx.inMessage.hash !== e.creditPath.creditMessageHash)
+      throw new TonSourceFailure("provider_schema_invalid");
+    const payload = tx.inMessage.decodedPayload;
+    return {
+      tx,
+      owner: tx.account,
+      event: { txHash: tx.hash, txLt: tx.lt, messageHash: tx.inMessage.hash },
+      reference: payload.kind === "native_comment" ? payload.reference : null,
+    };
+  }
+  if (e.asset.kind === "jetton" && e.creditPath.kind === "jetton") {
+    // The credit transaction lives on the merchant's jetton wallet; the
+    // invoice reference rides the transfer_notification message it emits.
+    // Local alias keeps the union narrowed inside the find() closures below.
+    const creditPath = e.creditPath;
+    const tx = e.transactions.find(
+      (t) => t.hash === creditPath.creditTransactionHash,
+    );
+    if (
+      !tx ||
+      tx.inMessage.hash !== creditPath.internalTransferMessageHash ||
+      tx.inMessage.decodedPayload.kind !== "jetton_internal_transfer"
+    )
+      throw new TonSourceFailure("provider_schema_invalid");
+    const notification = tx.outMessages.find(
+      (m) => m.hash === creditPath.notificationMessageHash,
+    );
+    if (
+      !notification ||
+      notification.decodedPayload.kind !== "jetton_notification"
+    )
+      throw new TonSourceFailure("provider_schema_invalid");
+    return {
+      tx,
+      owner: e.creditPath.walletDerivationOwner,
+      event: { txHash: tx.hash, txLt: tx.lt, messageHash: tx.inMessage.hash },
+      reference: notification.decodedPayload.forwardReference || null,
+    };
+  }
+  throw new TonSourceFailure("unsupported_asset");
 }
 export function providerPage(
   value: unknown,
   previous: TonProviderCursor | null,
-  account: string,
+  source: TonReconciliationSource,
   preset: import("./ton-payment-evidence.js").TonPreset,
 ): Extract<TonProviderResult, { kind: "page" }> {
   try {
@@ -251,7 +346,10 @@ export function providerPage(
     for (const e of evidence) {
       const c = creditCandidate(e),
         number = BigInt(c.tx.lt);
-      if (c.tx.account !== account)
+      // Native credits land on the merchant wallet account; jetton credits on
+      // the derived jetton wallet — the OWNER binding is the invariant both
+      // kinds share.
+      if (c.owner !== source.invoiceRecipient)
         throw new TonSourceFailure("recipient_binding_changed");
       if (
         (lt !== null && number >= lt) ||
