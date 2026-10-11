@@ -28,6 +28,7 @@
     "@aiag/database": "*",
     "@aiag/shared": "*",
     "@hono/node-server": "2.1.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "fast-xml-parser": "5.11.1",
     "hono": "4.13.10",
     "ioredis": "^5.4.1",

@@ -34,6 +34,7 @@ import { agentRegister } from './routes/v1/agent-register';
 import { agentTopup } from './routes/v1/agent-topup';
 import { agentKeys } from './routes/v1/agent-keys';
 import { agentPolicy } from './routes/v1/agent-policy';
+import { mcpFacade } from './mcp/server';
 import { catalogHttpBoundary } from './catalog/http-contract';
 import { adminProxy } from './routes/admin/proxyTest';
 import { adminCatalog } from './routes/admin/catalog';
@@ -176,6 +177,19 @@ app.use('/v1/agent/policy/*', requireApiKey);
 app.use('/v1/agent/policy', rateLimit);
 app.use('/v1/agent/policy/*', rateLimit);
 app.route('/v1/agent', agentPolicy);
+
+// ---- /mcp: MCP facade for headless agents (Task 11) ------------------------
+// Model Context Protocol Streamable HTTP INSIDE this process (stateless:
+// fresh McpServer+transport per POST, JSON responses, no SSE). Same root-app
+// mount pattern as the agent rails above: requireApiKey (+ per-key RPM)
+// ahead of the facade, so auth/orgId come from the fresh key row and the
+// 0105 KEY_EXPIRED path applies before any JSON-RPC code runs. The facade
+// mounts the REAL v1 route handlers in-process (mcp/server.ts) — tools are
+// pure delegation, zero new business logic. POST only: GET/DELETE answer
+// 405 from the facade itself (notifications-only POSTs still get 202).
+app.use('/mcp', requireApiKey);
+app.use('/mcp', rateLimit);
+app.route('/mcp', mcpFacade);
 
 if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
   // Early cache policy includes auth, RPM, unsupported routes and 404 responses.
