@@ -4,14 +4,20 @@
  * The properties this file exists to pin:
  *  1. PUBLIC by design: no Authorization header is ever required — the TON
  *     wallet proof is the authentication. Mounted ahead of the /v1 key chain.
- *  2. The FIRST gateway key is minted by the register route itself, returned
- *     as plaintext EXACTLY ONCE, and only its SHA-256 hash is persisted.
+ *  2. The FIRST gateway key is minted INSIDE the registration transaction
+ *     (review wave T-a1): the route generates the plaintext locally, hands
+ *     only its SHA-256 hash + prefix to the service, and returns the
+ *     plaintext EXACTLY ONCE from its own local value. No DB write happens
+ *     in the route itself — an org can never exist without its bootstrap
+ *     key, and a mid-register failure rolls the whole registration back.
  *  3. Review Focus #1: a second registration of the same wallet is a 409 and
  *     mints nothing — one wallet, one org, one primary key.
  *  4. Service-layer errors map to HTTP without leaking SQL internals.
  *  5. Redis sliding-window limits: 6/5min per address, 60/min global.
+ *  6. Challenge domain: AIAG_AGENT_PROOF_DOMAIN when set (production MUST
+ *     set it), request Host otherwise (dev fallback).
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import IORedisMock from 'ioredis-mock';
 
@@ -89,19 +95,15 @@ const post = (path: string, body: unknown, app = mount(), origin = GW) =>
     body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 
-const keyRow = () => [
-  {
-    id: KEY_ID,
-    key_prefix: 'sk_aiag_live_aaaa',
-  },
-];
-
 beforeEach(() => {
   db.statements.length = 0;
   db.results.length = 0;
   db.sql.mockClear();
   service.issue.mockReset();
   service.consume.mockReset();
+  // Fix 4 tests mutate this env var; every other test must see the dev
+  // fallback (request Host), never a leftover configured domain.
+  delete process.env.AIAG_AGENT_PROOF_DOMAIN;
   setupRedis();
 });
 
@@ -155,6 +157,73 @@ describe('POST /v1/agent/challenge', () => {
     expect(res.headers.get('Retry-After')).toMatch(/^\d+$/);
   });
 
+  // ── Review wave (T-a1 Fix 4): the proof domain is configuration, not Host ─
+  // config.ts reads process.env at import time, so these tests re-import the
+  // route module graph with the env set (vi.resetModules + dynamic import).
+  // The re-imported graph gets its OWN lib/redis instance — the factory must
+  // be re-wired there or the sliding-window guard would dial a real Redis.
+  // The hoisted '@aiag/database'/'../lib/db' mocks keep serving the same fakes.
+  describe('AIAG_AGENT_PROOF_DOMAIN (review wave T-a1)', () => {
+    afterEach(() => {
+      delete process.env.AIAG_AGENT_PROOF_DOMAIN;
+      vi.resetModules();
+    });
+
+    async function mountFreshRoute(): Promise<Hono> {
+      vi.resetModules();
+      const [{ setRedisFactory: wireRedis }, { applyAiagErrorHandler: wireErrors }, route] =
+        await Promise.all([
+          import('../lib/redis'),
+          import('../lib/errors'),
+          import('../routes/v1/agent-register'),
+        ]);
+      const instance = new (IORedisMock as any)();
+      void instance.flushall();
+      wireRedis(() => instance as any);
+      const app = new Hono();
+      wireErrors(app);
+      app.route('/v1/agent', route.agentRegister);
+      return app;
+    }
+
+    it('uses the configured domain and ignores the request Host entirely', async () => {
+      process.env.AIAG_AGENT_PROOF_DOMAIN = 'api.aiag-production.example';
+      const app = await mountFreshRoute();
+      service.issue.mockResolvedValue({ challengeId: CHALLENGE, payload: 'p', expiresAt: 'x' });
+
+      const res = await app.request(`${GW}/v1/agent/challenge`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ address: ADDR, network: '-3' }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(service.issue).toHaveBeenCalledTimes(1);
+      expect(service.issue.mock.calls[0]![1]).toEqual({
+        address: ADDR,
+        network: '-3',
+        domain: 'api.aiag-production.example', // NOT 'gw.example'
+      });
+    });
+
+    it('falls back to the request Host when the env is unset (dev)', async () => {
+      delete process.env.AIAG_AGENT_PROOF_DOMAIN;
+      const app = await mountFreshRoute();
+      service.issue.mockResolvedValue({ challengeId: CHALLENGE, payload: 'p', expiresAt: 'x' });
+
+      await app.request(`${GW}/v1/agent/challenge`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ address: ADDR, network: '-3' }),
+      });
+      expect(service.issue.mock.calls[0]![1]).toEqual({
+        address: ADDR,
+        network: '-3',
+        domain: 'gw.example',
+      });
+    });
+  });
+
   it('503 for AGENT_AUTH_UNAVAILABLE, without echoing internals', async () => {
     const { AgentAuthError } = await import('@aiag/database');
     service.issue.mockRejectedValue(new AgentAuthError('AGENT_AUTH_UNAVAILABLE'));
@@ -175,9 +244,12 @@ describe('POST /v1/agent/challenge', () => {
 });
 
 describe('POST /v1/agent/register — happy path', () => {
-  it('201 {principal_id, org_id, key, key_prefix}; key plaintext shown exactly once, stored hashed', async () => {
-    service.consume.mockResolvedValue({ principalId: PRINCIPAL, orgId: ORG });
-    db.results.push(keyRow());
+  it('201 {principal_id, org_id, key, key_prefix}; key plaintext shown exactly once, minted in the service tx', async () => {
+    service.consume.mockResolvedValue({
+      principalId: PRINCIPAL,
+      orgId: ORG,
+      primaryKey: { id: KEY_ID, prefix: 'sk_aiag_live_aaaa' },
+    });
 
     const res = await post('/v1/agent/register', {
       challengeId: CHALLENGE,
@@ -193,49 +265,37 @@ describe('POST /v1/agent/register — happy path', () => {
     expect(body.key_prefix).toBe('sk_aiag_live_aaaa');
     expect(KEY_PREFIX_REGEX.test(body.key!)).toBe(true);
 
-    // The proof travels to the service opaquely, unmodified.
-    expect(service.consume.mock.calls[0]![1]).toEqual({
-      challengeId: CHALLENGE,
-      address: ADDR,
-      proof: PROOF,
+    // The route generates the key BEFORE the service call and passes only the
+    // hash + prefix (+name) down — the mint INSERT happens inside the
+    // service's registration transaction, so the route writes nothing itself.
+    expect(service.consume).toHaveBeenCalledTimes(1);
+    const input = service.consume.mock.calls[0]![1] as {
+      challengeId: string;
+      address: string;
+      proof: unknown;
+      primaryKey: { hash: string; prefix: string; name: string };
+    };
+    expect(input.challengeId).toBe(CHALLENGE);
+    expect(input.address).toBe(ADDR);
+    expect(input.proof).toEqual(PROOF);
+    expect(input.primaryKey).toEqual({
+      hash: hashKey(body.key!),
+      prefix: body.key!.slice(0, 20),
+      name: 'agent-primary',
     });
-
-    const insert = db.statements.find((s) => /INSERT INTO gateway_api_keys/.test(s.text))!;
-    expect(insert).toBeDefined();
-    // Only the hash is persisted...
-    expect(insert.values).toContain(hashKey(body.key!));
-    // ...never the plaintext, in values or statement text.
-    expect(insert.values).not.toContain(body.key);
-    expect(insert.text).not.toContain(body.key);
-
-    // First key shape: agent-primary, rpm 60, s2s-minting policy, no expiry.
-    expect(insert.values).toContain('agent-primary');
-    expect(insert.values).toContain(60);
-    expect(insert.values).toContain('{"kind":"agent","s2s_key_minting":true}');
-    expect(insert.text.toLowerCase()).not.toContain('expires_at');
-    expect(insert.values).toContain(ORG);
+    // The plaintext never crosses the service boundary.
+    expect(JSON.stringify(input)).not.toContain(body.key);
+    // And the route performs no DB writes of its own.
+    expect(db.statements).toHaveLength(0);
   });
 
-  it('audit row records the mint but never key material', async () => {
-    service.consume.mockResolvedValue({ principalId: PRINCIPAL, orgId: ORG });
-    db.results.push(keyRow());
-    const res = await post('/v1/agent/register', {
-      challengeId: CHALLENGE,
-      address: ADDR,
-      proof: PROOF,
-    });
-    const body = (await res.json()) as Record<string, string>;
-    const audit = db.statements.find((s) => /INSERT INTO usage_events/.test(s.text))!;
-    expect(audit).toBeDefined();
-    const serialized = JSON.stringify(audit.values);
-    expect(serialized).not.toContain(body.key!);
-    expect(serialized).not.toContain(hashKey(body.key!));
-    expect(serialized).toContain(ORG);
-  });
-
-  it('503 when the mint INSERT fails — no key is claimed to exist', async () => {
-    service.consume.mockResolvedValue({ principalId: PRINCIPAL, orgId: ORG });
-    db.results.push(new Error('deadlock detected'));
+  it('a failed mint fails the WHOLE registration — 503, nothing claimed to exist, retry possible', async () => {
+    const { AgentAuthError } = await import('@aiag/database');
+    // The mint now lives inside consumeAgentRegister's transaction: its
+    // failure surfaces as AGENT_AUTH_UNAVAILABLE after the tx rolled back —
+    // org and principal included, so the wallet can simply register again
+    // (this was the keyless lock-out the review wave closed).
+    service.consume.mockRejectedValue(new AgentAuthError('AGENT_AUTH_UNAVAILABLE'));
     const res = await post('/v1/agent/register', {
       challengeId: CHALLENGE,
       address: ADDR,
@@ -244,6 +304,8 @@ describe('POST /v1/agent/register — happy path', () => {
     expect(res.status).toBe(503);
     const raw = await res.text();
     expect(raw).not.toMatch(/deadlock/);
+    expect(raw).not.toMatch(/INSERT|UPDATE|SELECT/);
+    expect(db.statements).toHaveLength(0);
   });
 });
 
@@ -333,14 +395,17 @@ describe('registration rate limits (Redis sliding window)', () => {
   });
 
   it('the register route shares the same per-address bucket', async () => {
-    service.consume.mockResolvedValue({ principalId: PRINCIPAL, orgId: ORG });
+    service.consume.mockResolvedValue({
+      principalId: PRINCIPAL,
+      orgId: ORG,
+      primaryKey: { id: KEY_ID, prefix: 'sk_aiag_live_aaaa' },
+    });
     const app = mount();
-    for (let i = 0; i < 7; i++) db.results.push(keyRow());
     for (let i = 0; i < 6; i++)
       await post('/v1/agent/register', { challengeId: CHALLENGE, address: ADDR, proof: PROOF }, app);
     const seventh = await post('/v1/agent/register', { challengeId: CHALLENGE, address: ADDR, proof: PROOF }, app);
     expect(seventh.status).toBe(429);
-    expect(db.statements.filter((s) => /INSERT INTO gateway_api_keys/.test(s.text))).toHaveLength(6);
+    expect(service.consume).toHaveBeenCalledTimes(6);
   });
 
   it('global bucket: 60/min across ALL addresses', async () => {

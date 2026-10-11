@@ -9,19 +9,30 @@
  * challenge caps (Task 3), and the challenge being single-use + 120s.
  *
  * ── The first key, and the only place it exists in the clear ────────────────
- * Registration and key custody are deliberately split (Task 3 ruling): the
- * service layer returns {principalId, orgId} and no key material. The FIRST
- * gateway key for the new org is minted HERE, following the exact INSERT
- * pattern of /v1/organization/keys: `generateApiKey` produces the plaintext,
- * it is returned in this ONE response and never stored — only its SHA-256
- * hash and 20-char prefix reach `gateway_api_keys`. There is no endpoint
- * that can return the key again; a lost key is rotated, never looked up.
- * Nothing logs it, and the audit row below carries ids/prefix only.
+ * Review wave (T-a1 Fix 2): the first gateway key is minted INSIDE the
+ * service's registration transaction. The route generates the plaintext
+ * BEFORE the service call (`generateApiKey`), passes only its SHA-256 hash
+ * and 20-char prefix down, and returns the plaintext in this ONE response
+ * from its own local value — it is never stored, never logged, and never
+ * crosses the service boundary. Atomicity is the point: the two-transaction
+ * split (org+principal, then key) could strand a registered wallet with no
+ * key — a keyless lock-out with no recovery but principal revoke. Now a
+ * mint failure rolls the whole registration back (AGENT_AUTH_UNAVAILABLE →
+ * 503) and the wallet can simply register again. The same transaction also
+ * enrolls the org into quota v2 (0068) — stored admission requires
+ * enforcement_version=2, so without the enrollment every later request
+ * would 500 with QUOTA_V2_NOT_ENABLED.
  *
  * The minted key: name 'agent-primary', rpm_limit 60, policies
  * {"kind":"agent","s2s_key_minting":true} (the agent may mint sibling keys
  * for its own org via /v1/organization/keys), expires_at NULL — the TTL
  * column exists (0105) but the bootstrap key is deliberately non-expiring.
+ *
+ * ── The challenge domain is configuration, not the Host header ──────────────
+ * AIAG_AGENT_PROOF_DOMAIN (config.ts) names the domain the wallet proof must
+ * be signed for. PRODUCTION MUST SET IT: the request Host is
+ * attacker-influenced at the edge and is only a dev fallback here. The
+ * service re-validates whatever arrives (3..300 chars, dot, URL round-trip).
  *
  * ── Error mapping (service codes → HTTP), no internals leak ─────────────────
  *   AGENT_ALREADY_REGISTERED  → 409   (one wallet = one org = one bootstrap)
@@ -41,6 +52,7 @@ import { sql } from '../../lib/db';
 import { AiagError, errors } from '../../lib/errors';
 import { generateApiKey } from '../../lib/api-key';
 import { makeRedis } from '../../lib/redis';
+import { config } from '../../config';
 import {
   AgentAuthError,
   consumeAgentRegister,
@@ -206,69 +218,6 @@ function throwServiceError(c: Context, e: unknown): never {
   throw mapped;
 }
 
-// ── First-key mint (INSERT pattern of organization-keys.ts#mintKey) ─────────
-type MintedAgentKey = { id: string; key: string; key_prefix: string };
-
-async function mintAgentPrimaryKey(orgId: string): Promise<MintedAgentKey> {
-  const { key, hash, prefix } = generateApiKey('live');
-
-  let row: { id: string; key_prefix: string };
-  try {
-    row = await sql.begin(async (tx) => {
-      const rows = (await tx<{ id: string; key_prefix: string }[]>`
-        INSERT INTO gateway_api_keys (
-          org_id, name, key_hash, key_prefix, policies,
-          rpm_limit, batch_rpm_limit, cost_limit_monthly_rub,
-          model_whitelist, ru_residency_only
-        )
-        VALUES (
-          ${orgId}::uuid,
-          ${'agent-primary'},
-          ${hash},
-          ${prefix},
-          ${tx.json({ kind: 'agent', s2s_key_minting: true })}::jsonb,
-          ${60},
-          ${10},
-          ${null}::numeric,
-          ${tx.json([])}::jsonb,
-          ${false}
-        )
-        RETURNING id::text, key_prefix
-      `) as unknown as { id: string; key_prefix: string }[];
-      const inserted = rows[0];
-      if (!inserted) throw errors.unavailable('Key could not be created');
-
-      // Audit, in the same transaction as the INSERT: a key must never exist
-      // without a record of its origin. Ids and prefix only — never the
-      // plaintext key, never its hash. There is no issuing key here (this IS
-      // the bootstrap), so the origin is recorded as the registration rail.
-      await tx`
-        INSERT INTO usage_events (org_id, api_key_id, request_id, kind, payload)
-        VALUES (
-          ${orgId}::uuid,
-          ${inserted.id}::uuid,
-          ${null},
-          'gateway_key_minted',
-          ${tx.json({
-            minted_key_id: inserted.id,
-            key_prefix: inserted.key_prefix,
-            name: 'agent-primary',
-            minted_by: 'agent_register_bootstrap',
-          })}::jsonb
-        )
-      `;
-      return inserted;
-    });
-  } catch (e) {
-    if (e instanceof AiagError) throw e;
-    // A failed insert must not tell the caller a key exists, and must not
-    // echo the driver's message (it can contain the statement).
-    throw errors.unavailable('Key could not be created');
-  }
-
-  return { id: row.id, key, key_prefix: row.key_prefix };
-}
-
 // ── Routes ───────────────────────────────────────────────────────────────────
 async function readJsonBody(c: Context): Promise<unknown> {
   const raw = await c.req.json().catch(() => undefined);
@@ -289,9 +238,11 @@ agentRegister.post('/challenge', async (c) => {
     challenge = await issueAgentChallenge(agentAuthDb, {
       address: parsed.data.address,
       network: '-3',
-      // The gateway's own host from the request: it is the domain the wallet
-      // signed against, and the service re-verifies it (3..300 chars).
-      domain: new URL(c.req.url).host,
+      // Review wave (T-a1 Fix 4): the proof domain is configuration, not the
+      // request Host (attacker-influenced at the edge). PRODUCTION MUST SET
+      // AIAG_AGENT_PROOF_DOMAIN; the Host here is a dev-only fallback, and
+      // the service re-validates whichever value arrives (3..300 chars).
+      domain: config.AIAG_AGENT_PROOF_DOMAIN ?? new URL(c.req.url).host,
     });
   } catch (e) {
     throwServiceError(c, e);
@@ -311,18 +262,24 @@ agentRegister.post('/register', async (c) => {
   if (!parsed.success) throw errors.badRequest('Invalid agent registration request');
   await guardAddress(c, parsed.data.address);
 
+  // Review wave (T-a1 Fix 2): the plaintext is generated HERE, before the
+  // service call, and exists only in this handler's local scope. The service
+  // receives hash + prefix + name and inserts the key INSIDE the
+  // registration transaction — org, principal, key, quota enrollment and
+  // audits commit together or not at all.
+  const { key, hash, prefix } = generateApiKey('live');
+
   let registered: Awaited<ReturnType<typeof consumeAgentRegister>>;
   try {
     registered = await consumeAgentRegister(agentAuthDb, {
       challengeId: parsed.data.challengeId,
       address: parsed.data.address,
       proof: parsed.data.proof,
+      primaryKey: { hash, prefix, name: 'agent-primary' },
     });
   } catch (e) {
     throwServiceError(c, e);
   }
-
-  const minted = await mintAgentPrimaryKey(registered.orgId);
 
   c.header('Cache-Control', 'private, no-store');
   return c.json(
@@ -330,8 +287,8 @@ agentRegister.post('/register', async (c) => {
       principal_id: registered.principalId,
       org_id: registered.orgId,
       // Shown exactly once. There is no endpoint that returns it again.
-      key: minted.key,
-      key_prefix: minted.key_prefix,
+      key,
+      key_prefix: registered.primaryKey?.prefix ?? prefix,
     },
     201,
   );

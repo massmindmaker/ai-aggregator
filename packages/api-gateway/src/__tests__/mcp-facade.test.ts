@@ -402,24 +402,30 @@ describe('tools/call', () => {
   });
 
   it('aiag_list_keys returns the org key inventory without secrets', async () => {
-    db.results.push([
-      {
-        id: OTHER_KEY_ID,
-        name: 'agent-bootstrap',
-        key_prefix: 'sk_aiag_live_abc',
-        expires_at: null,
-        created_at: '2026-10-09T00:00:00.000000Z',
-        last_used_at: null,
-        revoked_at: null,
-      },
-    ]);
+    db.results.push(
+      // Review wave (T-a1): the agent key lifecycle now opens with the
+      // active-agent-principal gate (agent-keys.ts), so the scripted DB
+      // serves its row first, then the inventory.
+      [{ ok: true }],
+      [
+        {
+          id: OTHER_KEY_ID,
+          name: 'agent-bootstrap',
+          key_prefix: 'sk_aiag_live_abc',
+          expires_at: null,
+          created_at: '2026-10-09T00:00:00.000000Z',
+          last_used_at: null,
+          revoked_at: null,
+        },
+      ],
+    );
     const res = await rpc('tools/call', { name: 'aiag_list_keys', arguments: {} }, 15);
     const body = await json(res);
     const result = body.result as { structuredContent: { object: string; data: Array<Record<string, unknown>> } };
     expect(result.structuredContent.object).toBe('list');
     expect(result.structuredContent.data[0]!.id).toBe(OTHER_KEY_ID);
     // No plaintext, no hash ever leaves the key table through this path.
-    const select = db.statements.find((s) => /gateway_api_keys/.test(s.text))!;
+    const select = db.statements.find((s) => /FROM gateway_api_keys/.test(s.text))!;
     expect(select.text).not.toContain('key_hash');
   });
 

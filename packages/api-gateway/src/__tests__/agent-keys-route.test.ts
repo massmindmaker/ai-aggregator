@@ -19,6 +19,9 @@
  *     / {confirm:true} / empty all accepted; {confirm:false} and extra
  *     fields → 400; AGENT_NOT_AUTHORIZED → 403; state conflict → 409;
  *     unexpected errors → 500 without internals.
+ *  7. PRINCIPAL GATE (review wave T-a1): list/rotate/revoke first prove the
+ *     key's org has an ACTIVE agent_principals row (0106-0108 predicate);
+ *     a human org's live key → 403 AGENT_NOT_AUTHORIZED, no other statement.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
@@ -136,19 +139,76 @@ describe('auth boundary', () => {
   });
 });
 
+// ── Review wave (T-a1 Fix 1): the agent rail is for agent orgs only ─────────
+// Every lifecycle op must first prove the key's org belongs to an ACTIVE
+// agent principal (0106-0108 predicate). A human org's live key must get
+// 403 AGENT_NOT_AUTHORIZED — not a listing, and above all not the rotate
+// feature, which exists nowhere else and would let a leaked dashboard key
+// self-heal its credentials through the agent rail.
+describe('principal gate: human orgs cannot use the agent key lifecycle', () => {
+  const GATE_NO = [{ ok: false }];
+  const GATE_YES = [{ ok: true }];
+
+  it('gate statement is the 0106-0108 predicate against agent_principals', async () => {
+    db.results.push(GATE_YES, []); // gate, then inventory
+    await get('/v1/agent/keys');
+    const gate = db.statements[0]!;
+    expect(gate.text).toContain('agent_principals');
+    expect(gate.text).toContain("status = 'active'");
+    expect(gate.text).toContain('EXISTS');
+    expect(gate.values).toContain(ORG);
+  });
+
+  it.each([
+    ['GET /v1/agent/keys (list)', () => get('/v1/agent/keys'), GATE_NO],
+    [
+      'POST /keys/:id/rotate',
+      () => post(`/v1/agent/keys/${OTHER_KEY_ID}/rotate`),
+      GATE_NO,
+    ],
+    [
+      'POST /keys/:id/revoke',
+      () => post(`/v1/agent/keys/${OTHER_KEY_ID}/revoke`),
+      GATE_NO,
+    ],
+  ])('403 AGENT_NOT_AUTHORIZED for a human org on %s', async (_label, run, gateRows) => {
+    db.results.push(gateRows);
+    const res = await run();
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('AGENT_NOT_AUTHORIZED');
+    // The gate is the ONLY statement: no inventory read, no UPDATE, no audit.
+    expect(db.statements).toHaveLength(1);
+    expect(db.statements.find((s) => /UPDATE gateway_api_keys/.test(s.text))).toBeUndefined();
+    expect(db.statements.find((s) => /INSERT INTO usage_events/.test(s.text))).toBeUndefined();
+  });
+
+  it('fails closed (403) when the gate row itself is missing', async () => {
+    // ok:false is the explicit human-org verdict; a LOST gate row (empty
+    // result) must not be readable as "no principal information = allow".
+    db.results.push([]); // gate SELECT returns nothing
+    const res = await get('/v1/agent/keys');
+    expect(res.status).toBe(403);
+    expect(db.statements).toHaveLength(1);
+  });
+});
+
 describe('GET /v1/agent/keys — inventory without secrets', () => {
   it('200 with the org-scoped list; the SELECT never mentions key_hash', async () => {
-    db.results.push([
-      {
-        id: OTHER_KEY_ID,
-        name: 'agent-primary',
-        key_prefix: 'sk_aiag_live_abcd',
-        expires_at: null,
-        created_at: '2026-10-09T10:00:00.000000Z',
-        last_used_at: null,
-        revoked_at: null,
-      },
-    ]);
+    db.results.push(
+      [{ ok: true }], // principal gate (review wave Fix 1)
+      [
+        {
+          id: OTHER_KEY_ID,
+          name: 'agent-primary',
+          key_prefix: 'sk_aiag_live_abcd',
+          expires_at: null,
+          created_at: '2026-10-09T10:00:00.000000Z',
+          last_used_at: null,
+          revoked_at: null,
+        },
+      ],
+    );
 
     const res = await get('/v1/agent/keys');
     expect(res.status).toBe(200);
@@ -164,8 +224,8 @@ describe('GET /v1/agent/keys — inventory without secrets', () => {
     expect(JSON.stringify(body)).not.toMatch(/sk_aiag_live_[A-Za-z0-9_-]{20,}/);
 
     // Org scoping is in the statement itself, with the org as a value.
-    const select = db.statements[0]!;
-    expect(select.text).toContain('FROM gateway_api_keys');
+    const select = db.statements.find((s) => /FROM gateway_api_keys/.test(s.text))!;
+    expect(select).toBeDefined();
     expect(select.text).toContain('WHERE org_id =');
     expect(select.values).toContain(ORG);
     // The secret columns are not even selected.
@@ -174,7 +234,7 @@ describe('GET /v1/agent/keys — inventory without secrets', () => {
   });
 
   it('503 without internals when the inventory read fails', async () => {
-    db.results.push(new Error('relation "gateway_api_keys" does not exist'));
+    db.results.push([{ ok: true }], new Error('relation "gateway_api_keys" does not exist'));
     const res = await get('/v1/agent/keys');
     expect(res.status).toBe(503);
     const raw = await res.text();
@@ -194,7 +254,7 @@ describe('POST /v1/agent/keys/:id/rotate — atomic credential replacement', () 
   }
 
   it('200 {id,key,key_prefix}; new hash replaces the old one in ONE guarded UPDATE', async () => {
-    db.results.push(rotationRows(), []); // UPDATE RETURNING, then audit INSERT
+    db.results.push([{ ok: true }], rotationRows(), []); // gate, UPDATE RETURNING, audit INSERT
 
     const res = await post(`/v1/agent/keys/${OTHER_KEY_ID}/rotate`);
     expect(res.status).toBe(200);
@@ -235,7 +295,7 @@ describe('POST /v1/agent/keys/:id/rotate — atomic credential replacement', () 
   });
 
   it('self-rotate of the calling key is allowed and succeeds', async () => {
-    db.results.push(rotationRows(KEY_ID), []);
+    db.results.push([{ ok: true }], rotationRows(KEY_ID), []);
     const res = await post(`/v1/agent/keys/${KEY_ID}/rotate`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { id: string };
@@ -248,7 +308,7 @@ describe('POST /v1/agent/keys/:id/rotate — atomic credential replacement', () 
   });
 
   it('404 for a foreign or already-dead key id (indistinguishable)', async () => {
-    db.results.push([], []); // guarded UPDATE matches zero rows
+    db.results.push([{ ok: true }], [], []); // gate, guarded UPDATE matches zero rows
     const res = await post(`/v1/agent/keys/${OTHER_KEY_ID}/rotate`);
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { code: string } };
@@ -264,7 +324,7 @@ describe('POST /v1/agent/keys/:id/rotate — atomic credential replacement', () 
   });
 
   it('503 without internals (and without the new hash) when the UPDATE fails', async () => {
-    db.results.push(new Error('deadlock detected'));
+    db.results.push([{ ok: true }], new Error('deadlock detected'));
     const res = await post(`/v1/agent/keys/${OTHER_KEY_ID}/rotate`);
     expect(res.status).toBe(503);
     const raw = await res.text();
@@ -276,6 +336,7 @@ describe('POST /v1/agent/keys/:id/rotate — atomic credential replacement', () 
 describe('POST /v1/agent/keys/:id/revoke — retire one key', () => {
   it('200 {id,revoked_at} with the guarded UPDATE and an audit row', async () => {
     db.results.push(
+      [{ ok: true }], // principal gate
       [{ id: OTHER_KEY_ID, revoked_at: '2026-10-09T12:00:00.000000Z' }],
       [], // audit INSERT
     );
@@ -300,13 +361,17 @@ describe('POST /v1/agent/keys/:id/revoke — retire one key', () => {
   });
 
   it('self-revoke of the calling key is allowed', async () => {
-    db.results.push([{ id: KEY_ID, revoked_at: '2026-10-09T12:00:00.000000Z' }], []);
+    db.results.push(
+      [{ ok: true }],
+      [{ id: KEY_ID, revoked_at: '2026-10-09T12:00:00.000000Z' }],
+      [],
+    );
     const res = await post(`/v1/agent/keys/${KEY_ID}/revoke`);
     expect(res.status).toBe(200);
   });
 
   it('404 for a foreign id — guarded UPDATE matches zero rows', async () => {
-    db.results.push([], []);
+    db.results.push([{ ok: true }], [], []);
     const res = await post(`/v1/agent/keys/${OTHER_KEY_ID}/revoke`);
     expect(res.status).toBe(404);
     expect(db.statements.find((s) => /gateway_key_revoked/.test(s.text))).toBeUndefined();

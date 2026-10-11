@@ -32,6 +32,10 @@
  *     `ru_residency_only: false` from a residency-bound caller are all
  *     rejected. A key can therefore never mint a key more powerful than
  *     itself.
+ *  4. (Review wave T-a1) The new key's OPTIONAL `expires_at` (0105 TTL) is
+ *     ISO-8601, strictly future, at most +2 years out — and CLAMPED to the
+ *     issuing key's own expires_at, so a subordinate key can never outlive
+ *     the credential that minted it.
  *
  * Money invariants respected: the only write is a parameterized INSERT (no
  * string interpolation, no price arithmetic, no cap is spent or moved here),
@@ -52,6 +56,8 @@ const MAX_SLUG = 128;
 const MAX_RPM = 100_000;
 /** Ceiling for a single minted key's monthly cap, in credits. */
 const MAX_COST_LIMIT = 10_000_000;
+/** Review wave (T-a1 Fix 5): a minted key may not be given a TTL beyond +2 years. */
+const MAX_TTL_MS = 2 * 365 * 24 * 60 * 60 * 1000;
 
 type CreateBody = {
   name: string;
@@ -60,6 +66,8 @@ type CreateBody = {
   ru_residency_only: boolean;
   rpm_limit: number;
   batch_rpm_limit: number;
+  /** Normalized ISO-8601 UTC string; null = key never expires (0105). */
+  expires_at: string | null;
 };
 
 type InsertedKeyRow = {
@@ -71,6 +79,7 @@ type InsertedKeyRow = {
   ru_residency_only: boolean;
   rpm_limit: number;
   batch_rpm_limit: number;
+  expires_at: string | null;
   created_at: string;
 };
 
@@ -100,6 +109,32 @@ function optionalCostLimit(raw: unknown): number | null {
     throw errors.badRequest(`cost_limit_monthly_rub must be a number in (0, ${MAX_COST_LIMIT}]`);
   }
   return raw;
+}
+
+/**
+ * Review wave (T-a1 Fix 5): optional key TTL (0105). Accepted as an ISO-8601
+ * string, strictly in the future, at most +2 years out; normalized to a UTC
+ * ISO string so the INSERT binds one canonical shape. Anything else is a 400
+ * — never a coercion (an unparsable TTL that silently meant "never expire"
+ * would be a security regression, not convenience).
+ */
+function optionalExpiresAt(raw: unknown): string | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'string') {
+    throw errors.badRequest('expires_at must be an ISO-8601 timestamp string');
+  }
+  const ts = Date.parse(raw);
+  if (Number.isNaN(ts)) {
+    throw errors.badRequest('expires_at must be an ISO-8601 timestamp string');
+  }
+  const now = Date.now();
+  if (ts <= now) {
+    throw errors.badRequest('expires_at must be in the future');
+  }
+  if (ts > now + MAX_TTL_MS) {
+    throw errors.badRequest('expires_at must be at most 2 years in the future');
+  }
+  return new Date(ts).toISOString();
 }
 
 function parseWhitelist(raw: unknown): string[] {
@@ -134,6 +169,7 @@ export function parseCreateBody(raw: unknown): CreateBody {
     ru_residency_only: raw.ru_residency_only === true,
     rpm_limit: optionalPositiveInt(raw.rpm_limit, 'rpm_limit', MAX_RPM, 60),
     batch_rpm_limit: optionalPositiveInt(raw.batch_rpm_limit, 'batch_rpm_limit', MAX_RPM, 10),
+    expires_at: optionalExpiresAt(raw.expires_at),
   };
 }
 
@@ -177,6 +213,18 @@ export function clampToIssuer(body: CreateBody, issuer: AuthenticatedApiKey): Cr
     throw errors.badRequest('batch_rpm_limit exceeds the calling key own limit');
   }
 
+  // Review wave (T-a1 Fix 5): a subordinate key cannot OUTLIVE its issuer —
+  // a requested TTL past the issuer's own expires_at is clamped to it (the
+  // 0105 CHECK expires_at>created_at stays trivially intact: the issuer is
+  // alive, so its expiry is still in the future). An unlimited issuer (NULL)
+  // imposes no ceiling beyond the +2 years already enforced at parse time.
+  if (body.expires_at !== null && issuer.expires_at) {
+    const issuerTs = Date.parse(issuer.expires_at);
+    if (!Number.isNaN(issuerTs) && Date.parse(body.expires_at) > issuerTs) {
+      return { ...body, expires_at: new Date(issuerTs).toISOString() };
+    }
+  }
+
   return body;
 }
 
@@ -199,7 +247,7 @@ export async function mintKey(
       INSERT INTO gateway_api_keys (
         org_id, name, key_hash, key_prefix, policies,
         rpm_limit, batch_rpm_limit, cost_limit_monthly_rub,
-        model_whitelist, ru_residency_only
+        model_whitelist, ru_residency_only, expires_at
       )
       VALUES (
         ${issuer.org_id}::uuid,
@@ -211,12 +259,14 @@ export async function mintKey(
         ${body.batch_rpm_limit},
         ${body.cost_limit_monthly_rub}::numeric,
         ${tx.json(body.model_whitelist)}::jsonb,
-        ${body.ru_residency_only}
+        ${body.ru_residency_only},
+        ${body.expires_at}::timestamptz
       )
       RETURNING
         id::text, name, key_prefix, model_whitelist,
         cost_limit_monthly_rub::text, ru_residency_only,
         rpm_limit, batch_rpm_limit,
+        to_char(expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at,
         to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at
     `) as unknown as InsertedKeyRow[];
     const row = rows[0];
@@ -240,6 +290,7 @@ export async function mintKey(
           model_whitelist: body.model_whitelist,
           cost_limit_monthly_rub: body.cost_limit_monthly_rub,
           ru_residency_only: body.ru_residency_only,
+          expires_at: body.expires_at,
         })}::jsonb
       )
     `;
@@ -286,6 +337,7 @@ organizationKeys.post('/keys', async (c) => {
       ru_residency_only: minted.row.ru_residency_only,
       rpm_limit: minted.row.rpm_limit,
       batch_rpm_limit: minted.row.batch_rpm_limit,
+      expires_at: minted.row.expires_at,
       created_at: minted.row.created_at,
     },
     201,

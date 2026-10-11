@@ -86,6 +86,7 @@ function insertedRow(overrides: Record<string, unknown> = {}) {
     ru_residency_only: false,
     rpm_limit: 60,
     batch_rpm_limit: 10,
+    expires_at: null,
     created_at: '2026-09-30T10:00:00.000000Z',
     ...overrides,
   };
@@ -242,6 +243,64 @@ describe('POST /v1/organization/keys — limits cannot exceed the issuer', () =>
     });
     expect(res.status).toBe(400);
     expect(db.statements).toHaveLength(0);
+  });
+});
+
+// ── Review wave (T-a1 Fix 5): optional expires_at on sub-key minting ───────
+// A minted sub-key may carry a TTL: ISO-8601, strictly future, at most +2
+// years — and never outliving the ISSUING key (clamped to the issuer's own
+// expires_at, mirroring how every other limit is bounded by the caller).
+describe('POST /v1/organization/keys — optional expires_at (review wave T-a1)', () => {
+  const inDays = (days: number) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+  it('records a valid future expires_at and echoes it once', async () => {
+    const expiresAt = inDays(30);
+    db.results.push([insertedRow({ expires_at: '2028-01-01T00:00:00.000000Z' })]);
+    const res = await post({ ...validBody, expires_at: expiresAt });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.expires_at).toBe('2028-01-01T00:00:00.000000Z');
+
+    const insert = db.statements.find((s) => /INSERT INTO gateway_api_keys/.test(s.text))!;
+    expect(insert.text).toContain('expires_at');
+    // The normalized ISO string is a bound value — never interpolated text.
+    expect(insert.values).toContain(expiresAt);
+  });
+
+  it('clamps the requested expiry to the issuing key own expires_at', async () => {
+    const issuerExpiry = inDays(10);
+    const app = mount(ISSUER, { expires_at: issuerExpiry });
+    db.results.push([insertedRow({ expires_at: `${issuerExpiry.slice(0, 19)}.000000Z` })]);
+    const res = await app.request('/v1/organization/keys', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${ISSUER}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ ...validBody, expires_at: inDays(30) }),
+    });
+    expect(res.status).toBe(201);
+    const insert = db.statements.find((s) => /INSERT INTO gateway_api_keys/.test(s.text))!;
+    // The sub-key cannot outlive its issuer: 30 days requested, 10 days kept.
+    expect(insert.values).toContain(issuerExpiry);
+    expect(insert.values).not.toContain(inDays(30));
+  });
+
+  it.each([
+    ['garbage string', 'next tuesday'],
+    ['non-string number', 12345],
+    ['past timestamp', new Date(Date.now() - 86_400_000).toISOString()],
+    ['more than +2 years', inDays(3 * 365)],
+  ])('400 for expires_at %s, writing nothing', async (_label, bad) => {
+    const res = await post({ ...validBody, expires_at: bad });
+    expect(res.status).toBe(400);
+    expect(db.statements).toHaveLength(0);
+  });
+
+  it('omitting expires_at still mints a non-expiring key (NULL)', async () => {
+    db.results.push([insertedRow()]);
+    const res = await post(validBody);
+    expect(res.status).toBe(201);
+    const insert = db.statements.find((s) => /INSERT INTO gateway_api_keys/.test(s.text))!;
+    expect(insert.text).toContain('expires_at');
+    expect(insert.values).toContain(null);
   });
 });
 

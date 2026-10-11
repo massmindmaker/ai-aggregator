@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Address } from "@ton/core";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -99,6 +100,21 @@ describe.skipIf(!RUN_INTEGRATION)("agent register service layer (0104 rail)", ()
       values: [display],
     });
     for (const principal of principals.rows) {
+      // Review wave (T-a1): registrations may now mint a first key, a
+      // usage_events audit row and a quota v2 enrollment — all org-scoped,
+      // all RESTRICTed or auditable, so scrub them before the org goes.
+      await client.query({
+        text: "DELETE FROM public.usage_events WHERE org_id=$1::uuid",
+        values: [principal.org_id],
+      });
+      await client.query({
+        text: "DELETE FROM public.gateway_quota_org_policies WHERE org_id=$1::uuid",
+        values: [principal.org_id],
+      });
+      await client.query({
+        text: "DELETE FROM public.gateway_api_keys WHERE org_id=$1::uuid",
+        values: [principal.org_id],
+      });
       await client.query({
         text: "DELETE FROM public.organizations WHERE id=$1::uuid",
         values: [principal.org_id],
@@ -335,6 +351,152 @@ describe.skipIf(!RUN_INTEGRATION)("agent register service layer (0104 rail)", ()
         "AGENT_CHALLENGE_RATE_LIMIT",
       );
     } finally {
+      await cleanupByAddress(display);
+    }
+  }, 120_000);
+
+  // ── Review wave (T-a1 Fix 2/3): atomic registration with the first key ────
+  it("mints the first key, the mint audit and the quota v2 enrollment inside the registration transaction", async () => {
+    const seed = 25;
+    const probe = walletProofFixture("probe", DOMAIN, Math.floor(Date.now() / 1000), seed);
+    const display = friendly(probe.address);
+    const keyHash = createHash("sha256").update("native-agent-primary-plaintext").digest("hex");
+    try {
+      const challenge = await issueAgentChallenge(db, {
+        address: probe.address,
+        network: "-3",
+        domain: DOMAIN,
+      });
+      const proof = walletProofFixture(challenge.payload, DOMAIN, Math.floor(Date.now() / 1000), seed);
+      const result = await consumeAgentRegister(db, {
+        challengeId: challenge.challengeId,
+        address: probe.address,
+        proof,
+        primaryKey: { hash: keyHash, prefix: "sk_aiag_live_nat0001", name: "agent-primary" },
+      });
+
+      expect(result.primaryKey?.id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(result.primaryKey?.prefix).toBe("sk_aiag_live_nat0001");
+
+      const key = await client.query<{
+        id: string;
+        key_hash: string;
+        policies: { kind?: string; s2s_key_minting?: boolean };
+        rpm_limit: number;
+        batch_rpm_limit: number;
+        expires_at: string | null;
+        revoked_at: string | null;
+      }>({
+        text: `SELECT id::text, key_hash, policies, rpm_limit, batch_rpm_limit,
+                 expires_at::text, revoked_at::text
+               FROM public.gateway_api_keys WHERE org_id=$1::uuid`,
+        values: [result.orgId],
+      });
+      expect(key.rows).toHaveLength(1);
+      expect(key.rows[0]).toMatchObject({
+        id: result.primaryKey?.id,
+        key_hash: keyHash,
+        policies: { kind: "agent", s2s_key_minting: true },
+        rpm_limit: 60,
+        batch_rpm_limit: 10,
+        expires_at: null,
+        revoked_at: null,
+      });
+
+      // Fix 3: stored admission requires enforcement_version=2 — the org is
+      // enrolled at registration, in the same transaction.
+      const quota = await client.query<{ enforcement_version: number }>({
+        text: "SELECT enforcement_version::int FROM public.gateway_quota_org_policies WHERE org_id=$1::uuid",
+        values: [result.orgId],
+      });
+      expect(quota.rows[0]?.enforcement_version).toBe(2);
+
+      const audit = await client.query<{ n: number }>({
+        text: "SELECT count(*)::int AS n FROM public.usage_events WHERE org_id=$1::uuid AND kind='gateway_key_minted'",
+        values: [result.orgId],
+      });
+      expect(audit.rows[0]?.n).toBe(1);
+    } finally {
+      await cleanupByAddress(display);
+    }
+  }, 120_000);
+
+  it("a failed mint rolls the WHOLE registration back — the wallet can register again (no keyless lock-out)", async () => {
+    const seed = 26;
+    const probe = walletProofFixture("probe", DOMAIN, Math.floor(Date.now() / 1000), seed);
+    const display = friendly(probe.address);
+    const collidingHash = createHash("sha256").update("native-mint-collision").digest("hex");
+    let decoyOrgId = "";
+    try {
+      // A decoy key with the SAME hash makes the in-transaction mint INSERT
+      // violate the global key_hash UNIQUE constraint after the org and
+      // principal have already been created — the exact mid-registration
+      // failure window the review wave closed.
+      const decoy = await client.query<{ id: string }>({
+        text: `INSERT INTO public.organizations(slug, name, owner_id)
+               VALUES($1, 'agent:native-collide', public.aiag_agent_owner_user_v1())
+               RETURNING id::text`,
+        values: [`native-collide-${Date.now()}`],
+      });
+      decoyOrgId = decoy.rows[0]!.id;
+      await client.query({
+        text: `INSERT INTO public.gateway_api_keys(org_id, name, key_hash, key_prefix)
+               VALUES($1::uuid, 'collision-decoy', $2, 'sk_aiag_live_collider')`,
+        values: [decoyOrgId, collidingHash],
+      });
+
+      const challenge = await issueAgentChallenge(db, {
+        address: probe.address,
+        network: "-3",
+        domain: DOMAIN,
+      });
+      const proof = walletProofFixture(challenge.payload, DOMAIN, Math.floor(Date.now() / 1000), seed);
+      await expectAgentError(
+        consumeAgentRegister(db, {
+          challengeId: challenge.challengeId,
+          address: probe.address,
+          proof,
+          primaryKey: { hash: collidingHash, prefix: "sk_aiag_live_nat0002", name: "agent-primary" },
+        }),
+        "AGENT_AUTH_UNAVAILABLE",
+      );
+
+      // The transaction rolled back completely: no principal, no org — and
+      // the challenge is unconsumed again, so a retry is not a 409.
+      const state = await client.query<{ principals: number; consumed: number }>({
+        text: `SELECT
+                 (SELECT count(*)::int FROM public.agent_principals WHERE network='-3' AND address=$1) AS principals,
+                 count(*) FILTER (WHERE consumed_at IS NOT NULL)::int AS consumed
+               FROM public.agent_wallet_challenges WHERE address=$1`,
+        values: [display],
+      });
+      expect(state.rows[0]).toMatchObject({ principals: 0, consumed: 0 });
+
+      // The wallet can simply register again with a fresh key material.
+      const retryChallenge = await issueAgentChallenge(db, {
+        address: probe.address,
+        network: "-3",
+        domain: DOMAIN,
+      });
+      const retryProof = walletProofFixture(retryChallenge.payload, DOMAIN, Math.floor(Date.now() / 1000), seed);
+      const retry = await consumeAgentRegister(db, {
+        challengeId: retryChallenge.challengeId,
+        address: probe.address,
+        proof: retryProof,
+        primaryKey: { hash: createHash("sha256").update("native-agent-retry").digest("hex"), prefix: "sk_aiag_live_nat0003", name: "agent-primary" },
+      });
+      expect(retry.primaryKey?.id).toMatch(/^[0-9a-f-]{36}$/);
+    } finally {
+      if (decoyOrgId) {
+        await client.query({
+          text: "DELETE FROM public.gateway_api_keys WHERE org_id=$1::uuid",
+          values: [decoyOrgId],
+        });
+        await client.query({
+          text: "DELETE FROM public.organizations WHERE id=$1::uuid",
+          values: [decoyOrgId],
+        });
+      }
       await cleanupByAddress(display);
     }
   }, 120_000);

@@ -361,6 +361,123 @@ describe("agent register consumption", () => {
       expect(calls).toHaveLength(0);
     }
   });
+  describe("agent register first-key mint (review wave T-a1: atomic registration)", () => {
+    const KEY_HASH = "ab".repeat(32);
+    const KEY_PREFIX = "sk_aiag_live_abc1234"; // 13-char stem + 7 base64url chars
+    const KEY_ID = "66666666-6666-4666-8666-6666666666d1";
+    const PRIMARY_KEY = { hash: KEY_HASH, prefix: KEY_PREFIX, name: "agent-primary" };
+
+    function proofPairNow() {
+      const pair = proofPair();
+      const script = happyScript(pair);
+      return { pair, script };
+    }
+
+    /** happyScript rows + the three mint statements (key, quota, usage_events). */
+    function mintingScript(base: (unknown[] | Error)[]) {
+      const rows = [...base];
+      const audit = rows.pop(); // the trailing agent.register audit_log insert
+      rows.push([{ id: KEY_ID, key_prefix: KEY_PREFIX }]); // key INSERT RETURNING
+      rows.push([]); // quota v2 enrollment
+      rows.push([]); // usage_events audit
+      rows.push(audit!);
+      return rows;
+    }
+
+    it("mints the first key, enrolls quota v2, and audits — all INSIDE the registration transaction", async () => {
+      const { pair, script } = proofPairNow();
+      const { db, calls } = recordingDatabase(mintingScript(script.rows));
+      const result = await consumeAgentRegister(db, {
+        challengeId: script.challengeId,
+        address: pair.proof.address,
+        proof: pair.proof,
+        primaryKey: PRIMARY_KEY,
+      });
+
+      expect(result).toEqual({
+        principalId: script.principalId,
+        orgId: script.orgId,
+        primaryKey: { id: KEY_ID, prefix: KEY_PREFIX },
+      });
+
+      const texts = calls.map((call) => call.text);
+      const keyInsert = calls[8]!;
+      expect(texts[8]).toContain("INSERT INTO public.gateway_api_keys");
+      expect(keyInsert.values[0]).toBe(script.orgId);
+      expect(keyInsert.values[1]).toBe("agent-primary");
+      // Only the hash and prefix travel — never a plaintext (which the gateway
+      // keeps local); the policies/rpm/expiry shape of the bootstrap key is in
+      // the static SQL, not caller-controlled.
+      expect(keyInsert.values[2]).toBe(KEY_HASH);
+      expect(keyInsert.values[3]).toBe(KEY_PREFIX);
+      expect(texts[8]).toContain('"kind":"agent"');
+      expect(texts[8]).toContain('"s2s_key_minting":true');
+      expect(texts[8]).toContain("expires_at");
+
+      const quota = calls[9]!;
+      expect(texts[9]).toContain("INSERT INTO public.gateway_quota_org_policies");
+      expect(texts[9]).toContain("enforcement_version");
+      expect(texts[9]).toContain("ON CONFLICT (org_id) DO NOTHING");
+      expect(quota.values).toEqual([script.orgId]);
+
+      const audit = calls[10]!;
+      expect(texts[10]).toContain("INSERT INTO public.usage_events");
+      expect(texts[10]).toContain("gateway_key_minted");
+      expect(audit.values[0]).toBe(script.orgId);
+      expect(audit.values[1]).toBe(KEY_ID);
+      const payload = JSON.stringify(audit.values[2]);
+      expect(payload).toContain("agent_register_bootstrap");
+      expect(payload).not.toContain(KEY_HASH); // ids/prefix only, never the hash
+
+      // The registration audit still closes the transaction.
+      expect(texts[11]).toContain("agent.register");
+    });
+
+    it("a failed mint INSERT fails the WHOLE registration (AGENT_AUTH_UNAVAILABLE, nothing further written)", async () => {
+      const { pair, script } = proofPairNow();
+      const rows = mintingScript(script.rows);
+      rows[8] = new Error("deadlock detected");
+      const { db, calls } = recordingDatabase(rows);
+      await expect(
+        consumeAgentRegister(db, {
+          challengeId: script.challengeId,
+          address: pair.proof.address,
+          proof: pair.proof,
+          primaryKey: PRIMARY_KEY,
+        }),
+      ).rejects.toMatchObject({ name: "AgentAuthError", code: "AGENT_AUTH_UNAVAILABLE" });
+      // The recording database executes statements in call order inside ONE
+      // transaction: the error aborts it before the quota enroll, the
+      // usage_events audit and the agent.register audit — the principal and org
+      // created earlier in the same transaction roll back with it, so the
+      // wallet can simply register again (no keyless lock-out).
+      expect(calls).toHaveLength(9);
+      expect(calls.map((call) => call.text).some((text) => text.includes("gateway_quota_org_policies"))).toBe(false);
+      expect(calls.map((call) => call.text).some((text) => text.includes("usage_events"))).toBe(false);
+      expect(calls.map((call) => call.text).some((text) => text.includes("agent.register"))).toBe(false);
+    });
+
+    it("rejects malformed primaryKey material before SQL", async () => {
+      const pair = proofPair();
+      for (const bad of [
+        { hash: "not-hex", prefix: KEY_PREFIX, name: "agent-primary" },
+        { hash: KEY_HASH, prefix: "short", name: "agent-primary" },
+        { hash: KEY_HASH, prefix: KEY_PREFIX, name: "" },
+        { hash: KEY_HASH, prefix: KEY_PREFIX, name: "x".repeat(101) },
+      ]) {
+        const { db, calls } = recordingDatabase();
+        await expect(
+          consumeAgentRegister(db, {
+            challengeId: "00000000-0000-4000-8000-0000000000aa",
+            address: pair.proof.address,
+            proof: pair.proof,
+            primaryKey: bad,
+          }),
+        ).rejects.toThrow();
+        expect(calls).toHaveLength(0);
+      }
+    });
+  });
 });
 
 describe("agent principal self-revoke (0107 entrypoint seam)", () => {

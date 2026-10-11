@@ -34,6 +34,12 @@ const schema = z.object({
   // settle ships, USDT topup is operator-gated and OFF by default; the 402
   // topup hint (billing/admission-internal.ts) mirrors the same flag.
   AIAG_AGENT_USDT_ENABLED: z.enum(["0", "1"]).default("0"),
+  // Review wave (T-a1): the domain the agent wallet proof must be signed for
+  // (POST /v1/agent/challenge). PRODUCTION MUST SET IT — unset, the route
+  // falls back to the request Host, which is attacker-influenced at the edge
+  // and is a dev-only convenience. The service re-validates whichever value
+  // arrives (3..300 chars, contains a dot, round-trips as a URL host).
+  AIAG_AGENT_PROOF_DOMAIN: z.string().min(3).max(300).optional(),
   // CBR endpoints (FIX H5/H6)
   CBR_URL: z.string().default("https://www.cbr.ru/scripts/XML_daily.asp"),
   CBR_FALLBACK_URL: z.string().optional(),

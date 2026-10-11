@@ -64,6 +64,16 @@
  * (audit_log 'agent.revoke').
  *
  * ── Error mapping, no internals leak ────────────────────────────────────────
+ * ── Principal gate (review wave T-a1) ───────────────────────────────────────
+ * Every op below first proves the key's org belongs to an ACTIVE agent
+ * principal — the same predicate the 0106-0108 SQL entrypoints embed
+ * (agent_principals.status='active' on the key's org). Without it a HUMAN
+ * org's live key could drive the agent key lifecycle: rotate especially is
+ * an agent-rail-only feature, and letting a dashboard key rotate its org's
+ * credentials through it widens the credential surface of every human org.
+ * Human org → 403 AGENT_NOT_AUTHORIZED, before any inventory read, UPDATE
+ * or audit row; a lost gate row fails closed the same way.
+ *
  *   AGENT_NOT_AUTHORIZED             → 403  (live key, but not an agent org)
  *   AGENT_PRINCIPAL_STATE_CONFLICT   → 409
  *   AGENT_REVOKE_UNAVAILABLE         → 503
@@ -73,6 +83,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
+import type { TransactionSql } from 'postgres';
 import { sql, type SqlClient } from '../../lib/db';
 import { AiagError, errors } from '../../lib/errors';
 import { generateApiKey } from '../../lib/api-key';
@@ -93,29 +104,58 @@ type KeyListRow = {
   revoked_at: string | null;
 };
 
+// ── Principal gate (review wave T-a1; 0106-0108 predicate) ─────────────────
+/**
+ * The agent key lifecycle only ever acts for an org owned by an ACTIVE
+ * agent principal. Throws 403 AGENT_NOT_AUTHORIZED otherwise — the same
+ * verdict the SQL entrypoints (0106-0108) hand out — and fails closed on a
+ * lost gate row. Runs as the FIRST statement of each operation's
+ * transaction, ahead of any inventory read, UPDATE or audit write.
+ */
+async function requireActiveAgentOrg(
+  orgId: string,
+  tx: TransactionSql<Record<string, unknown>>,
+): Promise<void> {
+  const rows = (await tx<{ ok: boolean }[]>`
+    SELECT EXISTS(
+      SELECT 1 FROM agent_principals p
+      WHERE p.org_id = ${orgId}::uuid
+        AND p.status = 'active'
+    ) AS ok
+  `) as unknown as { ok: boolean }[];
+  if (!rows[0] || rows[0].ok !== true) {
+    throw new AiagError('AGENT_NOT_AUTHORIZED', 403, 'Agent principal not active');
+  }
+}
+
 // ── GET /keys — org-scoped inventory, no secrets ────────────────────────────
 async function listKeys(
   orgId: string,
   client: SqlClient = sql,
 ): Promise<KeyListRow[]> {
-  // Only id/name/prefix/timestamps leave the table: key_hash, policies and
-  // meta are deliberately not selected, so no response shape can leak them.
-  // Timestamps render as ISO-8601 UTC (to_char, static text — the
-  // organization-keys.ts precedent); to_char(NULL) is NULL, so optional
-  // columns surface as JSON null. Raw PG timestamp text never crosses here.
-  return (await client<KeyListRow[]>`
-    SELECT
-      id::text,
-      name,
-      key_prefix,
-      to_char(expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at,
-      to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
-      to_char(last_used_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS last_used_at,
-      to_char(revoked_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS revoked_at
-    FROM gateway_api_keys
-    WHERE org_id = ${orgId}::uuid
-    ORDER BY created_at DESC, id
-  `) as unknown as KeyListRow[];
+  return client.begin(async (tx) => {
+    // Review wave T-a1: a human org's key gets 403 here, never a listing.
+    await requireActiveAgentOrg(orgId, tx);
+
+    // Only id/name/prefix/timestamps leave the table: key_hash, policies and
+    // meta are deliberately not selected, so no response shape can leak them.
+    // Timestamps render as ISO-8601 UTC (to_char, static text — the
+    // organization-keys.ts precedent); to_char(NULL) is NULL, so optional
+    // columns surface as JSON null. Raw PG timestamp text never crosses here.
+    return (await tx<KeyListRow[]>`
+      SELECT
+        id::text,
+        name,
+        key_prefix,
+        to_char(expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at,
+        to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+        to_char(last_used_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS last_used_at,
+        to_char(revoked_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS revoked_at
+      FROM gateway_api_keys
+      WHERE org_id = ${orgId}::uuid
+      ORDER BY created_at DESC, id
+    `) as unknown as KeyListRow[];
+  });
 }
 
 agentKeys.get('/keys', async (c) => {
@@ -125,7 +165,8 @@ agentKeys.get('/keys', async (c) => {
   let rows: KeyListRow[];
   try {
     rows = await listKeys(orgId);
-  } catch {
+  } catch (e) {
+    if (e instanceof AiagError) throw e;
     // No driver text: a listing failure is an availability issue, nothing else.
     throw errors.unavailable('Key inventory unavailable');
   }
@@ -146,6 +187,10 @@ async function rotateKey(
   const { key, hash, prefix } = generateApiKey('live');
 
   const row = await client.begin(async (tx) => {
+    // Review wave T-a1: rotate is an agent-rail-only feature — a human
+    // org's key must be refused before any credential is replaced.
+    await requireActiveAgentOrg(orgId, tx);
+
     // Guarded UPDATE: org + id + liveness in the WHERE, new material in the
     // SET, old hash preserved into meta.rotated_from_hash (right-side
     // key_hash is the OLD row value). One statement — no window where both
@@ -226,6 +271,9 @@ async function revokeKey(
   client: SqlClient = sql,
 ): Promise<RevokedRow | null> {
   return client.begin(async (tx) => {
+    // Review wave T-a1: same agent-org gate as list/rotate, first statement.
+    await requireActiveAgentOrg(orgId, tx);
+
     // RETURNING sees the NEW revoked_at (= now()), rendered as ISO-8601 UTC.
     const rows = (await tx<RevokedRow[]>`
       UPDATE gateway_api_keys
