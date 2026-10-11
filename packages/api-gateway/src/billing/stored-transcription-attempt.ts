@@ -24,6 +24,8 @@ export type StoredTranscriptionAttemptArgs=Readonly<{
   identity:StoredTranscriptionHttpIdentity;audioBytes:Uint8Array;orgId:string;apiKeyId:string;clientRequestId:string|null;
   deadlineAt:string;modelSlug:'whisper-large-v3';modelUpstreamId:string;upstreamId:'groq';upstreamModelId:'whisper-large-v3';
   quote:StoredTranscriptionQuote;markup:string;execute:()=>Promise<ProviderResult>;
+  /** T10: auth-context key policies — enriches a P0003 admit refusal with the agent topup hint. */
+  policies?: Record<string, unknown>;
 }>;
 type ReconciliationStage='admit'|'dispatch'|'provider'|'outcome'|'settle';
 export type StoredTranscriptionAttemptResult=
@@ -131,6 +133,7 @@ export function createStoredTranscriptionAttempt(args:StoredTranscriptionAttempt
         orgId:args.orgId,apiKeyId:args.apiKeyId,clientRequestId:args.clientRequestId,billingRequestId:job.billingRequestId,
         routeKind:'audio_transcription',billingMode:'stored',modelSlug:args.modelSlug,authorizedMaxCredits:args.quote.retailMaxMicrocredits,
         quoteSnapshot,preDispatchDeadlineAt,declaredSessionId:args.identity.declaredSessionId,supplierQuoteSnapshot,
+        policies:args.policies,
       });
     }catch(error){
       try{if(await deps.releaseClaim({orgId:args.orgId,jobId:job.id,billingRequestId:job.billingRequestId}))throw error;}

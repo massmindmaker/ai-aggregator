@@ -141,6 +141,7 @@ export async function streamSseAndSettle(
           settlementRequestId: opts.settlementRequestId,
           traceRequestId: opts.requestId,
           costCredits,
+          policies: opts.key.policies,
           metadata: {
             model_slug: opts.model.slug,
             input_tokens: inputTokens,

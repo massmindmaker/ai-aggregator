@@ -76,7 +76,7 @@ images.post('/generations', async (c) => {
   }
 
   // PREFLIGHT: 402 before submitting a paid upstream job (see settle.ts).
-  if (!byok) await assertPositiveBalance(key.org_id);
+  if (!byok) await assertPositiveBalance(key.org_id, undefined, key.policies);
 
   const start = Date.now();
   // Capability guard preserved for the preferred candidate exactly as pre-T3
@@ -142,6 +142,7 @@ images.post('/generations', async (c) => {
       settlementRequestId,
       traceRequestId: requestId,
       costCredits,
+      policies: key.policies,
       metadata: { model_slug: body.model, image_count: n },
     });
   }

@@ -48,7 +48,7 @@ embeddings.post('/', async (c) => {
     : {};
 
   // PREFLIGHT: 402 before spending on the upstream (see billing/settle.ts).
-  if (!byok) await assertPositiveBalance(key.org_id);
+  if (!byok) await assertPositiveBalance(key.org_id, undefined, key.policies);
 
   const start = Date.now();
 
@@ -93,6 +93,7 @@ embeddings.post('/', async (c) => {
       settlementRequestId,
       traceRequestId: requestId,
       costCredits,
+      policies: key.policies,
       metadata: { model_slug: body.model, input_tokens: resp.usage.prompt_tokens },
     });
   }

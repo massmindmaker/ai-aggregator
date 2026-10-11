@@ -143,6 +143,7 @@ storedTranscription.post('/audio/transcriptions', async (c) => {
       supplierFormulaVersion: quote.supplierFormulaVersion,
     },
     markup: candidate.billing.prices.markup,
+    policies: key.policies,
     execute: () =>
       adapter.admittedTranscription!.execute({
         modelId: 'whisper-large-v3',

@@ -12,6 +12,8 @@ export type StoredMediaAttemptArgs = Readonly<{
   deadlineAt:string; modelSlug:string; modelUpstreamId:string; upstreamId:string; upstreamModelId:string;
   providerFamily:'image'|'video'|'suno'; quote:MediaUnitQuote; priceCentsPerUnit:string; markup:string;
   submit:()=>Promise<MediaJob>; enqueue:(jobId:string)=>Promise<void>;
+  /** T10: auth-context key policies — enriches a P0003 admit refusal with the agent topup hint. */
+  policies?: Record<string, unknown>;
 }>;
 export type StoredMediaAttemptDeps = Readonly<{
  newUuid:()=>string; claim:typeof claimMediaJob; attach:typeof attachMediaProviderTask; read:typeof readMediaJob; releaseClaim:typeof releaseUnadmittedMediaClaim;
@@ -40,7 +42,7 @@ export function createStoredMediaAttempt(args:StoredMediaAttemptArgs,partial:Par
   const durableBillingRequestId=claimed.billingRequestId;
   if(!claimed.didClaim){const existing=await deps.read(args.orgId,claimed.taskId);if(!existing)throw new Error('media replay unavailable');if(existing.status==='claimed')return Object.freeze({kind:'reconciliation_required' as const,taskId:claimed.taskId,billingRequestId:durableBillingRequestId,stage:'admit' as const});return Object.freeze({kind:'replay' as const,job:existing});}
   let admission:GatewayChargeAdmissionResult;
-  try{admission=await deps.admit({orgId:args.orgId,apiKeyId:args.apiKeyId,clientRequestId:args.clientRequestId,billingRequestId:durableBillingRequestId,routeKind:args.identity.routeKind,billingMode:'stored',modelSlug:args.modelSlug,authorizedMaxCredits:args.quote.retailMaxMicrocredits,quoteSnapshot,preDispatchDeadlineAt:args.deadlineAt,declaredSessionId:args.identity.declaredSessionId,supplierQuoteSnapshot});}
+  try{admission=await deps.admit({orgId:args.orgId,apiKeyId:args.apiKeyId,clientRequestId:args.clientRequestId,billingRequestId:durableBillingRequestId,routeKind:args.identity.routeKind,billingMode:'stored',modelSlug:args.modelSlug,authorizedMaxCredits:args.quote.retailMaxMicrocredits,quoteSnapshot,preDispatchDeadlineAt:args.deadlineAt,declaredSessionId:args.identity.declaredSessionId,supplierQuoteSnapshot,policies:args.policies});}
   catch(error){try{if(await deps.releaseClaim({orgId:args.orgId,jobId:claimed.id,billingRequestId:durableBillingRequestId}))throw error;}catch(releaseError){if(releaseError===error)throw error;}return Object.freeze({kind:'reconciliation_required' as const,taskId:claimed.taskId,billingRequestId:durableBillingRequestId,stage:'admit' as const});}
   try{const d=await deps.dispatch({admission,attemptId,upstreamId:args.upstreamId,pricingSnapshot});if(d.kind!=='dispatch_granted'||d.admission.state!=='dispatched')return Object.freeze({kind:'reconciliation_required' as const,taskId:claimed.taskId,billingRequestId:durableBillingRequestId,stage:'dispatch' as const});admission=d.admission;}
   catch{return Object.freeze({kind:'reconciliation_required' as const,taskId:claimed.taskId,billingRequestId:durableBillingRequestId,stage:'dispatch' as const});}

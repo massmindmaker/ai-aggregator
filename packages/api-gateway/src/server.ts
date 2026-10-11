@@ -42,6 +42,7 @@ import { registerGatewayEgressExecutor } from './egress-executor';
 import { resolveModelWithOverride } from './routing/resolver';
 
 import { storedChat, respondStoredChat, unsupportedStoredExecution } from './routes/v1/stored-chat';
+import { InsufficientFundsError } from './billing/admission-internal';
 import { fixedStoredChatHttpError } from './billing/stored-chat-http-contract';
 import { storedEmbeddings } from './routes/v1/stored-embeddings';
 import { storedCompletions } from './routes/v1/stored-completions';
@@ -217,8 +218,18 @@ if (config.GATEWAY_HTTP_EXECUTION_MODE !== 'legacy') {
       return c.json(errors.rateLimited(Number.isSafeInteger(retry) && retry > 0 ? retry : 60).toResponseBody(), 429);
     }
     const mediaExecutionPath = /\/(?:images\/generations|video\/generations|audio\/(?:speech|transcriptions))\/?$/.test(c.req.path);
-    if (mediaExecutionPath && error instanceof AiagError && error.code === 'PAYMENT_REQUIRED')
+    if (mediaExecutionPath && error instanceof AiagError && error.code === 'PAYMENT_REQUIRED') {
+      // T10 (agentic rail): an InsufficientFundsError may carry the agent-key
+      // topup hint — render its body (legacy fields identical to the bare
+      // envelope below) plus its Retry-After. Any other PAYMENT_REQUIRED
+      // stays canonicalized: no arbitrary diagnostics on execution paths.
+      if (error instanceof InsufficientFundsError) {
+        if (typeof error.retryAfterSeconds === 'number' && Number.isSafeInteger(error.retryAfterSeconds) && error.retryAfterSeconds > 0)
+          c.header('Retry-After', String(error.retryAfterSeconds));
+        return c.json(error.toResponseBody(), 402);
+      }
       return c.json(errors.paymentRequired().toResponseBody(), 402);
+    }
     if (mediaExecutionPath && error instanceof AiagError && error.code === 'UNSUPPORTED_EXECUTION_CONTRACT')
       return c.json(errors.unsupported('Execution contract unsupported').toResponseBody(), 501);
     if (mediaExecutionPath && error instanceof AiagError && error.code === 'BAD_REQUEST')

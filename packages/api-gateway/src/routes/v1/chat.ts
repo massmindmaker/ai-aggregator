@@ -174,7 +174,7 @@ chat.post('/completions', async (c) => {
   // upstream → settle → 402, so a zero-balance org still got a full answer
   // (and on the stream path the settle error was swallowed in sse.ts, making
   // the answer free). BYOK is skipped — the caller pays their own provider.
-  if (!byok) await assertPositiveBalance(key.org_id);
+  if (!byok) await assertPositiveBalance(key.org_id, undefined, key.policies);
 
   const start = Date.now();
 
@@ -250,6 +250,7 @@ chat.post('/completions', async (c) => {
         settlementRequestId,
         traceRequestId: requestId,
         costCredits,
+        policies: key.policies,
         metadata: { model_slug: body.model },
       });
     }
@@ -274,6 +275,7 @@ chat.post('/completions', async (c) => {
         settlementRequestId,
         traceRequestId: requestId,
         costCredits,
+        policies: key.policies,
         metadata: {
           model_slug: body.model,
           input_tokens: usage.prompt_tokens,

@@ -105,6 +105,7 @@ async function submit(c:any,routeKind:StoredMediaRouteKind){
     modelSlug:model.slug,modelUpstreamId:billing.modelUpstreamId,upstreamId:candidate.upstream_id,
     upstreamModelId:candidate.upstream_model_id,providerFamily:family(routeKind),quote,
     priceCentsPerUnit:profile.priceCentsPerUnit,markup:profile.markup,submit:doSubmit,enqueue:enqueueOwnedMediaPoll,
+    policies:key.policies,
   });
   const result=await attempt.run();
   if(result.kind==='replay')return c.json(publicJob(result.job),result.job.status==='completed'?200:202);

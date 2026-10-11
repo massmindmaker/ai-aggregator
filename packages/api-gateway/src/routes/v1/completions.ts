@@ -50,7 +50,7 @@ completions.post('/', async (c) => {
 
   // PREFLIGHT: 402 before spending on the upstream (see billing/settle.ts).
   // BYOK skipped — the caller pays their own provider.
-  if (!byok) await assertPositiveBalance(key.org_id);
+  if (!byok) await assertPositiveBalance(key.org_id, undefined, key.policies);
 
   const start = Date.now();
 
@@ -90,6 +90,7 @@ completions.post('/', async (c) => {
       settlementRequestId,
       traceRequestId: requestId,
       costCredits,
+      policies: key.policies,
       metadata: {
         model_slug: body.model,
         input_tokens: resp.usage.prompt_tokens,
