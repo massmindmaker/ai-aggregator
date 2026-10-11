@@ -21,9 +21,11 @@ export class StoredChatFreshPolicyError extends Error {
 }
 function invalid(): never { throw new StoredChatFreshPolicyError('key_policy_unavailable'); }
 const modes = ['auto', 'fastest', 'cheapest', 'balanced', 'ru-only'] as const;
+const kinds = ['agent'] as const;
 const known = [
   'default_mode','allowed_providers','blocked_providers','forbid_non_ru',
   'allow_pii_transborder','per_session_budget_cap_rub','forbid_streaming_prompts',
+  'kind','s2s_key_minting',
 ];
 
 function plain(value: unknown): Record<string, unknown> {
@@ -50,6 +52,9 @@ function strings(value: unknown): string[] {
 export function normalizeStoredChatFreshPolicy(key:AuthenticatedApiKey):Readonly<{policy:Readonly<ApiKeyPolicies>;whitelist:readonly string[]}>{
   const data=plain(key); const p=plain(data.policies);
   if(Object.keys(p).some(name=>!known.includes(name))) invalid();
+  // Agent rail flags (agent-register bootstrap key): validated strictly, no routing semantics.
+  if(Object.hasOwn(p,'kind')){if(typeof p.kind!=='string'||!kinds.includes(p.kind as 'agent')) invalid();}
+  if(Object.hasOwn(p,'s2s_key_minting')&&typeof p.s2s_key_minting!=='boolean') invalid();
   const whitelist=strings(data.model_whitelist);
   if(typeof data.ru_residency_only!=='boolean') invalid();
   const policy:ApiKeyPolicies={};

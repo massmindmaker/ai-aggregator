@@ -111,6 +111,25 @@ it.each([null, 0, '0', '0.000'])(
     ).toBe('auto');
   },
 );
+it('accepts agent rail flags with strict values and no routing effect', () => {
+  const bootstrap = key({ kind: 'agent', s2s_key_minting: true });
+  const normalized = normalizeStoredChatFreshPolicy(bootstrap);
+  expect(normalized.policy).toEqual({ forbid_non_ru: false });
+  expect(prepare(bootstrap).requestedMode).toBe('auto');
+  expect(prepare(key({ kind: 'agent' })).requestedMode).toBe('auto');
+  expect(prepare(key({ s2s_key_minting: false })).requestedMode).toBe('auto');
+  expect(prepare(key({})).requestedMode).toBe('auto');
+});
+it.each([
+  { kind: 'human' },
+  { kind: 1 },
+  { kind: null },
+  { s2s_key_minting: 'yes' },
+  { s2s_key_minting: 1 },
+  { kind: 'agent', s2s_key_minting: null },
+])('rejects malformed agent rail flag %j', (p) => {
+  expect(() => prepare(key(p))).toThrow('KEY_POLICY_UNAVAILABLE');
+});
 it('rejects accessors without evaluating them and missing mandatory top-level fields', () => {
   const getter = vi.fn();
   const k = key(
