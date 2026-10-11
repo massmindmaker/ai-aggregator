@@ -65,6 +65,28 @@ function numericOrNull(value:unknown):string|null{
  if(typeof value!=='string'||!/^(0|[1-9][0-9]*)$/.test(value))fail('AGENT_POLICY_UNAVAILABLE');
  return value;
 }
+/**
+ * cost_limit_monthly_rub canonicalization. The column is NUMERIC(10,2), so
+ * ::text renders integral 15000 as "15000.00" — the plain integer regex would
+ * reject it and every read (hence every GET AND every PUT, which re-reads the
+ * row first) would 503 after the first monthly write: a self-locking
+ * endpoint. Accept the NUMERIC render (<=2 decimals, enforced by the column
+ * type) and canonicalize to the integer-credits string by TRUNCATING the
+ * fraction toward zero:
+ *  - exact for every value this rail writes (the 0108 writer stores integer
+ *    credits only, so the fraction is always ".00");
+ *  - a legacy fractional cap (dashboard-era writes, 0061 ROUND(...,2)) can
+ *    lose at most 0.99 credit of DISPLAY, never overstates the cap, and the
+ *    0068 admission still enforces the true micro value (credits*1000)
+ *    server-side regardless of what this API reports;
+ *  - truncation (not ::bigint's round-half-away-from-zero) so a round-trip
+ *    can only tighten a legacy cap, never loosen it.
+ */
+function creditsOrNull(value:unknown):string|null{
+ if(value===null)return null;
+ if(typeof value!=='string'||!/^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/.test(value))fail('AGENT_POLICY_UNAVAILABLE');
+ return value.split('.')[0]!;
+}
 async function query<R extends Record<string,unknown>>(tx:TonSqlClient,text:string,values:readonly unknown[]=[]){return (await tx.query<R>({text,values})).rows;}
 
 const POLICY_ROW_SQL=`SELECT k.org_id::text AS org_id,k.policies,k.model_whitelist,
@@ -92,7 +114,7 @@ function rowToState(row:PolicyRow|undefined):AgentPolicyState{
   modelWhitelist:stringArray(row.model_whitelist),
   quotas:{
    sessionMicrocredits:numericOrNull(row.session_micro),
-   monthlyCredits:numericOrNull(row.monthly_credits),
+   monthlyCredits:creditsOrNull(row.monthly_credits),
    dailyOrgUsdMicro:numericOrNull(row.daily_org_usd_micro),
   },
  };

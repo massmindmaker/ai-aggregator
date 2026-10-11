@@ -8,6 +8,11 @@ import {
   withGuardedTestDatabase,
   type TestDatabaseClient,
 } from "../test-db-guard";
+import { readAgentPolicy, updateAgentPolicy } from "../../src/agent-policy";
+import type {
+  TonPaymentDatabase,
+  TonSqlClient,
+} from "../../src/ton-payment-types";
 
 const RUN_INTEGRATION = process.env.RUN_NATIVE_DB_INTEGRATION === "1";
 
@@ -422,5 +427,96 @@ describe.skipIf(!RUN_INTEGRATION)("agent quota writers (0108)", () => {
     expect(await auditCount(orgId)).toBe(0);
     await setOrgQuota(orgId, "25000");
     expect(await auditCount(orgId)).toBe(1);
+  });
+
+  // ── Review round 1: the SEAM against real NUMERIC(10,2) rendering ────────
+  // cost_limit_monthly_rub::text renders integral 15000 as "15000.00"; the
+  // seam must canonicalize, not reject — otherwise the first monthly write
+  // self-locks the endpoint (rowToState runs at the top of every GET and PUT).
+  // This scenario drives the whole sequence through readAgentPolicy /
+  // updateAgentPolicy, NOT through a raw-SQL projection.
+  it("seam round-trip: PUT monthly -> GET canonical -> routing-only PUT -> PUT null (no self-lock)", async () => {
+    const { orgId, keyId } = await insertAgentOrg();
+
+    /** Single-level transaction adapter of the seam over the native client. */
+    const seamDb: TonPaymentDatabase = {
+      transaction: async <T>(run: (tx: TonSqlClient) => Promise<T>): Promise<T> => {
+        await client.query({ text: "BEGIN", values: [] });
+        try {
+          const tx: TonSqlClient = {
+            query: async <
+              Row extends Record<string, unknown> = Record<string, unknown>,
+            >(config: { text: string; values: readonly unknown[] }) =>
+              client.query<Row>({ text: config.text, values: [...config.values] }),
+          };
+          const result = await run(tx);
+          await client.query({ text: "COMMIT", values: [] });
+          return result;
+        } catch (error) {
+          await client.query({ text: "ROLLBACK", values: [] });
+          throw error;
+        }
+      },
+    };
+
+    // PUT monthly=15000 credits (integer credits; stored into NUMERIC(10,2)).
+    const written = await updateAgentPolicy(seamDb, {
+      keyId,
+      patch: { monthly_credits_limit: "15000" },
+    });
+    expect(written.quotas.monthlyCredits).toBe("15000");
+
+    // GET: the column renders "15000.00" — the seam must answer "15000".
+    const read1 = await readAgentPolicy(seamDb, { keyId });
+    expect(read1.quotas.monthlyCredits).toBe("15000");
+    expect(read1.orgId).toBe(orgId);
+
+    // Routing-only PUT re-reads the row first: pre-fix this is the 503.
+    const routing = await updateAgentPolicy(seamDb, {
+      keyId,
+      patch: { default_mode: "ru-only" },
+    });
+    expect(routing.quotas.monthlyCredits).toBe("15000");
+    expect(routing.policies.default_mode).toBe("ru-only");
+
+    // Session-only PUT resolves the untouched monthly from the same row into
+    // the ::bigint writer parameter — "15000.00" would be rejected by PG.
+    const session = await updateAgentPolicy(seamDb, {
+      keyId,
+      patch: { session_micro_limit: "1500" },
+    });
+    expect(session.quotas.sessionMicrocredits).toBe("1500");
+    expect(session.quotas.monthlyCredits).toBe("15000");
+
+    // PUT null clears the monthly cap; a final GET confirms the full cycle.
+    const cleared = await updateAgentPolicy(seamDb, {
+      keyId,
+      patch: { monthly_credits_limit: null },
+    });
+    expect(cleared.quotas.monthlyCredits).toBeNull();
+    const read2 = await readAgentPolicy(seamDb, { keyId });
+    expect(read2.quotas.monthlyCredits).toBeNull();
+    expect(read2.quotas.sessionMicrocredits).toBe("1500");
+  });
+
+  it("seam read of a legacy fractional cap truncates toward zero, never overstating", async () => {
+    const { keyId } = await insertAgentOrg();
+    // Dashboard-era shape: 0061 ROUND(...,2) can leave fractional credits.
+    await client.query({
+      text: "UPDATE public.gateway_api_keys SET cost_limit_monthly_rub = 15000.50 WHERE id = $1::uuid",
+      values: [keyId],
+    });
+
+    const seamDb: TonPaymentDatabase = {
+      transaction: async <T>(run: (tx: TonSqlClient) => Promise<T>): Promise<T> => run({
+        query: async <
+          Row extends Record<string, unknown> = Record<string, unknown>,
+        >(config: { text: string; values: readonly unknown[] }) =>
+          client.query<Row>({ text: config.text, values: [...config.values] }),
+      }),
+    };
+
+    const state = await readAgentPolicy(seamDb, { keyId });
+    expect(state.quotas.monthlyCredits).toBe("15000");
   });
 });

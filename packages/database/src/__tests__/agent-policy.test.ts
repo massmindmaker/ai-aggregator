@@ -112,6 +112,31 @@ describe("readAgentPolicy", () => {
     await expectAgentPolicyError(readAgentPolicy(db, { keyId: KEY_ID }), "AGENT_NOT_AUTHORIZED");
   });
 
+  // ── Real NUMERIC(10,2) rendering (review round 1) ─────────────────────────
+  // ::text renders integral 15000 as "15000.00"; the seam must canonicalize,
+  // not reject — otherwise the endpoint self-locks after the first monthly
+  // write (every GET and every PUT re-reads the row first).
+  it("canonicalizes the NUMERIC(10,2) render of cost_limit_monthly_rub (\"15000.00\" -> \"15000\")", async () => {
+    const { db } = recordingDatabase([
+      [policyRow({ monthly_credits: "15000.00" })],
+    ]);
+    const state = await readAgentPolicy(db, { keyId: KEY_ID });
+    expect(state.quotas.monthlyCredits).toBe("15000");
+  });
+
+  it("truncates a legacy fractional cap toward zero (\"0.50\" -> \"0\"), never overstating it", async () => {
+    const { db } = recordingDatabase([[policyRow({ monthly_credits: "0.50" })]]);
+    const state = await readAgentPolicy(db, { keyId: KEY_ID });
+    expect(state.quotas.monthlyCredits).toBe("0");
+  });
+
+  it("still rejects garbage in the monthly column (3 decimals / negative / non-numeric)", async () => {
+    for (const garbage of ["15000.000", "-1", "1e4", "15,000"]) {
+      const { db } = recordingDatabase([[policyRow({ monthly_credits: garbage })]]);
+      await expectAgentPolicyError(readAgentPolicy(db, { keyId: KEY_ID }), "AGENT_POLICY_UNAVAILABLE");
+    }
+  });
+
   it("fails AGENT_POLICY_UNAVAILABLE on a malformed policies column", async () => {
     const { db } = recordingDatabase([[policyRow({ policies: "nope" })]]);
     await expectAgentPolicyError(readAgentPolicy(db, { keyId: KEY_ID }), "AGENT_POLICY_UNAVAILABLE");
@@ -225,6 +250,41 @@ describe("updateAgentPolicy — quotas", () => {
     });
 
     expect(state.quotas.sessionMicrocredits).toBeNull();
+    expect(state.quotas.monthlyCredits).toBeNull();
+    expect(calls[1]!.values).toEqual([KEY_ID, null, null]);
+  });
+
+  // ── Self-lock regression (review round 1) ─────────────────────────────────
+  // rowToState runs at the top of EVERY updateAgentPolicy call; with the real
+  // NUMERIC(10,2) render in the row, a fractional-looking monthly must neither
+  // 503 the read NOR leak a non-integer into the $n::bigint writer parameter
+  // (PG would reject "15000.00"::bigint outright).
+  it("session-only patch over a \"15000.00\" current: writer gets the canonical integer, no self-lock", async () => {
+    const { db, calls } = recordingDatabase([
+      [policyRow({ monthly_credits: "15000.00" })],
+      [{ result: { sessionMicrocreditsLimit: "1500", monthlyCreditsLimit: "15000" } }],
+    ]);
+
+    const state = await updateAgentPolicy(db, {
+      keyId: KEY_ID,
+      patch: { session_micro_limit: "1500" },
+    });
+
+    expect(state.quotas.monthlyCredits).toBe("15000");
+    expect(calls[1]!.values).toEqual([KEY_ID, "1500", "15000"]);
+  });
+
+  it("monthly null-clear over a \"15000.00\" current resolves without failing the read", async () => {
+    const { db, calls } = recordingDatabase([
+      [policyRow({ monthly_credits: "15000.00" })],
+      [{ result: { sessionMicrocreditsLimit: null, monthlyCreditsLimit: null } }],
+    ]);
+
+    const state = await updateAgentPolicy(db, {
+      keyId: KEY_ID,
+      patch: { monthly_credits_limit: null },
+    });
+
     expect(state.quotas.monthlyCredits).toBeNull();
     expect(calls[1]!.values).toEqual([KEY_ID, null, null]);
   });
