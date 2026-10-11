@@ -951,7 +951,10 @@ function jettonTextPayload(text: string): JsonObject {
 }
 
 /** One incoming jetton transfer: transfer → internal transfer → credit → notification. */
-function syntheticJettonCandidate(seed: number, options: { reference?: string | null; merchantWallet?: string } = {}) {
+function syntheticJettonCandidate(
+  seed: number,
+  options: { reference?: string | null; merchantWallet?: string; noneResponse?: boolean } = {},
+) {
   const reference = options.reference === undefined ? JETTON_REFERENCE : options.reference;
   const merchantWallet = options.merchantWallet ?? MERCHANT_JETTON_WALLET;
   const transferTxHash = base64Hash(seed);
@@ -980,6 +983,8 @@ function syntheticJettonCandidate(seed: number, options: { reference?: string | 
   const forwardPayload = reference === null
     ? { '@type': 'first_from_either', value: { '@type': 'empty_cell' } }
     : jettonTextPayload(reference);
+  // TEP-74: API senders frequently burn excess (response_destination=addr_none).
+  const responseAddress = options.noneResponse ? { '@type': 'addr_none' } : jettonAddrStd(SENDER_OWNER);
   const transferInMessage: JsonObject = {
     hash: transferInHash, source: SENDER_OWNER, destination: SENDER_WALLET,
     value: '50000000', opcode: '0x0f8a7ea5', decoded_opcode: null,
@@ -1000,7 +1005,7 @@ function syntheticJettonCandidate(seed: number, options: { reference?: string | 
     message_content: { decoded: {
       '@type': 'jetton_internal_transfer', query_id: '0',
       amount: jettonVarUint(JETTON_AMOUNT), from: jettonAddrStd(SENDER_OWNER),
-      response_address: jettonAddrStd(SENDER_OWNER),
+      response_address: responseAddress,
       forward_ton_amount: jettonVarUint('1'),
       forward_payload: forwardPayload,
     } },
@@ -1233,5 +1238,97 @@ describe('createToncenterV3Provider jetton scan (task 9)', () => {
     rows = [oldest.row];
     const page3 = await scan.scanJettonTransfersPage!(input, page2.nextCursor, new AbortController().signal);
     expect(page3).toMatchObject({ kind: 'page' });
+  });
+
+  it('does not wedge the page on a whitespace-dirty reference comment', async () => {
+    const { creditCandidate } = await import('../ton-recovery-contract.js');
+    // A legal chain comment that fails the label hygiene (trailing newline)
+    // must scan through with a NULL reference — not provider_schema_invalid.
+    const dirtyComment = syntheticJettonCandidate(14, { reference: `${JETTON_REFERENCE}\n` });
+    const result = await provider(jettonFixtureFetch([dirtyComment])).scanJettonTransfersPage!(
+      { masterAddress: JETTON_MASTER, ownerAddress: RECIPIENT, decimals: 6 },
+      null,
+      new AbortController().signal,
+    );
+    expect(result).toMatchObject({ kind: 'page' });
+    if (result.kind !== 'page') throw new Error('expected jetton page');
+    expect(result.evidence).toHaveLength(1);
+    expect(creditCandidate(result.evidence[0]!).reference).toBeNull();
+  });
+
+  it('decodes a response_destination=addr_none internal transfer end to end', async () => {
+    const candidate = syntheticJettonCandidate(15, { noneResponse: true });
+    const result = await provider(jettonFixtureFetch([candidate])).scanJettonTransfersPage!(
+      { masterAddress: JETTON_MASTER, ownerAddress: RECIPIENT, decimals: 6 },
+      null,
+      new AbortController().signal,
+    );
+    expect(result).toMatchObject({ kind: 'page' });
+    if (result.kind !== 'page') throw new Error('expected jetton page');
+    const evidence = result.evidence[0]!;
+    if (evidence.creditPath.kind !== 'jetton') throw new Error('expected jetton credit path');
+    const internalTx = evidence.transactions.find(
+      (tx) => tx.inMessage.hash === evidence.creditPath.internalTransferMessageHash,
+    );
+    if (!internalTx || internalTx.inMessage.decodedPayload.kind !== 'jetton_internal_transfer') {
+      throw new Error('expected internal transfer message');
+    }
+    expect(internalTx.inMessage.decodedPayload.responseDestination).toBeNull();
+  });
+
+  it('continues below a page of only rejected rows instead of exhausting the source', async () => {
+    const aborted = syntheticJettonCandidate(13);
+    (aborted.row as JsonObject).transaction_aborted = true;
+    const foreignMaster = syntheticJettonCandidate(12);
+    (foreignMaster.row as JsonObject).jetton_master = `0:${'9'.repeat(64)}`;
+    const below = syntheticJettonCandidate(11);
+    // Rows arrive newest-first: seed 13 > 12 > 11.
+    const candidates = [aborted, foreignMaster, below];
+    const byHash = new Map(candidates.map((candidate) => [String(candidate.creditTxHash), candidate]));
+    let rows: JsonObject[] = [aborted.row, foreignMaster.row];
+    const fetchImpl = vi.fn(async (url: string) => {
+      const parsed = new URL(url);
+      let body: unknown;
+      if (parsed.pathname === '/api/v3/jetton/transfers') {
+        body = { jetton_transfers: rows };
+      } else if (parsed.pathname === '/api/v3/traces') {
+        body = byHash.get(parsed.searchParams.get('tx_hash') ?? '')?.trace;
+      } else if (parsed.pathname === '/api/v3/blocks') {
+        body = { blocks: [below.block] };
+      } else if (parsed.pathname === '/api/v3/masterchainInfo') {
+        body = {
+          first: { workchain: -1, shard: '8000000000000000', seqno: 1, root_hash: base64Hash(30_000), file_hash: base64Hash(30_001) },
+          last: { workchain: -1, shard: '8000000000000000', seqno: 102, root_hash: base64Hash(30_002), file_hash: base64Hash(30_003) },
+        };
+      }
+      if (body === undefined) throw new Error(`unexpected request ${url}`);
+      return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+    });
+    const scan = provider(fetchImpl);
+    const input = { masterAddress: JETTON_MASTER, ownerAddress: RECIPIENT, decimals: 6 };
+    const page1 = await scan.scanJettonTransfersPage!(input, null, new AbortController().signal);
+    // Transfers shadowed by rejected rows must stay scannable: the cursor
+    // advances below the rejected tail instead of declaring exhaustion.
+    expect(page1).toMatchObject({ kind: 'page', evidence: [], exhausted: false });
+    if (page1.kind !== 'page') throw new Error('expected first page');
+    expect(page1.nextCursor).not.toBeNull();
+    expect(page1.nextCursor).toMatchObject({ beforeLt: foreignMaster.ltCredit, cycleUpperLt: aborted.ltCredit });
+    rows = [below.row];
+    const page2 = await scan.scanJettonTransfersPage!(input, page1.nextCursor, new AbortController().signal);
+    expect(page2).toMatchObject({ kind: 'page', exhausted: false });
+    if (page2.kind !== 'page') throw new Error('expected second page');
+    expect(page2.evidence).toHaveLength(1);
+    expect(page2.nextCursor).toMatchObject({ beforeLt: below.ltCredit });
+  });
+
+  it('fails closed when the row source wallet diverges from the transfer transaction account', async () => {
+    const candidate = syntheticJettonCandidate(9);
+    (candidate.row as JsonObject).source_wallet = `0:${'7'.repeat(64)}`;
+    const result = await provider(jettonFixtureFetch([candidate])).scanJettonTransfersPage!(
+      { masterAddress: JETTON_MASTER, ownerAddress: RECIPIENT, decimals: 6 },
+      null,
+      new AbortController().signal,
+    );
+    expect(result).toEqual({ kind: 'source_error', code: 'provider_schema_invalid', retryAfterMs: null });
   });
 });

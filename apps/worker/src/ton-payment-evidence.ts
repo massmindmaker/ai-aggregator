@@ -59,7 +59,7 @@ export interface NormalizedTonMessage {
   decodedPayload:
     | { kind: 'native_comment'; reference: string }
     | { kind: 'jetton_transfer'; amountAtomic: string; destination: string; forwardReference: string }
-    | { kind: 'jetton_internal_transfer'; amountAtomic: string; sender: string; responseDestination: string }
+    | { kind: 'jetton_internal_transfer'; amountAtomic: string; sender: string; responseDestination: string | null }
     | { kind: 'jetton_notification'; amountAtomic: string; sender: string; forwardReference: string }
     | { kind: 'other' };
 }
@@ -383,7 +383,8 @@ function decodedPayload(value: unknown): NormalizedTonMessage['decodedPayload'] 
         kind: 'jetton_internal_transfer',
         amountAtomic: decimal(payload.amountAtomic),
         sender: address(payload.sender),
-        responseDestination: address(payload.responseDestination),
+        // TEP-74 nullable slot: addr_none decodes to null (excess burned).
+        responseDestination: payload.responseDestination === null ? null : address(payload.responseDestination),
       };
     case 'jetton_notification':
       exactKeys(payload, ['kind', 'amountAtomic', 'sender', 'forwardReference']);

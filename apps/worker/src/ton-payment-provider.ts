@@ -19,6 +19,7 @@ import {
   TON_JETTON_INTERNAL_OPCODE,
   TON_JETTON_NOTIFICATION_OPCODE,
   TON_JETTON_TRANSFER_OPCODE,
+  type JettonRowRejection,
   type JettonTransferRowFacts,
 } from './ton-jetton-evidence.js';
 
@@ -598,10 +599,14 @@ function mapJettonTrace(
   ) throw new ProviderFailure('provider_schema_invalid');
   const internal = creditTx.inMessage.decodedPayload;
   const transferTx = mapped.find(
-    (tx) => tx.inMessage.opcode === TON_JETTON_TRANSFER_OPCODE
+    (tx) => tx.account === row.sourceWallet
+      && tx.inMessage.opcode === TON_JETTON_TRANSFER_OPCODE
       && tx.inMessage.decodedPayload.kind === 'jetton_transfer'
       && tx.outMessages.some((outgoing) => outgoing.hash === creditTx.inMessage.hash),
   );
+  // The transfer transaction's ACCOUNT must be the row's declared
+  // source_wallet (the sender's jetton wallet contract): a divergence means
+  // the indexer row and the chain trace describe different transfers.
   if (!transferTx) throw new ProviderFailure('provider_schema_invalid');
   const transfer = transferTx.inMessage.decodedPayload;
   if (transfer.kind !== 'jetton_transfer') throw new ProviderFailure('provider_schema_invalid');
@@ -769,30 +774,43 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
         if (!Array.isArray(rows) || rows.length > PAGE_SIZE) throw new ProviderFailure('provider_schema_invalid');
         if (rows.length === 0) return { kind: 'page', evidence: [], nextCursor: null, exhausted: true };
         const parsed = rows.map((row) => parseJettonTransferRow(row, { masterAddress: master, ownerAddress: owner }));
-        if (parsed.some((entry) => entry.kind === 'schema_invalid')) throw new ProviderFailure('provider_schema_invalid');
+        const entries: Array<JettonTransferRowFacts | JettonRowRejection> = [];
+        for (const entry of parsed) {
+          if (entry.kind === 'schema_invalid') throw new ProviderFailure('provider_schema_invalid');
+          entries.push(entry);
+        }
         // Semantic rejections (foreign master/owner, aborted credit) drop the
-        // row: the transfer belongs to someone else or never landed.
-        const allRows = parsed.filter((entry): entry is JettonTransferRowFacts => entry.kind !== 'row_rejected');
-        const pageUpperLt = allRows.length > 0 ? allRows[0]!.transactionLt : null;
-        let retained = allRows;
-        if (continuation !== null && retained.length > 0) {
-          const first = retained[0]!;
+        // row from the evidence set, but every parsed row — retained or
+        // rejected — still anchors pagination: the continuation cursor may be
+        // built from a rejected tail so transfers shadowed by rejected rows
+        // stay scannable instead of being falsely declared exhausted.
+        const pageUpperLt = entries[0]!.transactionLt;
+        let scoped = entries;
+        if (continuation !== null) {
+          const first = entries[0]!;
           if (first.transactionLt === continuation.beforeLt && first.transactionHash === continuation.beforeTransactionHash) {
-            retained = retained.slice(1);
+            scoped = scoped.slice(1);
+            if (scoped.length === 0) return { kind: 'page', evidence: [], nextCursor: null, exhausted: true };
           } else if (BigInt(first.transactionLt) > BigInt(continuation.beforeLt)) {
             throw new ProviderFailure('pagination_regressed');
           }
           // else: the indexer's end_lt bound excluded the boundary row — the
           // page simply starts below the cursor, which is safe to continue.
         }
-        if (retained.length === 0) return { kind: 'page', evidence: [], nextCursor: null, exhausted: true };
         let previous: bigint | null = null;
-        for (const row of retained) {
-          const lt = BigInt(row.transactionLt);
+        for (const entry of scoped) {
+          const lt = BigInt(entry.transactionLt);
           if ((continuation !== null && lt >= BigInt(continuation.beforeLt))
             || (continuation !== null && lt > BigInt(continuation.cycleUpperLt))
             || (previous !== null && lt >= previous)) throw new ProviderFailure('pagination_regressed');
           previous = lt;
+        }
+        const retained = scoped.filter((entry): entry is JettonTransferRowFacts => entry.kind === 'facts');
+        if (retained.length === 0) {
+          // The whole page was semantically rejected: advance below the
+          // rejected tail rather than exhausting the source forever.
+          const last = scoped[scoped.length - 1]!;
+          return { kind: 'page', evidence: [], nextCursor: { schemaVersion: 1, beforeLt: last.transactionLt, beforeTransactionHash: last.transactionHash, cycleUpperLt: continuation?.cycleUpperLt ?? pageUpperLt }, exhausted: false };
         }
         const blocks = new Map<string, Record<string, unknown>>();
         const traced: Array<{ row: JettonTransferRowFacts; trace: unknown }> = [];
@@ -835,8 +853,8 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
           }
           return mapped;
         });
-        const finalRow = retained[retained.length - 1]!;
-        const cycleUpperLt = continuation?.cycleUpperLt ?? pageUpperLt!;
+        const finalRow = scoped[scoped.length - 1]!;
+        const cycleUpperLt = continuation?.cycleUpperLt ?? pageUpperLt;
         return { kind: 'page', evidence, nextCursor: { schemaVersion: 1, beforeLt: finalRow.transactionLt, beforeTransactionHash: finalRow.transactionHash, cycleUpperLt }, exhausted: false };
       } catch (error) { return failure(error instanceof ProviderFailure ? error.code : 'provider_schema_invalid', error instanceof ProviderFailure ? error.retryAfterMs : null); }
     },

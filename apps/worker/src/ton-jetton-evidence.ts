@@ -40,11 +40,14 @@ const BASE64_32 = /^(?:[A-Za-z0-9+/]{43}=|[A-Za-z0-9+/]{44})$/;
 const DECIMAL = /^(?:0|[1-9][0-9]*)$/;
 
 /** Rejections are data-dependent (the row belongs to someone else or never
- *  credited); schema breakage is provider failure and fails closed instead. */
+ *  credited); schema breakage is provider failure and fails closed instead.
+ *  Every rejection still carries the credit-transaction anchor (lt + hash) so
+ *  the scanner can advance its cursor below a page of rejected rows instead
+ *  of falsely exhausting the source. */
 export type JettonRowRejection =
-  | { kind: 'row_rejected'; reason: 'master_mismatch' }
-  | { kind: 'row_rejected'; reason: 'owner_mismatch' }
-  | { kind: 'row_rejected'; reason: 'aborted_transaction' };
+  | { kind: 'row_rejected'; reason: 'master_mismatch'; transactionLt: string; transactionHash: string }
+  | { kind: 'row_rejected'; reason: 'owner_mismatch'; transactionLt: string; transactionHash: string }
+  | { kind: 'row_rejected'; reason: 'aborted_transaction'; transactionLt: string; transactionHash: string };
 
 export type JettonRowSchemaFailure = { kind: 'schema_invalid' };
 
@@ -108,6 +111,20 @@ export function jettonAddrStd(value: unknown): string {
   return `${wc}:${address.toLowerCase()}`;
 }
 
+/**
+ * TEP-74 nullable address slot: addr_std → raw form, `{"@type":"addr_none"}`
+ * or JSON null → null, anything else fails closed. Used for
+ * response_destination, where API senders frequently burn excess.
+ */
+export function jettonAddrOrNull(value: unknown): string | null {
+  if (value === null) return null;
+  if (isObject(value) && (value['@type'] === 'addr_none' || value.type === 'addr_none')) {
+    if (Object.keys(value).length !== 1) throw new Error('JETTON_BODY_INVALID');
+    return null;
+  }
+  return jettonAddrStd(value);
+}
+
 /** var_uint decoded wrapper → canonical decimal string. */
 export function jettonVarUint(value: unknown): string {
   if (!isObject(value)) throw new Error('JETTON_BODY_INVALID');
@@ -123,6 +140,11 @@ export function jettonVarUint(value: unknown): string {
  * (first_from_either/second_from_either wrappers around text_comment with a
  * `text` field) and the transfer-row shape (decoded_forward_payload with a
  * `comment` field). Anything else — including an empty payload — yields ''.
+ *
+ * Hygiene: the normalized-evidence label demands trim-stability and rejects
+ * control characters. A legal-but-dirty chain comment (`aiag-ton:<uuid>\n`,
+ * padded text) must map to '' (the unmatched path), never to a raw text that
+ * later fails evidence validation and wedges the whole scan page.
  */
 export function jettonForwardReference(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -132,6 +154,7 @@ export function jettonForwardReference(value: unknown): string {
   if (type !== 'text_comment') return '';
   const text = inner.text ?? inner.comment;
   if (typeof text !== 'string' || text.length > 96) return '';
+  if (text !== text.trim() || /[\u0000-\u001f\u007f]/.test(text)) return '';
   return text;
 }
 
@@ -183,14 +206,16 @@ export function parseJettonTransferRow(
   }
   // A foreign master cannot pay an invoice of this source's asset; a foreign
   // owner is not this merchant; an aborted credit transaction never landed.
+  // Rejections keep the validated lt/hash anchor for cursor continuation.
+  const rejectionAnchor = { transactionLt, transactionHash: Buffer.from(transactionHash, 'base64').toString('hex') };
   if (masterAddress !== expected.masterAddress.toLowerCase()) {
-    return { kind: 'row_rejected', reason: 'master_mismatch' };
+    return { kind: 'row_rejected', reason: 'master_mismatch', ...rejectionAnchor };
   }
   if (destinationOwner !== expected.ownerAddress.toLowerCase()) {
-    return { kind: 'row_rejected', reason: 'owner_mismatch' };
+    return { kind: 'row_rejected', reason: 'owner_mismatch', ...rejectionAnchor };
   }
   if (transactionAborted) {
-    return { kind: 'row_rejected', reason: 'aborted_transaction' };
+    return { kind: 'row_rejected', reason: 'aborted_transaction', ...rejectionAnchor };
   }
   const rawForwardText = jettonForwardReference(input.decoded_forward_payload);
   return {
@@ -237,7 +262,9 @@ export function jettonTransferPayload(body: unknown): JettonTransferPayload {
   }
 }
 
-/** jetton_internal_transfer (op 0x178d4519) decoded body → normalized payload. */
+/** jetton_internal_transfer (op 0x178d4519) decoded body → normalized payload.
+ *  response_destination is a TEP-74 nullable slot (addr_none → null); the
+ *  amount and sender remain mandatory. */
 export function jettonInternalTransferPayload(body: unknown): JettonInternalPayload {
   if (!isObject(body)) throw new Error('JETTON_BODY_INVALID');
   try {
@@ -245,7 +272,7 @@ export function jettonInternalTransferPayload(body: unknown): JettonInternalPayl
       kind: 'jetton_internal_transfer',
       amountAtomic: jettonVarUint(body.amount),
       sender: jettonAddrStd(body.from),
-      responseDestination: jettonAddrStd(body.response_address),
+      responseDestination: jettonAddrOrNull(body.response_address),
     };
   } catch {
     throw new Error('JETTON_BODY_INVALID');

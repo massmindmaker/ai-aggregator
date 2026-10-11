@@ -83,19 +83,48 @@ describe('parseJettonTransferRow', () => {
     expect(result).toMatchObject({ reference: null, forwardText: 'not-a-reference' });
   });
 
+  it('routes whitespace-padded and control-character comments to the unmatched path (no wedge)', () => {
+    // The normalized-evidence label demands trim-stability and no control
+    // characters; a legal-but-dirty chain comment must surface as an EMPTY
+    // forward text (unmatched path), never as a provider_schema_invalid page
+    // failure that wedges the source forever.
+    const dirty = (comment: string) => parseJettonTransferRow(
+      row({ decoded_forward_payload: { '@type': 'text_comment', comment, type: 'text_comment' } }),
+      { masterAddress: MASTER, ownerAddress: OWNER },
+    );
+    expect(dirty(`${REFERENCE}\n`)).toMatchObject({ kind: 'facts', forwardText: '', reference: null });
+    expect(dirty(` ${REFERENCE}`)).toMatchObject({ kind: 'facts', forwardText: '', reference: null });
+    expect(dirty(`${REFERENCE}\u0007`)).toMatchObject({ kind: 'facts', forwardText: '', reference: null });
+    expect(dirty('thanks\u001f for the models')).toMatchObject({ kind: 'facts', forwardText: '', reference: null });
+  });
+
+  it('keeps a clean reference comment untouched through the hygiene gate', () => {
+    expect(jettonForwardReference({ '@type': 'text_comment', comment: REFERENCE, type: 'text_comment' }))
+      .toBe(REFERENCE);
+    expect(jettonForwardReference({ '@type': 'second_from_either', value: { '@type': 'text_comment', text: 'thanks for the models' } }))
+      .toBe('thanks for the models');
+  });
+
+  // Semantic rejections still carry the credit-transaction anchor so the
+  // scanner can continue below a page of rejected rows.
+  const REJECTION_ANCHOR = {
+    transactionLt: '109307457000011',
+    transactionHash: Buffer.from(txHash(1), 'base64').toString('hex'),
+  };
+
   it('rejects a foreign jetton master', () => {
     expect(parseJettonTransferRow(row(), { masterAddress: `0:${'9'.repeat(64)}`, ownerAddress: OWNER }))
-      .toEqual({ kind: 'row_rejected', reason: 'master_mismatch' });
+      .toEqual({ kind: 'row_rejected', reason: 'master_mismatch', ...REJECTION_ANCHOR });
   });
 
   it('rejects a row addressed to another owner', () => {
     expect(parseJettonTransferRow(row(), { masterAddress: MASTER, ownerAddress: `0:${'8'.repeat(64)}` }))
-      .toEqual({ kind: 'row_rejected', reason: 'owner_mismatch' });
+      .toEqual({ kind: 'row_rejected', reason: 'owner_mismatch', ...REJECTION_ANCHOR });
   });
 
   it('rejects an aborted credit transaction (the transfer never landed)', () => {
     expect(parseJettonTransferRow(row({ transaction_aborted: true }), { masterAddress: MASTER, ownerAddress: OWNER }))
-      .toEqual({ kind: 'row_rejected', reason: 'aborted_transaction' });
+      .toEqual({ kind: 'row_rejected', reason: 'aborted_transaction', ...REJECTION_ANCHOR });
   });
 
   it('fails closed on a fractional amount string', () => {
@@ -189,6 +218,44 @@ describe('jetton decoded body mappers', () => {
       sender: SENDER_OWNER,
       responseDestination: SENDER_OWNER,
     });
+  });
+
+  it('maps response_destination addr_none to a NULL responseDestination (TEP-74)', () => {
+    const body = {
+      '@type': 'jetton_internal_transfer',
+      query_id: '0',
+      amount: varUint('2500000'),
+      from: addrStd(SENDER_OWNER),
+      forward_ton_amount: varUint('1'),
+      forward_payload: textPayload(REFERENCE),
+    };
+    expect(jettonInternalTransferPayload({ ...body, response_address: { '@type': 'addr_none' } }))
+      .toEqual({ kind: 'jetton_internal_transfer', amountAtomic: '2500000', sender: SENDER_OWNER, responseDestination: null });
+    expect(jettonInternalTransferPayload({ ...body, response_address: null }))
+      .toEqual({ kind: 'jetton_internal_transfer', amountAtomic: '2500000', sender: SENDER_OWNER, responseDestination: null });
+  });
+
+  it('still fails closed on an addr_none transfer destination (a burn is not a credit)', () => {
+    expect(() => jettonTransferPayload({
+      '@type': 'jetton_transfer',
+      query_id: '0',
+      amount: varUint('2500000'),
+      destination: { '@type': 'addr_none' },
+      response_destination: addrStd(SENDER_OWNER),
+      custom_payload: { '@type': 'nothing_from_maybe' },
+      forward_ton_amount: varUint('1'),
+      forward_payload: textPayload(REFERENCE),
+    })).toThrow('JETTON_BODY_INVALID');
+    // A junk response_address wrapper (neither addr_std nor addr_none) fails too.
+    expect(() => jettonInternalTransferPayload({
+      '@type': 'jetton_internal_transfer',
+      query_id: '0',
+      amount: varUint('2500000'),
+      from: addrStd(SENDER_OWNER),
+      response_address: 42,
+      forward_ton_amount: varUint('1'),
+      forward_payload: textPayload(REFERENCE),
+    })).toThrow('JETTON_BODY_INVALID');
   });
 
   it('rejects malformed decoded bodies', () => {

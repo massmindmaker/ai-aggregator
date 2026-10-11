@@ -46,6 +46,7 @@ import {
   evidenceDigest,
   TonSourceFailure,
 } from "./ton-recovery-contract.js";
+import { TON_JETTON_REFERENCE } from "./ton-jetton-evidence.js";
 export interface TonObserveReconcilerDeps {
   getInvoice(id: string): Promise<TonInvoice | null>;
   listSources(input: {
@@ -142,10 +143,7 @@ export type TonReconcileItemResult =
   | { kind: "review_required"; reason: TonReviewReason }
   | { kind: "verified_candidate"; credit: VerifiedChainCredit };
 const reference = (value: string | null): value is string =>
-  value !== null &&
-  /^aiag-ton:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
-    value,
-  );
+  value !== null && TON_JETTON_REFERENCE.test(value);
 function request(value: unknown, names: readonly string[]) {
   const r = object(value);
   exact(r, names);
