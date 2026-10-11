@@ -625,7 +625,7 @@ function mapJettonTrace(
     transfer.amountAtomic !== row.amountAtomic ||
     internal.amountAtomic !== row.amountAtomic ||
     notification.amountAtomic !== row.amountAtomic ||
-    notification.forwardReference !== (row.reference ?? '')
+    notification.forwardReference !== row.forwardText
   ) throw new ProviderFailure('provider_schema_invalid');
   const last = headFacts(headBody);
   const canonical = {

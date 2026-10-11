@@ -13,6 +13,7 @@ import {
   normalizeCanonicalTonEvidence,
   type NormalizedTonEvidence,
 } from "./ton-payment-evidence.js";
+import { TON_JETTON_REFERENCE } from "./ton-jetton-evidence.js";
 import type { TonProviderResult } from "./ton-payment-provider.js";
 export class TonSourceFailure extends Error {
   constructor(readonly code: TonSourceErrorCode) {
@@ -310,9 +311,16 @@ export function creditCandidate(e: NormalizedTonEvidence) {
       throw new TonSourceFailure("provider_schema_invalid");
     return {
       tx,
-      owner: e.creditPath.walletDerivationOwner,
+      owner: creditPath.walletDerivationOwner,
       event: { txHash: tx.hash, txLt: tx.lt, messageHash: tx.inMessage.hash },
-      reference: notification.decodedPayload.forwardReference || null,
+      // Gate the raw forward text to the canonical reference shape here: a
+      // foreign comment ("thanks") is a valid chain fact that must surface as
+      // a NULL reference (unmatched path), never as a junk invoice lookup.
+      reference:
+        notification.decodedPayload.forwardReference &&
+        TON_JETTON_REFERENCE.test(notification.decodedPayload.forwardReference)
+          ? notification.decodedPayload.forwardReference
+          : null,
     };
   }
   throw new TonSourceFailure("unsupported_asset");

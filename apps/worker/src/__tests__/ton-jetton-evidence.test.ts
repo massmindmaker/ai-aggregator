@@ -58,6 +58,7 @@ describe('parseJettonTransferRow', () => {
       transactionTimeMs: 1_791_740_218_000,
       traceId: Buffer.from(txHash(2), 'base64').toString('hex'),
       amountAtomic: '2500000',
+      forwardText: REFERENCE,
       reference: REFERENCE,
       sourceOwner: SENDER_OWNER,
       destinationOwner: OWNER,
@@ -71,15 +72,15 @@ describe('parseJettonTransferRow', () => {
       row({ decoded_forward_payload: null, forward_payload: null }),
       { masterAddress: MASTER, ownerAddress: OWNER },
     );
-    expect(result).toMatchObject({ reference: null });
+    expect(result).toMatchObject({ reference: null, forwardText: '' });
   });
 
-  it('yields a NULL reference for a non-reference text comment', () => {
+  it('yields a NULL reference for a non-reference text comment but keeps the raw text', () => {
     const result = parseJettonTransferRow(
       row({ decoded_forward_payload: { '@type': 'text_comment', comment: 'not-a-reference', type: 'text_comment' } }),
       { masterAddress: MASTER, ownerAddress: OWNER },
     );
-    expect(result).toMatchObject({ reference: null });
+    expect(result).toMatchObject({ reference: null, forwardText: 'not-a-reference' });
   });
 
   it('rejects a foreign jetton master', () => {

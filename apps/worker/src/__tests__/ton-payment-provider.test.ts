@@ -1144,6 +1144,23 @@ describe('createToncenterV3Provider jetton scan (task 9)', () => {
     expect(creditCandidate(result.evidence[0]!).reference).toBeNull();
   });
 
+  it('does not wedge the page on a foreign text comment (raw-vs-raw cross-check)', async () => {
+    const { creditCandidate } = await import('../ton-recovery-contract.js');
+    const foreignComment = syntheticJettonCandidate(7, { reference: 'thanks for the models' });
+    const result = await provider(jettonFixtureFetch([foreignComment])).scanJettonTransfersPage!(
+      { masterAddress: JETTON_MASTER, ownerAddress: RECIPIENT, decimals: 6 },
+      null,
+      new AbortController().signal,
+    );
+    expect(result).toMatchObject({ kind: 'page' });
+    if (result.kind !== 'page') throw new Error('expected jetton page');
+    expect(result.evidence).toHaveLength(1);
+    // A non-reference comment is a valid chain fact: it scans through and
+    // lands on the unmatched (invoice_reference_not_found) path, not a
+    // provider_schema_invalid wedge.
+    expect(creditCandidate(result.evidence[0]!).reference).toBeNull();
+  });
+
   it('drops foreign-master, foreign-owner and aborted rows without failing the page', async () => {
     const good = syntheticJettonCandidate(3);
     const foreignMaster = syntheticJettonCandidate(4);

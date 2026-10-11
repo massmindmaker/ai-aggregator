@@ -59,6 +59,13 @@ export interface JettonTransferRowFacts {
   traceId: string;
   /** Jetton atomic units, canonical decimal string. */
   amountAtomic: string;
+  /**
+   * Raw forward-payload comment text (empty string when absent). The trace
+   * cross-check compares against THIS, not the regex-gated reference: a
+   * foreign text comment ("thanks") is a valid chain fact that must not
+   * wedge the scan page — only the invoice matcher needs the reference.
+   */
+  forwardText: string;
   /** Canonical aiag-ton reference from the forward payload comment, or null. */
   reference: string | null;
   /** Sender owner address, raw lowercase. */
@@ -185,6 +192,7 @@ export function parseJettonTransferRow(
   if (transactionAborted) {
     return { kind: 'row_rejected', reason: 'aborted_transaction' };
   }
+  const rawForwardText = jettonForwardReference(input.decoded_forward_payload);
   return {
     kind: 'facts' as const,
     transactionHash: Buffer.from(transactionHash, 'base64').toString('hex'),
@@ -192,7 +200,8 @@ export function parseJettonTransferRow(
     transactionTimeMs: (transactionNow as number) * 1000,
     traceId: Buffer.from(traceId, 'base64').toString('hex'),
     amountAtomic,
-    reference: referenceOrNone(jettonForwardReference(input.decoded_forward_payload)),
+    forwardText: rawForwardText,
+    reference: referenceOrNone(rawForwardText),
     sourceOwner,
     destinationOwner,
     masterAddress,
