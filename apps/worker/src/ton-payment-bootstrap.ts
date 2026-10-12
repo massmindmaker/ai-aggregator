@@ -246,10 +246,13 @@ export async function startTonObservationFromEnv(
         return second.kind === "closed" ? first : second;
       };
     }
+    // The provider's canonicalBaseUrl() requires the origin WITH a trailing
+    // slash (preset.origin never carries one) — without it every real start
+    // failed origin_mismatch; test doubles never exercised this path.
     provider = options.makeProvider
       ? options.makeProvider({ baseUrl: config.preset.origin, apiKey: config.toncenterApiKey })
       : (await import("./ton-payment-provider.js")).createToncenterV3Provider({
-          baseUrl: config.preset.origin,
+          baseUrl: `${config.preset.origin}/`,
           apiKey: config.toncenterApiKey,
           preset: config.preset,
         });
