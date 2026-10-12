@@ -6,11 +6,11 @@
 ## Подъём воркера TON в проде
 
 1. Собрать env воркера (worker-часть секции TON в `.env.example`): `TON_RECONCILIATION_MODE`, `TON_RECONCILIATION_NETWORK=tvm:-3`, `TON_RECONCILIATION_ASSET_KIND=native`, `TON_RECONCILIATION_PROVIDER_ID`, `TON_RECONCILIATION_PROVIDER_ORIGIN`, `TON_RECONCILIATION_VERIFIER_VERSION`, `TON_RECONCILIATION_FINALITY_POLICY_ID` (+ опц. `TONCENTER_API_KEY`, `TON_EVIDENCE_CROSSCHECK=1`). Любое отклонение от констант кода — startup-отказ.
-2. Задать `TON_POLICY_TEMPLATE` (включение Gram-витрины): при наличии переменной воркер каждые 60 с пересобирает политику чекаута (подставляя свежий `usdPerTon` из FX-оракула; протухший курс не перештамповывается) и пишет её в `admin_settings` под ключом `ton_checkout_policy` — откуда её читает `/api/ton/*` веб-слоя. Готовый шаблон (recipient заменить на адрес владельца):
+2. Задать `TON_POLICY_TEMPLATE` (включение Gram-витрины): при наличии переменной воркер каждые 60 с пересобирает политику чекаута (подставляя свежий `usdPerTon` из FX-оракула; протухший курс не перештамповывается) и пишет её в `admin_settings` под ключом `ton_checkout_policy` — откуда её читает `/api/ton/*` веб-слоя. Готовый шаблон; recipient — адрес владельца (получен 12.10.2026: testnet bounceable `UQCKkoODFRy60mjDLyizpNpZcy06d9KQSUSOzhnVXgnSN3ZP`, CRC сверен, raw-форма ниже):
 
    ```json
    {
-     "recipient": "0:<ЗАМЕНИТЬ_НА_АДРЕС_ВЛАДЕЛЬЦА>",
+     "recipient": "0:8a928383151cbad268c32f28b3a4da59732d3a77d29049448ece19d55e09d237",
      "revision": "credit-v1",
      "finalityPolicyId": "toncenter-v3-testnet-provider-attested-mc-depth-2-v1",
      "verifierVersion": "aiag-toncenter-v3-verifier-v1",
