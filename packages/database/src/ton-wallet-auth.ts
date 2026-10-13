@@ -74,7 +74,7 @@ export async function completeTonWalletProof(db:TonPaymentDatabase,input:TonWall
    WHERE c.id=$1::uuid AND c.consumed_at IS NULL AND c.expires_at>n RETURNING c.id::text,c.ticket_expires_at::text`,[ch.id,identity.proofDigest,wallet.id,secret?digest(secret):null]))[0];
   if(!updated)fail('TON_WALLET_CHALLENGE_EXPIRED');
   await query(tx,`INSERT INTO public.audit_log(actor_id,actor_type,action,resource_type,resource_id,details)
-   VALUES($1::uuid,'user',$2,'ton_wallet',$3,$4::jsonb)`,[actor.id,ctx.purpose==='link'?'wallet.link':'wallet.login.verify',wallet.id,JSON.stringify({challengeId:ch.id,network:'-3'})]);
+   VALUES($1::uuid,'user',$2,'ton_wallet',$3,$4::text::jsonb)`,[actor.id,ctx.purpose==='link'?'wallet.link':'wallet.login.verify',wallet.id,JSON.stringify({challengeId:ch.id,network:'-3'})]);
   if(ctx.purpose==='link')return {kind:'linked',wallet:walletView(wallet)};
   return {kind:'login_ticket',ticket:ch.id+'.'+secret,expiresAt:updated.ticket_expires_at!};
  });

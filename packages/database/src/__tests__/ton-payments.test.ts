@@ -38,7 +38,7 @@ describe("TON invoice wrappers", () => {
     const { db, calls } = recordingDatabase([[{ id: org }], [], [{ result: invoice }]]);
     await expect(createTonInvoice(db, { actorUserId: actor, orgId: org }, input(), { allowlist: [asset] })).resolves.toEqual(invoice);
     expect(calls).toHaveLength(3);
-    expect(calls[2]?.text).toContain("aiag_create_ton_invoice_v1($1::uuid,$2::uuid,$3::jsonb,$4::text)");
+    expect(calls[2]?.text).toContain("aiag_create_ton_invoice_v1($1::uuid,$2::uuid,$3::text::jsonb,$4::text)");
     expect(calls[2]?.values[0]).toBe(actor);
     expect(calls[2]?.values[1]).toBe(org);
     expect(calls[2]?.values[2]).toEqual(expect.stringContaining('"grantMicrocredits":"3"'));

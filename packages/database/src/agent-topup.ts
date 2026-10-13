@@ -422,7 +422,7 @@ export async function createAgentTopupInvoice(
       const row = (
         await query<{ invoice: string }>(
           tx,
-          'SELECT aiag_create_agent_ton_invoice_v1($1::uuid, $2::jsonb, $3) AS invoice',
+          'SELECT aiag_create_agent_ton_invoice_v1($1::uuid, $2::text::jsonb, $3) AS invoice',
           [input.keyId, payload, fingerprint],
         )
       )[0];

@@ -118,7 +118,7 @@ export async function consumeAgentRegister(db:TonPaymentDatabase,input:AgentRegi
     if(!key)fail('AGENT_AUTH_UNAVAILABLE');
     await query(tx,`INSERT INTO public.gateway_quota_org_policies(org_id,enforcement_version) VALUES($1::uuid,2) ON CONFLICT (org_id) DO NOTHING`,[org.id]);
     await query(tx,`INSERT INTO public.usage_events(org_id,api_key_id,request_id,kind,payload)
-     VALUES($1::uuid,$2::uuid,NULL,'gateway_key_minted',$3::jsonb)`,[org.id,key.id,JSON.stringify({minted_key_id:key.id,key_prefix:key.key_prefix,name:primary.name,minted_by:'agent_register_bootstrap'})]);
+     VALUES($1::uuid,$2::uuid,NULL,'gateway_key_minted',$3::text::jsonb)`,[org.id,key.id,JSON.stringify({minted_key_id:key.id,key_prefix:key.key_prefix,name:primary.name,minted_by:'agent_register_bootstrap'})]);
     minted={id:key.id,prefix:key.key_prefix};
    }catch(error){
     if(error instanceof AgentAuthError)throw error;
@@ -130,7 +130,7 @@ export async function consumeAgentRegister(db:TonPaymentDatabase,input:AgentRegi
    }
   }
   await query(tx,`INSERT INTO public.audit_log(actor_id,actor_type,action,resource_type,resource_id,details)
-   VALUES($1::uuid,'system','agent.register','agent_principal',$2,$3::jsonb)`,[owner.owner,principal!.id,JSON.stringify({challengeId,network:'-3',orgId:org.id})]);
+   VALUES($1::uuid,'system','agent.register','agent_principal',$2,$3::text::jsonb)`,[owner.owner,principal!.id,JSON.stringify({challengeId,network:'-3',orgId:org.id})]);
   return minted?{principalId:principal!.id,orgId:org.id,primaryKey:minted}:{principalId:principal!.id,orgId:org.id};
  });
 }

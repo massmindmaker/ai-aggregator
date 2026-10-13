@@ -171,7 +171,7 @@ describe("updateAgentPolicy — routing only", () => {
     expect(read.text).toContain("FOR UPDATE OF k");
     const update = calls[1]!;
     expect(update.text).toContain("UPDATE public.gateway_api_keys");
-    expect(update.text).toContain("SET policies=$3::jsonb, model_whitelist=$4::jsonb");
+    expect(update.text).toContain("SET policies=$3::text::jsonb, model_whitelist=$4::text::jsonb");
     // Guarded by the locked row's own org and liveness — never a body value.
     expect(update.text).toContain("WHERE id=$1::uuid AND org_id=$2::uuid AND revoked_at IS NULL AND disabled_at IS NULL");
     expect(update.values[0]).toBe(KEY_ID);

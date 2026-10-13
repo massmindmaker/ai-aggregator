@@ -188,13 +188,13 @@ export async function updateAgentPolicy(db:TonPaymentDatabase,input:{keyId:strin
    policies=mergeKeyPolicies(policies,patch);
    if(patch.model_whitelist!==undefined)whitelist=patch.model_whitelist===null?[]:canonicalStrings(patch.model_whitelist);
    const updated=await tx.query<Record<string,unknown>>({text:`UPDATE public.gateway_api_keys
-    SET policies=$3::jsonb, model_whitelist=$4::jsonb
+    SET policies=$3::text::jsonb, model_whitelist=$4::text::jsonb
     WHERE id=$1::uuid AND org_id=$2::uuid AND revoked_at IS NULL AND disabled_at IS NULL`,
     values:[keyId,current.orgId,JSON.stringify(policies),JSON.stringify(whitelist)]});
    if(updated.rowCount!==1)fail('AGENT_NOT_AUTHORIZED');
    const routingKeys=Object.keys(patch).filter(key=>key!=='session_micro_limit'&&key!=='monthly_credits_limit'&&key!=='daily_org_usd_micro_limit');
    await query(tx,`INSERT INTO public.usage_events (org_id,api_key_id,request_id,kind,payload)
-    VALUES($1::uuid,$2::uuid,NULL,'gateway_key_policy_updated',$3::jsonb)`,
+    VALUES($1::uuid,$2::uuid,NULL,'gateway_key_policy_updated',$3::text::jsonb)`,
     [current.orgId,keyId,JSON.stringify({updated_by_key_id:keyId,routing_keys:routingKeys,model_whitelist:whitelist})]);
   }
 

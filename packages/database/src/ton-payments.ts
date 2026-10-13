@@ -222,7 +222,7 @@ export async function createTonInvoice(
     )
       throw new Error("TON_QUOTE_MISMATCH");
     const result = await tx.query<{ result: TonInvoice }>({
-      text: "SELECT aiag_create_ton_invoice_v1($1::uuid,$2::uuid,$3::jsonb,$4::text) AS result",
+      text: "SELECT aiag_create_ton_invoice_v1($1::uuid,$2::uuid,$3::text::jsonb,$4::text) AS result",
       values: [p.ownerId, p.orgId, serialized, fingerprint],
     });
     return result.rows[0]!.result;
@@ -366,8 +366,8 @@ async function runTonSettlement(
       (
         await tx.query<{ result: TonSettlementResult }>({
           text: workerBoundary
-            ? "SELECT aiag_ton_worker.settle_invoice_v1($1::uuid,$2::jsonb) AS result"
-            : "SELECT aiag_settle_ton_invoice_v1($1::uuid,$2::jsonb) AS result",
+            ? "SELECT aiag_ton_worker.settle_invoice_v1($1::uuid,$2::text::jsonb) AS result"
+            : "SELECT aiag_settle_ton_invoice_v1($1::uuid,$2::text::jsonb) AS result",
           values: [invoice, stable(c)],
         })
       ).rows[0]!.result,
@@ -957,7 +957,7 @@ export async function findTonInvoicesForReconciliation(
   if (requestedReferences.length === 0) return [];
   return db.transaction(async (tx) => {
     const result = await tx.query<{ result: unknown }>({
-      text: "SELECT aiag_find_ton_invoices_for_reconciliation_v1($1::jsonb,$2::text[]) AS result",
+      text: "SELECT aiag_find_ton_invoices_for_reconciliation_v1($1::text::jsonb,$2::text[]) AS result",
       values: [sourceJson(source), requestedReferences],
     });
     if (result.rows.length !== 1 || !Array.isArray(result.rows[0]?.result))
@@ -1022,7 +1022,7 @@ export async function recordTonChainObservation(
   return db.transaction(async (tx) => {
     const value = (
       await tx.query<{ result: unknown }>({
-        text: "SELECT aiag_record_ton_chain_observation_v1($1::jsonb) AS result",
+        text: "SELECT aiag_record_ton_chain_observation_v1($1::text::jsonb) AS result",
         values: [serialized],
       })
     ).rows[0]?.result;
@@ -1081,7 +1081,7 @@ export async function claimTonReconciliationLease(
   return db.transaction(async (tx) => {
     const value = (
       await tx.query<{ result: unknown }>({
-        text: "SELECT aiag_claim_ton_reconciliation_lease_v1($1::jsonb,$2::text,$3::uuid,$4::integer) AS result",
+        text: "SELECT aiag_claim_ton_reconciliation_lease_v1($1::text::jsonb,$2::text,$3::uuid,$4::integer) AS result",
         values: [sourceJson(source), providerId, owner, 90_000],
       })
     ).rows[0]?.result;
@@ -1128,7 +1128,7 @@ export async function bindTonReconciliationRecipient(
     requireResult(
       (
         await tx.query<{ result: unknown }>({
-          text: "SELECT aiag_bind_ton_reconciliation_recipient_v1($1::jsonb,$2::uuid,$3::jsonb,$4::jsonb) AS result",
+          text: "SELECT aiag_bind_ton_reconciliation_recipient_v1($1::text::jsonb,$2::uuid,$3::text::jsonb,$4::text::jsonb) AS result",
           values: [
             sourceJson(source),
             owner,
@@ -1167,7 +1167,7 @@ export async function renewTonReconciliationLease(
     requireResult(
       (
         await tx.query<{ result: unknown }>({
-          text: "SELECT aiag_renew_ton_reconciliation_lease_v1($1::text,$2::uuid,$3::jsonb,$4::integer) AS result",
+          text: "SELECT aiag_renew_ton_reconciliation_lease_v1($1::text,$2::uuid,$3::text::jsonb,$4::integer) AS result",
           values: [
             sourceId,
             owner,
@@ -1227,7 +1227,7 @@ export async function advanceTonReconciliationCursor(
     requireResult(
       (
         await tx.query<{ result: unknown }>({
-          text: "SELECT aiag_advance_ton_reconciliation_cursor_v1($1::text,$2::uuid,$3::jsonb,$4::jsonb,$5::text,$6::integer,$7::text) AS result",
+          text: "SELECT aiag_advance_ton_reconciliation_cursor_v1($1::text,$2::uuid,$3::text::jsonb,$4::text::jsonb,$5::text,$6::integer,$7::text) AS result",
           values: [
             sourceId,
             owner,

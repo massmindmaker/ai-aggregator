@@ -39,7 +39,7 @@ export async function createTonCheckout(db:TonPaymentDatabase,ctx:TonInvoiceCont
   const quote=createQuote({quoteId:'checkout-'+randomUUID(),sourcePrice:{unit:'gateway_microcredits',amountAtomic:item[0].grantMicrocredits},asset,fx:{...p.fx,sourceUnit:'gateway_microcredits',targetAsset:asset},additionalFeeAtomic:p.additionalFeeAtomic,expiresAtMs:Math.min(now+p.quoteLifetimeSeconds*1000,p.fx.expiresAtMs)},[asset],now);
   const invoice=await createTonInvoice(nested(tx),ctx,{idempotencyKey:'wallet-'+hash,grantMicrocredits:item[0].grantMicrocredits,priceRevision:p.revision,quote,recipient:p.recipient,expectedSender:w.address,finalityPolicyId:p.finalityPolicyId,verifierVersion:p.verifierVersion},{allowlist:[asset]});
   const row=(await q<Row>(tx,`INSERT INTO public.user_ton_checkouts(owner_user_id,org_id,wallet_id,package_id,key_hash,invoice_id,policy_snapshot)
-   VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6::uuid,$7::jsonb) RETURNING `+fields,[ctx.actorUserId,ctx.orgId,input.walletId,input.packageId,hash,invoice.invoiceId,JSON.stringify({revision:p.revision,package:item[0],quote,recipient:p.recipient})]))[0];
+   VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6::uuid,$7::text::jsonb) RETURNING `+fields,[ctx.actorUserId,ctx.orgId,input.walletId,input.packageId,hash,invoice.invoiceId,JSON.stringify({revision:p.revision,package:item[0],quote,recipient:p.recipient})]))[0];
   if(!row)fail();return view(tx,ctx,row);
  });
 }

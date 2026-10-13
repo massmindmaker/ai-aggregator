@@ -109,7 +109,7 @@ describe("dedicated settlement database session", () => {
       expect(q[0]).toBe("BEGIN");
       expect(q[1]).toContain("SELECT session_user");
       expect(q[2]).toBe(
-        "SELECT aiag_ton_worker.settle_invoice_v1($1::uuid,$2::jsonb) AS result",
+        "SELECT aiag_ton_worker.settle_invoice_v1($1::uuid,$2::text::jsonb) AS result",
       );
       expect(q[3]).toBe("COMMIT");
       expect(q.some((s) => s.includes("SELECT aiag_settle_ton_invoice"))).toBe(

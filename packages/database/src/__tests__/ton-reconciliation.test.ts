@@ -395,7 +395,7 @@ describe("TON reconciliation wrapper validation", () => {
         references: [reference],
       }),
     ).resolves.toEqual([]);
-    expect(calls[0]?.text).toContain("$1::jsonb,$2::text[]");
+    expect(calls[0]?.text).toContain("$1::text::jsonb,$2::text[]");
     expect(calls[0]?.values[1]).toEqual([reference]);
     const invalid = recordingDatabase();
     await expect(
@@ -559,7 +559,7 @@ describe("TON reconciliation wrapper validation", () => {
     });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.text).toBe(
-      "SELECT aiag_record_ton_chain_observation_v1($1::jsonb) AS result",
+      "SELECT aiag_record_ton_chain_observation_v1($1::text::jsonb) AS result",
     );
     expect(calls[0]?.values).toEqual([expect.any(String)]);
   });
