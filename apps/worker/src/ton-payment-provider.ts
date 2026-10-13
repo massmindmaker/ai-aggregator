@@ -305,7 +305,13 @@ function message(raw: unknown, index: number, externalAllowed: boolean): Normali
   const bounced = nullableBoolean(item.bounced);
   nullableBoolean(item.bounce);
   const decodedOpcode = nullableString(item.decoded_opcode);
-  const isExternal = source === null && createdLt === null && createdAt === null;
+  // Live TonCenter renders external-in messages with created_lt/created_at as
+  // "0" (not null) — only the source is absent. Zero is not a real lt: no
+  // internal message ever carries lt 0.
+  const isExternal =
+    source === null &&
+    (createdLt === null || createdLt === '0') &&
+    (createdAt === null || createdAt === '0');
   if (isExternal && !externalAllowed) throw new ProviderFailure('provider_schema_invalid');
   if (isExternal) {
     if (value !== null || bounced !== null) throw new ProviderFailure('provider_schema_invalid');
@@ -395,23 +401,28 @@ function validateScanRow(value: unknown, recipient: string): ScanFacts {
 
 function executionFacts(value: unknown): Pick<NormalizedTonTransaction, 'aborted' | 'computeSuccess' | 'actionSuccess'> {
   const description = object(value);
+  // Live TonCenter omits absent phases entirely (undefined), while fixtures
+  // and some responses use explicit null — normalize both to null.
+  const phase = (v: unknown): unknown => (v === undefined ? null : v);
   const aborted = bool(description.aborted);
-  const compute = description.compute_ph === null ? null : object(description.compute_ph);
+  const compute = phase(description.compute_ph) === null ? null : object(phase(description.compute_ph));
   let computeSuccess = false;
   if (compute !== null) {
     const skipped = bool(compute.skipped);
     if (skipped) {
-      if (compute.success !== null || compute.exit_code !== null || typeof compute.reason !== 'string') {
+      if (phase(compute.success) !== null || phase(compute.exit_code) !== null || typeof compute.reason !== 'string') {
         throw new ProviderFailure('provider_schema_invalid');
       }
     } else {
       bool(compute.success);
       signedInteger(compute.exit_code);
-      if (compute.reason !== null && typeof compute.reason !== 'string') throw new ProviderFailure('provider_schema_invalid');
+      // Successful executions omit `reason` entirely on live TonCenter.
+      const reason = (compute as { reason?: unknown }).reason;
+      if (reason !== undefined && reason !== null && typeof reason !== 'string') throw new ProviderFailure('provider_schema_invalid');
     }
     computeSuccess = !skipped && compute.success === true;
   }
-  const action = description.action === null ? null : object(description.action);
+  const action = phase(description.action) === null ? null : object(phase(description.action));
   let actionSuccess = false;
   if (action !== null) {
     const success = bool(action.success);
@@ -419,7 +430,7 @@ function executionFacts(value: unknown): Pick<NormalizedTonTransaction, 'aborted
     signedInteger(action.result_code);
     actionSuccess = success && valid;
   }
-  if (description.bounce !== null) string(object(description.bounce).type);
+  if (phase(description.bounce) !== null) string(object(phase(description.bounce)).type);
   return { aborted, computeSuccess, actionSuccess };
 }
 
@@ -750,7 +761,7 @@ export function createToncenterV3Provider(config: ToncenterV3ProviderConfig): To
         const finalRow = retained[retained.length - 1]!.facts;
         const cycleUpperLt = continuation?.cycleUpperLt ?? first.facts.lt;
         return { kind: 'page', evidence, nextCursor: { schemaVersion: 1, beforeLt: finalRow.lt, beforeTransactionHash: finalRow.hash, cycleUpperLt }, exhausted: false };
-      } catch (error) { return failure(error instanceof ProviderFailure ? error.code : 'provider_schema_invalid', error instanceof ProviderFailure ? error.retryAfterMs : null); }
+      } catch (error) { if (process.env.TON_PROVIDER_DEBUG) console.error('PF_STACK', (error as Error)?.stack); return failure(error instanceof ProviderFailure ? error.code : 'provider_schema_invalid', error instanceof ProviderFailure ? error.retryAfterMs : null); }
     },
     async scanJettonTransfersPage(input, cursor, signal) {
       try {

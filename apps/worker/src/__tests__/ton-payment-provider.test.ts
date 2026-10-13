@@ -361,6 +361,28 @@ describe('createToncenterV3Provider', () => {
     expect(result.nextCursor?.beforeTransactionHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('accepts a live-shaped external in message (created_lt/created_at as "0", not null)', async () => {
+    // Live TonCenter renders the sender-wallet external message with zero
+    // strings instead of nulls; only the source is absent. Regression for the
+    // 2026-10-13 wedge where every real trace failed provider_schema_invalid.
+    const result = await provider(
+      nativeFixtureFetch((traceRecord) => {
+        const rootKey = (traceRecord.transactions_order as string[])[0]!;
+        const root = (traceRecord.transactions as Record<string, Record<string, unknown>>)[rootKey]!;
+        const inMsg = root.in_msg as Record<string, unknown>;
+        inMsg.created_lt = '0';
+        inMsg.created_at = '0';
+        inMsg.value = null;
+        // Successful live compute_ph omits `reason` entirely.
+        const compute = (root.description as Record<string, unknown>).compute_ph as Record<string, unknown>;
+        delete compute.reason;
+      }),
+    ).scanAccountPage(FIXTURE_RECIPIENT, null, new AbortController().signal);
+    expect(result).toMatchObject({ kind: 'page' });
+    if (result.kind !== 'page') throw new Error('expected fixture page');
+    expect(result.evidence).toHaveLength(1);
+  });
+
   it('fails closed when a required trace completeness fact is removed', async () => {
     const result = await provider(nativeFixtureFetch((trace) => { delete trace.trace; }))
       .scanAccountPage(RECIPIENT, null, new AbortController().signal);
@@ -759,16 +781,12 @@ describe('required endpoint fact mutation matrix', () => {
     { label: 'trace transaction block seqno', target: 'trace', path: transaction('block_ref', 'seqno'), wrong: '1' },
     { label: 'trace execution description', target: 'trace', path: transaction('description'), wrong: null },
     { label: 'trace aborted flag', target: 'trace', path: transaction('description', 'aborted'), wrong: 'false' },
-    { label: 'trace compute phase', target: 'trace', path: transaction('description', 'compute_ph'), wrong: false },
     { label: 'trace compute skipped', target: 'trace', path: transaction('description', 'compute_ph', 'skipped'), wrong: 'false' },
     { label: 'trace compute success', target: 'trace', path: transaction('description', 'compute_ph', 'success'), wrong: 'true' },
     { label: 'trace compute exit code', target: 'trace', path: transaction('description', 'compute_ph', 'exit_code'), wrong: '0' },
-    { label: 'trace compute reason nullable type', target: 'trace', path: transaction('description', 'compute_ph', 'reason'), wrong: 1 },
-    { label: 'trace action phase', target: 'trace', path: transaction('description', 'action'), wrong: false },
     { label: 'trace action success', target: 'trace', path: transaction('description', 'action', 'success'), wrong: 'true' },
     { label: 'trace action valid', target: 'trace', path: transaction('description', 'action', 'valid'), wrong: 'true' },
     { label: 'trace action result code', target: 'trace', path: transaction('description', 'action', 'result_code'), wrong: '0' },
-    { label: 'trace bounce phase nullable type', target: 'trace', path: transaction('description', 'bounce'), wrong: false },
     { label: 'trace inbound message', target: 'trace', path: transaction('in_msg'), wrong: null },
     { label: 'trace inbound hash', target: 'trace', path: incoming('hash'), wrong: 1 },
     { label: 'trace inbound source nullable type', target: 'trace', path: incoming('source'), wrong: 1 },
@@ -818,6 +836,24 @@ describe('required endpoint fact mutation matrix', () => {
       });
       expect(result).toEqual({ kind: 'source_error', code: 'provider_schema_invalid', retryAfterMs: null });
     }
+  });
+
+  // Live TonCenter omits these execution phases entirely (2026-10-13 wedge):
+  // omission is legal, wrong types still fail closed.
+  it.each([
+    { label: 'trace compute phase', path: transaction('description', 'compute_ph'), wrong: false },
+    { label: 'trace compute reason', path: transaction('description', 'compute_ph', 'reason'), wrong: 1 },
+    { label: 'trace action phase', path: transaction('description', 'action'), wrong: false },
+    { label: 'trace bounce phase', path: transaction('description', 'bounce'), wrong: false },
+  ])('accepts omission but rejects wrong type for $label', async ({ path, wrong }) => {
+    const rejected = await scanFixture(nativeSuccess, SUCCESS_TRANSACTION_KEY, {
+      trace: (root) => mutatePath(root, path, wrong, false),
+    });
+    expect(rejected).toEqual({ kind: 'source_error', code: 'provider_schema_invalid', retryAfterMs: null });
+    const accepted = await scanFixture(nativeSuccess, SUCCESS_TRANSACTION_KEY, {
+      trace: (root) => mutatePath(root, path, null, true),
+    });
+    expect(accepted).toMatchObject({ kind: 'page' });
   });
 
   it('validates non-null bounce internals in the real negative fixture', async () => {
