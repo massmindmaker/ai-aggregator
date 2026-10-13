@@ -168,11 +168,20 @@ const agentTopupDb: TonPaymentDatabase = {
           text: string;
           values: readonly unknown[];
         }) => {
-          const rows = (await tx.unsafe(
+          const res = (await tx.unsafe(
             config.text,
             [...config.values] as never[],
-          )) as unknown as Row[];
-          return { rows, rowCount: rows.length };
+          )) as unknown;
+          // postgres.js returns a row array for SELECT/RETURNING but a
+          // { count } object for plain UPDATE/DELETE — rowCount must be
+          // derived from either, never from .length on the object.
+          const rows = (Array.isArray(res) ? res : []) as Row[];
+          const rowCount = Array.isArray(res)
+            ? res.length
+            : typeof (res as { count?: unknown })?.count === 'number'
+              ? (res as unknown as { count: number }).count
+              : 0;
+          return { rows, rowCount };
         },
       });
     }) as unknown as Promise<T>);
