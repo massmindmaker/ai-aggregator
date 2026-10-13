@@ -192,11 +192,17 @@ function atomic(value: unknown): string {
 }
 
 function parseInvoiceJson(raw: unknown): AgentTopupInvoice {
-  if (typeof raw !== 'string') fail('AGENT_TOPUP_UNAVAILABLE');
   let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      fail('AGENT_TOPUP_UNAVAILABLE');
+    }
+  } else if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+    // postgres.js hands jsonb results back as already-parsed objects.
+    parsed = raw;
+  } else {
     fail('AGENT_TOPUP_UNAVAILABLE');
   }
   const v = parsed as Record<string, unknown>;
