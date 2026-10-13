@@ -344,15 +344,17 @@ const agentKeysDb: TonPaymentDatabase = {
             config.text,
             [...config.values] as never[],
           )) as unknown;
-          // postgres.js returns a row array for SELECT/RETURNING but a
-          // { count } object for plain UPDATE/DELETE — rowCount must be
-          // derived from either, never from .length on the object.
+          // postgres.js returns an array for every statement: SELECT rows
+          // carry only .length, while UPDATE/DELETE carry a numeric .count
+          // field (and an empty .length). rowCount must prefer .count.
           const rows = (Array.isArray(res) ? res : []) as Row[];
-          const rowCount = Array.isArray(res)
-            ? res.length
-            : typeof (res as { count?: unknown })?.count === 'number'
-              ? (res as unknown as { count: number }).count
-              : 0;
+          const countField = (res as { count?: unknown } | undefined)?.count;
+          const rowCount =
+            typeof countField === 'number'
+              ? countField
+              : Array.isArray(res)
+                ? res.length
+                : 0;
           return { rows, rowCount };
         },
       });
