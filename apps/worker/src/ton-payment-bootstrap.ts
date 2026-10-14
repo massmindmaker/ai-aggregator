@@ -343,6 +343,7 @@ export async function startTonObservationFromEnv(
           deps.listSources({ afterSourceId, limit: 16, assetKind: activeConfig.assetKind }),
         false,
       );
+      if (process.env.TON_PROVIDER_DEBUG) console.error("S1_LISTSOURCES_OK", found.length);
       if (!Array.isArray(found) || found.length > 16)
         throw Error("TON_INVALID_SOURCE_PAGE");
       // Preset fence (I3): a worker bound to one network never sweeps the
@@ -382,12 +383,15 @@ export async function startTonObservationFromEnv(
       if (settlement && typeof settlement.retryReviewed === "function") {
         // Operator retry pass (I1): invoices whose review cause was temporary
         // get their settlement re-run on the next tick after retry_requested.
+        if (process.env.TON_PROVIDER_DEBUG) console.error("S2_POLLRETRIES_START");
         await pollRetries();
+        if (process.env.TON_PROVIDER_DEBUG) console.error("S2_POLLRETRIES_OK");
       }
       budget.check();
       afterSourceId =
         sources.length < 16 ? null : sources[sources.length - 1].sourceId;
     } catch (error) {
+      if (process.env.TON_PROVIDER_DEBUG) console.error("BOOT_CYCLE_ERR", (error as Error)?.stack ?? String(error));
       report("(cycle)", {
         kind: "stopped",
         reason: controller.signal.aborted

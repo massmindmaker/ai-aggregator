@@ -180,6 +180,9 @@ export interface TonFixtureSettlementDeps {
 }
 /** Sanctioned runtime name for the settlement hook (same shape as the fixture one). */
 export type TonSettlementHook = TonFixtureSettlementDeps;
+const dbg = (m: string): void => {
+  if (process.env.TON_PROVIDER_DEBUG) console.error("RS_" + m);
+};
 type SourceInput = {
   source: TonReconciliationSource;
   limit: number;
@@ -202,8 +205,18 @@ export async function reconcileTonInvoicesWithFixtureSettlement(
   budget = new TonOperationBudget(input.signal),
 ): Promise<TonReconcileSourceResult> {
   const hook = object(settlement);
-  exact(hook, ["mode", "settleVerifiedCredit"]);
-  if (hook.mode !== "settle" || typeof hook.settleVerifiedCredit !== "function")
+  // Runtime bootstrap binds an optional operator-retry entry alongside the
+  // settlement hook; the fixture shape stays two-key.
+  const keys = Object.keys(hook);
+  const required = ["mode", "settleVerifiedCredit"];
+  const allowed = [...required, "retryReviewed"];
+  if (
+    keys.length < 2 ||
+    keys.some((k) => !allowed.includes(k)) ||
+    required.some((k) => !keys.includes(k)) ||
+    hook.mode !== "settle" ||
+    typeof hook.settleVerifiedCredit !== "function"
+  )
     throw Error("TON_INVALID_FIXTURE_SETTLEMENT");
   return reconcileSource(input, deps, budget, undefined, settlement);
 }
@@ -240,6 +253,7 @@ async function reconcileSource(
     if (result === ok) return;
     if (result === "lease_lost" || result === "cursor_conflict")
       throw new TonRunStopped(result);
+    if (process.env.TON_PROVIDER_DEBUG) console.error("FENCE_RESULT", result);
     budget.mutationOutcome = "unknown";
     throw new TonRunStopped("db_error");
   };
@@ -262,7 +276,9 @@ async function reconcileSource(
       "renewed",
     );
   const observe = async (data: TonObservationInput) => {
+    dbg("OBSERVE");
     const result = await budget.db(() => deps.recordObservation(data));
+    dbg("OBSERVE_OK");
     try {
       return observedAck(result);
     } catch {
@@ -316,6 +332,7 @@ async function reconcileSource(
   async function run(): Promise<TonReconcileSourceResult> {
     budget.check();
     leaseOwner = uuid(deps.newLeaseOwner());
+    dbg("CLAIM");
     const claimed = await budget.db(() =>
       deps.claimLease({
         source,
@@ -324,6 +341,7 @@ async function reconcileSource(
         leaseMs: TON_LEASE_MS,
       }),
     );
+    dbg("CLAIM_OK");
     const raw = object(claimed);
     if (raw.kind === "busy" || raw.kind === "source_identity_mismatch") {
       exact(raw, ["kind"]);
@@ -456,7 +474,7 @@ async function reconcileSource(
       ];
       const invoices = references.length
         ? await budget.db(
-            () => deps.findInvoices({ source, references }),
+            async () => { dbg("FIND_INVOICES"); const r = await deps.findInvoices({ source, references }); dbg("FIND_OK "+references.length); return r; },
             false,
           )
         : [];
@@ -654,6 +672,8 @@ async function reconcileSource(
   try {
     answer = await run();
   } catch (error) {
+    if (process.env.TON_PROVIDER_DEBUG && !(error instanceof TonSourceFailure))
+      console.error("CYCLE_ERR", (error as Error)?.stack ?? String(error));
     answer =
       error instanceof TonSourceFailure
         ? { kind: "source_error", code: error.code, ...count() }
